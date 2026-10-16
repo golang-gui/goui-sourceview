@@ -5,6 +5,15 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
+## 括号提示视觉调整（2026-10-16）
+
+- [x] 独立亮暗配色、淡底与 1 DIP 内缩边框，仅显示已确认配对。
+- [x] 几何/层次/透明/共享 Cluster 回归，本机全包、race、vet 与 Windows/macOS 包测试。
+- [x] 独立 X11 的 Software 1x/2x、OpenGL 1x 真实截图与颜色断言。
+- [ ] Windows/macOS 新边框窗口、分数缩放与字体矩阵。
+
+改动、命令、证据及发布限制见 [括号视觉验收](PlanBracketAppearance.md)。
+
 ## 编辑体验后续切片（2026-10-16）
 
 - [x] 修复双击松开缩回 caret、词尾后半部误命中；加入三击和按词正反拖选。
