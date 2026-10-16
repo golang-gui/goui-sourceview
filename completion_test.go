@@ -86,3 +86,12 @@ func TestCompletionReplacesWholeWordAndBoundsResults(t *testing.T) {
 		t.Fatal("unmounted completion")
 	}
 }
+
+func TestCompletionLabelsStayOnOneNativeLine(t *testing.T) {
+	for _, separator := range []string{"\r", "\n", "\t", "\v", "\f", "\u0085", "\u2028", "\u2029"} {
+		items := normalizeCompletions([]Completion{{Label: "a" + separator + "b"}}, CompletionContext{})
+		if len(items) != 0 {
+			t.Fatalf("accepted native line separator %q", separator)
+		}
+	}
+}

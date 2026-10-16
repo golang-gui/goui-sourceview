@@ -1,6 +1,11 @@
 package sourceview
 
 import (
+	"cmp"
+	"image/color"
+	"slices"
+	"unicode/utf8"
+
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"
@@ -9,28 +14,47 @@ import (
 	"github.com/golang-gui/goui/platform/typography"
 )
 
-// This bounded popup owns at most eight native rows. Keyboard input stays in
-// SourceView; pointer activation uses the popup's normal click controller.
+const (
+	completionRows                = 8
+	completionInset       float32 = 6
+	completionTextInset   float32 = 12
+	completionGap         float32 = 16
+	completionScrollWidth float32 = 8
+)
+
+// Only visible rows own native layouts. All-candidate measurements are retained
+// as scalar metrics, so scrolling never changes the panel width or columns.
 type completionList struct {
 	gui.WidgetBase
-	view      *SourceView
-	session   *completionSession
-	first     int
-	rowHeight float32
-	width     float32
-	rows      []typography.TextLayout
-	epoch     uint64
-	err       error
+	view                           *SourceView
+	session                        *completionSession
+	first, visible                 int
+	rowHeight, ascent, descent     float32
+	width, labelWidth, detailWidth float32
+	measured                       bool
+	preparing                      bool
+	rows                           []completionRow
+	epoch                          uint64
+	err                            error
+}
+type completionRow struct {
+	label, detail    *completionText
+	styled, selected bool
+}
+type completionText struct {
+	native                  typography.TextLayout
+	width, height, baseline float32
+	clusters                []typography.TextCluster
+	kept                    int // original bytes before an optional ellipsis
 }
 
 func newCompletionList(v *SourceView, s *completionSession) *completionList {
-	l := &completionList{view: v, session: s, rowHeight: max(24, v.lineHeight+6)}
+	l := &completionList{view: v, session: s, visible: min(completionRows, len(s.items))}
 	l.ConnectUnmount(l.release)
 	click := gui.NewClickEventController()
 	click.ConnectClicked(func(ctx gui.EventContext) {
 		if p, ok := ctx.Position(); ok {
-			index := l.first + int((p.Y-4)/l.rowHeight)
-			if p.Y >= 4 && index >= l.first && index < min(len(s.items), l.first+8) {
+			if index, hit := l.itemAt(p); hit {
 				v.report(v.acceptCompletion(s, index))
 				ctx.StopPropagation()
 			}
@@ -39,8 +63,7 @@ func newCompletionList(v *SourceView, s *completionSession) *completionList {
 	l.AddEventController(click)
 	motion := gui.NewMotionEventController()
 	motion.ConnectMotion(func(info gui.MotionInfo) {
-		index := l.first + int((info.Position.Y-4)/l.rowHeight)
-		if info.Position.Y >= 4 && index >= l.first && index < min(l.first+8, len(s.items)) && s.index != index {
+		if index, hit := l.itemAt(info.Position); hit && s.index != index {
 			s.index = index
 			l.RequestPaint()
 		}
@@ -48,7 +71,7 @@ func newCompletionList(v *SourceView, s *completionSession) *completionList {
 	l.AddEventController(motion)
 	wheel := gui.NewWheelEventController()
 	wheel.ConnectScroll(func(ctx gui.EventContext, e events.WheelEvent) {
-		if e.DeltaY == 0 {
+		if e.DeltaY == 0 || v.completion != s {
 			return
 		}
 		delta := 1
@@ -62,103 +85,393 @@ func newCompletionList(v *SourceView, s *completionSession) *completionList {
 	l.AddEventController(wheel)
 	return l
 }
-
 func (l *completionList) release() {
 	l.epoch++
 	rows := l.rows
 	l.rows = nil
 	for _, row := range rows {
-		row.Destroy()
+		for _, text := range []*completionText{row.label, row.detail} {
+			if text != nil {
+				text.native.Destroy()
+			}
+		}
 	}
 }
 func (l *completionList) refresh() {
-	first := l.first
+	first := max(0, min(l.first, len(l.session.items)-max(1, l.visible)))
 	if l.session.index < first {
 		first = l.session.index
 	}
-	if l.session.index >= first+8 {
-		first = l.session.index - 7
+	if l.session.index >= first+max(1, l.visible) {
+		first = l.session.index - max(1, l.visible) + 1
 	}
 	if first != l.first {
 		l.first = first
 		l.release()
-		l.RequestLayout()
 	}
 	l.RequestPaint()
 }
-func (l *completionList) ensureRows() {
-	if l.rows != nil || l.err != nil {
-		return
+func (l *completionList) detailFont() typography.FontInfo {
+	size := l.view.font.Size
+	if size == 0 {
+		size = 12
 	}
-	l.width = 240
-	context, epoch := l.view.context, l.epoch
-	if context == nil || l.view.completion != l.session {
-		return
-	}
-	for i := l.first; i < min(l.first+8, len(l.session.items)); i++ {
-		item := l.session.items[i]
-		text := item.Label
-		if item.Detail != "" {
-			text += "    " + item.Detail
-		}
-		native, err := context.NewTextLayout(text, typography.TextFormat{Font: l.view.font, TextColor: l.view.colors.Foreground}, 540, 1<<16)
-		if l.epoch != epoch || l.view.completion != l.session || l.view.context != context {
-			if native != nil {
-				native.Destroy()
-			}
-			return
-		}
-		if err != nil {
-			l.err = err
-			l.release()
-			if l.session.shown {
-				l.view.closeCompletion()
-				l.view.report(err)
-			}
-			return
-		}
-		l.rows = append(l.rows, native)
-		w, _ := native.MeasureSize()
-		if l.epoch != epoch || l.view.completion != l.session {
-			return
-		}
-		l.width = max(l.width, min(560, w+20))
+	return typography.FontInfo{Size: size * .9}
+}
+
+// A build transaction owns every layout until its rows are published. Native
+// callbacks can cancel/unmount the panel without releasing an in-flight probe.
+type completionBuild struct {
+	list    *completionList
+	context typography.Context
+	epoch   uint64
+	live    []typography.TextLayout
+}
+
+func (l *completionList) build() *completionBuild {
+	return &completionBuild{list: l, context: l.view.context, epoch: l.epoch}
+}
+func (b *completionBuild) valid() bool {
+	l := b.list
+	return b.context != nil && l.epoch == b.epoch && l.view.completion == l.session && l.view.context == b.context
+}
+func (b *completionBuild) discard(native typography.TextLayout) {
+	at := slices.Index(b.live, native)
+	b.live = slices.Delete(b.live, at, at+1)
+	native.Destroy()
+}
+func (b *completionBuild) destroy() {
+	for _, native := range b.live {
+		native.Destroy()
 	}
 }
+func (b *completionBuild) text(text string, font typography.FontInfo, foreground color.NRGBA) (*completionText, error) {
+	if !b.valid() {
+		return nil, ErrOperationChanged
+	}
+	native, err := b.context.NewTextLayout(text, typography.TextFormat{Font: font, TextColor: foreground, WrapMode: typography.WrapNone}, 1<<20, 1<<16)
+	if native != nil {
+		b.live = append(b.live, native)
+	}
+	if !b.valid() {
+		return nil, ErrOperationChanged
+	}
+	if err != nil {
+		return nil, err
+	}
+	w, h := native.MeasureSize()
+	if !b.valid() {
+		return nil, ErrOperationChanged
+	}
+	lines, clusters := native.MeasureMetrics()
+	if !b.valid() {
+		return nil, ErrOperationChanged
+	}
+	baseline := h * .8
+	if len(lines) > 0 && lines[0].Baseline > 0 {
+		baseline = lines[0].Baseline
+	}
+	return &completionText{native: native, width: w, height: h, baseline: baseline, clusters: clusters, kept: len(text)}, nil
+}
+func (l *completionList) fail(b *completionBuild, err error) {
+	if err == nil || !b.valid() {
+		return
+	}
+	l.err = err
+	if l.session.shown {
+		l.view.closeCompletion()
+		l.view.report(err)
+	}
+}
+func (l *completionList) measureItems() {
+	if l.measured || l.err != nil || l.preparing {
+		return
+	}
+	l.preparing = true
+	defer func() { l.preparing = false }()
+	b := l.build()
+	defer b.destroy()
+	var label, detail, ascent, descent float32
+	for _, item := range l.session.items {
+		for column, value := range []string{item.Label, item.Detail} {
+			if value == "" {
+				continue
+			}
+			font := l.view.font
+			if column == 1 {
+				font = l.detailFont()
+			}
+			text, err := b.text(value, font, l.view.colors.Completion.Foreground)
+			if err != nil {
+				l.fail(b, err)
+				return
+			}
+			if column == 0 {
+				label = max(label, text.width)
+			} else {
+				detail = max(detail, text.width)
+			}
+			ascent, descent = max(ascent, text.baseline), max(descent, text.height-text.baseline)
+			b.discard(text.native)
+			if !b.valid() {
+				return
+			}
+		}
+	}
+	if !b.valid() {
+		return
+	}
+	l.labelWidth, l.detailWidth = min(260, label), min(220, detail)
+	l.ascent, l.descent, l.rowHeight = ascent, descent, max(26, ascent+descent+8)
+	width := 2*completionTextInset + l.labelWidth
+	if detail > 0 {
+		width += completionGap + l.detailWidth
+	}
+	if len(l.session.items) > completionRows {
+		width += completionScrollWidth
+	}
+	l.width, l.measured = max(240, min(520, width)), true
+}
 func (l *completionList) Measure(c layout.Constraint) layout.Measurement {
-	l.ensureRows()
-	return layout.Measured(c.Clamp(geometry.Size{Width: l.width, Height: 8 + float32(min(8, len(l.session.items)))*l.rowHeight}))
+	l.measureItems()
+	return layout.Measured(c.Clamp(geometry.Size{Width: l.width, Height: 2*completionInset + float32(min(completionRows, len(l.session.items)))*l.rowHeight}))
+}
+func (l *completionList) Arrange(r geometry.Rectangle) {
+	previous := l.Rect()
+	l.WidgetBase.Arrange(r)
+	visible := 0
+	if l.rowHeight > 0 {
+		visible = max(0, min(completionRows, len(l.session.items), int((r.Height-2*completionInset)/l.rowHeight)))
+	}
+	if previous.Width != r.Width || l.visible != visible {
+		l.visible = visible
+		l.release()
+		l.refresh()
+	}
+}
+func (l *completionList) columns() (labelWidth, detailX, detailWidth float32) {
+	right := max(completionTextInset, l.Rect().Width-completionTextInset)
+	if len(l.session.items) > l.visible {
+		right = max(completionTextInset, right-completionScrollWidth)
+	}
+	available := right - completionTextInset
+	if l.detailWidth == 0 {
+		return available, right, 0
+	}
+	labelWidth = min(l.labelWidth, max(0, available-completionGap-min(l.detailWidth, available*.45)))
+	detailX = completionTextInset + labelWidth + completionGap
+	return labelWidth, detailX, max(0, right-detailX)
+}
+
+// Logical cut positions must not bisect a shaping cluster, including overlapping
+// native clusters. The replacement is reshaped and measured with its ellipsis.
+func completionCuts(text string, clusters []typography.TextCluster) []int {
+	cuts := []int{0}
+	ordered := slices.Clone(clusters)
+	slices.SortFunc(ordered, func(a, b typography.TextCluster) int { return cmp.Compare(a.Start, b.Start) })
+	appendCut := func(end int) {
+		if end > 0 && (end == len(text) || utf8.RuneStart(text[end])) {
+			cuts = append(cuts, end)
+		}
+	}
+	end := 0
+	for _, c := range ordered {
+		if c.Start < 0 || c.Length <= 0 || c.Start > len(text) || c.Length > len(text)-c.Start {
+			continue
+		}
+		if c.Start >= end {
+			appendCut(end)
+		}
+		end = max(end, c.Start+c.Length)
+	}
+	appendCut(end)
+	cuts = append(cuts, len(text))
+	return slices.Compact(cuts)
+}
+func (b *completionBuild) fit(value string, font typography.FontInfo, foreground color.NRGBA, width float32) (*completionText, error) {
+	if value == "" || width <= 0 {
+		return nil, nil
+	}
+	full, err := b.text(value, font, foreground)
+	if err != nil {
+		return nil, err
+	}
+	if full.width <= width {
+		full.clusters = nil
+		return full, nil
+	}
+	cuts := completionCuts(value, full.clusters)
+	b.discard(full.native)
+	best, err := b.text("…", font, foreground)
+	if err != nil {
+		return nil, err
+	}
+	best.kept = 0
+	if best.width > width {
+		b.discard(best.native)
+		return nil, nil
+	}
+	for lo, hi := 1, len(cuts)-2; lo <= hi; {
+		mid := lo + (hi-lo)/2
+		candidate, err := b.text(value[:cuts[mid]]+"…", font, foreground)
+		if err != nil {
+			return nil, err
+		}
+		if candidate.width <= width {
+			b.discard(best.native)
+			best = candidate
+			best.kept = cuts[mid]
+			lo = mid + 1
+		} else {
+			b.discard(candidate.native)
+			hi = mid - 1
+		}
+	}
+	if !b.valid() {
+		return nil, ErrOperationChanged
+	}
+	best.clusters = nil
+	return best, nil
+}
+func (l *completionList) ensureRows() {
+	if l.rows != nil || l.err != nil || !l.measured || l.preparing {
+		return
+	}
+	l.preparing = true
+	defer func() { l.preparing = false }()
+	b := l.build()
+	defer b.destroy()
+	labelWidth, _, detailWidth := l.columns()
+	rows := make([]completionRow, 0, l.visible)
+	for i := l.first; i < min(len(l.session.items), l.first+l.visible); i++ {
+		item := l.session.items[i]
+		label, err := b.fit(item.Label, l.view.font, l.view.colors.Completion.Foreground, labelWidth)
+		if err != nil {
+			l.fail(b, err)
+			return
+		}
+		detail, err := b.fit(item.Detail, l.detailFont(), l.view.colors.Completion.DetailForeground, detailWidth)
+		if err != nil {
+			l.fail(b, err)
+			return
+		}
+		rows = append(rows, completionRow{label: label, detail: detail})
+	}
+	if !b.valid() {
+		return
+	}
+	l.rows, b.live = rows, nil
+}
+func (l *completionList) rowRect(slot int) geometry.Rectangle {
+	width := max(0, l.Rect().Width-2*completionInset)
+	if len(l.session.items) > l.visible {
+		width = max(0, width-completionScrollWidth)
+	}
+	return geometry.Rect(completionInset, completionInset+float32(slot)*l.rowHeight, width, l.rowHeight)
+}
+func (l *completionList) itemAt(p geometry.Point) (int, bool) {
+	if l.view.completion != l.session || l.rowHeight <= 0 || p.Y < completionInset {
+		return 0, false
+	}
+	slot := int((p.Y - completionInset) / l.rowHeight)
+	if slot >= l.visible {
+		return 0, false
+	}
+	r := l.rowRect(slot)
+	return l.first + slot, p.X >= r.X && p.X < r.X+r.Width && p.Y < r.Y+r.Height
+}
+func (l *completionList) styleRow(row *completionRow, index int, b *completionBuild) bool {
+	selected := index == l.session.index
+	if row.styled && row.selected == selected {
+		return b.valid()
+	}
+	colors := l.view.colors.Completion
+	foreground, detail, match := colors.Foreground, colors.DetailForeground, colors.MatchForeground
+	if selected {
+		foreground, detail, match = colors.SelectedForeground, colors.SelectedDetailForeground, colors.SelectedMatchForeground
+	}
+	if row.label != nil {
+		native := row.label.native
+		native.SetTextColor(0, len(native.Text()), foreground)
+		if !b.valid() {
+			return false
+		}
+		if end := min(row.label.kept, completionPrefixEnd(l.session.items[index].Label, l.session.prefix)); end > 0 {
+			native.SetTextColor(0, end, match)
+			if !b.valid() {
+				return false
+			}
+		}
+	}
+	if row.detail != nil {
+		row.detail.native.SetTextColor(0, len(row.detail.native.Text()), detail)
+		if !b.valid() {
+			return false
+		}
+	}
+	row.styled, row.selected = true, selected
+	return true
 }
 func (l *completionList) Paint(p gui.Painter) {
 	l.ensureRows()
-	if l.view.completion != l.session {
+	b := l.build()
+	if !b.valid() || l.err != nil {
 		return
 	}
-	epoch := l.epoch
-	colors := l.view.colors
-	p.FillRect(geometry.Rect(0, 0, l.Rect().Width, l.Rect().Height), graphics.ColorOf(colors.Background))
-	for i, row := range l.rows {
-		y := 4 + float32(i)*l.rowHeight
-		foreground := colors.Foreground
-		if l.first+i == l.session.index {
-			p.FillRect(geometry.Rect(4, y, l.Rect().Width-8, l.rowHeight), graphics.ColorOf(colors.SelectionBackground))
-			foreground = colors.SelectionForeground
-		}
-		row.SetTextColor(0, len(row.Text()), foreground)
-		if l.epoch != epoch || l.view.completion != l.session {
+	colors := l.view.colors.Completion
+	w, h := l.Rect().Width, l.Rect().Height
+	p.FillRect(geometry.Rect(0, 0, w, h), graphics.ColorOf(colors.Background))
+	if w > 1 && h > 1 && colors.Border.A != 0 {
+		p.DrawRect(geometry.Rect(.5, .5, w-1, h-1), 1, graphics.ColorOf(colors.Border))
+	}
+	labelWidth, detailX, detailWidth := l.columns()
+	for slot := range l.rows {
+		row := &l.rows[slot]
+		if !l.styleRow(row, l.first+slot, b) {
 			return
 		}
-		_, h := row.MeasureSize()
-		p.DrawTextLayout(geometry.Point{X: 10, Y: y + max(0, (l.rowHeight-h)/2)}, row)
+		r := l.rowRect(slot)
+		if row.selected {
+			p.FillRect(r, graphics.ColorOf(colors.SelectedBackground))
+		}
+		baseline := r.Y + (l.rowHeight-l.ascent-l.descent)/2 + l.ascent
+		for column, text := range []*completionText{row.label, row.detail} {
+			if text == nil {
+				continue
+			}
+			x, width := completionTextInset, labelWidth
+			if column == 1 {
+				x, width = detailX, detailWidth
+			}
+			p.Save()
+			p.SetClipRect(geometry.Rect(x, r.Y, width, r.Height))
+			if column == 1 {
+				x += max(0, width-text.width)
+			}
+			p.DrawTextLayout(geometry.Point{X: x, Y: baseline - text.baseline}, text.native)
+			p.Restore()
+			if !b.valid() {
+				return
+			}
+		}
+	}
+	if l.visible > 0 && len(l.session.items) > l.visible && colors.ScrollThumb.A != 0 {
+		track := float32(l.visible) * l.rowHeight
+		thumb := max(12, track*float32(l.visible)/float32(len(l.session.items)))
+		y := completionInset + (track-thumb)*float32(l.first)/float32(len(l.session.items)-l.visible)
+		p.FillRect(geometry.Rect(w-completionInset-3, y, 3, thumb), graphics.ColorOf(colors.ScrollThumb))
 	}
 }
 func (l *completionList) Snapshot() gui.WidgetInfo {
 	info := l.WidgetBase.Snapshot()
 	info.Role = gui.Role("completion-list")
-	info.ItemCount = len(l.session.items)
-	for i := l.first; i < min(l.first+8, len(l.session.items)); i++ {
+	info.ItemCount, info.VisibleStart, info.VisibleEnd = len(l.session.items), l.first, l.first+l.visible
+	for slot := 0; slot < l.visible; slot++ {
+		i := l.first + slot
 		item := l.session.items[i]
-		info.Children = append(info.Children, gui.WidgetInfo{Role: gui.Role("completion-item"), Text: item.Label, Visible: true, Enabled: true, Selected: i == l.session.index, Actions: []gui.Action{gui.ActionClick}, Bounds: geometry.Rect(info.Bounds.X+4, info.Bounds.Y+4+float32(i-l.first)*l.rowHeight, max(0, info.Bounds.Width-8), l.rowHeight)})
+		row := gui.WidgetInfo{Role: gui.Role("completion-item"), Text: item.Label, Visible: true, Enabled: true, Selected: i == l.session.index, Actions: []gui.Action{gui.ActionClick}, Bounds: l.rowRect(slot).Translate(info.Bounds.Pos)}
+		row.SetAttribute("sourceview.completion.detail", item.Detail)
+		info.Children = append(info.Children, row)
 	}
 	return info
 }

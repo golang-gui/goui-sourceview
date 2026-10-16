@@ -57,3 +57,31 @@ func TestBracketColorsCanBeIndependentlyTransparent(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionPaletteIsIndependentAndOpaque(t *testing.T) {
+	for _, base := range []*Scheme{Light(), Dark()} {
+		d := base.Definition()
+		want := d.Completion
+		d.SelectionBackground = color.NRGBA{R: 255, A: 100}
+		d.SelectionForeground = color.NRGBA{G: 255, A: 255}
+		s, err := New(d)
+		if err != nil || s.Definition().Completion != want {
+			t.Fatal("editor selection changed completion palette", err)
+		}
+		d.Completion = CompletionColors{}
+		s, err = New(d)
+		if err != nil || s.Definition().Completion.Background != d.Background || s.Definition().Completion.Foreground != d.Foreground {
+			t.Fatal("missing custom palette did not inherit base colors", err)
+		}
+		d.Completion = want
+		d.Completion.DetailForeground.A = 0
+		if _, err := New(d); err == nil {
+			t.Fatal("transparent detail could become unreadable")
+		}
+		d.Completion = want
+		d.Completion.Border.A, d.Completion.ScrollThumb.A = 0, 80
+		if s, err = New(d); err != nil || s.Definition().Completion != d.Completion {
+			t.Fatal("decorations lost explicit alpha", err)
+		}
+	}
+}

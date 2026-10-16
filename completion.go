@@ -39,6 +39,7 @@ type completionSession struct {
 	state    operationState
 	language language.ID
 	range_   textedit.Range
+	prefix   string
 	items    []Completion
 	index    int
 	popup    gui.Popover
@@ -174,7 +175,7 @@ func normalizeCompletions(items []Completion, c CompletionContext) []Completion 
 			item.Text = item.Label
 		}
 		item.Text = textedit.Normalize(item.Text)
-		if item.Label == "" || len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 || strings.ContainsAny(item.Label, "\r\n\t") {
+		if item.Label == "" || len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 || strings.ContainsAny(item.Label, "\r\n\t\v\f\u0085\u2028\u2029") {
 			continue
 		}
 		if !strings.HasPrefix(strings.ToLower(item.Label), prefix) || item.Text == c.Prefix || seen[item.Text] {
@@ -188,6 +189,39 @@ func normalizeCompletions(items []Completion, c CompletionContext) []Completion 
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Label < out[j].Label })
 	return out
+}
+
+// Prefix matching folds Unicode runes, whose UTF-8 lengths can change (İ -> i).
+// Convert the folded prefix length back to a boundary in the original label.
+func completionPrefixEnd(label, prefix string) int {
+	folded := strings.ToLower(prefix)
+	if folded == "" || !strings.HasPrefix(strings.ToLower(label), folded) {
+		return 0
+	}
+	length := 0
+	for at, r := range label {
+		length += utf8.RuneLen(unicode.ToLower(r))
+		if length >= len(folded) {
+			return at + utf8.RuneLen(r)
+		}
+	}
+	return 0
+}
+
+func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rectangle) geometry.Point {
+	x := caret.X
+	row := v.document.model.LineAt(c.Range.Start)
+	r, _ := v.document.model.LineRange(row)
+	if p := v.paragraph(row); p != nil {
+		start := p.geometry.Caret(textedit.Position{Offset: c.Range.Start - r.Start})
+		start = start.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.heights.Top(row) - v.offset.Y})
+		// A wrapped or horizontally hidden word start cannot anchor the visible
+		// list. Keep it at the caret in that case; never alter editor selection.
+		if start.Y == caret.Y && start.X >= v.gutter+padding {
+			x = start.X
+		}
+	}
+	return geometry.Point{X: x - completionTextInset, Y: caret.Y + caret.Height + 2}
 }
 
 func (v *SourceView) complete(explicit bool) error {
@@ -228,11 +262,15 @@ func (v *SourceView) complete(explicit bool) error {
 	if !ok || !state.valid(v) {
 		return nil
 	}
-	s := &completionSession{state: state, language: c.Language, range_: c.Range, items: items}
+	position := v.completionPosition(c, caret)
+	if !state.valid(v) {
+		return nil
+	}
+	s := &completionSession{state: state, language: c.Language, range_: c.Range, prefix: c.Prefix, items: items}
 	s.popup = gui.NewPopover(v, nil)
 	s.list = newCompletionList(v, s)
 	s.popup.SetWidget(s.list)
-	s.popup.SetPosition(geometry.Point{X: caret.X, Y: caret.Y + caret.Height})
+	s.popup.SetPosition(position)
 	s.popup.ConnectDismissRequest(v.closeCompletion)
 	v.completion = s
 	if err := s.popup.Show(); err != nil {
