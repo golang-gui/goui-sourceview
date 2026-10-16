@@ -215,7 +215,8 @@ type bracketState struct {
 }
 
 // Matching scans at most 64 KiB on either side and never guesses unresolved
-// lexical styles. A typed mismatch highlights the candidate alone.
+// lexical styles. A single range identifies a candidate; only two ranges confirm
+// a pair and qualify for matching decoration.
 func (v *SourceView) matchingBrackets() []textedit.Range {
 	m := v.document.model
 	s := v.Selection()

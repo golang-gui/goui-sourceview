@@ -37,9 +37,27 @@ caret 优先检查右侧括号，再检查左侧，按类型栈寻找另一端�
 扫描窗口在 caret 两侧各最多 64 KiB，未就绪的 token 请求正常帧分析并推迟显示。
 匹配结果按文档身份、修订、caret 和语言缓存，未知分析结果不缓存成有效“无匹配”。
 
-活动且无选区时，在两端绘制下划线；窗口内未找到另一端时只标出当前括号。
-这不是全文件语法诊断：超出窗口的配对仍可能存在，不给它标注确定的语法错误。
-装饰不改变文字前景或 Geometry，不产生语义交互动作。
+活动且无选区时，只装饰已确认的两端，使用淡背景和 1 DIP 细边框。
+未匹配、分析未完成或另一端超出搜索窗口时不显示单端提示，不把局部查询结果当成语法诊断。
+失焦、选择文本和预编辑时不显示配对装饰。
+
+几何采用实际 visual-line/Cluster 范围，上下各内缩 1 DIP；边框路径再内缩半个线宽，
+保证描边留在字符单元内。宽不超过 1 DIP 或高不超过 3 DIP 的单元不画，避免反向矩形。
+跨行、软折行、bidi 和滚动沿用既有几何与裁剪；两端共享同一 shaping Cluster 时去重，
+避免半透明装饰叠加。文字在装饰之后绘制，语法前景和布局度量不变，不产生语义交互动作。
+
+配色来自 `scheme.Definition.BracketMatchBackground` 与 `BracketMatchBorder`，
+不借用 caret、选区或输入法颜色。两字段分别支持 alpha，透明时独立关闭相应填充或边框；
+旧的自定义 Definition 未填写两字段时不显示配对装饰，不从其他颜色推断默认值。
+
+| 配色 | 背景 | 边框 |
+| --- | --- | --- |
+| Light | `#e6eef7` | `#9aafc4` |
+| Dark | `#35414d` | `#667a8d` |
+
+先画当前行与括号淡底，再画搜索/选择背景，最后画括号边框和文字。
+搜索背景优先于括号淡底，边框保留配对提示；配色变更走已有 SetScheme/绘制失效，
+不建立新的字体布局缓存或系统设置订阅。
 
 ## 参考与取舍
 
@@ -55,3 +73,9 @@ caret 优先检查右侧括号，再检查左侧，按类型栈寻找另一端�
   区分闭合与包裹；[VS Code 1.105.0 cursorTypeEditOperations.ts](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/common/cursor/cursorTypeEditOperations.ts#L100)
   的 overtype 使用自动闭合位置，SurroundSelectionOperation 排除正在组合的输入。
   采用显式身份与 IME 边界，首轮使用 Go 编辑计划与有限标记，不建设通用 decoration 追踪子系统。
+
+视觉调整核对 [Monaco/VS Code 的括号背景与边框配置](https://code.visualstudio.com/api/references/theme-color#editor-colors)、
+[GtkSourceView 5 配色定义](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/style-reference.html)
+中的 `bracket-match`，以及 [Scintilla 的独立括号装饰](https://www.scintilla.org/ScintillaDoc.html#SCI_BRACEHIGHLIGHTINDICATOR)。
+采用独立主题色和与语法着色分离的装饰；未采用改字重/字色、彩虹层级或明显的粗下划线。
+这些是参考 API 的职责划分，具体颜色与 1 DIP 几何为本项目的视觉选择，不声称复制其默认外观。

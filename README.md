@@ -61,8 +61,9 @@ Ctrl/Cmd+A/C/X/V/Z、Ctrl/Cmd+Shift+Z、方向键、Home/End、PageUp/PageDown �
 
 双击选择词，三击选择逻辑整行，双击后拖动按词扩展。右键或 Shift+F10 打开编辑菜单。
 Ctrl+Space 请求补全，上下选择、Enter/Tab 确认、Escape 取消，也可点击候选。
-自动补全和括号配对默认开启，可通过 SetAutomaticCompletion/SetAutoPairs 关闭；
+自动补全和括号自动插入默认开启，可通过 SetAutomaticCompletion/SetAutoPairs 关闭；
 SetCompletionProvider 可添加应用候选，ui 提供同名薄绑定配置。
+配对提示使用淡底和细边框；主题的 BracketMatchBackground/BracketMatchBorder 可分别配色或设为透明关闭。
 当前补全提供语言关键词/名称及附近文档词，不包含 Schema、LSP 或语义类型推断。
 
 ReplaceSelection、Cut、Copy 等同步操作返回错误；Paste 返回请求是否接受，

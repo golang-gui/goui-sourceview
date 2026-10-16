@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"image/color"
+	"slices"
 	"strconv"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
@@ -409,7 +410,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 	caretRow := v.displayLine(v.displayCaret())
 	selection := v.Selection().Range()
 	var brackets []textedit.Range
-	if activeFocus(v) {
+	if activeFocus(v) && (v.colors.BracketMatchBackground.A != 0 || v.colors.BracketMatchBorder.A != 0) {
 		brackets = v.matchingBrackets()
 	}
 	for row := first; row <= last; row++ {
@@ -423,6 +424,14 @@ func (v *SourceView) Paint(p gui.Painter) {
 			p.FillRect(geometry.Rect(v.gutter, origin.Y, max(0, bounds.Width-v.gutter), item.height), graphics.ColorOf(v.colors.CurrentLine))
 		}
 		if v.projection == nil {
+			// Put the quiet fill below search/selection, and the outline above
+			// those backgrounds. Neither pass changes syntax foregrounds.
+			bracketRects := bracketRectangles(item, r, origin, brackets)
+			if c := v.colors.BracketMatchBackground; c.A != 0 {
+				for _, rect := range bracketRects {
+					p.FillRect(rect, graphics.ColorOf(c))
+				}
+			}
 			for _, match := range v.search.InRange(v.document.model, r, 2000) {
 				c := v.colors.SearchBackground
 				if v.currentMatch != nil && v.currentMatch.raw == match {
@@ -435,13 +444,11 @@ func (v *SourceView) Paint(p gui.Painter) {
 				c = v.colors.SelectionBackground
 			}
 			v.paintRange(p, item, r, origin, selection, c)
-			for _, bracket := range brackets {
-				if bracket.End <= r.Start || bracket.Start >= r.End {
-					continue
-				}
-				for _, rect := range item.geometry.Selection(textedit.Range{Start: max(r.Start, bracket.Start) - r.Start, End: min(r.End, bracket.End) - r.Start}) {
-					rect = rect.Translate(origin)
-					p.DrawLine(geometry.Point{X: rect.X, Y: rect.Y + rect.Height - 1}, geometry.Point{X: rect.X + rect.Width, Y: rect.Y + rect.Height - 1}, 2, graphics.ColorOf(v.colors.Caret))
+			if c := v.colors.BracketMatchBorder; c.A != 0 {
+				for _, rect := range bracketRects {
+					// Strokes are centered on the path. Keep the 1-DIP border
+					// inside its character cell, including at viewport edges.
+					p.DrawRect(geometry.Rect(rect.X+.5, rect.Y+.5, rect.Width-1, rect.Height-1), 1, graphics.ColorOf(c))
 				}
 			}
 			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 {
@@ -501,6 +508,37 @@ func (v *SourceView) Paint(p gui.Painter) {
 		p.Restore()
 		p.DrawLine(geometry.Point{X: v.gutter - .5}, geometry.Point{X: v.gutter - .5, Y: bounds.Height}, 1, graphics.ColorOf(v.colors.Border))
 	}
+}
+
+// Only a confirmed pair receives matching decoration. A lone candidate may be
+// unmatched or simply have its partner beyond the bounded analysis window.
+func bracketRectangles(item *paragraph, line textedit.Range, origin geometry.Point, brackets []textedit.Range) []geometry.Rectangle {
+	if len(brackets) != 2 {
+		return nil
+	}
+	var result []geometry.Rectangle
+	for _, bracket := range brackets {
+		if bracket.End <= line.Start || bracket.Start >= line.End {
+			continue
+		}
+		local := textedit.Range{Start: max(line.Start, bracket.Start) - line.Start, End: min(line.End, bracket.End) - line.Start}
+		for _, rect := range item.geometry.Selection(local) {
+			// Native visual-line geometry keeps wrapped/bidi positions exact.
+			// A small vertical inset separates the box from neighboring rows.
+			if rect.Width <= 1 || rect.Height <= 3 {
+				continue
+			}
+			rect.Y++
+			rect.Height -= 2
+			rect = rect.Translate(origin)
+			// A shaping cluster may contain both characters. Paint its shared
+			// rectangle once so translucent decorations do not accumulate.
+			if !slices.Contains(result, rect) {
+				result = append(result, rect)
+			}
+		}
+	}
+	return result
 }
 func (v *SourceView) paintRange(p gui.Painter, item *paragraph, line textedit.Range, origin geometry.Point, r textedit.Range, c color.NRGBA) {
 	start, end := max(line.Start, r.Start)-line.Start, min(line.End, r.End)-line.Start

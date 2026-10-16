@@ -23,10 +23,14 @@ type Definition struct {
 	InactiveSelectionBackground color.NRGBA
 	SearchBackground            color.NRGBA
 	CurrentSearchBackground     color.NRGBA
-	Caret                       color.NRGBA
-	PreeditUnderline            color.NRGBA
-	Border                      color.NRGBA
-	Tokens                      map[language.Kind]color.NRGBA
+	// BracketMatchBackground and BracketMatchBorder decorate a confirmed pair.
+	// Zero alpha independently disables the fill or border.
+	BracketMatchBackground color.NRGBA
+	BracketMatchBorder     color.NRGBA
+	Caret                  color.NRGBA
+	PreeditUnderline       color.NRGBA
+	Border                 color.NRGBA
+	Tokens                 map[language.Kind]color.NRGBA
 }
 
 // Scheme is immutable and safe to share.
@@ -78,6 +82,7 @@ var light = builtin(Definition{
 	GutterBackground: rgb(0xf6f8fa), GutterForeground: rgb(0x6e7781), CurrentLine: rgb(0xf3f6fa),
 	SelectionBackground: rgb(0xb8d7ff), SelectionForeground: rgb(0x111111), InactiveSelectionBackground: rgb(0xd8dee8),
 	SearchBackground: rgb(0xffe58f), CurrentSearchBackground: rgb(0xffd166),
+	BracketMatchBackground: rgb(0xe6eef7), BracketMatchBorder: rgb(0x9aafc4),
 	Caret: rgb(0x24292f), PreeditUnderline: rgb(0x24292f), Border: rgb(0xd0d7de),
 	Tokens: map[language.Kind]color.NRGBA{
 		language.KindProperty: rgb(0x005cc5), language.KindString: rgb(0x0a7f39), language.KindEscape: rgb(0x6f42c1),
@@ -92,6 +97,7 @@ var dark = builtin(Definition{
 	GutterBackground: rgb(0x252526), GutterForeground: rgb(0x858585), CurrentLine: rgb(0x2a2d2e),
 	SelectionBackground: rgb(0x264f78), SelectionForeground: rgb(0xffffff), InactiveSelectionBackground: rgb(0x3a3d41),
 	SearchBackground: rgb(0x5c4b00), CurrentSearchBackground: rgb(0x805e00),
+	BracketMatchBackground: rgb(0x35414d), BracketMatchBorder: rgb(0x667a8d),
 	Caret: rgb(0xd4d4d4), PreeditUnderline: rgb(0xd4d4d4), Border: rgb(0x454545),
 	Tokens: map[language.Kind]color.NRGBA{
 		language.KindProperty: rgb(0x9cdcfe), language.KindString: rgb(0xce9178), language.KindEscape: rgb(0xd7ba7d),

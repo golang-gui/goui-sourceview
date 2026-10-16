@@ -32,3 +32,28 @@ func TestImmutableAndFallback(t *testing.T) {
 		t.Fatal("accepted transparent base")
 	}
 }
+
+func TestBracketColorsCanBeIndependentlyTransparent(t *testing.T) {
+	for _, base := range []*Scheme{Light(), Dark()} {
+		for _, alpha := range []uint8{0, 64, 255} {
+			d := base.Definition()
+			d.BracketMatchBackground.A = alpha
+			s, err := New(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := s.Definition(); got.BracketMatchBackground.A != alpha || got.BracketMatchBorder != base.Definition().BracketMatchBorder {
+				t.Fatal("background changed border")
+			}
+			d = base.Definition()
+			d.BracketMatchBorder.A = alpha
+			s, err = New(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := s.Definition(); got.BracketMatchBorder.A != alpha || got.BracketMatchBackground != base.Definition().BracketMatchBackground {
+				t.Fatal("border changed background")
+			}
+		}
+	}
+}

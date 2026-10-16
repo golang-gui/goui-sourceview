@@ -124,7 +124,7 @@ RTL 的同一逻辑选区可能分裂成多个视觉矩形，使用 Geometry.Sel
 颜色以标准非预乘 color.NRGBA 存储，进入 graphics 通过既有转换；
 不重复预乘。Token.Kind 未在方案中指定时使用普通前景。
 
-计划接口：
+当前配色接口：
 
 ```go
 package scheme
@@ -146,6 +146,8 @@ type Definition struct {
     InactiveSelectionBackground color.NRGBA
     SearchBackground color.NRGBA
     CurrentSearchBackground color.NRGBA
+    BracketMatchBackground color.NRGBA
+    BracketMatchBorder color.NRGBA
     Caret color.NRGBA
     PreeditUnderline color.NRGBA
     Border color.NRGBA
@@ -174,6 +176,7 @@ Light/Dark 返回可安全共享的不可变实例；修改以取得 Definition�
 | SelectionBackground / SelectionForeground | #b8d7ff / #111111 | #264f78 / #ffffff |
 | InactiveSelectionBackground | #d8dee8 | #3a3d41 |
 | SearchBackground / CurrentSearchBackground | #ffe58f / #ffd166 | #5c4b00 / #805e00 |
+| BracketMatchBackground / BracketMatchBorder | #e6eef7 / #9aafc4 | #35414d / #667a8d |
 | Caret / PreeditUnderline | #24292f | #d4d4d4 |
 | Border | #d0d7de | #454545 |
 | KindProperty | #005cc5 | #9cdcfe |
@@ -196,11 +199,13 @@ KindPlain 使用 Foreground。这个颜色表是本项目初始设计，不是�
 
 1. 编辑区和侧栏背景、边框。
 2. 当前行背景。
-3. 普通搜索命中、当前搜索命中背景。
+3. 已确认括号配对的淡背景，再画普通搜索命中、当前搜索命中背景。
 4. 选区背景（焦点/非焦点分别有配色）。
-5. 语法前景；选中范围使用明确的选择前景覆盖，保证可读。
+5. 括号细边框，再画语法前景；选中范围使用明确的选择前景覆盖，保证可读。
 6. 预编辑下划线、行号/分隔线。
 7. 活动 caret 与焦点装饰。
+
+括号独立主题色、内缩边框及确认条件见 [括号设计](DesignPairs.md)，不修改语法颜色或排版度量。
 
 每个段落应用颜色前先恢复全范围基础前景，再按 token 与选择覆盖，
 否则重新分析后消失的 token 会遗留旧色。只在颜色指纹改变时更新，
