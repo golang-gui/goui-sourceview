@@ -3,19 +3,23 @@
 // ./tests/window/experience. Runs automatically and exits nonzero on failure.
 // Initial state: a plain-text editor with line numbers hidden. Checks double
 // click including the trailing half of a character, word dragging, triple click,
-// partial selection foreground, right-click preservation, Delete and Undo via
-// normal window/popup event dispatch. No clipboard, files or settings are changed.
+// partial selection foreground, right-click preservation, menu keyboard/pointer
+// activation, completion keyboard/pointer/cancellation/provider reentry, bracket
+// insertion/overtype/surround/deletion/newline and atomic undo via normal
+// window/popup event dispatch. No clipboard, files or settings are changed.
 // Record OS, backend and scale. Native IME is outside this program's coverage.
 // Reset by restarting; closes automatically, or close the window to abort.
 package main
 
 import (
 	"bytes"
+	"errors"
 	"log"
 	"runtime"
 	"time"
 
 	source "github.com/golang-gui/goui-sourceview"
+	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -90,6 +94,7 @@ func main() {
 	var point geometry.Point
 	var popup gui.Popover
 	primary, _ := gui.ModPrimary.Resolve()
+	completed := false
 	steps := []func(){
 		func() {
 			check(win.Focused() && ctx.line != nil, "native focus/layout unavailable")
@@ -147,9 +152,117 @@ func main() {
 			check(d.Model().Text() == "alpha beta\n", "menu Delete undo failed")
 			key(events.KeyF10, events.ModifierShift)
 			check(len(win.Popovers()) == 1, "keyboard menu missing")
+			key(events.KeyEnd, 0)
+		},
+		func() {
+			// Newly opened menu rows are realized by the next native frame.
+			var selected func(gui.WidgetInfo) bool
+			selected = func(i gui.WidgetInfo) bool {
+				if i.Role == gui.RoleMenuItem && i.Selected && i.Text == "Select All" {
+					return true
+				}
+				for _, c := range i.Children {
+					if selected(c) {
+						return true
+					}
+				}
+				return false
+			}
+			check(selected(win.Popovers()[0].Widget().Snapshot()), "menu keyboard selection missing")
+			key(events.KeyEnter, 0)
+			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 11}) && len(win.Popovers()) == 0, "menu keyboard activation failed")
+			key(events.KeyF10, events.ModifierShift)
 			key(events.KeyEscape, 0)
 			check(len(win.Popovers()) == 0, "Escape did not close menu")
 			log.Printf("PASS double/triple click, partial selection colors, context menu and history; backend=%s", app.Typography().Name())
+			must(d.SetLanguage(language.JSON))
+			d.Model().SetText("tr")
+			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			key(events.KeySpace, events.ModifierControl)
+			check(len(win.Popovers()) == 1, "JSON completion popup missing")
+		},
+		func() {
+			popup = win.Popovers()[0]
+			info := popup.Widget().Snapshot()
+			check(info.Role == gui.Role("completion-list") && len(info.Children) > 0 && info.Children[0].Text == "true", "JSON completion proposal missing")
+			key(events.KeyEnter, 0)
+			check(d.Model().Text() == "true" && v.Selection().Caret == 4 && len(win.Popovers()) == 0, "completion acceptance failed")
+			key(events.KeyZ, primary)
+			check(d.Model().Text() == "tr" && v.Selection().Caret == 2, "completion undo failed")
+			d.Model().SetText("")
+			v.SetSelection(textedit.Selection{})
+			must(win.CommitText("["))
+			check(d.Model().Text() == "[]" && v.Selection().Caret == 1, "auto pair insertion failed")
+			key(events.KeyEnter, 0)
+			check(d.Model().Text() == "[\n    \n]" && v.Selection().Caret == 6, "pair newline indentation failed")
+			key(events.KeyZ, primary)
+			check(d.Model().Text() == "[]" && v.Selection().Caret == 1, "pair newline undo failed")
+			must(win.CommitText("{"))
+			must(win.CommitText("}"))
+			must(win.CommitText("]"))
+			check(d.Model().Text() == "[{}]" && v.Selection().Caret == 4, "nested pair overtype failed")
+			key(events.KeyZ, primary)
+			check(d.Model().Text() == "[]", "nested pair undo failed")
+			d.Model().SetText("")
+			v.SetSelection(textedit.Selection{})
+			must(win.CommitText("["))
+			key(events.KeyBackspace, 0)
+			check(d.Model().Text() == "", "pair backspace failed")
+			key(events.KeyZ, primary)
+			check(d.Model().Text() == "[]", "pair delete undo failed")
+			d.Model().SetText("word")
+			v.SetSelection(textedit.Selection{Caret: 4})
+			must(win.CommitText(`"`))
+			check(d.Model().Text() == `"word"` && v.Selection() == (textedit.Selection{Anchor: 1, Caret: 5}), "selection surround failed")
+			key(events.KeyZ, primary)
+			check(d.Model().Text() == "word", "selection surround undo failed")
+			d.Model().SetText("")
+			v.SetSelection(textedit.Selection{})
+			must(win.CommitText("t"))
+			check(len(win.Popovers()) == 1, "automatic JSON completion missing")
+			key(events.KeyEscape, 0)
+			check(d.Model().Text() == "t" && len(win.Popovers()) == 0, "completion Escape modified text")
+			must(d.SetLanguage(language.HTML))
+			d.Model().SetText("<di")
+			v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+			key(events.KeySpace, events.ModifierControl)
+			check(len(win.Popovers()) == 1, "HTML completion missing")
+		},
+		func() {
+			popup = win.Popovers()[0]
+			info := popup.Widget().Snapshot()
+			check(len(info.Children) > 0 && info.Children[0].Text == "div", "HTML proposal missing")
+			r := info.Children[0].Bounds
+			p := geometry.Point{X: r.X + r.Width/2, Y: r.Y + r.Height/2}
+			for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
+				must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: p}))
+			}
+			check(d.Model().Text() == "<div" && len(win.Popovers()) == 0, "completion pointer activation failed")
+			d.Model().SetText("<di")
+			v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+			key(events.KeySpace, events.ModifierControl)
+			v.SetReadOnly(true)
+			check(len(win.Popovers()) == 0, "read-only retained completion")
+			v.SetReadOnly(false)
+			var reported error
+			h := v.ConnectError(func(err error) { reported = err })
+			defer h.Disconnect()
+			v.SetCompletionProvider(func(c source.CompletionContext) ([]source.Completion, error) {
+				d.Model().SetText("changed")
+				return []source.Completion{{Label: "div"}}, nil
+			})
+			key(events.KeySpace, events.ModifierControl)
+			check(errors.Is(reported, source.ErrOperationChanged) && len(win.Popovers()) == 0 && d.Model().Text() == "changed", "reentrant completion escaped guard")
+			v.SetCompletionProvider(nil)
+			must(d.SetLanguage(language.JSON))
+			d.Model().SetText("tr")
+			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			key(events.KeySpace, events.ModifierControl)
+			scroll.SetChild(nil)
+			check(len(win.Popovers()) == 0, "unmount retained completion")
+			scroll.SetChild(v)
+			log.Print("PASS JSON/HTML completion keyboard/pointer, cancellation, provider reentry, pair insertion/overtype/surround/deletion and atomic history")
+			completed = true
 			win.Destroy()
 		},
 	}
@@ -164,4 +277,5 @@ func main() {
 	})
 	must(timer.Start(250 * time.Millisecond))
 	app.Run()
+	check(completed, "experience verification aborted before completing all checks")
 }

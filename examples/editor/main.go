@@ -126,6 +126,7 @@ func main() {
 	content.SetSpacing(6)
 	content.AddChild(toolbar)
 	content.AddChild(searchbar)
+	content.AddChild(gui.NewLabel("Double-click: select word   Right-click: edit menu   Ctrl+Space: complete   Enter/Tab: accept"))
 	content.AddChild(scroll)
 	content.AddChild(status)
 	win.SetWidget(content)
