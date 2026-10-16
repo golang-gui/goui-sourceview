@@ -12,17 +12,19 @@ import (
 
 type SourceViewView struct {
 	base.ViewBase[SourceViewView]
-	document             *source.Document
-	readOnly, acceptsTab bool
-	selection            *textedit.Selection
-	indent               *source.IndentOptions
-	wrap                 *source.WrapMode
-	lineNumbers          *bool
-	colors               *scheme.Scheme
-	query                *source.SearchQuery
-	onChange             func(textedit.Change)
-	onSelection          func(textedit.Selection)
-	onError              func(error)
+	document                       *source.Document
+	readOnly, acceptsTab           bool
+	selection                      *textedit.Selection
+	indent                         *source.IndentOptions
+	wrap                           *source.WrapMode
+	lineNumbers                    *bool
+	colors                         *scheme.Scheme
+	query                          *source.SearchQuery
+	onChange                       func(textedit.Change)
+	onSelection                    func(textedit.Selection)
+	onError                        func(error)
+	autoPairs, automaticCompletion *bool
+	completionProvider             source.CompletionProvider
 }
 
 func SourceView() *SourceViewView                                        { v := &SourceViewView{}; v.Self = v; return v }
@@ -55,6 +57,16 @@ func (v *SourceViewView) BindSelection(s base.BindState[textedit.Selection]) *So
 }
 func (v *SourceViewView) Build() base.View { return v }
 
+func (v *SourceViewView) AutoPairs(enabled bool) *SourceViewView { v.autoPairs = &enabled; return v }
+func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {
+	v.automaticCompletion = &enabled
+	return v
+}
+func (v *SourceViewView) CompletionProvider(provider source.CompletionProvider) *SourceViewView {
+	v.completionProvider = provider
+	return v
+}
+
 type state struct {
 	document    *source.Document
 	indent      source.IndentOptions
@@ -64,11 +76,18 @@ type state struct {
 	onSelection func(textedit.Selection)
 	onError     func(error)
 	handles     signal.Handles
+	provider    source.CompletionProvider
 }
 
 func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 	w := source.NewSourceView()
 	s := &state{document: w.Document(), indent: w.IndentOptions(), wrap: w.WrapMode(), lineNumbers: w.ShowLineNumbers()}
+	w.SetCompletionProvider(func(c source.CompletionContext) ([]source.Completion, error) {
+		if s.provider != nil {
+			return s.provider(c)
+		}
+		return nil, nil
+	})
 	s.handles = signal.Handles{
 		w.ConnectChange(func(c textedit.Change) {
 			if s.onChange != nil {
@@ -100,6 +119,16 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	w.SetDocument(d)
 	w.SetReadOnly(v.readOnly)
 	w.SetAcceptsTab(v.acceptsTab)
+	autoPairs, automatic := true, true
+	if v.autoPairs != nil {
+		autoPairs = *v.autoPairs
+	}
+	if v.automaticCompletion != nil {
+		automatic = *v.automaticCompletion
+	}
+	w.SetAutoPairs(autoPairs)
+	w.SetAutomaticCompletion(automatic)
+	s.provider = v.completionProvider
 	indent := s.indent
 	if v.indent != nil {
 		indent = *v.indent
@@ -133,6 +162,7 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 func (v *SourceViewView) Unmount(ctx base.BuildContext, _ gui.Widget) {
 	if s, ok := ctx.State().(*state); ok {
 		s.handles.Disconnect()
+		s.provider = nil
 	}
 }
 

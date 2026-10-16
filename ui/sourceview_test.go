@@ -25,6 +25,15 @@ func TestBindingRestoresDefaultsAndDisconnects(t *testing.T) {
 	events := 0
 	configured := SourceView().Document(document).ReadOnly(true).ShowLineNumbers(false).AcceptsTab(true).WrapMode(source.WrapWordChar).Selection(textedit.Selection{Caret: 2}).OnSelection(func(textedit.Selection) { events++ })
 	configured.Update(ctx, widget)
+	options := SourceView().AutoPairs(false).AutomaticCompletion(false)
+	options.Update(ctx, widget)
+	if widget.AutoPairs() || widget.AutomaticCompletion() {
+		t.Fatal("editor options ignored")
+	}
+	configured.Update(ctx, widget)
+	if !widget.AutoPairs() || !widget.AutomaticCompletion() {
+		t.Fatal("editor option defaults not restored")
+	}
 	if events != 0 || widget.Document() != document || !widget.ReadOnly() || widget.ShowLineNumbers() || !widget.AcceptsTab() {
 		t.Fatal("update emitted or lost config")
 	}
