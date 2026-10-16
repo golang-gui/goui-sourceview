@@ -93,6 +93,7 @@ func (v *SourceView) StyleChanged() {
 	if !gui.IsEnabled(v) {
 		v.cancelPreedit()
 		v.cancelPaste()
+		v.hideMenu()
 	}
 	if v.font == font {
 		return

@@ -187,3 +187,14 @@ OnSelection/OnError 在节点状态保存最新回调，只连接一次底层信
 OnChange 对当前 Document.Model 管理 handle，切 Document 后断开旧模型。
 声明式协调不得因为自身 Update 设置选区再调用用户 OnSelection；事件写回按协调保护区分。
 Unmount 释放声明式连接，不夺走 Window 对 Widget 的最终销毁责任。
+
+## 10. 编辑菜单
+
+使用 GOUI ContextMenuEventController 和 PopoverMenu，经正常事件分发处理右键、
+macOS Control+单击、Shift+F10 和 Menu 键。指针位于实际绘制选区内时保留选区，
+其他位置收起到命中 caret；键盘唤出定位在 caret 下方。
+提供撤销、重做、剪切、复制、粘贴、删除、全选；依据挂载、Enabled、ReadOnly、
+历史和选区更新可用状态。菜单显示不探测或读取剪贴板。
+菜单动作重新核验挂载代次和文档，再调用与键盘相同的编辑入口。
+语言资源使用本模块的 mlang 文本；卸载断开语言监听，原生菜单由锚点生命周期释放。
+菜单打开时保持活动选区配色，关闭后重绘。

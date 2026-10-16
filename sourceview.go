@@ -104,6 +104,7 @@ type SourceView struct {
 	query                                       SearchQuery
 	search                                      *editor.Search
 	currentMatch                                *searchMatch
+	menu                                        *editMenu
 }
 
 func NewSourceView() *SourceView {
@@ -126,6 +127,7 @@ func NewSourceView() *SourceView {
 		v.RequestPaint()
 	})
 	v.installInput()
+	v.installContextMenu()
 	return v
 }
 func (v *SourceView) Document() *Document { return v.document }
@@ -142,6 +144,7 @@ func (v *SourceView) SetDocument(d *Document) {
 		return
 	}
 	v.cancelPaste()
+	v.hideMenu()
 	if v.mounted {
 		v.document.release(v)
 	}
@@ -219,6 +222,7 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	v.resetBlink()
 	v.RequestPaint()
 	selectionEpoch := v.selectionEpoch
+	v.updateMenu()
 	if reveal {
 		v.RevealSelection()
 	}
@@ -236,6 +240,7 @@ func (v *SourceView) SetReadOnly(value bool) {
 		v.cancelPreedit()
 		v.cancelPaste()
 	}
+	v.updateMenu()
 	v.RequestPaint()
 }
 func (v *SourceView) AcceptsTab() bool { return v.acceptsTab }
@@ -314,6 +319,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	}
 	v.cancelPaste()
 	v.currentMatch = nil
+	v.updateMenu()
 	old := v.selection
 	if v.selectionRevision < c.Revision {
 		if c.Reset {
@@ -384,6 +390,11 @@ func (v *SourceView) unmount() {
 	v.mounted = false
 	v.mountEpoch++
 	v.cancelPaste()
+	v.hideMenu()
+	if v.menu != nil && v.menu.language != nil {
+		v.menu.language.Disconnect()
+		v.menu.language = nil
+	}
 	v.dragging = false
 	if v.blink != nil {
 		v.blink.Stop()
@@ -418,7 +429,7 @@ func visible(v gui.Widget) bool {
 }
 
 func activeFocus(v *SourceView) bool {
-	return v.Focused() && (v.Window() == nil || v.Window().Focused())
+	return v.Focused() && (v.Window() == nil || v.Window().Focused() || v.menu != nil && v.menu.popup.Visible())
 }
 
 // Capture before operations that can synchronously call application code.
