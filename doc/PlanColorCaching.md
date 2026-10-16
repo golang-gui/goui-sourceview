@@ -1,7 +1,9 @@
 # 着色缓存切片与验收
 
 日期：2026-10-16。GOUI 基线为 `2f782897684f1bfc892a11b0254e5a2162980ed8`，
-叠加本轮未提交的 DirectWrite 全范围前景覆盖回收修正。SourceView 本轮也未提交。
+叠加当时未提交的 DirectWrite 全范围前景覆盖回收修正。SourceView 当时也未提交。
+后续该修正已独立提交为 GOUI `227220a`；本篇保留原测量范围，当前提交和验证见
+[编辑体验验收](PlanEditorExperience.md)。
 设计契约见 [布局设计](DesignLayout.md#10-着色失效与排版失效分离)。
 
 ## 1. 问题与修改
@@ -68,4 +70,4 @@
 - 远端通过 remote-shell 在临时目录解包验证；Windows 为 SSH Session 0，macOS 为原生离屏排版，未改已有远端检出。
 - GOUI 工作副本全仓测试仍有既有写图副作用；本轮未迁移这些测试。
 - 真实 IME、跨屏/真实混合 DPI、所有 GPU 组合和完整规模矩阵未执行，不计作通过。
-- 两仓工作区依赖仍未发布；DirectWrite 修正需要随 GOUI 后续独立提交/版本提供。
+- 两仓工作区依赖仍未发布；DirectWrite 修正已在 GOUI `227220a` 独立提交，仍待发行版本提供。

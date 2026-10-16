@@ -4,6 +4,7 @@ GOUI 的可选代码编辑器扩展，模块路径为 github.com/golang-gui/goui
 
 当前已提供独立的 SourceView 控件、共享 Document、JSON / XML / HTML 增量高亮、
 选择与复制、编辑与撤销、行号、缩进、字面量搜索替换、亮暗配色和薄声明式绑定。
+支持按词拖选、编辑菜单、语言/文档词补全、括号自动闭合/包裹/成对删除和匹配装饰。
 控件基于 WidgetBase 与公开的 textedit、typography 设施实现，滚动条由 GOUI ScrollView 提供。
 
 当前是开发中的初始实现，尚未完成所有平台的原生验收与独立发布。
@@ -14,8 +15,9 @@ GOUI 的可选代码编辑器扩展，模块路径为 github.com/golang-gui/goui
 本轮同时修改了相邻 GOUI 仓库中的通用批量编辑、Tab 排版和剪贴板结果接口。
 go.mod 保留可获取的 v0.1.1 作为依赖基线；该发行版尚不具备这些新增接口，
 当前需要 GOUI 提交 `2f782897684f1bfc892a11b0254e5a2162980ed8` 或之后包含这些接口的版本，
-本地通过 go.work 联调。Windows 的反复重着色还需要本轮 GOUI DirectWrite 全范围颜色覆盖回收修正（当前未提交），
+本地通过 go.work 联调。Windows 的反复重着色还需要 GOUI `227220a` 的全范围颜色覆盖回收修正，
 详见 [着色缓存验收](doc/PlanColorCaching.md)。新增依赖尚未发布；没有提交机器专属 replace。
+菜单键盘导航使用 GOUI `ffc59f3` 的实现；本轮联调 GOUI HEAD 为 `e345c5c`。
 
 在本仓库运行：
 
@@ -57,6 +59,12 @@ AcceptsTab 默认关闭。打开后 Tab 插入缩进，非空选区的 Tab / Shi
 Escape 后的下一次 Tab / Shift+Tab 交给 GOUI 焦点遍历。
 Ctrl/Cmd+A/C/X/V/Z、Ctrl/Cmd+Shift+Z、方向键、Home/End、PageUp/PageDown 可直接使用。
 
+双击选择词，三击选择逻辑整行，双击后拖动按词扩展。右键或 Shift+F10 打开编辑菜单。
+Ctrl+Space 请求补全，上下选择、Enter/Tab 确认、Escape 取消，也可点击候选。
+自动补全和括号配对默认开启，可通过 SetAutomaticCompletion/SetAutoPairs 关闭；
+SetCompletionProvider 可添加应用候选，ui 提供同名薄绑定配置。
+当前补全提供语言关键词/名称及附近文档词，不包含 Schema、LSP 或语义类型推断。
+
 ReplaceSelection、Cut、Copy 等同步操作返回错误；Paste 返回请求是否接受，
 延迟的读取/插入失败经 ConnectError 通知；取消输入法时，若回调改变了文档或选区，旧命令返回 ErrOperationChanged。复制为空选区、无文本格式以及过期粘贴请求属于正常情况。
 搜索为 Unicode 字面量搜索，支持忽略大小写和整词；全部替换和多行缩进分别只占一次撤销。
@@ -70,6 +78,7 @@ go vet ./...
 
 # 真实桌面，默认不改写剪贴板：
 XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor -auto
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/experience
 ~~~
 
 Linux 有真实输入法时应保留其 XMODIFIERS，再按窗口程序注释手动验收组合输入。
@@ -78,8 +87,11 @@ X11 下内容可能随测试进程退出而消失。
 
 - [总设计](doc/DesignSourceView.md)
 - [编辑与输入](doc/DesignEditing.md)
+- [括号编辑与匹配](doc/DesignPairs.md)
+- [补全](doc/DesignCompletion.md)
 - [语言与增量高亮](doc/DesignHighlighting.md)
 - [排版与呈现](doc/DesignLayout.md)
 - [GOUI 接入与扩展](doc/DesignGOUIIntegration.md)
 - [测试矩阵](doc/Testing.md)
 - [实现和验收记录](doc/Implementation.md)
+- [编辑体验验收](doc/PlanEditorExperience.md)
