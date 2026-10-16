@@ -1,0 +1,116 @@
+package sourceview
+
+import (
+	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/gui/textedit"
+)
+
+func (v *SourceView) cancelPreedit() {
+	v.compositionSeen = false
+	if v.projection == nil {
+		return
+	}
+	v.projection = nil
+	v.invalidateLayout()
+	if !v.resettingIM {
+		v.resettingIM = true
+		v.im.Reset()
+		v.resettingIM = false
+	}
+}
+func (v *SourceView) preedit(text string, caret int) {
+	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
+		return
+	}
+	if text == "" {
+		v.projection = nil
+		v.invalidateLayout()
+		return
+	}
+	v.compositionSeen = true
+	m := v.document.model
+	if v.projection == nil || v.projectionRevision != m.Revision() {
+		v.cancelPaste()
+		v.projection = textedit.NewProjection(m, v.Selection())
+		v.projectionRevision = m.Revision()
+		m.BreakUndoGroup()
+	}
+	v.projection.Update(textedit.Normalize(text), caret)
+	v.invalidateLayout()
+	v.resetBlink()
+	v.RevealSelection()
+}
+func (v *SourceView) commit(c gui.IMCommit) {
+	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
+		return
+	}
+	if c.Text == "" {
+		v.cancelPreedit()
+		return
+	}
+	r := v.Selection().Range()
+	atomic := c.Composed || v.compositionSeen
+	v.compositionSeen = false
+	if v.projection != nil {
+		if v.projectionRevision != v.document.model.Revision() {
+			v.cancelPreedit()
+			return
+		}
+		r = v.projection.Replacement()
+		v.projection = nil
+		v.invalidateLayout()
+		atomic = true
+	}
+	v.report(v.replace(r, c.Text, atomic))
+}
+func (v *SourceView) displayCount() int {
+	if v.projection != nil {
+		return v.projection.LineCount(v.document.model)
+	}
+	return v.document.model.LineCount()
+}
+func (v *SourceView) displayRange(row int) textedit.Range {
+	if v.projection != nil {
+		return v.projection.LineRange(v.document.model, row)
+	}
+	r, _ := v.document.model.LineRange(row)
+	return r
+}
+func (v *SourceView) displayText(row int) string {
+	if v.projection != nil {
+		return v.projection.Paragraph(v.document.model, row)
+	}
+	r := v.displayRange(row)
+	s, _ := v.document.model.Slice(r)
+	return s
+}
+func (v *SourceView) displayLine(offset int) int {
+	if v.projection != nil {
+		return v.projection.LineAt(v.document.model, offset)
+	}
+	return v.document.model.LineAt(offset)
+}
+func (v *SourceView) displayCaret() int {
+	if v.projection != nil {
+		return v.projection.Replacement().Start + v.projection.Caret()
+	}
+	return v.Selection().Caret
+}
+
+// Unchanged paragraphs keep committed highlighting during composition. The
+// projected paragraphs have no committed lexical coordinates and use Plain.
+func (v *SourceView) highlightRow(row int) (int, bool) {
+	if v.projection == nil {
+		return row, true
+	}
+	first := v.projection.FirstLine()
+	end := first + v.projection.ParagraphCount()
+	if row < first {
+		return row, true
+	}
+	if row < end {
+		return 0, false
+	}
+	delta := v.projection.ParagraphCount() - (v.projection.LastLine() - first + 1)
+	return row - delta, true
+}
