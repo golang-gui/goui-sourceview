@@ -4,7 +4,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -230,11 +229,14 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 				run(func() error { return v.tab(shift) })
 			}
 		case events.KeyEnter:
-			run(func() error {
-				return v.ReplaceSelection("\n" + editor.LeadingIndent(v.document.model, v.Selection().Caret))
-			})
+			run(v.newline)
 		case events.KeyBackspace, events.KeyDelete:
 			run(func() error {
+				if event.Key == events.KeyBackspace {
+					if handled, err := v.deletePair(); handled {
+						return err
+					}
+				}
 				r := v.Selection().Range()
 				if r.Start == r.End {
 					if event.Key == events.KeyBackspace {

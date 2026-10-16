@@ -403,6 +403,10 @@ func (v *SourceView) Paint(p gui.Painter) {
 	p.SetClipRect(geometry.Rect(v.gutter, 0, max(0, bounds.Width-v.gutter), bounds.Height))
 	caretRow := v.displayLine(v.displayCaret())
 	selection := v.Selection().Range()
+	var brackets []textedit.Range
+	if activeFocus(v) {
+		brackets = v.matchingBrackets()
+	}
 	for row := first; row <= last; row++ {
 		item := v.paragraph(row)
 		if item == nil {
@@ -426,6 +430,15 @@ func (v *SourceView) Paint(p gui.Painter) {
 				c = v.colors.SelectionBackground
 			}
 			v.paintRange(p, item, r, origin, selection, c)
+			for _, bracket := range brackets {
+				if bracket.End <= r.Start || bracket.Start >= r.End {
+					continue
+				}
+				for _, rect := range item.geometry.Selection(textedit.Range{Start: max(r.Start, bracket.Start) - r.Start, End: min(r.End, bracket.End) - r.Start}) {
+					rect = rect.Translate(origin)
+					p.DrawLine(geometry.Point{X: rect.X, Y: rect.Y + rect.Height - 1}, geometry.Point{X: rect.X + rect.Width, Y: rect.Y + rect.Height - 1}, 2, graphics.ColorOf(v.colors.Caret))
+				}
+			}
 			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 {
 				edge := item.geometry.Caret(textedit.Position{Offset: len(item.text), Upstream: true})
 				p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))

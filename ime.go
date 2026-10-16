@@ -61,6 +61,12 @@ func (v *SourceView) commit(c gui.IMCommit) {
 		v.invalidateLayout()
 		atomic = true
 	}
+	if !atomic {
+		if handled, err := v.pairText(r, c.Text); handled {
+			v.report(err)
+			return
+		}
+	}
 	v.report(v.replace(r, c.Text, atomic))
 }
 func (v *SourceView) displayCount() int {

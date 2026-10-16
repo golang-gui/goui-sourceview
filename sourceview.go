@@ -105,11 +105,14 @@ type SourceView struct {
 	search                                      *editor.Search
 	currentMatch                                *searchMatch
 	menu                                        *editMenu
+	autoPairs                                   bool
+	pairs                                       []autoPair
+	brackets                                    bracketState
 }
 
 func NewSourceView() *SourceView {
 	d := NewDocument("")
-	v := &SourceView{document: d, private: d, showLineNumbers: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
+	v := &SourceView{document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
 	v.colors = scheme.Light().Definition()
 	v.SetFocusable(true)
 	v.SetCursor(gui.CursorText)
@@ -149,6 +152,8 @@ func (v *SourceView) SetDocument(d *Document) {
 		v.document.release(v)
 	}
 	v.document = d
+	v.pairs = nil
+	v.brackets = bracketState{}
 	v.selection = textedit.Selection{}
 	v.upstream = false
 	v.selectionEpoch++
@@ -303,6 +308,7 @@ func (v *SourceView) IMContext() gui.IMContext {
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
 	epoch, d := v.mountEpoch, v.document
 	v.observed = c.Revision
+	v.mapPairs(c)
 	if c.Reset {
 		v.anchor.valid = false
 		v.pendingAnchor = false
@@ -396,6 +402,8 @@ func (v *SourceView) unmount() {
 		v.menu.language = nil
 	}
 	v.dragging = false
+	v.pairs = nil
+	v.brackets = bracketState{}
 	if v.blink != nil {
 		v.blink.Stop()
 		v.blinkHandle.Disconnect()

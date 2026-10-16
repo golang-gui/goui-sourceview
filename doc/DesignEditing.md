@@ -55,7 +55,7 @@ Reset 使分析和投影全部失效；视图选区、查找游标与待 reveal 
 | Backspace / Delete | 删除前/后逻辑 Cluster；段落边界删除 LF；有选区则替换选区 |
 | Primary+A / C / X / V / Z | 全选、复制、剪切、粘贴、撤销；Redo 用 Primary+Shift+Z，Windows/Linux 同时支持 Control+Y |
 | Tab / Shift+Tab | AcceptsTab=true 时缩进/反缩进；false 或 Escape 后一次未修改 Tab/Shift+Tab 交给 GOUI 默认焦点遍历 |
-| Enter | 插入 LF 与基础缩进，一次撤销 |
+| Enter | 基础缩进；紧邻空括号中生成内外两行缩进，一次撤销，见 [括号设计](DesignPairs.md) |
 | Escape | 取消预编辑或当前瞬时交互，并允许下一次 Tab/Shift+Tab 离开编辑器；不关闭应用自有查找 UI |
 
 Primary 用 GOUI 的语义修饰键解析。Option/Alt、AltGraph 和 IME 的组合不能按
@@ -84,7 +84,7 @@ Primary 用 GOUI 的语义修饰键解析。Option/Alt、AltGraph 和 IME 的组
 - 多行缩进：选区覆盖的每个逻辑行首插入一个缩进单位。若非空选区的较大端点恰好在某行首，该行不计入。
 - 反缩进：每行最多删除一个前导 Tab，或最多 IndentWidth 个前导空格；空行和空白不足按实际删除，不能删除内容。
 - 变更前计算全部范围与最终双向选区，以 G1 一次提交。选区仍包围原选中内容，不默认收起到最后一个插入点。
-- Enter 首版复制当前行光标前的前导空白；不做 JSON/XML/HTML 的完整结构自动补全。特殊结构缩进、自动闭合配对后续独立设计。
+- Enter 复制当前行光标前的前导空白；空括号缩进与自动闭合见 [括号设计](DesignPairs.md)，不做完整语法树格式化。
 - 空白前缀中 Tab 的逻辑列推进按 TabWidth；前导之外按原生几何决定可视位置，不用 rune 数乘空格宽度。
 - 重排/格式化、自动转换已有 Tab、整个文件统一缩进不由配置 setter 隐式触发。
 
