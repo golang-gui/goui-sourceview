@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"math"
+	"runtime"
 	"time"
 
 	"github.com/golang-gui/goui/core/geometry"
@@ -168,6 +169,12 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		ctx.StopPropagation()
 		return
 	}
+	if command, ok := lineKeyCommand(event); ok {
+		v.runCommand(command)
+		event.PreventDefault()
+		ctx.StopPropagation()
+		return
+	}
 	mods := event.Modifiers
 	shift := mods&events.ModifierShift != 0
 	base := mods &^ events.ModifierShift
@@ -275,6 +282,40 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		ctx.StopPropagation()
 	}
 }
+
+func lineKeyCommand(event events.KeyEvent) (editCommand, bool) {
+	if event.Key == events.KeyK {
+		mods, ok := (gui.ModPrimary | gui.ModShift).Resolve()
+		return commandDeleteLines, ok && event.Modifiers == mods
+	}
+	if event.Key != events.KeyArrowUp && event.Key != events.KeyArrowDown {
+		return 0, false
+	}
+	alt, ok := gui.ModAlt.Resolve()
+	if !ok {
+		return 0, false
+	}
+	duplicate := gui.ModAlt | gui.ModShift
+	if runtime.GOOS == "linux" {
+		duplicate |= gui.ModControl
+	}
+	copyMods, copyOK := duplicate.Resolve()
+	down := event.Key == events.KeyArrowDown
+	if event.Modifiers == alt {
+		if down {
+			return commandMoveLinesDown, true
+		}
+		return commandMoveLinesUp, true
+	}
+	if copyOK && event.Modifiers == copyMods {
+		if down {
+			return commandDuplicateLinesDown, true
+		}
+		return commandDuplicateLinesUp, true
+	}
+	return 0, false
+}
+
 func (v *SourceView) moveTo(at int, upstream, extend bool) {
 	state := v.operationState()
 	v.cancelPreedit()

@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -17,6 +18,11 @@ const (
 	commandCopy
 	commandPaste
 	commandDelete
+	commandMoveLinesUp
+	commandMoveLinesDown
+	commandDuplicateLinesUp
+	commandDuplicateLinesDown
+	commandDeleteLines
 	commandSelectAll
 )
 
@@ -27,6 +33,11 @@ var commandLabels = [...]mlang.Getter{
 	mlang.String(mlang.En("Copy"), mlang.ZhCN("复制")),
 	mlang.String(mlang.En("Paste"), mlang.ZhCN("粘贴")),
 	mlang.String(mlang.En("Delete"), mlang.ZhCN("删除")),
+	mlang.String(mlang.En("Move Lines Up"), mlang.ZhCN("上移行")),
+	mlang.String(mlang.En("Move Lines Down"), mlang.ZhCN("下移行")),
+	mlang.String(mlang.En("Duplicate Lines Up"), mlang.ZhCN("向上复制行")),
+	mlang.String(mlang.En("Duplicate Lines Down"), mlang.ZhCN("向下复制行")),
+	mlang.String(mlang.En("Delete Lines"), mlang.ZhCN("删除整行")),
 	mlang.String(mlang.En("Select All"), mlang.ZhCN("全选")),
 }
 
@@ -55,6 +66,16 @@ func (v *SourceView) canCommand(c editCommand) bool {
 		return !v.readOnly && clipboard
 	case commandDelete:
 		return !v.readOnly && selected
+	case commandMoveLinesUp, commandMoveLinesDown:
+		if v.readOnly {
+			return false
+		}
+		first, last, err := editor.SelectedLines(v.document.model, v.Selection())
+		return err == nil && (c == commandMoveLinesUp && first > 0 || c == commandMoveLinesDown && last+1 < v.document.model.LineCount())
+	case commandDuplicateLinesUp, commandDuplicateLinesDown:
+		return !v.readOnly
+	case commandDeleteLines:
+		return !v.readOnly && v.document.model.Len() > 0
 	case commandSelectAll:
 		return v.document.model.Len() > 0
 	}
@@ -78,6 +99,12 @@ func (v *SourceView) runCommand(c editCommand) {
 		v.report(v.Paste())
 	case commandDelete:
 		v.report(v.ReplaceSelection(""))
+	case commandMoveLinesUp, commandMoveLinesDown:
+		v.report(v.MoveLines(c == commandMoveLinesDown))
+	case commandDuplicateLinesUp, commandDuplicateLinesDown:
+		v.report(v.DuplicateLines(c == commandDuplicateLinesDown))
+	case commandDeleteLines:
+		v.report(v.DeleteLines())
 	case commandSelectAll:
 		v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
 	}
@@ -130,7 +157,7 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	items := gui.NewMenu()
 	m.items = make(map[editCommand]*gui.MenuItem)
 	for c := commandUndo; c <= commandSelectAll; c++ {
-		if c == commandCut || c == commandSelectAll {
+		if c == commandCut || c == commandMoveLinesUp || c == commandSelectAll {
 			items.AppendSeparator()
 		}
 		item := items.Append(commandLabels[c](), func() {

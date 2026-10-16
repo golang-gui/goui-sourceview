@@ -194,8 +194,9 @@ Unmount 释放声明式连接，不夺走 Window 对 Widget 的最终销毁责�
 使用 GOUI ContextMenuEventController 和 PopoverMenu，经正常事件分发处理右键、
 macOS Control+单击、Shift+F10 和 Menu 键。指针位于实际绘制选区内时保留选区，
 其他位置收起到命中 caret；键盘唤出定位在 caret 下方。
-提供撤销、重做、剪切、复制、粘贴、删除、全选；依据挂载、Enabled、ReadOnly、
-历史和选区更新可用状态。菜单显示不探测或读取剪贴板。
+提供撤销、重做、剪切、复制、粘贴、删除、行移动/复制/删除、全选；依据挂载、Enabled、ReadOnly、
+历史、选区和文档边界更新可用状态。全选保持最后一项，行操作单独分组。
+菜单显示不探测或读取剪贴板。
 菜单动作重新核验挂载代次和文档，再调用与键盘相同的编辑入口。
 语言资源使用本模块的 mlang 文本；卸载断开语言监听，原生菜单由锚点生命周期释放。
 菜单打开时保持活动选区配色，关闭后重绘。
@@ -258,3 +259,22 @@ IM Reset、模型通知和选区回调仍可能重入，沿用 applyPlan 的身�
   本轮移动保留原始缩进，不接入它的语言自动缩进策略、UTF-16 坐标或多选区对象体系。
 - [GtkSourceView 5.22.1 move-lines](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/signal.View.move-lines.html)
   定义当前行/选中行向上或下移动；采用 down 布尔方向，输入仍由 GOUI 正常分发。
+
+### 快捷键与菜单
+
+| 命令 | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| 上移/下移行 | Alt+↑/↓ | Alt+↑/↓ | Option+↑/↓ |
+| 向上/下复制行 | Alt+Shift+↑/↓ | Control+Alt+Shift+↑/↓ | Option+Shift+↑/↓ |
+| 删除整行 | Control+Shift+K | Control+Shift+K | Command+Shift+K |
+
+按 [VS Code 1.105.0 行命令绑定](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/linesOperations/browser/linesOperations.ts#L71)
+区分 Linux 的复制组合键，Alt 与 Primary 使用 GOUI 的语义修饰键解析；只匹配精确修饰键，
+额外 AltGraph 不当作行命令。组合键能否从系统或 IME 到达应用由所在桌面决定，
+正常 DispatchEvent 验证不证明物理按键未被系统截获；也可使用右键菜单或应用自定入口。
+
+补全等瞬时交互先处理或关闭自身，再进入行命令。识别到的行快捷键即使因只读或边界
+无操作，也阻止默认行为及继续传播，避免触发窗口同键动作；禁用控件遵循 GOUI 焦点和输入规则。
+菜单与键盘共用可用状态和命令执行入口，文首上移、文末下移及空文档删除置灰，
+空文档复制仍可创建一个新空行。语义快照复用普通菜单项的角色、Enabled、边界和动作，
+不新增直接执行编辑操作的自动化动作。ui 不增加命令状态副本。

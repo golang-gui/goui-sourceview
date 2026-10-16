@@ -61,6 +61,8 @@ Ctrl/Cmd+A/C/X/V/Z、Ctrl/Cmd+Shift+Z、方向键、Home/End、PageUp/PageDown �
 
 双击选择词，三击选择逻辑整行，双击后拖动按词扩展。右键或 Shift+F10 打开编辑菜单。
 Ctrl+Space 请求补全，上下选择、Enter/Tab 确认、Escape 取消，也可点击候选。
+Alt/Option+上下移动逻辑行；加 Shift 复制行（Linux 还需加 Control）；Primary+Shift+K 删除整行。
+右键菜单也提供这些命令；移动和复制保留选区方向，每次操作可一次撤销，详见 [行编辑规则](doc/DesignEditing.md#12-逻辑行编辑)。
 自动补全和括号自动插入默认开启，可通过 SetAutomaticCompletion/SetAutoPairs 关闭；
 SetCompletionProvider 可添加应用候选，ui 提供同名薄绑定配置。
 补全列表支持独立亮暗配色、名称/说明分列、前缀强调、长文本省略和滚动位置提示；
