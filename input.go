@@ -155,6 +155,19 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		return
 	}
 	primary, _ := gui.ModPrimary.Resolve()
+	if v.completionKey(event) {
+		event.PreventDefault()
+		ctx.StopPropagation()
+		return
+	}
+	if event.Key == events.KeySpace && event.Modifiers == events.ModifierControl {
+		if v.editable() == nil {
+			v.report(v.ShowCompletion())
+		}
+		event.PreventDefault()
+		ctx.StopPropagation()
+		return
+	}
 	mods := event.Modifiers
 	shift := mods&events.ModifierShift != 0
 	base := mods &^ events.ModifierShift
@@ -231,6 +244,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		case events.KeyEnter:
 			run(v.newline)
 		case events.KeyBackspace, events.KeyDelete:
+			wasCompleting := v.completion != nil
 			run(func() error {
 				if event.Key == events.KeyBackspace {
 					if handled, err := v.deletePair(); handled {
@@ -247,6 +261,9 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 				}
 				return v.replace(r, "", false)
 			})
+			if wasCompleting && v.editable() == nil {
+				v.report(v.complete(false))
+			}
 		case events.KeyArrowLeft, events.KeyArrowRight, events.KeyArrowUp, events.KeyArrowDown, events.KeyHome, events.KeyEnd, events.KeyPageUp, events.KeyPageDown:
 			v.cancelPreedit()
 			v.navigate(event.Key, shift)

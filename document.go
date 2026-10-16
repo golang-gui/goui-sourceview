@@ -47,6 +47,7 @@ func (d *Document) SetLanguage(id language.ID) error {
 		d.engine.SetLanguage(id)
 	}
 	for v := range d.views {
+		v.closeCompletion()
 		v.RequestPaint()
 	}
 	d.requestWork()

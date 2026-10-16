@@ -108,12 +108,19 @@ type SourceView struct {
 	autoPairs                                   bool
 	pairs                                       []autoPair
 	brackets                                    bracketState
+	completion                                  *completionSession
+	completionProvider                          CompletionProvider
+	completionEpoch                             uint64
+	closingCompletion                           bool
+	automaticCompletion                         bool
+	windowFocus                                 signal.Handle
 }
 
 func NewSourceView() *SourceView {
 	d := NewDocument("")
 	v := &SourceView{document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
 	v.colors = scheme.Light().Definition()
+	v.automaticCompletion = true
 	v.SetFocusable(true)
 	v.SetCursor(gui.CursorText)
 	v.im = gui.NewIMContext()
@@ -123,6 +130,7 @@ func NewSourceView() *SourceView {
 	v.ConnectUnmount(v.unmount)
 	v.ConnectFocused(func(focused bool) {
 		if !focused {
+			v.closeCompletion()
 			v.cancelPreedit()
 			v.dragging = false
 		}
@@ -148,6 +156,10 @@ func (v *SourceView) SetDocument(d *Document) {
 	}
 	v.cancelPaste()
 	v.hideMenu()
+	v.closeCompletion()
+	if !state.valid(v) {
+		return
+	}
 	if v.mounted {
 		v.document.release(v)
 	}
@@ -222,6 +234,10 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	v.selectionRevision = v.document.model.Revision()
 	v.selectionEpoch++
 	v.cancelPaste()
+	v.closeCompletion()
+	if v.document != state.document || v.mountEpoch != state.mount || v.document.model.Revision() != state.revision || v.selectionEpoch != state.selection+1 {
+		return
+	}
 	v.currentMatch = nil
 	v.preferredSet = false
 	v.resetBlink()
@@ -242,6 +258,7 @@ func (v *SourceView) SetReadOnly(value bool) {
 	}
 	v.readOnly = value
 	if value {
+		v.closeCompletion()
 		v.cancelPreedit()
 		v.cancelPaste()
 	}
@@ -308,6 +325,10 @@ func (v *SourceView) IMContext() gui.IMContext {
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
 	epoch, d := v.mountEpoch, v.document
 	v.observed = c.Revision
+	v.closeCompletion()
+	if v.document != d || v.mountEpoch != epoch || !v.mounted {
+		return
+	}
 	v.mapPairs(c)
 	if c.Reset {
 		v.anchor.valid = false
@@ -367,6 +388,14 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 func (v *SourceView) mount() {
 	v.mounted = true
 	v.mountEpoch++
+	if win := v.Window(); win != nil {
+		v.windowFocus = win.ConnectFocus(func(focused bool) {
+			if !focused {
+				v.closeCompletion()
+			}
+			v.RequestPaint()
+		})
+	}
 	if v.observed != v.document.model.Revision() {
 		v.anchor.valid = false
 		v.pendingAnchor = false
@@ -397,6 +426,11 @@ func (v *SourceView) unmount() {
 	v.mountEpoch++
 	v.cancelPaste()
 	v.hideMenu()
+	v.closeCompletion()
+	if v.windowFocus != nil {
+		v.windowFocus.Disconnect()
+		v.windowFocus = nil
+	}
 	if v.menu != nil && v.menu.language != nil {
 		v.menu.language.Disconnect()
 		v.menu.language = nil

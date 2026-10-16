@@ -98,6 +98,7 @@ func (v *SourceView) installContextMenu() {
 
 func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	state := v.operationState()
+	v.closeCompletion()
 	v.cancelPreedit()
 	if !state.valid(v) || !v.mounted || v.Window() == nil {
 		return nil

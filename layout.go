@@ -80,6 +80,7 @@ func (v *SourceView) StyleChanged() {
 	}
 	state := style.Normal
 	if !gui.IsEnabled(v) {
+		v.closeCompletion()
 		state = style.Disabled
 	}
 	resolved := gui.ResolveStyle(name, "", state)
@@ -98,6 +99,7 @@ func (v *SourceView) StyleChanged() {
 	if v.font == font {
 		return
 	}
+	v.closeCompletion()
 	v.font = font
 	v.metricsReady = false
 	v.contentWidth = 0
@@ -181,6 +183,9 @@ func (v *SourceView) ensureHeights() {
 	}
 }
 func (v *SourceView) LayoutVisible(viewport geometry.Size, offset geometry.Point) {
+	if v.viewport != viewport || v.offset != offset {
+		v.closeCompletion()
+	}
 	if v.viewport.Width != viewport.Width && v.wrap != WrapNone {
 		v.dropLayouts()
 		v.heights.Reset(v.displayCount(), v.lineHeight)

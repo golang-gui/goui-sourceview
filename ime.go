@@ -27,6 +27,7 @@ func (v *SourceView) preedit(text string, caret int) {
 		v.invalidateLayout()
 		return
 	}
+	v.closeCompletion()
 	v.compositionSeen = true
 	m := v.document.model
 	if v.projection == nil || v.projectionRevision != m.Revision() {
@@ -62,12 +63,22 @@ func (v *SourceView) commit(c gui.IMCommit) {
 		atomic = true
 	}
 	if !atomic {
+		state := v.operationState()
 		if handled, err := v.pairText(r, c.Text); handled {
 			v.report(err)
+			if err == nil && c.Text == "<" && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection().Caret == r.Start+1 {
+				v.report(v.complete(true))
+			}
 			return
 		}
 	}
-	v.report(v.replace(r, c.Text, atomic))
+	state := v.operationState()
+	err := v.replace(r, c.Text, atomic)
+	v.report(err)
+	end := r.Start + len(textedit.Normalize(c.Text))
+	if err == nil && !atomic && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == (textedit.Selection{Anchor: end, Caret: end}) {
+		v.report(v.complete(false))
+	}
 }
 func (v *SourceView) displayCount() int {
 	if v.projection != nil {

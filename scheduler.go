@@ -136,6 +136,7 @@ func (v *SourceView) updateScheme() {
 	if v.appliedScheme == s {
 		return
 	}
+	v.closeCompletion()
 	v.appliedScheme = s
 	v.colors = s.Definition()
 	v.RequestPaint()
