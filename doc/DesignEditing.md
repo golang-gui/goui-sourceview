@@ -1,7 +1,7 @@
 # 编辑核心、输入与查找设计
 
-> 状态：首版实现规格，尚未实现。公共入口见 [总设计](DesignSourceView.md)；
-> G1/G3 是 [GOUI 扩展提案](DesignGOUIIntegration.md)，不是现有接口。
+> 状态：已实现的基础行为与后续约束。实施和验证边界见 [实施记录](Implementation.md)。
+> 公共入口见 [总设计](DesignSourceView.md)，GOUI 所需提交见 [接入设计](DesignGOUIIntegration.md)。
 
 ## 1. 命令流水线
 
@@ -66,7 +66,9 @@ Primary 用 GOUI 的语义修饰键解析。Option/Alt、AltGraph 和 IME 的组
 输入层区分“已识别命令”和“实际发生编辑”：只读下拒绝的修改按键仍按已识别处理，
 不落到无关窗口快捷键；这种预期的模式限制不发错误信号。明确放行的 Tab 例外。
 
-单击定位；Shift+单击扩展；双击按模型 Unicode word segment 选取并吸附 Cluster。
+单击定位；Shift+单击扩展；双击按指针所在 Cluster 的模型 Unicode word segment 选取，
+三击选择逻辑整行（含 LF）。命中字符后半部时仍选择该字符所属的词。
+双击后拖动以完整词扩展，反向拖动保留方向；松开不再缩为普通 caret 选区。
 正文拖选复用 GOUI 手势仲裁/捕获，取消时清理状态。
 点击行号选择整个逻辑行（有 LF 时包含它），末尾空行为空选区。
 拖到视口外使用挂载期计时器推进目标与 reveal，不修改 ScrollView 私有偏移。

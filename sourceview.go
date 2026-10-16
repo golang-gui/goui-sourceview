@@ -96,6 +96,9 @@ type SourceView struct {
 	dragging                                    bool
 	dragPoint                                   geometry.Point
 	dragGutter                                  bool
+	dragUnit                                    int // 0: caret, 1: word, 2: logical line
+	dragRange                                   textedit.Range
+	clickCount                                  int
 	lastClick                                   time.Time
 	lastClickPoint                              geometry.Point
 	query                                       SearchQuery

@@ -39,6 +39,7 @@ func (v *SourceView) installInput() {
 		v.dragGutter = point.X < v.gutter
 		v.dragPoint = point
 		v.dragging = true
+		v.dragUnit = 0
 		if mods&events.ModifierShift != 0 {
 			s.Caret = pos.Offset
 		} else {
@@ -46,20 +47,30 @@ func (v *SourceView) installInput() {
 		}
 		now := time.Now()
 		twice := now.Sub(v.lastClick) < 400*time.Millisecond && math.Abs(float64(point.X-v.lastClickPoint.X)) < 4 && math.Abs(float64(point.Y-v.lastClickPoint.Y)) < 4
+		if twice && mods&events.ModifierShift == 0 {
+			v.clickCount = v.clickCount%3 + 1
+		} else {
+			v.clickCount = 1
+		}
 		v.lastClick = now
 		v.lastClickPoint = point
 		if v.dragGutter {
-			row := v.document.model.LineAt(pos.Offset)
-			r, _ := v.document.model.LineRange(row)
-			if row < v.document.model.LineCount()-1 {
-				r.End++
-			}
+			r := v.lineSelection(pos.Offset)
+			v.dragUnit, v.dragRange = 2, r
 			if mods&events.ModifierShift == 0 {
 				s.Anchor = r.Start
+			} else {
+				v.dragRange = textedit.Range{Start: s.Anchor, End: s.Anchor}
 			}
 			s.Caret = r.End
-		} else if twice {
-			r := v.document.model.WordAt(pos.Offset)
+		} else if v.clickCount > 1 {
+			r := v.wordSelection(point)
+			v.dragUnit = 1
+			if v.clickCount == 3 {
+				v.dragUnit = 2
+				r = v.lineSelection(pos.Offset)
+			}
+			v.dragRange = r
 			s = textedit.Selection{Anchor: r.Start, Caret: r.End}
 		}
 		v.setSelection(s, pos.Upstream, false)
@@ -94,19 +105,51 @@ func (v *SourceView) dragSelection(point geometry.Point) {
 	pos := v.hit(point)
 	s := v.Selection()
 	s.Caret = pos.Offset
-	if v.dragGutter {
-		row := v.document.model.LineAt(pos.Offset)
-		r, _ := v.document.model.LineRange(row)
-		if pos.Offset >= s.Anchor {
-			s.Caret = r.End
-			if row < v.document.model.LineCount()-1 {
-				s.Caret++
-			}
+	if v.dragUnit != 0 {
+		r := v.wordSelection(point)
+		if v.dragUnit == 2 {
+			r = v.lineSelection(pos.Offset)
+		}
+		if r.Start < v.dragRange.Start {
+			s.Anchor, s.Caret = v.dragRange.End, r.Start
 		} else {
-			s.Caret = r.Start
+			s.Anchor, s.Caret = v.dragRange.Start, max(v.dragRange.End, r.End)
 		}
 	}
 	v.setSelection(s, pos.Upstream, false)
+}
+
+func (v *SourceView) lineSelection(at int) textedit.Range {
+	m := v.document.model
+	row := m.LineAt(at)
+	r, _ := m.LineRange(row)
+	if row+1 < m.LineCount() {
+		r.End++
+	}
+	return r
+}
+
+// Select the cluster under the pointer, including its trailing half. Nearest
+// caret hit testing alone would select the following punctuation/word there.
+func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
+	pos := v.hit(point)
+	row := v.document.model.LineAt(pos.Offset)
+	r, _ := v.document.model.LineRange(row)
+	if p := v.paragraph(row); p != nil && pos.Offset > r.Start {
+		previous := p.geometry.Adjacent(pos.Offset-r.Start, false)
+		local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.heights.Top(row)}
+		for _, rect := range p.geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
+			if containsPoint(rect, local) {
+				pos.Offset = r.Start + previous
+				break
+			}
+		}
+	}
+	return v.document.model.WordAt(pos.Offset)
+}
+
+func containsPoint(r geometry.Rectangle, p geometry.Point) bool {
+	return p.X >= r.X && p.X < r.X+r.Width && p.Y >= r.Y && p.Y < r.Y+r.Height
 }
 func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 	if !v.mounted || !v.Focused() || !gui.IsEnabled(v) {
