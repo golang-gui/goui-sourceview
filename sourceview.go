@@ -492,6 +492,9 @@ func (v *SourceView) report(err error) {
 	}
 }
 func (v *SourceView) editable() error {
+	if v.Destroyed() {
+		return ErrDisabled
+	}
 	if v.readOnly {
 		return ErrReadOnly
 	}

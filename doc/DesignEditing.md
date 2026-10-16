@@ -18,6 +18,7 @@
 EditPlan 是内部数据，不是另一套文档或 undo 栈；真实输入仍经过
 `Window.DispatchEvent -> EventController -> 编辑命令`。
 公开编辑 API 是应用编程能力，不能成为自动化绕过正常输入分发的接口。
+已销毁控件的修改入口返回 ErrDisabled，不能因对象仍有 Go 引用而继续修改原共享文档。
 
 简单插入和连续删除使用现有 Apply；粘贴、IME 提交、换行等形成独立撤销单元；
 不相邻修改或需自定义 redo 选区的命令使用 G1。
@@ -205,3 +206,55 @@ macOS Control+单击、Shift+F10 和 Menu 键。指针位于实际绘制选区�
 自动配对、包裹、成对删除、括号缩进和匹配见 [括号设计](DesignPairs.md)。
 语言/文档词候选、提供者、弹窗、输入优先级及失效见 [补全设计](DesignCompletion.md)。
 瞬时交互优先消费自己的确认、导航和取消按键，再进入正文命令；不产生平行撤销栈。
+
+## 12. 逻辑行编辑
+
+`MoveLines(down bool)`、`DuplicateLines(down bool)`、`DeleteLines()` 是根包的公开命令。
+前两者的 down=true 表示向下，false 表示向上；复制行不读写剪贴板。
+算法位于 `internal/editor/lines.go`，只生成已有 Plan，控件经 ApplyBatch 提交，
+不引入新的文本模型、撤销栈或原生资源。未挂载对象也可使用这些纯编辑方法；
+ReadOnly、禁用与销毁遵守共用编辑权限，正常输入中的模式限制不发错误信号。
+
+### 范围与选区
+
+- 无选区时操作 caret 所在逻辑行；折行不拆成多个待操作的行。
+- 非空选区覆盖所有相交逻辑行。末端恰好在后续行行首时排除该行，与缩进命令一致。
+- 移动保留文本、缩进及 LF 数量；选择的字节端点随被移动行保持相对位置和方向。
+  选区曾包含块后 LF，而块移动到无尾随 LF 的 EOF 时，末端钳制到新 EOF。
+- 复制完整行块，创建必要的 LF 分隔符；向上复制后选择位于上方副本，向下则位于下方副本。
+  保留原来的局部选区及 Anchor/Caret 方向，不强迫扩展为整行选区。
+- 删除后收起选区到删除边界。存在后续行时删除块及其后 LF；删除到 EOF 时改为包含前方 LF，
+  caret 留在前一行末，避免额外空行。整份文档删除后保留模型的一个空逻辑行。
+- 文首上移、文末下移，以及空文档删除是正常无操作，返回 nil，不增加修订或撤销项。
+  空行之间移动仍须移动 caret；相同文本不代表没有选区变化。
+
+### 提交与失效
+
+移动通过删除/插入相邻行实现，被移动块内部的原文字节保持在模型中，
+其他视图中的内部位置由既有 Change.Edits 映射；边界仍遵守模型端点粘性。
+单个空行下移时只将其 LF 搬到相邻行之后，避免批次中出现同起点插入与删除。
+复制为一个插入，删除为一个范围删除。编辑坐标都属于原文，排序、非重叠及通知顺序
+遵守 ApplyBatch 的公开契约，不以多次 Apply 拼出可被观察到的中间状态。
+
+每次实际操作增加一次修订、一个撤销项，保存明确的 Before/AfterSelection，
+并与前后的连续打字分隔；Undo/Redo 不重新运行行编辑算法。
+IM Reset、模型通知和选区回调仍可能重入，沿用 applyPlan 的身份检查，
+回调切文档或指定新选区后，不覆盖它们。
+
+行范围校验不复制选区正文。移动仅物化需要插入的邻行，复制仅物化行块，
+单次累计插入文本（含新 LF）不得超过 32 MiB；超限在读取/修改前返回 ErrOperationLimit。
+空行下移只插入一个 LF，不因邻行很长而读取它；删除不为计算计划物化被删除全文。
+该预算限制输入分配，不是对原生排版或原子模型调用的耗时承诺。
+
+### 参考与取舍
+
+2026-10-16 核对以下官方材料；UTF-8 端点和预算为本项目的选择，没有复制实现：
+
+- [Scintilla 5 行命令](https://www.scintilla.org/ScintillaDoc.html#SCI_MOVESELECTEDLINESUP)
+  提供移动、复制、删除行；移动会扩展为整行选区。采用独立行命令，保留本项目原有局部选区。
+- [VS Code 1.105.0 MoveLinesCommand](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/linesOperations/browser/moveLinesCommand.ts#L39)
+  和 [CopyLinesCommand](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/linesOperations/browser/copyLinesCommand.ts#L28)
+  处理末端位于下一行首的范围，并追踪选区。采用排除下一行、保留方向及邻行编辑的思路；
+  本轮移动保留原始缩进，不接入它的语言自动缩进策略、UTF-16 坐标或多选区对象体系。
+- [GtkSourceView 5.22.1 move-lines](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/signal.View.move-lines.html)
+  定义当前行/选中行向上或下移动；采用 down 布尔方向，输入仍由 GOUI 正常分发。

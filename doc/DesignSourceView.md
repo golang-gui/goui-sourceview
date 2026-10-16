@@ -142,6 +142,9 @@ func (v *SourceView) SetWrapMode(mode WrapMode)
 func (v *SourceView) SetShowLineNumbers(value bool)
 func (v *SourceView) SetScheme(value *scheme.Scheme)
 func (v *SourceView) ReplaceSelection(text string) error
+func (v *SourceView) MoveLines(down bool) error
+func (v *SourceView) DuplicateLines(down bool) error
+func (v *SourceView) DeleteLines() error
 func (v *SourceView) Undo() bool
 func (v *SourceView) Redo() bool
 func (v *SourceView) Copy() error
@@ -174,6 +177,7 @@ type SearchQuery struct {
 - SetSelection 钳制到模型及 rune 边界；相关行可排版时按 Cluster 修正，保持 Anchor/Caret 方向。程序设置可操作未挂载对象，不触发用户编辑。
 - ReadOnly 限制该视图的修改命令，不限制调用方直接修改共享模型；Undo/Redo 在只读时返回 false。
 - ReplaceSelection、ReplaceCurrent、ReplaceAll 同样遵守只读，不把公开方法当作绕过用户模式的后门；外部数据装载使用 Model.SetText。
+- MoveLines、DuplicateLines、DeleteLines 操作逻辑整行，复用同一权限与历史流水线；规则见 [编辑设计](DesignEditing.md#12-逻辑行编辑)。
 - Copy/Cut/Paste 需要挂载及 GUI 剪贴板能力；Paste 返回 nil 只表示请求已受理，其回调可同步发生，后续失败通过 ConnectError 报告。
 - 同一个失败只经一个通道报告：同步公共调用返回 error；输入控制器代调用时转为错误信号；异步回调只发信号。
 - 用户在只读/禁用模式触发受限输入是正常无操作，不反复发错误信号；公共修改方法仍返回对应模式错误供程序判断。
