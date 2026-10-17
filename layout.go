@@ -272,12 +272,18 @@ func (v *SourceView) paragraph(row int) *paragraph {
 			v.document.requestWork()
 		}
 	}
+	focus := activeFocus(v)
 	sel := textedit.Range{}
-	if v.projection == nil {
+	if v.colors.SelectionForeground.A == 255 && focus && v.projection == nil {
 		selection := v.Selection().Range()
 		sel = textedit.Range{Start: max(0, min(r.End, selection.Start)-r.Start), End: max(0, min(r.End, selection.End)-r.Start)}
+		if sel.Start == sel.End {
+			sel = textedit.Range{}
+		}
 	}
-	style := paragraphStyle{scheme: v.appliedScheme, language: v.document.language, tokenVersion: version, tokenValid: valid, selection: sel, focused: activeFocus(v)}
+	// Selection geometry is painted independently. Only an actual foreground
+	// override makes selection/focus part of the native text's color identity.
+	style := paragraphStyle{scheme: v.appliedScheme, language: v.document.language, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
 	var tokens []highlight.Token
 	if valid {
 		tokens, _, _ = e.Tokens(tokenRow)
@@ -295,7 +301,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	}
 	v.tick++
 	if p != nil {
-		if (!p.styled || p.style != style) && !v.colorParagraph(key, p, style, tokens) {
+		if (!p.styled || p.style != style) && !v.colorParagraph(key, p, style, tokens, focus) {
 			return nil
 		}
 		p.used = v.tick
@@ -320,7 +326,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		return nil
 	}
 	p = &paragraph{layout: native, text: text, used: v.tick}
-	if !v.colorParagraph(key, p, style, tokens) {
+	if !v.colorParagraph(key, p, style, tokens, focus) {
 		native.Destroy() // Not cached yet: the local call still owns this object.
 		return nil
 	}
@@ -339,11 +345,11 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	return p
 }
 
-func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraphStyle, tokens []highlight.Token) bool {
+func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraphStyle, tokens []highlight.Token, focus bool) bool {
 	state, epoch := v.operationState(), v.layoutEpoch
 	owner := v.layouts[key]
 	valid := func() bool {
-		return state.valid(v) && epoch == v.layoutEpoch && v.layouts[key] == owner && v.appliedScheme == style.scheme && v.document.language == style.language && activeFocus(v) == style.focused
+		return state.valid(v) && epoch == v.layoutEpoch && v.layouts[key] == owner && v.appliedScheme == style.scheme && v.document.language == style.language && activeFocus(v) == focus
 	}
 	if !valid() {
 		return false
@@ -369,7 +375,7 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 			return false
 		}
 	}
-	if style.focused && style.selection.End > style.selection.Start {
+	if v.colors.SelectionForeground.A == 255 && style.focused && style.selection.End > style.selection.Start {
 		p.layout.SetTextColor(style.selection.Start, style.selection.End-style.selection.Start, v.colors.SelectionForeground)
 		if !valid() {
 			return false

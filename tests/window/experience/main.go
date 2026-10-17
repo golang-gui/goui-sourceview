@@ -14,6 +14,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"image/color"
 	"log"
 	"runtime"
 	"time"
@@ -70,7 +71,13 @@ func main() {
 	defer win.Destroy()
 	v := source.NewSourceView()
 	v.SetShowLineNumbers(false)
-	v.SetScheme(scheme.Light())
+	// Preserve the existing explicit-foreground regression. Default syntax
+	// preservation is exercised by editor/selection with tokenized samples.
+	colors := scheme.Light().Definition()
+	colors.SelectionForeground = color.NRGBA{R: 0x11, G: 0x11, B: 0x11, A: 255}
+	explicit, err := scheme.New(colors)
+	must(err)
+	v.SetScheme(explicit)
 	v.SetAcceptsTab(true)
 	d := v.Document()
 	d.Model().SetText("alpha beta\n")
@@ -109,10 +116,10 @@ func main() {
 			v.RevealSelection()
 			original := ctx.line
 			f := original.Format()
-			f.TextColor = scheme.Light().Definition().Foreground
+			f.TextColor = colors.Foreground
 			fresh, err := ctx.Context.NewTextLayout("alpha beta", f, 1<<20, 1<<24)
 			must(err)
-			fresh.SetTextColor(0, 5, scheme.Light().Definition().SelectionForeground)
+			fresh.SetTextColor(0, 5, colors.SelectionForeground)
 			got, err := original.Rasterize(1, nil)
 			must(err)
 			pixels := bytes.Clone(got.Pixels)

@@ -84,6 +84,8 @@ func codeRules(d scheme.Definition) []style.Rule {
 		style.Name("source-view").FontFamily("monospace").FontSize(12).BackgroundColor(d.Background).ForegroundColor(d.Foreground),
 		style.Name("source-view").Part("gutter").BackgroundColor(d.GutterBackground).ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("current-line").BackgroundColor(d.CurrentLine),
+		// An explicit zero foreground prevents the root foreground fallback;
+		// SourceView treats zero alpha here as preserving syntax, not invisible text.
 		style.Name("source-view").Part("selection").BackgroundColor(d.SelectionBackground).ForegroundColor(d.SelectionForeground),
 		style.Name("source-view").Part("inactive-selection").BackgroundColor(d.InactiveSelectionBackground),
 		style.Name("source-view").Part("search").BackgroundColor(d.SearchBackground),
@@ -136,6 +138,9 @@ func (v *SourceView) styledScheme() (*scheme.Scheme, error) {
 	setBG("current-line", &d.CurrentLine)
 	setBG("selection", &d.SelectionBackground)
 	setFG("selection", &d.SelectionForeground)
+	if d.SelectionForeground.A == 0 {
+		d.SelectionForeground = color.NRGBA{}
+	}
 	setBG("inactive-selection", &d.InactiveSelectionBackground)
 	setBG("search", &d.SearchBackground)
 	setBG("current-search", &d.CurrentSearchBackground)

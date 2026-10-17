@@ -50,6 +50,8 @@ return ui.Root().StyleSheet(modern.FromSettings(app.Settings())).Windows(/* wind
 
 命令式示例启动时读取一次系统外观，按钮替换整张 Modern 样式表；声明式示例随设置重建。
 `SetScheme` 仅覆盖代码配色，传 nil 恢复当前样式；查找栏和补全的界面仍跟随 Basic/Modern。
+代码选区默认保留语法前景，并以半透明背景叠加；自定义 `SelectionForeground` 的 alpha 为 255
+可启用统一选区前景，设为 0 恢复语法色。
 需要并列不同主题时，用 `gui.StyleScope` 显式包裹各编辑区及其查找浮层。
 应用覆盖、所有命名 part 与失效规则见 [样式设计](doc/DesignStyles.md)，
 验证范围见 [接入验收](doc/PlanStyles.md)。

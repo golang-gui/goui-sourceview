@@ -25,11 +25,17 @@ Dark、主题色、UI 字体均来自当前 Modern 参数，不能从系统设�
 
 默认代码区字体是 monospace / 12 pt，与 UI 字体分离，可用 `source-view` 的字体规则覆盖。
 Basic 采用内置 Light 的代码颜色；Modern 根据 Dark 选择语法颜色，并从官方 `text-view`
-取得正文背景、前景及选区。保留独立的代码侧栏、当前行、搜索、括号等领域配色。
+取得正文背景、前景；选区以官方输入框焦点色作为 tint，活动 alpha=64、非活动 alpha=32。保留独立的代码侧栏、当前行、搜索、括号等领域配色。
 
 `SetScheme(s)` 仅覆盖代码区域的完整配色；`SetScheme(nil)` 恢复所属 stylesheet。
 `scheme.Definition` 只维护代码颜色，不再包含 Find / Completion UI 调色板。
 UI 的界面字体、焦点、圆角和阴影不由代码 Scheme 控制。
+
+选区默认保留 token 前景；SelectionForeground.A==0 表示不覆盖，255 表示活动选区
+统一前景，其他 alpha 返回错误。Basic/Modern 的 selection part 显式写入零值前景，
+阻断根前景的 part 回退。应用追加 `.Part("selection").ForegroundColor(...)` 可开启覆盖，
+追加 `.ForegroundColor(color.NRGBA{})` 可恢复保留语法；完整自定义规则也遵守该契约。
+背景 alpha 通过真正的 source-over 合成，不能对预混表面色再次降低 alpha。
 
 代码样式名默认为 `source-view`，以下 part 具有公开语义：
 

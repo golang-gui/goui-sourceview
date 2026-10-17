@@ -15,15 +15,20 @@ func modernRules(o modern.Options, base style.StyleSheet) []style.Rule {
 	d := s.Definition()
 	root := base.Resolve(style.Sel{Name: "text-view"})
 	d.Background, d.Foreground = background(root), foreground(root)
-	selection := base.Resolve(style.Sel{Name: "text-view", Part: "selection"})
-	d.SelectionBackground, d.SelectionForeground = background(selection), foreground(selection)
+	// Source selection preserves syntax foregrounds and blends a real tint under
+	// the text. TextView's resolved selection inherits its ordinary foreground
+	// and uses a preblended, opaque background, which is a different contract.
+	focus := base.Resolve(style.Sel{Name: "text-input", State: style.Focused})
+	focusBorder, _ := focus.BorderColor()
+	d.SelectionBackground = nrgba(focusBorder)
+	d.SelectionBackground.A = 64
+	d.InactiveSelectionBackground = d.SelectionBackground
+	d.InactiveSelectionBackground.A = 32
 	rules := codeRules(d)
 	menu := base.Resolve(style.Sel{Name: "menu"})
 	input := base.Resolve(style.Sel{Name: "text-input"})
-	focus := base.Resolve(style.Sel{Name: "text-input", State: style.Focused})
 	border, _ := input.BorderColor()
 	menuBorder, _ := menu.BorderColor()
-	focusBorder, _ := focus.BorderColor()
 	shadow, _ := menu.Shadow()
 	muted := foreground(base.Resolve(style.Sel{Name: modern.MutedText}))
 	accent := foreground(base.Resolve(style.Sel{Name: modern.AccentIcon}))

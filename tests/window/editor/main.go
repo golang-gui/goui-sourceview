@@ -26,6 +26,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"os"
 	"runtime"
@@ -103,7 +104,14 @@ func main() {
 			check(original != nil && win.Focused(), "recolor probe has no active native window/layout")
 			created := observed.created[probeText]
 			for i := 0; i < 20; i++ {
-				s := []*scheme.Scheme{scheme.Light(), scheme.Dark()}[i%2]
+				base := []*scheme.Scheme{scheme.Light(), scheme.Dark()}[i%2]
+				def := base.Definition()
+				def.SelectionForeground = color.NRGBA{R: 0x11, G: 0x11, B: 0x11, A: 255}
+				if i%2 == 1 {
+					def.SelectionForeground = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+				}
+				s, err := scheme.New(def)
+				must(err)
 				editor.SetScheme(s)
 				editor.SetSelection(textedit.Selection{Anchor: probe.Start, Caret: probe.End})
 				editor.RevealSelection()

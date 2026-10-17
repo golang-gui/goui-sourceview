@@ -12,13 +12,15 @@ import (
 // Definition is a mutable input value. New and Scheme.Definition copy its map.
 // Colors are ordinary, non-premultiplied sRGB NRGBA values.
 type Definition struct {
-	Name                        string
-	Background                  color.NRGBA
-	Foreground                  color.NRGBA
-	GutterBackground            color.NRGBA
-	GutterForeground            color.NRGBA
-	CurrentLine                 color.NRGBA
-	SelectionBackground         color.NRGBA
+	Name                string
+	Background          color.NRGBA
+	Foreground          color.NRGBA
+	GutterBackground    color.NRGBA
+	GutterForeground    color.NRGBA
+	CurrentLine         color.NRGBA
+	SelectionBackground color.NRGBA
+	// SelectionForeground optionally overrides syntax colors in the active
+	// selection. Alpha 0 preserves syntax; alpha 255 supplies an opaque override.
 	SelectionForeground         color.NRGBA
 	InactiveSelectionBackground color.NRGBA
 	SearchBackground            color.NRGBA
@@ -38,8 +40,14 @@ type Scheme struct{ definition Definition }
 
 // New validates and copies a complete scheme definition.
 func New(d Definition) (*Scheme, error) {
-	if d.Background.A != 255 || d.Foreground.A != 255 || d.SelectionForeground.A != 255 {
-		return nil, fmt.Errorf("scheme: background, foreground and selection foreground must be opaque")
+	if d.Background.A != 255 || d.Foreground.A != 255 {
+		return nil, fmt.Errorf("scheme: background and foreground must be opaque")
+	}
+	if d.SelectionForeground.A != 0 && d.SelectionForeground.A != 255 {
+		return nil, fmt.Errorf("scheme: selection foreground must be unset or opaque")
+	}
+	if d.SelectionForeground.A == 0 {
+		d.SelectionForeground = color.NRGBA{}
 	}
 	for kind := range d.Tokens {
 		if !kind.Valid() {
@@ -80,7 +88,7 @@ func builtin(d Definition) *Scheme {
 var light = builtin(Definition{
 	Name: "SourceView Light", Background: rgb(0xffffff), Foreground: rgb(0x24292f),
 	GutterBackground: rgb(0xf6f8fa), GutterForeground: rgb(0x6e7781), CurrentLine: rgb(0xf3f6fa),
-	SelectionBackground: rgb(0xb8d7ff), SelectionForeground: rgb(0x111111), InactiveSelectionBackground: rgb(0xd8dee8),
+	SelectionBackground: color.NRGBA{R: 0x46, G: 0x82, B: 0xdc, A: 64}, InactiveSelectionBackground: color.NRGBA{R: 0x46, G: 0x82, B: 0xdc, A: 32},
 	SearchBackground: rgb(0xffe58f), CurrentSearchBackground: rgb(0xffd166),
 	BracketMatchBackground: rgb(0xe6eef7), BracketMatchBorder: rgb(0x9aafc4),
 	Caret: rgb(0x24292f), PreeditUnderline: rgb(0x24292f), Border: rgb(0xd0d7de),
@@ -95,7 +103,7 @@ var light = builtin(Definition{
 var dark = builtin(Definition{
 	Name: "SourceView Dark", Background: rgb(0x1e1e1e), Foreground: rgb(0xd4d4d4),
 	GutterBackground: rgb(0x252526), GutterForeground: rgb(0x858585), CurrentLine: rgb(0x2a2d2e),
-	SelectionBackground: rgb(0x264f78), SelectionForeground: rgb(0xffffff), InactiveSelectionBackground: rgb(0x3a3d41),
+	SelectionBackground: color.NRGBA{R: 0x79, G: 0xbb, B: 0xff, A: 64}, InactiveSelectionBackground: color.NRGBA{R: 0x79, G: 0xbb, B: 0xff, A: 32},
 	SearchBackground: rgb(0x5c4b00), CurrentSearchBackground: rgb(0x805e00),
 	BracketMatchBackground: rgb(0x35414d), BracketMatchBorder: rgb(0x667a8d),
 	Caret: rgb(0xd4d4d4), PreeditUnderline: rgb(0xd4d4d4), Border: rgb(0x454545),

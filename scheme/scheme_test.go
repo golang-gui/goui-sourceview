@@ -57,3 +57,32 @@ func TestBracketColorsCanBeIndependentlyTransparent(t *testing.T) {
 		}
 	}
 }
+
+func TestOptionalSelectionForeground(t *testing.T) {
+	for _, base := range []*Scheme{Light(), Dark()} {
+		if base.Definition().SelectionForeground != (color.NRGBA{}) {
+			t.Fatal("built-in scheme overrides syntax foregrounds")
+		}
+		for _, alpha := range []uint8{0, 1, 64, 254, 255} {
+			d := base.Definition()
+			d.SelectionForeground = color.NRGBA{R: 210, G: 20, B: 100, A: alpha}
+			s, err := New(d)
+			if alpha != 0 && alpha != 255 {
+				if err == nil {
+					t.Fatal("accepted ambiguous translucent selection foreground", alpha)
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := d.SelectionForeground
+			if alpha == 0 {
+				want = color.NRGBA{}
+			}
+			if s.Definition().SelectionForeground != want {
+				t.Fatal("lost explicit override or failed to normalize unset color")
+			}
+		}
+	}
+}

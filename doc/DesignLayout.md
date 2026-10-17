@@ -161,20 +161,22 @@ func (s *Scheme) Definition() Definition
 func (s *Scheme) Color(kind language.Kind) color.NRGBA
 ```
 
-New 拷贝 Tokens；Definition getter 也返回独立 map。基础前景、背景及选择前景必须不透明，
+New 拷贝 Tokens；Definition getter 也返回独立 map。基础前景、背景必须不透明，
 未知 Kind 或不满足基础字段契约返回错误；普通叠加背景允许 alpha。
+SelectionForeground 的 alpha 为 0 表示保留语法前景，并规范化为零值；255 表示活动选区的
+显式统一前景。1–254 返回错误；不会把透明文字传给原生排版。
 Light/Dark 返回可安全共享的不可变实例；修改以取得 Definition、修改副本、New 的方式完成。
 应用不能改变共享 map 后依赖隐式刷新，也不以 Name 是否相同判断两个方案身份。
 
-内置方案初始颜色如下（均为不透明值，后续视觉调整仍需对应对比与验收）：
+内置方案颜色如下（六位色值不透明，八位色值为 RRGGBBAA）：
 
 | 字段 / Kind | Light | Dark |
 | --- | --- | --- |
 | Background / Foreground | #ffffff / #24292f | #1e1e1e / #d4d4d4 |
 | GutterBackground / GutterForeground | #f6f8fa / #6e7781 | #252526 / #858585 |
 | CurrentLine | #f3f6fa | #2a2d2e |
-| SelectionBackground / SelectionForeground | #b8d7ff / #111111 | #264f78 / #ffffff |
-| InactiveSelectionBackground | #d8dee8 | #3a3d41 |
+| SelectionBackground / SelectionForeground | #4682dc40 / 保留语法 | #79bbff40 / 保留语法 |
+| InactiveSelectionBackground | #4682dc20 | #79bbff20 |
 | SearchBackground / CurrentSearchBackground | #ffe58f / #ffd166 | #5c4b00 / #805e00 |
 | BracketMatchBackground / BracketMatchBorder | #e6eef7 / #9aafc4 | #35414d / #667a8d |
 | Caret / PreeditUnderline | #24292f | #d4d4d4 |
@@ -190,7 +192,7 @@ Light/Dark 返回可安全共享的不可变实例；修改以取得 Definition�
 KindPlain 使用 Foreground。这个颜色表是本项目初始设计，不是对其他编辑器主题文件的复制或兼容声明。
 
 默认 nil Scheme 根据所属 GUI stylesheet 解析代码颜色。Basic 使用 Light；Modern 按
-Options.Dark 选择语法色并适配官方正文/选区。SetScheme 只覆盖代码色，nil 恢复样式。
+Options.Dark 选择语法色并适配官方正文，以主题焦点色生成真实半透明选区。SetScheme 只覆盖代码色，nil 恢复样式。
 控件不订阅系统设置；应用/声明式层更新完整 stylesheet，StyleChanged 同步颜色和字体。
 具体注册、样式名、UI 边界与失效契约见 [样式接入](DesignStyles.md)。
 
@@ -199,14 +201,14 @@ Options.Dark 选择语法色并适配官方正文/选区。SetScheme 只覆盖�
 1. 编辑区和侧栏背景、边框。
 2. 当前行背景。
 3. 已确认括号配对的淡背景，再画普通搜索命中、当前搜索命中背景。
-4. 选区背景（焦点/非焦点分别有配色）。
-5. 括号细边框，再画语法前景；选中范围使用明确的选择前景覆盖，保证可读。
+4. 选区背景（活动 alpha=64、非活动 alpha=32），按既有预乘颜色契约叠加到下层。
+5. 括号细边框，再画语法前景；只有显式配置不透明 SelectionForeground 时才覆盖活动选区。
 6. 预编辑下划线、行号/分隔线。
 7. 活动 caret 与焦点装饰。
 
 括号独立主题色、内缩边框及确认条件见 [括号设计](DesignPairs.md)，不修改语法颜色或排版度量。
 
-每个段落应用颜色前先恢复全范围基础前景，再按 token 与选择覆盖，
+每个段落应用颜色前先恢复全范围基础前景，再应用 token，按需覆盖显式选区前景，
 否则重新分析后消失的 token 会遗留旧色。只在颜色指纹改变时更新，
 不能每帧无条件为所有段落重复设置范围颜色。
 未完成高亮区域用普通前景；无高亮也能完整选择和编辑。
@@ -248,11 +250,12 @@ Attributes 使用 `sourceview.language`、`sourceview.revision`、`sourceview.an
 ## 10. 着色失效与排版失效分离
 
 段落按文本身份、字体、Tab、折行宽度和 Context 管理原生布局。
-独立记录方案身份、语言、token 版本/有效性、段内选区和活动焦点组成的着色状态。
+独立记录方案身份、语言和 token 版本/有效性。仅显式前景覆盖实际活动时，
+将段内选区加入原生着色身份；默认选区移动和焦点变化只重绘背景，不重复设置文字颜色。
 状态未变不调用颜色 setter；纯颜色变化不重建 TextLayout、Geometry、HeightIndex 或正文宽度。
 StyleChanged 只在实际字体配置变化时失效度量；禁用引起的输入/预编辑取消仍按原有行为执行。
 
-重着色先用普通前景覆盖全文，再应用当前有效 token，最后覆盖活动选区前景。
+重着色先用普通前景覆盖全文，再应用当前有效 token，最后按需覆盖显式活动选区前景。
 行号布局独立更新前景；旧 token、撤销的选区和旧方案不能残留。
 全文颜色覆盖必须真正替换旧范围记录，不能在长寿命布局中永久累积颜色操作历史。
 GOUI DirectWrite 的完整覆盖回收修正是本实现保持范围记录有界的前置条件。
@@ -262,7 +265,8 @@ GOUI DirectWrite 的完整覆盖回收修正是本实现保持范围记录有界
 若索引尚未就绪仍可重新安排元数据构建，正文先保持普通前景。
 模型 Reset、文本变化、字体/Tab/折行/Context 变化仍走正常排版失效。
 
-每次原生颜色调用返回后核对文档、修订、选区、挂载代次、布局代次、缓存所有者和着色状态；
+真实活动焦点独立于规范化后的着色身份捕获；原生布局创建与颜色调用返回后仍核对
+实际焦点、文档、修订、选区、挂载代次、布局代次、缓存所有者和着色状态；
 重入销毁/换文档/换方案时不继续使用旧对象。缓存先移除所有权，再销毁原生资源。
 原生范围样式只改变前景是本切片经实测验证的条件，不推广为任意字体属性变化都能复用几何。
 
@@ -278,3 +282,12 @@ GOUI DirectWrite 的完整覆盖回收修正是本实现保持范围记录有界
   这说明该实现区分颜色事件；不据此声称 Monaco 所有颜色更新均不布局。
 - 本模块的原生几何复用结论来自 GOUI 三后端源码核对与测试，具体样本和边界见
   [着色缓存验收](PlanColorCaching.md)，不从上述参考框架推断 GOUI 的线程、资源或度量行为。
+
+选区策略参考：
+
+- [Scintilla Selection styles](https://www.scintilla.org/ScintillaDoc.html#SCI_SETSELFORE)
+  （2026-10-17 查阅）明确默认保留原前景，并支持文字下方透明背景；采用该默认，复用 GOUI 绘制顺序。
+- [Monaco/VS Code 1.105.0 编辑器颜色](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/platform/theme/common/colors/editorColors.ts)
+  将普通主题的 selectionForeground 设为 null，高对比度主题可给出具体色；本项目用现有 NRGBA alpha 表达可选覆盖。
+- [GtkSourceView 5 Style Scheme](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/style-reference.html)
+  分别定义 selection 与 selection-unfocused；沿用活动/非活动背景区分，未增加新的模式体系。
