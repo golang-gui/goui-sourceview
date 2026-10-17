@@ -27,16 +27,16 @@ func TestNativeCompletionEllipsisAndBaseline(t *testing.T) {
 	defer l.release()
 	for _, family := range []string{"monospace", "sans-serif"} {
 		for _, prefix := range []string{"e\u0301", "你好", "👩‍💻", "שלום"} {
-			t.Run(family+"/"+prefix, func(t *testing.T) {
+			func() {
 				b := l.build()
 				defer b.destroy()
 				font := typography.FontInfo{Family: family, Size: 12}
-				reference, err := b.text(prefix+"…", font, v.colors.Completion.Foreground)
+				reference, err := b.text(prefix+"…", font, l.colors.Foreground)
 				if err != nil {
 					t.Fatal(err)
 				}
 				width := reference.width
-				got, err := b.fit(prefix+strings.Repeat("ABC", 30), font, v.colors.Completion.Foreground, width+.01)
+				got, err := b.fit(prefix+strings.Repeat("ABC", 30), font, l.colors.Foreground, width+.01)
 				if err != nil || got == nil {
 					t.Fatal("fit", err)
 				}
@@ -46,7 +46,7 @@ func TestNativeCompletionEllipsisAndBaseline(t *testing.T) {
 				if got.baseline <= 0 || got.baseline > got.height {
 					t.Fatalf("%s: baseline %g outside height %g", ctx.Name(), got.baseline, got.height)
 				}
-			})
+			}()
 		}
 	}
 }

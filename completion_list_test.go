@@ -8,10 +8,12 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
+	"github.com/golang-gui/goui/theme/modern"
 )
 
 func completionFixture(t *testing.T, items []Completion) (*completionList, *shapedContext) {
@@ -61,11 +63,14 @@ func (p *completionPainter) DrawTextLayout(at geometry.Point, l typography.TextL
 }
 
 func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
-	for _, palette := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
-		t.Run(palette.Definition().Name, func(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		t.Run(map[bool]string{false: "light", true: "dark"}[dark], func(t *testing.T) {
 			l, ctx := completionFixture(t, []Completion{{Label: "transform", Detail: "JSON"}, {Label: "true", Detail: "document"}})
 			l.view.completion = nil
-			l.view.SetScheme(palette)
+			scope := gui.NewStyleScope()
+			scope.SetStyleSheet(modern.Sheet(modern.Options{Dark: dark}))
+			scope.SetChild(l.view)
+			l.readAppearance()
 			l.view.completion = l.session
 			arrangeCompletion(l)
 			p := &completionPainter{}
@@ -73,7 +78,7 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 			if len(l.rows) != 2 || len(p.text) != 4 || len(p.borders) != 1 {
 				t.Fatal("missing columns or outline", p)
 			}
-			if p.borders[0] != (paintShape{rect: geometry.Rect(.5, .5, 239, 67), width: 1, color: graphics.ColorOf(palette.Definition().Completion.Border)}) {
+			if p.borders[0] != (paintShape{rect: geometry.Rect(.5, .5, 239, 67), width: 1, color: graphics.ColorOf(l.colors.Border)}) {
 				t.Fatal("panel border", p.borders)
 			}
 			// Mock glyphs are 10x20 DIP: 28-DIP rows, 12-DIP text inset, 6-DIP panel padding.
@@ -86,7 +91,7 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 			if !slices.Equal(p.text, want) {
 				t.Fatalf("column geometry: got %+v", p.text)
 			}
-			c := palette.Definition().Completion
+			c := l.colors
 			if p.fills[0].color != graphics.ColorOf(c.Background) || p.fills[1] != (paintShape{rect: geometry.Rect(6, 6, 228, 28), color: graphics.ColorOf(c.SelectedBackground)}) {
 				t.Fatal("editor selection leaked into popup", p.fills)
 			}
@@ -110,7 +115,7 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 						t.Fatal("detail prominence", index, got, secondary)
 					}
 				}
-				if label.format.Font != l.view.font || detail.format.Font.Family != "" || detail.format.Font.Size != l.view.font.Size*.9 {
+				if label.format.Font != l.font || detail.format.Font != l.detailFont() {
 					t.Fatal("column fonts")
 				}
 			}
@@ -175,7 +180,7 @@ func TestCompletionWidthScrollingAndConstrainedHitAreas(t *testing.T) {
 				t.Fatal("padding or scroll indicator activated a row", point)
 			}
 		}
-		if p.fills[len(p.fills)-1].color != graphics.ColorOf(l.view.colors.Completion.ScrollThumb) {
+		if p.fills[len(p.fills)-1].color != graphics.ColorOf(l.colors.ScrollThumb) {
 			t.Fatal("missing scroll indicator")
 		}
 	}
@@ -205,7 +210,7 @@ func TestCompletionEllipsisPreservesNativeClusters(t *testing.T) {
 		{"e\u0301ABC", 20, "e\u0301…", 3}, {"你好世界", 30, "你好…", 6}, {"abc", 30, "abc", 3}, {"abc", 10, "…", 0}, {"abc", 9, "", 0},
 	} {
 		b := l.build()
-		text, err := b.fit(tt.value, l.view.font, l.view.colors.Completion.Foreground, tt.width)
+		text, err := b.fit(tt.value, l.font, l.colors.Foreground, tt.width)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
+	"github.com/golang-gui/goui/style"
 )
 
 const (
@@ -36,6 +37,9 @@ type completionList struct {
 	rows                           []completionRow
 	epoch                          uint64
 	err                            error
+	colors                         completionColors
+	font, secondaryFont            typography.FontInfo
+	box                            styleBox
 }
 type completionRow struct {
 	label, detail    *completionText
@@ -50,6 +54,7 @@ type completionText struct {
 
 func newCompletionList(v *SourceView, s *completionSession) *completionList {
 	l := &completionList{view: v, session: s, visible: min(completionRows, len(s.items))}
+	l.readAppearance()
 	l.ConnectUnmount(l.release)
 	click := gui.NewClickEventController()
 	click.ConnectClicked(func(ctx gui.EventContext) {
@@ -111,12 +116,26 @@ func (l *completionList) refresh() {
 	}
 	l.RequestPaint()
 }
-func (l *completionList) detailFont() typography.FontInfo {
-	size := l.view.font.Size
-	if size == 0 {
-		size = 12
+func (l *completionList) detailFont() typography.FontInfo { return l.secondaryFont }
+func (l *completionList) StyleChanged()                   { l.readAppearance() }
+func (l *completionList) readAppearance() {
+	resolve := func(part string) style.Style {
+		return gui.ResolveWidgetStyle(l.view, "sourceview.completion", part, style.Normal)
 	}
-	return typography.FontInfo{Size: size * .9}
+	root := resolve("")
+	border, _ := root.BorderColor()
+	colors := completionColors{Background: background(root), Foreground: foreground(root), Border: nrgba(border), DetailForeground: foreground(resolve("detail")),
+		SelectedBackground: background(resolve("selected")), SelectedForeground: foreground(resolve("selected")), SelectedDetailForeground: foreground(resolve("selected-detail")),
+		MatchForeground: foreground(resolve("match")), SelectedMatchForeground: foreground(resolve("selected-match")), ScrollThumb: background(resolve("scroll-thumb"))}
+	font, detail, box := styleFont(root), styleFont(resolve("detail")), boxOf(root)
+	if colors == l.colors && font == l.font && detail == l.secondaryFont && box == l.box {
+		return
+	}
+	l.release()
+	l.measured = false
+	l.colors, l.font, l.secondaryFont, l.box = colors, font, detail, box
+	l.RequestLayout()
+	l.RequestPaint()
 }
 
 // A build transaction owns every layout until its rows are published. Native
@@ -197,11 +216,11 @@ func (l *completionList) measureItems() {
 			if value == "" {
 				continue
 			}
-			font := l.view.font
+			font := l.font
 			if column == 1 {
 				font = l.detailFont()
 			}
-			text, err := b.text(value, font, l.view.colors.Completion.Foreground)
+			text, err := b.text(value, font, l.colors.Foreground)
 			if err != nil {
 				l.fail(b, err)
 				return
@@ -345,12 +364,12 @@ func (l *completionList) ensureRows() {
 	rows := make([]completionRow, 0, l.visible)
 	for i := l.first; i < min(len(l.session.items), l.first+l.visible); i++ {
 		item := l.session.items[i]
-		label, err := b.fit(item.Label, l.view.font, l.view.colors.Completion.Foreground, labelWidth)
+		label, err := b.fit(item.Label, l.font, l.colors.Foreground, labelWidth)
 		if err != nil {
 			l.fail(b, err)
 			return
 		}
-		detail, err := b.fit(item.Detail, l.detailFont(), l.view.colors.Completion.DetailForeground, detailWidth)
+		detail, err := b.fit(item.Detail, l.detailFont(), l.colors.DetailForeground, detailWidth)
 		if err != nil {
 			l.fail(b, err)
 			return
@@ -385,7 +404,7 @@ func (l *completionList) styleRow(row *completionRow, index int, b *completionBu
 	if row.styled && row.selected == selected {
 		return b.valid()
 	}
-	colors := l.view.colors.Completion
+	colors := l.colors
 	foreground, detail, match := colors.Foreground, colors.DetailForeground, colors.MatchForeground
 	if selected {
 		foreground, detail, match = colors.SelectedForeground, colors.SelectedDetailForeground, colors.SelectedMatchForeground
@@ -418,12 +437,9 @@ func (l *completionList) Paint(p gui.Painter) {
 	if !b.valid() || l.err != nil {
 		return
 	}
-	colors := l.view.colors.Completion
+	colors := l.colors
 	w, h := l.Rect().Width, l.Rect().Height
-	p.FillRect(geometry.Rect(0, 0, w, h), graphics.ColorOf(colors.Background))
-	if w > 1 && h > 1 && colors.Border.A != 0 {
-		p.DrawRect(geometry.Rect(.5, .5, w-1, h-1), 1, graphics.ColorOf(colors.Border))
-	}
+	l.box.paint(p, geometry.Rect(0, 0, w, h))
 	labelWidth, detailX, detailWidth := l.columns()
 	for slot := range l.rows {
 		row := &l.rows[slot]

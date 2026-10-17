@@ -26,12 +26,12 @@ import (
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/theme/modern"
 )
 
 func must(err error) {
@@ -77,6 +77,7 @@ func main() {
 	}
 	app, err := gui.NewApplication("org.golang-gui.SourceViewCompletionPreview")
 	must(err)
+	app.SetStyleSheet(modern.Sheet(modern.Options{Dark: *dark}))
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 700, Height: 340}})
 	must(err)
 	defer win.Destroy()
@@ -86,11 +87,7 @@ func main() {
 	v := source.NewSourceView()
 	v.SetDocument(doc)
 	v.SetAcceptsTab(true)
-	if *dark {
-		v.SetScheme(scheme.Dark())
-	} else {
-		v.SetScheme(scheme.Light())
-	}
+
 	if *scenario == "wrapped" {
 		v.SetWrapMode(source.WrapChar)
 	}

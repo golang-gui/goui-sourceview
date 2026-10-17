@@ -69,15 +69,10 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
   快照的行边界与点击计算使用同一几何，发布 VisibleStart/VisibleEnd，以及完整
   `sourceview.completion.detail` 字符串属性；视觉省略不截断语义内容或插入文本。
 
-`scheme.Definition.Completion` 是独立的 `CompletionColors` 值，分别指定面板、名称、说明、
-边框、选中背景/名称/说明、普通/选中匹配前景及滚动提示。背景及所有文字颜色必须不透明；
-边框和滚动提示允许 alpha，包括用零 alpha 关闭。整组为零的自定义方案由普通前景/背景
-派生一组完整配色，避免既有自定义方案出现透明文字；部分自定义应从现有 Definition 修改。
-
-| 内置主题 | 面板 | 边框 | 选中背景 | 名称 | 次要说明 | 普通匹配 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Light | #f8fafc | #b9c3cf | #e3edf9 | #24292f | #626d7a | #005fb8 |
-| Dark | #25292f | #505b69 | #35465e | #dce2e9 | #a0aab7 | #79bbff |
+补全界面配色与 UI 字体来自 `sourceview.completion` 及其命名 part，见
+[样式接入](DesignStyles.md#补全窗口)。Basic 与 Modern 分别注册完整规则，
+应用可追加覆盖；显式代码 Scheme 不改变列表外观。面板与文字的内置颜色均不透明，
+边框和滚动提示保留显式 alpha。原生 Popover 从所属编辑器解析样式，保持局部作用域。
 
 ## 资源与边界
 
