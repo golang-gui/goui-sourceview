@@ -133,7 +133,7 @@ GOUI 依赖版本，不以本地工作区成功代替。纯文档阶段以上命
 ## 8. 编辑体验窗口
 
 运行 `go run ./tests/window/experience`，环境与复位规则见入口注释。
-程序逐帧检查双击/三击、字符后半部命中、局部选区前景、右键保留、菜单键盘和鼠标执行，
+程序逐帧检查双击/三击、字符后半部命中、显式局部选区前景、右键保留、菜单键盘和鼠标执行，
 以及 JSON/HTML 候选的键盘/鼠标确认、自动触发、只读/卸载取消、提供者重入、
 配对插入/跳过/包裹/删除/换行缩进及单次撤销。提前关窗按未完成退出，不能计为通过。
 
@@ -205,3 +205,18 @@ XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/find
 非预乘 sRGB NRGBA，使用内建配色独立常量逐通道精确断言；不比较字体金图。
 实际桌面截图另行对照，窗口启动、离屏断言和桌面目视检查分别记录。
 本轮后端、缩放、旧版复现及平台缺口见 [浮层验收](PlanFindBarAppearance.md)。
+
+## 代码选区与语法色
+
+运行 `go run ./tests/window/editor/selection`，可用 `-capture-dir` 写入仓库外现有目录。
+程序的固定文本和独立 token 预期在 `tests/window/editor/selection/testdata/syntax.json`，
+不从扫描器生成。对 Basic、Modern 亮/暗分别验证 JSON/XML/HTML：
+默认全选、移动、反向选择、失焦/恢复保留语法且不重着色；显式统一前景、取消、失焦与
+菜单活动正确恢复。原生布局身份与创建数不变，窗口销毁后文档布局计数归零。
+
+前景以逐 byte 颜色和独立构造的同后端原生位图双重断言，不使用字体金图。
+背景在选区内的尾部空格采样，排除 glyph AA、caret、边框；比较当前行/搜索背景与
+选区的预乘 source-over，sRGB 不透明输出允许 1 byte 量化误差。
+输入只经正常 Window.DispatchEvent；未验证真实 IME 或桌面合成器。
+现有 editor、experience 程序保留显式统一前景的原断言，不以新默认行为删除这些覆盖。
+本轮环境、命令、结果与未验证项见 [代码选区验收](PlanSelection.md)。

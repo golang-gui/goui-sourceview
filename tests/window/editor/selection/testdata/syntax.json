@@ -1,0 +1,177 @@
+[
+  {
+    "language": "json",
+    "parts": [
+      {
+        "text": "{",
+        "kind": "delimiter"
+      },
+      {
+        "text": "\"name\"",
+        "kind": "property"
+      },
+      {
+        "text": ":",
+        "kind": "delimiter"
+      },
+      {
+        "text": "\"中 é 👩‍💻\"",
+        "kind": "string"
+      },
+      {
+        "text": ",",
+        "kind": "delimiter"
+      },
+      {
+        "text": "\"n\"",
+        "kind": "property"
+      },
+      {
+        "text": ":",
+        "kind": "delimiter"
+      },
+      {
+        "text": "42",
+        "kind": "number"
+      },
+      {
+        "text": ",",
+        "kind": "delimiter"
+      },
+      {
+        "text": "\"ok\"",
+        "kind": "property"
+      },
+      {
+        "text": ":",
+        "kind": "delimiter"
+      },
+      {
+        "text": "true",
+        "kind": "keyword"
+      },
+      {
+        "text": "}",
+        "kind": "delimiter"
+      },
+      {
+        "text": "    ",
+        "kind": "plain"
+      }
+    ]
+  },
+  {
+    "language": "xml",
+    "parts": [
+      {
+        "text": "<",
+        "kind": "delimiter"
+      },
+      {
+        "text": "node",
+        "kind": "tag"
+      },
+      {
+        "text": " ",
+        "kind": "plain"
+      },
+      {
+        "text": "key",
+        "kind": "attribute"
+      },
+      {
+        "text": "=",
+        "kind": "delimiter"
+      },
+      {
+        "text": "\"中 é 👩‍💻\"",
+        "kind": "string"
+      },
+      {
+        "text": ">",
+        "kind": "delimiter"
+      },
+      {
+        "text": "text",
+        "kind": "plain"
+      },
+      {
+        "text": "&amp;",
+        "kind": "entity"
+      },
+      {
+        "text": "</",
+        "kind": "delimiter"
+      },
+      {
+        "text": "node",
+        "kind": "tag"
+      },
+      {
+        "text": ">",
+        "kind": "delimiter"
+      },
+      {
+        "text": "    ",
+        "kind": "plain"
+      }
+    ]
+  },
+  {
+    "language": "html",
+    "parts": [
+      {
+        "text": "<",
+        "kind": "delimiter"
+      },
+      {
+        "text": "div",
+        "kind": "tag"
+      },
+      {
+        "text": " ",
+        "kind": "plain"
+      },
+      {
+        "text": "class",
+        "kind": "attribute"
+      },
+      {
+        "text": "=",
+        "kind": "delimiter"
+      },
+      {
+        "text": "\"中 é 👩‍💻\"",
+        "kind": "string"
+      },
+      {
+        "text": ">",
+        "kind": "delimiter"
+      },
+      {
+        "text": "text",
+        "kind": "plain"
+      },
+      {
+        "text": "&amp;",
+        "kind": "entity"
+      },
+      {
+        "text": "</",
+        "kind": "delimiter"
+      },
+      {
+        "text": "div",
+        "kind": "tag"
+      },
+      {
+        "text": ">",
+        "kind": "delimiter"
+      },
+      {
+        "text": "    ",
+        "kind": "plain"
+      }
+    ]
+  }
+]
