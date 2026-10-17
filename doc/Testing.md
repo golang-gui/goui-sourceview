@@ -187,3 +187,21 @@ READY 不代表像素验收。像素采样及平台结果见 [补全视觉验收
 两者的输入均经正常 Window.DispatchEvent / CommitText；源码入口说明启动环境和逐项预期。
 固定文本及分块计数与独立 strings.Count 比较；重叠匹配采用明确的原文范围预期。
 已执行命令、后端/缩放和未验收项见 [本轮记录](PlanFindBar.md)。
+
+
+## 13. 查找浮层外观与隔离
+
+```bash
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/find_appearance
+```
+
+程序在真实窗口中并列放置亮/暗编辑器，检查浮层开关不改变正文分配、紧凑尺寸、控件边界、
+选中语义、独立配色、替换展开、焦点及正常命中。通过 Window.DispatchEvent 的 SizeEvent
+模拟较窄/恢复的逻辑分配，验证隐藏与恢复次要项、Enter 查找和 Escape 关闭；这部分不声称完成
+原生窗口管理器的 resize 验收。`-inspect` 在自动检查后保留窗口供实际拖动、悬停与键盘检查，
+完成后正常关闭。`-capture-dir /tmp/<已有目录>` 输出 RenderWidget PNG，不写源码目录。
+
+像素断言只采样远离文字/描边/圆角抗锯齿的实色表面，image.At 经 NRGBAModel 转换为
+非预乘 sRGB NRGBA，使用内建配色独立常量逐通道精确断言；不比较字体金图。
+实际桌面截图另行对照，窗口启动、离屏断言和桌面目视检查分别记录。
+本轮后端、缩放、旧版复现及平台缺口见 [浮层验收](PlanFindBarAppearance.md)。
