@@ -52,3 +52,20 @@ func TestBindingRestoresDefaultsAndDisconnects(t *testing.T) {
 		t.Fatal("unmount leaked callback", events)
 	}
 }
+
+func TestUncontrolledSearchSurvivesDeclarativeUpdate(t *testing.T) {
+	ctx := &context{}
+	v := SourceView()
+	w := v.Mount(ctx).(*source.SourceView)
+	v.Update(ctx, w)
+	w.SetSearch(source.SearchQuery{Text: "user query", WholeWord: true})
+	v.Update(ctx, w)
+	if w.Search() != (source.SearchQuery{Text: "user query", WholeWord: true}) {
+		t.Fatal("rebuild cleared interactive query")
+	}
+	SourceView().Search(source.SearchQuery{}).Update(ctx, w)
+	if w.Search() != (source.SearchQuery{}) {
+		t.Fatal("explicit controlled empty query ignored")
+	}
+	v.Unmount(ctx, w)
+}

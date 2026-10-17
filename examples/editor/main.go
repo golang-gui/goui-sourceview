@@ -88,33 +88,10 @@ func main() {
 		}
 	})
 	button("Line numbers", func() { editor.SetShowLineNumbers(!editor.ShowLineNumbers()) })
-	searchbar := gui.NewLinearBox(layout.DirectionHorizontal)
-	searchbar.SetSpacing(6)
-	query := gui.NewTextInput()
-	query.SetMinSize(geometry.Size{Width: 200})
-	searchbar.AddChild(query)
-	replacement := gui.NewTextInput()
-	replacement.SetMinSize(geometry.Size{Width: 200})
-	searchbar.AddChild(replacement)
-	searchButton := func(text string, fn func()) {
-		b := gui.NewButton()
-		b.SetChild(gui.NewLabel(text))
-		b.ConnectClicked(fn)
-		searchbar.AddChild(b)
-	}
-	setQuery := func() { editor.SetSearch(source.SearchQuery{Text: query.Text()}) }
-	searchButton("Find", func() { setQuery(); editor.FindNext(false) })
-	searchButton("Replace", func() {
-		setQuery()
-		_, err := editor.ReplaceCurrent(replacement.Text())
-		if err != nil {
-			status.SetText(err.Error())
-		}
-	})
-	searchButton("Replace all", func() {
-		setQuery()
-		_, err := editor.ReplaceAll(replacement.Text())
-		if err != nil {
+	searchbar := source.NewFindBar()
+	searchbar.SetTarget(editor)
+	button("Find / Replace", func() {
+		if err := searchbar.Open(true); err != nil {
 			status.SetText(err.Error())
 		}
 	})
@@ -126,7 +103,7 @@ func main() {
 	content.SetSpacing(6)
 	content.AddChild(toolbar)
 	content.AddChild(searchbar)
-	content.AddChild(gui.NewLabel("Double-click: select word   Right-click: edit menu   Ctrl+Space: complete   Enter/Tab: accept"))
+	content.AddChild(gui.NewLabel("Ctrl/Cmd+F: find   F3 / Shift+F3: next / previous   Ctrl+Space: complete"))
 	content.AddChild(scroll)
 	content.AddChild(status)
 	win.SetWidget(content)

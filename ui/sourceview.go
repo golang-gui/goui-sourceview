@@ -147,11 +147,9 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	}
 	w.SetShowLineNumbers(lines)
 	w.SetScheme(v.colors)
-	query := source.SearchQuery{}
 	if v.query != nil {
-		query = *v.query
+		w.SetSearch(*v.query)
 	}
-	w.SetSearch(query)
 	if v.selection != nil && w.Selection() != *v.selection {
 		w.SetSelection(*v.selection)
 	}
