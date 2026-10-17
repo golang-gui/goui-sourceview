@@ -91,57 +91,32 @@ func minTime(a, b time.Time) time.Time {
 	return b
 }
 
-type settingsGroup struct {
-	handle signal.Handle
-	views  map[*SourceView]struct{}
-}
-
-var settingsGroups = make(map[gui.Application]*settingsGroup)
-
-func attachSettings(v *SourceView) {
-	app := gui.App
-	group := settingsGroups[app]
-	if group == nil {
-		group = &settingsGroup{views: make(map[*SourceView]struct{})}
-		settingsGroups[app] = group
-		group.handle = app.Settings().ConnectChanged(func() {
-			for view := range group.views {
-				if view.explicitScheme == nil {
-					view.updateScheme()
-				}
-			}
-		})
+func (v *SourceView) currentScheme() (*scheme.Scheme, error) {
+	if v.explicitScheme != nil {
+		return v.explicitScheme, nil
 	}
-	group.views[v] = struct{}{}
+	return v.styledScheme()
 }
-func detachSettings(v *SourceView) {
-	group := settingsGroups[gui.App]
-	if group == nil {
+func (v *SourceView) updateScheme() {
+	s, err := v.currentScheme()
+	if err != nil {
+		v.report(err)
 		return
 	}
-	delete(group.views, v)
-	if len(group.views) == 0 {
-		group.handle.Disconnect()
-		delete(settingsGroups, gui.App)
-	}
-}
-func (v *SourceView) colorScheme() *scheme.Scheme {
-	s := v.explicitScheme
-	if s == nil {
-		s = scheme.Light()
-		if v.mounted && gui.App.Settings().ColorScheme() == gui.ColorSchemeDark {
-			s = scheme.Dark()
-		}
-	}
-	return s
-}
-
-func (v *SourceView) updateScheme() {
-	s := v.colorScheme()
 	if v.appliedScheme == s {
 		return
 	}
 	v.closeCompletion()
+	if v.Destroyed() {
+		return
+	}
+	// Popup teardown can synchronously replace the document, explicit scheme
+	// or local stylesheet. Resolve the current appearance after that callback.
+	s, err = v.currentScheme()
+	if err != nil {
+		v.report(err)
+		return
+	}
 	v.appliedScheme = s
 	v.colors = s.Definition()
 	v.RequestPaint()

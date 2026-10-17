@@ -1,16 +1,13 @@
 package sourceview
 
 import (
-	"image/color"
 	"strings"
 
-	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/icon/svg"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
-	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/widgets"
 )
@@ -36,12 +33,10 @@ var findIcons = func() map[string]gui.IconSource {
 }()
 
 func (b *FindBar) buildSurface() {
-	b.scope = gui.NewStyleScope()
 	b.content = &findSurface{bar: b}
 	b.content.SetLayoutManager(&findBarLayout{bar: b})
 	b.content.SetVisible(false)
-	b.scope.SetChild(b.content)
-	b.WidgetBase.AddChild(b, b.scope)
+	b.WidgetBase.AddChild(b, b.content)
 	add := func(w gui.Widget) { b.content.WidgetBase.AddChild(b.content, w) }
 	name := func(w gui.Widget, en, zh string) {
 		getter := mlang.String(mlang.En(en), mlang.ZhCN(zh))
@@ -62,7 +57,9 @@ func (b *FindBar) buildSurface() {
 		w := gui.NewButton()
 		w.SetStyleName("sourceview.find.action")
 		w.SetPadding(3)
-		w.SetChild(gui.NewIcon(findIcons[icon]))
+		i := gui.NewIcon(findIcons[icon])
+		i.SetStyleName("sourceview.find.icon")
+		w.SetChild(i)
 		name(w, en, zh)
 		w.ConnectClicked(fn)
 		add(w)
@@ -80,6 +77,7 @@ func (b *FindBar) buildSurface() {
 		return w
 	}
 	b.toggleIcon = gui.NewIcon(findIcons["right"])
+	b.toggleIcon.SetStyleName("sourceview.find.icon")
 	b.toggle = option("Toggle replace", "展开替换", b.toggleIcon, b.SetReplaceMode)
 	b.toggle.SetStyleName("sourceview.find.expand")
 	b.find = gui.NewTextInput()
@@ -126,63 +124,31 @@ func (b *FindBar) buildSurface() {
 	b.replacement.ConnectText(func(text string) { b.replaceHint.SetVisible(b.replaceMode && text == "") })
 	b.find.ConnectFocused(func(bool) { b.content.RequestPaint() })
 	b.replacement.ConnectFocused(func(bool) { b.content.RequestPaint() })
-	b.updateAppearance(nil)
+	b.updateAppearance()
 }
 
-func (b *FindBar) updateAppearance(v *SourceView) {
-	s := scheme.Light()
-	if v != nil {
-		s = v.colorScheme()
+type findAppearance struct{ surface, normal, focused, disabled styleBox }
+
+func (b *FindBar) StyleChanged() { b.updateAppearance() }
+func (b *FindBar) updateAppearance() {
+	name := b.StyleName()
+	if name == "" {
+		name = "sourceview.find"
 	}
-	if s == b.paletteScheme {
+	next := findAppearance{surface: boxOf(gui.ResolveWidgetStyle(b, name, "", style.Normal)),
+		normal:   boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "frame", style.Normal)),
+		focused:  boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "frame", style.Focused)),
+		disabled: boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "frame", style.Disabled))}
+	if b.appearance == next {
 		return
 	}
-	b.paletteScheme = s
-	d := s.Definition()
-	c := d.Find
-	b.findColors = c
-	// A complete sheet is confined to this explicitly owned subtree. Layout and
-	// behavior remain on the native controls; application styles stay unchanged.
-	rules := gui.DefaultStyleRules()
-	rules = append(rules,
-		style.Name("sourceview.find.input").FontSize(9.75).ForegroundColor(c.Foreground).BackgroundColor(transparent).BorderWidth(0),
-		style.Name("sourceview.find.input").State(style.Focused).BorderWidth(0),
-		style.Name("sourceview.find.input").State(style.Disabled).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.input").Part("selection").BackgroundColor(d.SelectionBackground).ForegroundColor(d.SelectionForeground),
-		style.Name("sourceview.find.input").Part("caret").ForegroundColor(c.Foreground),
-		style.Name("sourceview.find.action").BackgroundColor(transparent).BorderWidth(0).Radius(3),
-		style.Name("sourceview.find.action").State(style.Hovered).BackgroundColor(c.HoverBackground),
-		style.Name("sourceview.find.action").State(style.Pressed).BackgroundColor(c.OptionBackground),
-		style.Name("sourceview.find.action").Part("focus").State(style.Focused).BackgroundColor(transparent).BorderWidth(0),
-		style.Name("sourceview.find.action").Part("focus").State(style.FocusVisible).BorderColor(c.FocusBorder).BorderWidth(1).Radius(3),
-		style.Name("icon").ForegroundColor(c.Foreground), style.Name("icon").State(style.Disabled).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.option-text").FontSize(9).ForegroundColor(c.Foreground),
-		style.Name("sourceview.find.option-text").State(style.Disabled).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.status").FontSize(9).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.hint").FontSize(9.75).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.error").FontSize(9).ForegroundColor(c.ErrorForeground),
-	)
-	for _, name := range []string{"sourceview.find.option", "sourceview.find.expand"} {
-		for _, part := range []string{"button", "button-checked"} {
-			bg, border := transparent, transparent
-			if part == "button-checked" && name != "sourceview.find.expand" {
-				bg = c.OptionBackground
-				border = c.OptionBorder
-			}
-			rules = append(rules, style.Name(name).Part(part).BackgroundColor(bg).BorderColor(border).BorderWidth(1).Radius(3).FontSize(9),
-				style.Name(name).Part(part).State(style.Hovered).BackgroundColor(c.HoverBackground),
-				style.Name(name).Part(part).State(style.Pressed).BackgroundColor(c.OptionBackground))
-		}
-		rules = append(rules, style.Name(name).Part("focus").State(style.FocusVisible).BorderColor(c.FocusBorder).BorderWidth(1).Radius(3))
-	}
-	b.scope.SetStyleSheet(style.Sheet(rules...))
-	b.content.RequestPaint()
+	b.appearance = next
+	b.inset = max(float32(2), next.surface.outset())
+	b.RequestLayout()
+	b.RequestPaint()
 }
 
-var transparent = color.NRGBA{} // Premultiplied zero also implements color.Color.
-
-// The surface reserves eight DIP for a soft shadow, inside its ordinary clip.
-// Its children remain ordinary widgets in the main window's event/focus tree.
+// A surface's shadow is reserved inside ordinary widget bounds.
 type findSurface struct {
 	gui.WidgetBase
 	bar *FindBar
@@ -190,33 +156,29 @@ type findSurface struct {
 
 func (s *findSurface) Paint(p gui.Painter) {
 	b := s.bar
-	c := b.findColors
-	panel := geometry.Rect(0, 0, s.Rect().Width, s.Rect().Height).Inset(8)
-	p.DrawBoxShadow(panel, 4, graphics.BoxShadow{Color: graphics.ColorOf(c.Shadow), Offset: geometry.Point{Y: 2}, BlurRadius: 6})
-	p.FillRoundRect(panel, 4, graphics.ColorOf(c.Background))
-	p.DrawRoundRect(panel.Inset(.5), 3.5, 1, graphics.ColorOf(c.Border))
-	input := func(r geometry.Rectangle, focused bool) {
-		if r.Width <= 0 || r.Height <= 0 {
-			return
+	b.appearance.surface.paint(p, geometry.Rect(0, 0, s.Rect().Width, s.Rect().Height).Inset(b.inset))
+	input := func(r geometry.Rectangle, w *gui.TextInput) {
+		skin := b.appearance.normal
+		if !gui.IsEnabled(w) {
+			skin = b.appearance.disabled
+		} else if w.Focused() {
+			skin = b.appearance.focused
 		}
-		border := c.InputBorder
-		if focused {
-			border = c.FocusBorder
-		}
-		p.FillRoundRect(r, 2, graphics.ColorOf(c.InputBackground))
-		p.DrawRoundRect(r.Inset(.5), 1.5, 1, graphics.ColorOf(border))
+		skin.paint(p, r)
 	}
-	input(b.fieldRect, b.find.Focused())
+	input(b.fieldRect, b.find)
 	if b.replaceMode {
-		input(b.replacementRect, b.replacement.Focused())
+		input(b.replacementRect, b.replacement)
 	}
 }
 
 // Layout addresses ordinary visible children by identity. Placeholder labels
 // paint behind the native inputs and never intercept their pointer input.
 type findBarLayout struct {
-	bar       *FindBar
-	rowHeight float32
+	bar         *FindBar
+	rowHeight   float32
+	statusWidth float32
+	optionSizes [2]geometry.Size
 }
 
 // Density changes precede WidgetBase's visible-child snapshot.
@@ -254,11 +216,20 @@ func (l *findBarLayout) Measure(children []layout.Child, c layout.Constraint) la
 	if b.replaceMode {
 		l.rowHeight = max(l.rowHeight, slots[b.replacement].Measure(layout.Loose(geometry.Size{Width: max(0, width-80), Height: layout.Inf})).Height)
 	}
+	if !b.reduced {
+		l.statusWidth = max(64, slots[b.status].Measure(layout.Unbounded()).Width)
+	}
+	if !b.narrow {
+		for i, w := range []gui.Widget{b.matchCase, b.wholeWord} {
+			m := slots[w].Measure(layout.Unbounded())
+			l.optionSizes[i] = geometry.Size{Width: max(22, m.Width), Height: min(l.rowHeight, max(22, m.Height))}
+		}
+	}
 	rows := float32(1)
 	if b.replaceMode {
 		rows = 2
 	}
-	height := 16 + 10 + rows*l.rowHeight + (rows-1)*4
+	height := 2*b.inset + 10 + rows*l.rowHeight + (rows-1)*4
 	// Measure all visible descendants through the framework before arrangement.
 	for _, child := range children {
 		child.Measure(layout.Loose(geometry.Size{Width: width, Height: height}))
@@ -270,7 +241,8 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	h := l.rowHeight
 	slots := l.slots(children)
 	widgets := []gui.Widget{b.toggle, b.find, b.matchCase, b.wholeWord, b.status, b.previous, b.next, b.close, b.replacement, b.replace, b.replaceAll, b.findHint, b.replaceHint}
-	x, y, right := float32(13), float32(13), max(float32(13), r.Width-13)
+	edge := b.inset + 5
+	x, y, right := edge, edge, max(edge, r.Width-edge)
 	place := func(i int, x, y, w, h float32) {
 		if child := slots[widgets[i]]; child != nil {
 			child.Arrange(geometry.Rect(x, y, max(0, w), max(0, h)))
@@ -288,9 +260,9 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 		take(5)
 	}
 	if !b.reduced {
-		right -= 76
-		height := slots[b.status].Measure(layout.Loose(geometry.Size{Width: 74, Height: h})).Height
-		place(4, right, y+(h-height)/2, 74, height)
+		right -= l.statusWidth + 2
+		height := slots[b.status].Measure(layout.Loose(geometry.Size{Width: l.statusWidth, Height: h})).Height
+		place(4, right, y+(h-height)/2, l.statusWidth, height)
 		right -= 4
 	}
 	place(0, x, y+(h-22)/2, 18, 22)
@@ -298,9 +270,10 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	b.fieldRect = geometry.Rect(x, y, max(0, right-x), h)
 	inputRight := right
 	if !b.narrow {
-		inputRight -= 46
-		place(2, inputRight+1, y+(h-22)/2, 22, 22)
-		place(3, inputRight+23, y+(h-22)/2, 22, 22)
+		a, b := l.optionSizes[0], l.optionSizes[1]
+		inputRight -= a.Width + b.Width + 6
+		place(2, inputRight+1, y+(h-a.Height)/2, a.Width, a.Height)
+		place(3, inputRight+a.Width+4, y+(h-b.Height)/2, b.Width, b.Height)
 	}
 	place(1, x+1, y+1, max(0, inputRight-x-2), h-2)
 	place(11, x+5, y+5, max(0, inputRight-x-8), h-8)

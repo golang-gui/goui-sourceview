@@ -19,7 +19,7 @@
 | [widget.go](../../goui/gui/widget.go) | mount/unmount、Destroyed、失效与树清理；脱离树后销毁不保证再发 unmount | 只在挂载期持有外部订阅和原生资源，不等待不存在的公开 Destroy hook |
 | [clipboard.go](../../goui/gui/clipboard.go) | SetText 不返回错误；RequestText 可同步回调，bool 不能区分无文本与失败 | 不能据当前 API 保证“剪切先复制成功再删除” |
 | [platform common Clipboard](../../goui/platform/common/clipboard.go) | 原生 SetText 已返回 error，但读取回调仍为 bool | 写错误可向 GUI 透传；读错误区分需要同步演进平台契约与各后端 |
-| [root.go](../../goui/gui/root.go)、[settings.go](../../goui/gui/settings.go) | ConnectFrame / RequestPaint；GUI 设置快照与变化信号 | 分帧驱动、共享自动配色来源，无原生轮询 |
+| [root.go](../../goui/gui/root.go)、[settings.go](../../goui/gui/settings.go) | ConnectFrame / RequestPaint；GUI 设置快照与变化信号 | 分帧驱动；界面设置由应用主题统一消费，无控件原生轮询 |
 
 ## 2. G1：原子批量编辑与历史选区
 
@@ -131,9 +131,10 @@ G3 验收覆盖空文本、无文本、无服务、读写失败、同步/异步�
 
 ## 6. 查找浮层使用的通用扩展（2026-10-17）
 
-浮层定位直接使用公开 Overlay。FindBar 的普通 TextInput/按钮需要在同窗口中跟随各自编辑器配色，
-框架实现显式 `gui.StyleScope` 单子容器和 `ResolveWidgetStyle`，沿用 StyleSheet 与 StyleChanged。
-具体属性仍只存在于配色表，不恢复局部 concrete style rules 或隐式父属性继承。
+浮层定位使用公开 Overlay。FindBar 普通子控件使用所属样式树；应用可用显式
+StyleScope 包裹整个编辑区。Basic / Modern 各自 Register 第三方规则，GOUI 不导入
+SourceView。具体接口与代码/UI 边界见 [样式接入](DesignStyles.md)。
+
 该扩展与所有 GUI/widgets 使用者迁移在 GOUI `210732a`，没有反向依赖 SourceView。
 
 `gui.Painter.DrawBoxShadow` 在 GOUI `00521cc` 中转发既有 graphics.BoxShadow，继续使用局部 DIP、

@@ -64,6 +64,7 @@ type SourceView struct {
 	showLineNumbers                             bool
 	explicitScheme                              *scheme.Scheme
 	appliedScheme                               *scheme.Scheme
+	themeScheme                                 *scheme.Scheme
 	digitWidth                                  float32
 	colors                                      scheme.Definition
 	mounted                                     bool
@@ -309,6 +310,8 @@ func (v *SourceView) SetShowLineNumbers(show bool) {
 		v.invalidateLayout()
 	}
 }
+
+// SetScheme overrides code-area colors only. nil uses the owning stylesheet.
 func (v *SourceView) SetScheme(s *scheme.Scheme) { v.explicitScheme = s; v.updateScheme() }
 func (v *SourceView) ConnectSelection(fn func(textedit.Selection)) signal.Handle {
 	return v.selectionSignal.Connect(fn)
@@ -409,7 +412,6 @@ func (v *SourceView) mount() {
 	v.context = gui.App.Typography()
 	v.document.acquire(v)
 	attachFrame(v)
-	attachSettings(v)
 	v.updateScheme()
 	v.invalidateLayout()
 	v.blink = gui.App.NewTimer()
@@ -449,7 +451,6 @@ func (v *SourceView) unmount() {
 		v.blink = nil
 	}
 	detachFrame(v)
-	detachSettings(v)
 	v.document.release(v)
 	v.cancelPreedit()
 	v.dropLayouts()

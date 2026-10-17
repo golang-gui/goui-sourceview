@@ -2,7 +2,7 @@
 // native typography and fonts. Run: go run ./tests/window/editor/find_appearance
 // (Linux without IME service: XMODIFIERS=@im=none). Optional -capture-dir writes
 // PNGs to that existing directory; use a temporary directory outside the repo.
-// Initially two editors use Light/Dark in one ordinary window. Automatically
+// Initially two explicit style scopes use Modern Light/Dark in one window. Automatically
 // opens both through dispatched Ctrl/Cmd+F, expands replacement with the normal
 // shortcut, checks geometry/colors/focus/hit testing, switches one theme and
 // dispatches smaller/restored logical window size events. This exercises layout,
@@ -31,6 +31,7 @@ import (
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/theme/modern"
 	"github.com/golang-gui/goui/widgets"
 )
 
@@ -59,6 +60,7 @@ func main() {
 	runtime.LockOSThread()
 	inspect := flag.Bool("inspect", false, "keep the final window open for manual inspection")
 	out := flag.String("capture-dir", "", "existing temporary directory for screenshots")
+	fontSize := flag.Float64("font-size", 14, "Modern UI font size in points")
 	flag.Parse()
 	app, err := gui.NewApplication("org.golang-gui.SourceViewFindAppearance")
 	must(err)
@@ -71,14 +73,11 @@ func main() {
 	var editors [2]*source.SourceView
 	var bars [2]*source.FindBar
 	var overlays [2]*gui.Overlay
+	var scopes [2]*gui.StyleScope
 	for i := range editors {
 		v := source.NewSourceView()
 		v.SetDocument(source.NewDocument("one one\n\neditor content\n"))
-		if i == 0 {
-			v.SetScheme(scheme.Light())
-		} else {
-			v.SetScheme(scheme.Dark())
-		}
+
 		scroll := gui.NewScrollView()
 		scroll.SetChild(v)
 		overlay := gui.NewOverlay()
@@ -88,7 +87,12 @@ func main() {
 		bar.SetTarget(v)
 		overlay.AddOverlay(bar)
 		overlay.ConnectOverlayPosition(bar, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
-		row.AddChild(overlay)
+		scope := gui.NewStyleScope()
+		scope.SetMainWeight(1)
+		scope.SetStyleSheet(modern.Sheet(modern.Options{Dark: i == 1, FontSize: float32(*fontSize)}))
+		scope.SetChild(overlay)
+		scopes[i] = scope
+		row.AddChild(scope)
 		editors[i], bars[i], overlays[i] = v, bar, overlay
 	}
 	win.SetWidget(row)
@@ -117,13 +121,13 @@ func main() {
 		get := func(x, y float32) color.NRGBA {
 			return color.NRGBAModel.Convert(img.At(int((bb.X-bounds.X+x)*scale), int((bb.Y-bounds.Y+y)*scale))).(color.NRGBA)
 		}
-		expected := uint8(243)
+		expected := uint8(255)
 		if dark {
-			expected = 37
+			expected = 40
 		}
 		expectedBlue := expected
 		if dark {
-			expectedBlue++
+			expectedBlue = 45
 		}
 		// Panel's empty bottom-right interior, away from glyphs/border/AA.
 		actual := get(bar.Rect().Width-20, bar.Rect().Height-12)
@@ -133,12 +137,16 @@ func main() {
 			input = named(bar, "Find")
 		}
 		ib := input.Snapshot().Bounds
-		c := color.NRGBAModel.Convert(img.At(int((ib.X-bounds.X+1)*scale), int((ib.Y-bounds.Y+1)*scale))).(color.NRGBA)
+		c := color.NRGBAModel.Convert(img.At(int((ib.X-bounds.X+3)*scale), int((ib.Y-bounds.Y+3)*scale))).(color.NRGBA)
 		expected = 255
 		if dark {
-			expected = 60
+			expected = 40
 		}
-		check(c.R == expected && c.G == expected && c.B == expected, fmt.Sprintf("native input palette %s: %+v", tag, c))
+		expectedBlue = expected
+		if dark {
+			expectedBlue = 45
+		}
+		check(c.R == expected && c.G == expected && c.B == expectedBlue, fmt.Sprintf("native input palette %s: %+v", tag, c))
 		if *out != "" {
 			f, err := os.Create(filepath.Join(*out, tag+".png"))
 			must(err)
@@ -166,9 +174,24 @@ func main() {
 			for i, bar := range bars {
 				check(bar.Opened() && !bar.ReplaceMode(), "collapsed open state")
 				check(editors[i].Rect() == before[i], "overlay changed editor allocation")
-				check(bar.Rect().Width == 448 && bar.Rect().Height < 56, "compact natural bounds")
+				input := named(bar, "Find")
+				// Native font metrics differ by platform. The row's allocated
+				// input height plus its 2-DIP frame and 26-DIP panel chrome is exact.
+				check(bar.Rect().Width == 448 && bar.Rect().Height == input.Rect().Height+28, "compact natural bounds")
 				check(named(bar, "Match case").Snapshot().Attributes[widgets.CheckInfoKey].(widgets.CheckInfo).State == widgets.CheckChecked, "selected option semantics")
-				check(named(bar, "Find").Rect().Width > 120, "input too narrow")
+				minInput := float32(90)
+				if *fontSize == 14 {
+					minInput = 120
+				}
+				check(named(bar, "Find").Rect().Width > minInput, "input too narrow")
+				// The status and option text must fit their native measurement,
+				// including larger application fonts; no screenshot tolerance.
+				for _, name := range []string{"Match case", "Whole word"} {
+					w := named(bar, name).(*widgets.CheckButton)
+					child := w.Child()
+					m := child.Measure(layout.Unbounded())
+					check(child.Rect().Width >= m.Width && child.Rect().Height >= m.Height, "option text clipped: "+name)
+				}
 				// Outside the floating rectangle normal hit testing still reaches content.
 				picked := gui.Pick(overlays[i], geometry.Point{X: 30, Y: 160})
 				check(picked == editors[i], "overlay blocked editor content")
@@ -178,11 +201,13 @@ func main() {
 			}
 		case 2:
 			for i, bar := range bars {
-				check(bar.ReplaceMode() && bar.Rect().Height < 90, "expanded compact bounds")
+				check(bar.ReplaceMode() && bar.Rect().Height == 2*(named(bar, "Find").Rect().Height+2)+30, "expanded compact bounds")
 				sample(i, i == 1, fmt.Sprintf("%d-expanded", i))
 			}
-			// Change only the right editor. Left controls must retain their own sheet.
+			// A code-only scheme must leave the Dark panel unchanged.
 			editors[1].SetScheme(scheme.Light())
+			sample(1, true, "scheme-does-not-style-ui")
+			scopes[1].SetStyleSheet(modern.Sheet(modern.Options{FontSize: float32(*fontSize)}))
 		case 3:
 			sample(0, false, "light-isolated")
 			sample(1, false, "dark-to-light")
@@ -212,10 +237,10 @@ func main() {
 				check(named(bar, "Previous").Visible() && named(bar, "Match case").Visible(), "wide controls not restored")
 			}
 			done = true
-			log.Print("PASS floating find geometry, light/dark native-input colors, independent schemes, collapsed/expanded, narrow/restore, focus and hit testing")
+			log.Print("PASS floating find geometry, light/dark native-input colors, independent style scopes, collapsed/expanded, narrow/restore, focus and hit testing")
 			if *inspect {
 				timer.Stop()
-				editors[1].SetScheme(scheme.Dark())
+				scopes[1].SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: float32(*fontSize)}))
 				for _, v := range editors {
 					win.SetFocusedWidget(v)
 					replace()

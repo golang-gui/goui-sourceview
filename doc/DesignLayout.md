@@ -189,11 +189,10 @@ Light/Dark 返回可安全共享的不可变实例；修改以取得 Definition�
 
 KindPlain 使用 Foreground。这个颜色表是本项目初始设计，不是对其他编辑器主题文件的复制或兼容声明。
 
-默认 nil Scheme 根据 GUI Settings 的快照选择 Light/Dark。
-本模块按 Application 共享一个自动方案观察者，首个自动视图挂载时连接，
-最后一个离开时断开；它只读取 gui.Settings，不查询或轮询原生系统。
-显式方案不随系统变化；GUI StyleChanged 继续负责边框、padding、字体等控件样式。
-应用使用固定 GUI 主题时应显式选择匹配的代码方案，不由源码控件猜测桌面主题策略。
+默认 nil Scheme 根据所属 GUI stylesheet 解析代码颜色。Basic 使用 Light；Modern 按
+Options.Dark 选择语法色并适配官方正文/选区。SetScheme 只覆盖代码色，nil 恢复样式。
+控件不订阅系统设置；应用/声明式层更新完整 stylesheet，StyleChanged 同步颜色和字体。
+具体注册、样式名、UI 边界与失效契约见 [样式接入](DesignStyles.md)。
 
 绘制顺序：
 

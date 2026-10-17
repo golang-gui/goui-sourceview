@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -25,9 +24,8 @@ type FindBar struct {
 	gui.WidgetBase
 	target                                     *SourceView
 	content                                    *findSurface
-	scope                                      *gui.StyleScope
-	paletteScheme                              *scheme.Scheme
-	findColors                                 scheme.FindColors
+	appearance                                 findAppearance
+	inset                                      float32
 	findHint, replaceHint                      *gui.Label
 	toggleIcon                                 *gui.Icon
 	narrow, reduced                            bool
@@ -274,7 +272,6 @@ func (b *FindBar) refresh() {
 	b.syncing = true
 	defer func() { b.syncing = false }()
 	v := b.liveTarget()
-	b.updateAppearance(v)
 	b.findHint.SetVisible(b.find.Text() == "")
 	b.replaceHint.SetVisible(b.replaceMode && b.replacement.Text() == "")
 	epoch := b.epoch

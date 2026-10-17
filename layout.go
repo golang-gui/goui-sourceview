@@ -75,16 +75,36 @@ func (v *SourceView) invalidateLayout() {
 	v.RequestPaint()
 }
 func (v *SourceView) StyleChanged() {
+	v.closeCompletion()
+	if v.Destroyed() {
+		return
+	}
+	v.updateScheme()
+	if v.Destroyed() {
+		return
+	}
+	if !gui.IsEnabled(v) {
+		v.cancelPreedit()
+		if v.Destroyed() {
+			return
+		}
+		v.cancelPaste()
+		v.hideMenu()
+		if v.Destroyed() {
+			return
+		}
+	}
+	// Read style and enabled state after teardown callbacks, using the view's
+	// current tree location rather than a captured document/selection state.
 	name := v.StyleName()
 	if name == "" {
 		name = "source-view"
 	}
 	state := style.Normal
 	if !gui.IsEnabled(v) {
-		v.closeCompletion()
 		state = style.Disabled
 	}
-	resolved := gui.ResolveStyle(name, "", state)
+	resolved := gui.ResolveWidgetStyle(v, name, "", state)
 	font := typography.FontInfo{Family: "monospace", Size: 12}
 	if family, ok := resolved.FontFamily(); ok {
 		font.Family = family
@@ -92,15 +112,9 @@ func (v *SourceView) StyleChanged() {
 	if size, ok := resolved.FontSize(); ok {
 		font.Size = size
 	}
-	if !gui.IsEnabled(v) {
-		v.cancelPreedit()
-		v.cancelPaste()
-		v.hideMenu()
-	}
 	if v.font == font {
 		return
 	}
-	v.closeCompletion()
 	v.font = font
 	v.metricsReady = false
 	v.contentWidth = 0

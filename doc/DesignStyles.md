@@ -1,0 +1,103 @@
+# Basic / Modern 样式接入
+
+## 职责与使用
+
+SourceView 根包在 init 中分别调用 `basic.Register`、`modern.Register`，登记名为
+`github.com/golang-gui/goui-sourceview`。应用只需正常导入 SourceView 并启用 Modern：
+
+```go
+app.SetStyleSheet(modern.FromSettings(app.Settings()))
+// 声明式 build：
+return ui.Root().StyleSheet(modern.FromSettings(app.Settings())).Windows(/* ... */)
+```
+
+不需要额外导入适配包。GOUI 默认 nil stylesheet 使用包含 SourceView 的 Basic。
+所有第三方控件必须实现 Basic，可选实现 Modern；两个注册入口分别由各主题拥有。
+GOUI 的 [注册契约](../../goui/doc/DesignThirdPartyStyles.md) 定义初始化冻结、规则排序和快照。
+本模块不增加主题标识、中心匹配、动态适配器或第三方主题降级协议。
+
+Basic 提供完整默认外观；Modern 根据本次 Options 和官方控件的只读 base 生成规则。
+Dark、主题色、UI 字体均来自当前 Modern 参数，不能从系统设置猜测应用主题。
+注册函数只生成值，不创建 Widget、读取应用、申请原生资源或调用完整主题构造。
+应用可在主题 Rules 末尾追加同 selector 覆盖。StyleSheet 是不可变快照，切换时替换整张表。
+
+## 代码区
+
+默认代码区字体是 monospace / 12 pt，与 UI 字体分离，可用 `source-view` 的字体规则覆盖。
+Basic 采用内置 Light 的代码颜色；Modern 根据 Dark 选择语法颜色，并从官方 `text-view`
+取得正文背景、前景及选区。保留独立的代码侧栏、当前行、搜索、括号等领域配色。
+
+`SetScheme(s)` 仅覆盖代码区域的完整配色；`SetScheme(nil)` 恢复所属 stylesheet。
+`scheme.Definition` 只维护代码颜色，不再包含 Find / Completion UI 调色板。
+UI 的界面字体、焦点、圆角和阴影不由代码 Scheme 控制。
+
+代码样式名默认为 `source-view`，以下 part 具有公开语义：
+
+| part | 字段 |
+| --- | --- |
+| 无 | 背景、前景、字体 |
+| gutter | 行号区背景、前景 |
+| current-line / search / current-search | 对应叠加背景 |
+| selection | 活动选区背景、前景 |
+| inactive-selection | 非活动选区背景 |
+| bracket | 匹配背景与边框色 |
+| caret / preedit | 插入点、预编辑下划线前景 |
+| border | 编辑区边框色 |
+| token-plain/property/string/escape/number/keyword/delimiter/tag/attribute/entity/comment/meta/invalid | 对应 token 前景 |
+
+解析使用 `gui.ResolveWidgetStyle`，因此支持应用主题和显式 `StyleScope`。
+颜色转为普通 NRGBA 后按现有 Scheme 契约验证；无效的代码基础色经 ConnectError 上报。
+`StyleChanged` 即使字体未改变也更新配色。等价颜色沿用同一不可变 Scheme；颜色变化只让
+paragraphStyle 的着色身份失效，不重建文本几何、HeightIndex 或原生布局。
+字体变化按原有布局失效路径释放原生资源。关闭补全等外部回调后检查生命周期与状态。
+控件不再维护用于自动配色的应用设置订阅；系统跟随由应用/声明式层更新样式表。
+
+## 查找浮层
+
+FindBar 使用自己在控件树中的样式环境，不在内部安装固定 Basic StyleScope。
+需要两个亮暗编辑区时，将各自的编辑器和 FindBar 一起放入明确的 StyleScope。
+SetTarget 只建立编辑行为关联，不把另一个子树的外观隐式传进来。
+
+| 名称 / part | 用途 |
+| --- | --- |
+| sourceview.find | 面板背景、前景、边框、圆角、阴影 |
+| sourceview.find.input | 输入 UI 字体、前景与透明内容区 |
+| sourceview.find.input / frame | 输入框表面；Normal / Focused / Disabled 的边框 |
+| sourceview.find.input / selection、caret | 原生文本选区与插入点 |
+| sourceview.find.action / focus | 操作按钮及独立键盘焦点 |
+| sourceview.find.option、sourceview.find.expand / button、button-checked、focus | 开关与展开按钮 |
+| sourceview.find.icon、option-text、status、hint、error | 显式命名的内容样式 |
+
+Modern 的面板/输入/焦点分别取官方 menu / text-input / Focused；选项、错误与次要文字
+取当前主题值。UI 字号使用 Options.FontSize，圆角取官方 menu / text-input。
+Basic 保留紧凑的 9.75 pt 输入与 4/2 DIP 圆角。操作图标使用专名，不覆盖全局 icon。
+
+布局继续使用 448 DIP 自然宽度、原生输入测量、4 DIP 行距与既有窄宽度策略。
+面板阴影空间从 shadow 的公开半径/偏移计算并保留在普通控件分配内；关闭阴影后不保留
+原有大留白。颜色、边框、圆角与阴影通过正常 StyleChanged 刷新，无独立配色帧轮询。
+原生输入、焦点、IME、命中和语义仍由现有 GOUI 控件负责。
+
+## 补全窗口
+
+独立原生 Popover 使用 `sourceview.completion`：根规则给出面板、边框、字体；
+detail / selected / selected-detail / match / selected-match / scroll-thumb 部件分别控制
+说明、选中、匹配和滚动提示。普通/选中匹配前景均来自 Modern 的对比度调整主题色。
+文字使用 UI 字体，说明字号为主体的 90%；名称列、原生 cluster 省略和语义完整文本不变。
+
+补全窗口通过所属 SourceView 显式解析样式，不能因为进入另一个原生 Root 而丢掉
+编辑器的局部 StyleScope。快照只保存普通颜色、字体和表面参数；原生布局仍由列表独占，
+外观变化、会话取消或卸载释放。运行中换编辑器样式关闭旧会话，下次打开采用最新样式。
+边框、滚动提示及阴影的显式 alpha 原样保留，不由缺省配色推导覆盖。
+
+## 验证与参照
+
+包测试覆盖默认登记、稳定规则、所有 token part、同字体换色、显式代码方案、UI 隔离、
+主题字号/圆角/焦点、应用覆盖、透明装饰及 Popover 所有者样式。原先 scheme 的 UI
+调色板测试迁移到这些规则测试，不再要求代码 Scheme 验证界面配色。
+现有补全几何、逐字颜色、资源数量、取消与原生省略断言继续保留。
+窗口测试验证亮暗并列、单侧换主题、原生输入颜色、缩窄恢复和正常事件路径。
+
+[Monaco 主题颜色](https://code.visualstudio.com/api/references/theme-color#suggest-widget)
+将 suggest 的表面、说明、匹配、选中分别命名，采用这些语义，不照搬其注册中心。
+[GtkSourceView 5 StyleScheme](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.StyleScheme.html)
+将源码配色作为编辑器资源；本实现保留代码 Scheme，与 GOUI 界面主题职责分离。
