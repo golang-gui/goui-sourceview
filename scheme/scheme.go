@@ -31,6 +31,7 @@ type Definition struct {
 	PreeditUnderline       color.NRGBA
 	Border                 color.NRGBA
 	Completion             CompletionColors
+	Find                   FindColors
 	Tokens                 map[language.Kind]color.NRGBA
 }
 
@@ -44,6 +45,15 @@ type CompletionColors struct {
 	SelectedDetailForeground                 color.NRGBA
 	MatchForeground, SelectedMatchForeground color.NRGBA
 	ScrollThumb                              color.NRGBA
+}
+
+// FindColors styles the optional find/replace surface. Text and surface colors
+// are opaque. Borders and Shadow may have alpha. New derives a zero palette.
+type FindColors struct {
+	Background, Foreground, MutedForeground           color.NRGBA
+	Border, InputBackground, InputBorder, FocusBorder color.NRGBA
+	HoverBackground, OptionBackground, OptionBorder   color.NRGBA
+	ErrorForeground, Shadow                           color.NRGBA
 }
 
 // Scheme is immutable and safe to share.
@@ -68,6 +78,19 @@ func New(d Definition) (*Scheme, error) {
 		d.Completion.MatchForeground, d.Completion.SelectedMatchForeground} {
 		if c.A != 255 {
 			return nil, fmt.Errorf("scheme: completion backgrounds and foregrounds must be opaque")
+		}
+	}
+	if d.Find == (FindColors{}) {
+		d.Find = FindColors{
+			Background: d.Completion.Background, Foreground: d.Completion.Foreground, MutedForeground: d.Completion.DetailForeground,
+			Border: d.Border, InputBackground: d.Background, InputBorder: d.Border, FocusBorder: d.Caret,
+			HoverBackground: d.Completion.SelectedBackground, OptionBackground: d.Completion.SelectedBackground, OptionBorder: d.Completion.MatchForeground,
+			ErrorForeground: rgb(0xc74e4e), Shadow: color.NRGBA{A: 55},
+		}
+	}
+	for _, c := range []color.NRGBA{d.Find.Background, d.Find.Foreground, d.Find.MutedForeground, d.Find.InputBackground, d.Find.HoverBackground, d.Find.OptionBackground, d.Find.ErrorForeground} {
+		if c.A != 255 {
+			return nil, fmt.Errorf("scheme: find surfaces and foregrounds must be opaque")
 		}
 	}
 	for kind := range d.Tokens {
@@ -124,6 +147,11 @@ var light = builtin(Definition{
 		SelectedBackground: rgb(0xe3edf9), SelectedForeground: rgb(0x172b44), SelectedDetailForeground: rgb(0x4e627b),
 		MatchForeground: rgb(0x005fb8), SelectedMatchForeground: rgb(0x0055a5), ScrollThumb: rgb(0xa6b3c2),
 	},
+	Find: FindColors{
+		Background: rgb(0xf3f3f3), Foreground: rgb(0x333333), MutedForeground: rgb(0x6c6c6c), Border: rgb(0xd0d0d0),
+		InputBackground: rgb(0xffffff), InputBorder: rgb(0xcecece), FocusBorder: rgb(0x0078d4), HoverBackground: rgb(0xe1e1e1),
+		OptionBackground: rgb(0xcce5ff), OptionBorder: rgb(0x0078d4), ErrorForeground: rgb(0xb42318), Shadow: color.NRGBA{A: 42},
+	},
 	Tokens: map[language.Kind]color.NRGBA{
 		language.KindProperty: rgb(0x005cc5), language.KindString: rgb(0x0a7f39), language.KindEscape: rgb(0x6f42c1),
 		language.KindNumber: rgb(0x0550ae), language.KindKeyword: rgb(0x8250df), language.KindDelimiter: rgb(0x57606a),
@@ -143,6 +171,11 @@ var dark = builtin(Definition{
 		Background: rgb(0x25292f), Foreground: rgb(0xdce2e9), DetailForeground: rgb(0xa0aab7), Border: rgb(0x505b69),
 		SelectedBackground: rgb(0x35465e), SelectedForeground: rgb(0xf0f5fc), SelectedDetailForeground: rgb(0xc0ccdc),
 		MatchForeground: rgb(0x79bbff), SelectedMatchForeground: rgb(0x96cbff), ScrollThumb: rgb(0x677588),
+	},
+	Find: FindColors{
+		Background: rgb(0x252526), Foreground: rgb(0xcccccc), MutedForeground: rgb(0x999999), Border: rgb(0x454545),
+		InputBackground: rgb(0x3c3c3c), InputBorder: rgb(0x3c3c3c), FocusBorder: rgb(0x007fd4), HoverBackground: rgb(0x3b3b3b),
+		OptionBackground: rgb(0x264f78), OptionBorder: rgb(0x007fd4), ErrorForeground: rgb(0xf48771), Shadow: color.NRGBA{A: 110},
 	},
 	Tokens: map[language.Kind]color.NRGBA{
 		language.KindProperty: rgb(0x9cdcfe), language.KindString: rgb(0xce9178), language.KindEscape: rgb(0xd7ba7d),

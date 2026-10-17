@@ -85,3 +85,32 @@ func TestCompletionPaletteIsIndependentAndOpaque(t *testing.T) {
 		}
 	}
 }
+
+func TestFindPaletteFallbackAndIsolation(t *testing.T) {
+	for _, base := range []*Scheme{Light(), Dark()} {
+		d := base.Definition()
+		want := d.Find
+		d.SelectionBackground = color.NRGBA{R: 240, A: 255}
+		s, err := New(d)
+		if err != nil || s.Definition().Find != want {
+			t.Fatal("selection leaked into find palette", err)
+		}
+		d.Find = FindColors{}
+		s, err = New(d)
+		if err != nil || s.Definition().Find.InputBackground != d.Background || s.Definition().Find.Background != d.Completion.Background {
+			t.Fatal("missing palette fallback", err)
+		}
+		d.Find = want
+		d.Find.InputBackground.A = 0
+		if _, err = New(d); err == nil {
+			t.Fatal("accepted transparent input surface")
+		}
+		d.Find = want
+		d.Find.Shadow.A = 0
+		d.Find.OptionBorder.A = 80
+		s, err = New(d)
+		if err != nil || s.Definition().Find != d.Find {
+			t.Fatal("lost decorative alpha", err)
+		}
+	}
+}
