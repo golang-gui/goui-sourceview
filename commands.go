@@ -181,6 +181,7 @@ func (v *SourceView) SetSearch(q SearchQuery) {
 	v.search = editor.Compile(editor.Query{Text: q.Text, IgnoreCase: q.IgnoreCase, WholeWord: q.WholeWord})
 	v.currentMatch = nil
 	v.RequestPaint()
+	v.searchState.Emit()
 }
 func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
 	if v.search.Empty() {

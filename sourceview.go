@@ -104,6 +104,7 @@ type SourceView struct {
 	query                                       SearchQuery
 	search                                      *editor.Search
 	currentMatch                                *searchMatch
+	searchState                                 signal.Signal0
 	menu                                        *editMenu
 	autoPairs                                   bool
 	pairs                                       []autoPair
@@ -149,6 +150,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	if v.document == d {
 		return
 	}
+	defer v.searchState.Emit()
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -209,6 +211,7 @@ func (v *SourceView) clampOffset(offset int) int {
 	return offset
 }
 func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
+	defer v.searchState.Emit()
 	state := v.operationState()
 	s = v.clampSelection(s)
 	if v.context != nil && v.projection == nil {
@@ -257,6 +260,7 @@ func (v *SourceView) SetReadOnly(value bool) {
 		return
 	}
 	v.readOnly = value
+	defer v.searchState.Emit()
 	if value {
 		v.closeCompletion()
 		v.cancelPreedit()
@@ -323,6 +327,7 @@ func (v *SourceView) IMContext() gui.IMContext {
 	return v.im
 }
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
+	defer v.searchState.Emit()
 	epoch, d := v.mountEpoch, v.document
 	v.observed = c.Revision
 	v.closeCompletion()

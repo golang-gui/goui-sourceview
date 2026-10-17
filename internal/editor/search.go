@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -40,6 +41,32 @@ func Compile(q Query) *Search {
 	return s
 }
 func (s *Search) Empty() bool { return s == nil || len(s.pattern) == 0 }
+
+// CountChunk counts non-overlapping match starts in one source chunk, reading a
+// pattern-sized suffix. matchedEnd carries the last accepted range across chunks;
+// callers start it at zero and retain the returned value, not a match list.
+func (s *Search) CountChunk(m *textedit.Model, start, budget, matchedEnd int) (next, count, after int) {
+	next = min(m.Len(), start+max(4, budget))
+	for next < m.Len() && !m.IsRuneBoundary(next) {
+		next++
+	}
+	after = matchedEnd
+	if s.Empty() || after >= next {
+		return next, 0, after
+	}
+	end := min(m.Len(), next+len(s.pattern)*utf8.UTFMax)
+	s.scan(m, textedit.Range{Start: max(start, after), End: end}, func(r textedit.Range) bool {
+		if r.Start >= next {
+			return false
+		}
+		if r.Start >= after {
+			count++
+			after = r.End
+		}
+		return true
+	})
+	return next, count, after
+}
 func fold(r rune) rune {
 	lowest := r
 	for next := unicode.SimpleFold(r); next != r; next = unicode.SimpleFold(next) {
@@ -159,7 +186,12 @@ func runeAtModel(m *textedit.Model, at int) rune {
 func (s *Search) Find(m *textedit.Model, start int, backward bool) (textedit.Range, bool) {
 	var first, last, best textedit.Range
 	have, found := false, false
+	matchedEnd := 0
 	s.scan(m, textedit.Range{Start: 0, End: m.Len()}, func(r textedit.Range) bool {
+		if r.Start < matchedEnd {
+			return true
+		}
+		matchedEnd = r.End
 		if !have {
 			first = r
 			have = true
@@ -198,8 +230,21 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 	}
 	context := len(s.pattern) * utf8.UTFMax
 	source := textedit.Range{Start: max(0, span.Start-context), End: min(m.Len(), span.End+context)}
+	singleLine := !strings.ContainsRune(s.query.Text, '\n')
+	if singleLine {
+		// A single-line pattern cannot overlap a preceding logical line. The
+		// painter already supplies whole paragraphs; this is also a stable
+		// anchor if a caller requests only part of one line.
+		line, _ := m.LineRange(m.LineAt(span.Start))
+		source.Start = line.Start
+	}
 	var matches []textedit.Range
+	matchedEnd := 0
 	s.scan(m, source, func(r textedit.Range) bool {
+		if singleLine && r.Start < matchedEnd {
+			return true
+		}
+		matchedEnd = r.End
 		if r.End > span.Start && r.Start < span.End {
 			matches = append(matches, r)
 		}

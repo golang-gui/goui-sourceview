@@ -12,6 +12,7 @@ GOUI 不反向依赖本模块。
 首版交付可编辑的单光标代码控件：IME、导航与选择、剪切复制粘贴、删除、撤销重做、
 基础缩进、字面量查找替换、行号、滚动、配色及 **JSON、XML、HTML 三种语言高亮**。
 只读是可选模式。基础补全和括号交互见 [补全设计](DesignCompletion.md) 与 [括号设计](DesignPairs.md)。
+查找替换界面作为同仓 [可选 FindBar](DesignFindBar.md) 组合，裸控件只提供操作与高亮能力。
 多光标、折叠、语义补全、完整嵌入语言等后续能力见 [Roadmap](Roadmap.md)。
 
 | 阅读顺序 | 文档 | 负责的问题 |
@@ -46,7 +47,7 @@ GOUI 不反向依赖本模块。
 
 | 包或目录 | 首版职责 |
 | --- | --- |
-| 根包 `sourceview` | Document、SourceView、公共编辑与查找 API、信号 |
+| 根包 `sourceview` | Document、SourceView、可选 FindBar、公共编辑与查找 API、信号 |
 | `language` | 语言 ID、元数据和内置语言查询；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
 | `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
@@ -55,6 +56,7 @@ GOUI 不反向依赖本模块。
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
 `sourceview` 可以使用 GOUI 的 gui、core、layout、typography、graphics 公开能力；
+FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 算法包可消费 typography 度量类型，不创建原生 Context 或 TextLayout。
 不将每个内部结构都提升为独立包，不导出行缓存、布局缓存或调度器。
 
@@ -76,6 +78,7 @@ flowchart LR
 | --- | --- | --- |
 | Document | 模型引用、语言 ID、语言 epoch、共享行元数据和 token 缓存 | 活动光标、视口、原生对象、文件路径 |
 | SourceView | Document 引用、EditSource、选区与视觉 affinity、预编辑、搜索、布局缓存、挂载期订阅 | 其他视图状态、模型历史栈、Application |
+| FindBar（可选） | 输入与按钮子树、替换文字、分块计数、挂载期连接 | 借用的 SourceView、Document、历史 |
 | ScrollView | 滚动偏移、滚动条与视口裁剪 | 文档和代码编辑策略 |
 | Scheme | 复制后的不可变颜色表与版本身份 | Widget、系统订阅、原生资源 |
 | 挂载期 Document 连接 | 一个模型订阅、已挂载视图登记、分析驱动者 | 脱离视图后仍无限运行的任务 |
@@ -182,7 +185,7 @@ type SearchQuery struct {
 - 同一个失败只经一个通道报告：同步公共调用返回 error；输入控制器代调用时转为错误信号；异步回调只发信号。
 - 用户在只读/禁用模式触发受限输入是正常无操作，不反复发错误信号；公共修改方法仍返回对应模式错误供程序判断。
 - SourceView 不再中转一份永久内容信号；内容监听放在 Model。Selection 信号只报告该视图实际变化。
-- FindNext 更新选区并请求可见，空查询或无命中返回 false；ReplaceCurrent 仅替换当前选区确实对应的命中，成功后选择下一项；ReplaceAll 为一个撤销单元。
+- FindNext 更新选区并请求可见，空查询或无命中返回 false；ReplaceCurrent 仅替换当前选区确实对应的命中；ReplaceAll 为一个撤销单元。可选 FindBar 在当前替换成功且操作未过期时选择下一项。
 - `errors.Is` 可识别 ErrReadOnly、ErrDisabled、ErrNotMounted、ErrUnknownLanguage、ErrInvalidOptions、ErrOperationLimit；平台失败保留原错误链。被取消的过期粘贴不当作失败上报。
 - Scheme 是复制并验证后的不可变值；nil 使用自动亮暗方案。Root 包提供 wrap 类型/常量别名供 ui 使用，ui 不直接导入 typography。
 - 框架契约另需实现 IMClient、Scrollable、Measure/Arrange/Paint/StyleChanged/Snapshot；不将其与用户功能 API 混为一组。
