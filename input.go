@@ -264,7 +264,6 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 				v.report(v.complete(false))
 			}
 		case events.KeyArrowLeft, events.KeyArrowRight, events.KeyArrowUp, events.KeyArrowDown, events.KeyHome, events.KeyEnd, events.KeyPageUp, events.KeyPageDown:
-			v.cancelPreedit()
 			v.navigate(event.Key, shift)
 			handled = true
 		}
@@ -349,6 +348,11 @@ func (v *SourceView) adjacent(at int, forward bool) int {
 	return max(0, min(at, m.Len()))
 }
 func (v *SourceView) navigate(key events.Key, extend bool) {
+	state := v.operationState()
+	v.cancelPreedit()
+	if !state.valid(v) {
+		return
+	}
 	s := v.Selection()
 	caret := s.Caret
 	m := v.document.model
