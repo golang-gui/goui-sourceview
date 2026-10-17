@@ -1,8 +1,8 @@
 # GOUI 接入与最小扩展设计
 
 > 实施状态：本轮已在相邻 GOUI 工作副本实现 G1/G2/G3；下文保留设计与验收门槛，实际签名、范围、验证和未发布状态见 [Implementation](Implementation.md)。
-> 状态：设计提案，尚未修改 GOUI。本文件区分当前源码事实与拟新增契约。
-> 本地基线：GOUI HEAD `4167bb79823efffbea43e00558260448959536b0`，2026-10-16；
+> 下文第 1–5 节保留初始提案的事实与拟新增契约；实施结果以当前公开接口及 Implementation 为准，样式注册见 [本轮验收](PlanStyles.md)。
+> 初始设计的历史基线：GOUI HEAD `4167bb79823efffbea43e00558260448959536b0`，2026-10-16；
 > 检查时工作树的 Plan / Roadmap 已有修改，源码结论来自所读取文件，不代替已发布版本承诺。
 
 ## 1. 已有公开能力
@@ -127,7 +127,7 @@ G3 验收覆盖空文本、无文本、无服务、读写失败、同步/异步�
 - 现有文本范围颜色、IME、滚动、快照、公开 Widget helper 先直接使用，不预设需要新接口。
 - 固定侧栏的 reveal 和滚动锚点先用现有 ScrollIntoView 请求实现，必要验证见布局专题。
 - 若实际源代码或公开契约与本文基线不同，先复核并更新证据，不制造重复入口。
-- 本轮只在 SourceView 仓库记录提案。后续实现每项 GOUI 改动时遵循其 AGENTS、测试与跨平台规范；两仓分别交付，不把这些提案写成已具备能力。
+- 初始设计阶段只记录提案。实施 GOUI 改动遵循其 AGENTS、测试与跨平台规范；两仓分别交付，实施和发布状态单独记录。
 
 ## 6. 查找浮层使用的通用扩展（2026-10-17）
 
@@ -135,7 +135,7 @@ G3 验收覆盖空文本、无文本、无服务、读写失败、同步/异步�
 StyleScope 包裹整个编辑区。Basic / Modern 各自 Register 第三方规则，GOUI 不导入
 SourceView。具体接口与代码/UI 边界见 [样式接入](DesignStyles.md)。
 
-该扩展与所有 GUI/widgets 使用者迁移在 GOUI `210732a`，没有反向依赖 SourceView。
+StyleScope 与 GUI/widgets 使用者迁移在 GOUI `210732a`；Basic / Modern 注册及默认缓存修正在 `903daf8`，没有反向依赖 SourceView。
 
 `gui.Painter.DrawBoxShadow` 在 GOUI `00521cc` 中转发既有 graphics.BoxShadow，继续使用局部 DIP、
 普通 transform 和结构裁剪。后端算法、资源归属不变；控件须在自身分配内预留阴影空间。

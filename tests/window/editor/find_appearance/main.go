@@ -2,6 +2,7 @@
 // native typography and fonts. Run: go run ./tests/window/editor/find_appearance
 // (Linux without IME service: XMODIFIERS=@im=none). Optional -capture-dir writes
 // PNGs to that existing directory; use a temporary directory outside the repo.
+// -font-size 18 also verifies larger Modern UI text fits its allocated bounds.
 // Initially two explicit style scopes use Modern Light/Dark in one window. Automatically
 // opens both through dispatched Ctrl/Cmd+F, expands replacement with the normal
 // shortcut, checks geometry/colors/focus/hit testing, switches one theme and
@@ -51,6 +52,17 @@ func named(w gui.Widget, name string) gui.Widget {
 	}
 	for _, c := range w.Children() {
 		if r := named(c, name); r != nil {
+			return r
+		}
+	}
+	return nil
+}
+func styled(w gui.Widget, name string) gui.Widget {
+	if w.StyleName() == name {
+		return w
+	}
+	for _, c := range w.Children() {
+		if r := styled(c, name); r != nil {
 			return r
 		}
 	}
@@ -184,6 +196,8 @@ func main() {
 					minInput = 120
 				}
 				check(named(bar, "Find").Rect().Width > minInput, "input too narrow")
+				status := styled(bar, "sourceview.find.status")
+				check(status.Rect().Width >= status.Measure(layout.Unbounded()).Width, "match count text clipped")
 				// The status and option text must fit their native measurement,
 				// including larger application fonts; no screenshot tolerance.
 				for _, name := range []string{"Match case", "Whole word"} {

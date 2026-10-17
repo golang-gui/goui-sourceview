@@ -10,10 +10,10 @@ import (
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"
+	"github.com/golang-gui/goui/theme/modern"
 )
 
 var samples = map[language.ID]string{
@@ -28,6 +28,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	options := modern.Options{Dark: app.Settings().ColorScheme() == gui.ColorSchemeDark, AccentColor: app.Settings().AccentColor(), FontFamily: app.Settings().FontFamily(), FontSize: app.Settings().FontSize()}
+	app.SetStyleSheet(modern.Sheet(options))
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 1050, Height: 720}})
 	if err != nil {
 		log.Fatal(err)
@@ -80,14 +82,9 @@ func main() {
 		}
 		editor.SetWrapMode(w)
 	})
-	dark := false
 	button("Light / dark", func() {
-		dark = !dark
-		if dark {
-			editor.SetScheme(scheme.Dark())
-		} else {
-			editor.SetScheme(scheme.Light())
-		}
+		options.Dark = !options.Dark
+		app.SetStyleSheet(modern.Sheet(options))
 	})
 	button("Line numbers", func() { editor.SetShowLineNumbers(!editor.ShowLineNumbers()) })
 	searchbar := source.NewFindBar()

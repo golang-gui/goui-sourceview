@@ -19,7 +19,7 @@ go.mod 保留可获取的 v0.1.1 作为依赖基线；该发行版尚不具备�
 本地通过 go.work 联调。Windows 的反复重着色还需要 GOUI `227220a` 的全范围颜色覆盖回收修正，
 详见 [着色缓存验收](doc/PlanColorCaching.md)。新增依赖尚未发布；没有提交机器专属 replace。
 菜单键盘导航使用 GOUI `ffc59f3` 的实现；浮层还需要 `00521cc` 的局部阴影接口与
-`210732a` 的显式子树样式作用域。本轮联调 GOUI HEAD 为 `210732a`，含此前菜单指针修正。
+`210732a` 的显式子树样式作用域。样式注册还需要 GOUI `903daf8`。本轮联调 GOUI HEAD 为 `903daf8`。
 
 在本仓库运行：
 
@@ -36,6 +36,23 @@ go run ./examples/declarative
 也可以通过 go run ./examples/editor path/to/file.json 加载一个本地文件；示例只修改内存，不保存文件。
 [声明式示例](examples/declarative/main.go) 展示稳定 Document 与 ui.ScrollView 的组合。
 两个示例都用 Overlay 把可选 FindBar 浮在编辑区右上角，支持紧凑查找、展开替换和亮暗配色；Ctrl/Cmd+F 打开查找，Windows/Linux Ctrl+H 或 macOS Cmd+Option+F 展开替换。
+
+## 样式
+
+SourceView 根包已注册 Basic 和 Modern。默认使用 Basic；应用启用 Modern 即可同时应用到
+编辑区、查找栏与补全，无需额外导入适配包：
+
+```go
+app.SetStyleSheet(modern.FromSettings(app.Settings()))
+// 声明式 build：
+return ui.Root().StyleSheet(modern.FromSettings(app.Settings())).Windows(/* windows */)
+```
+
+命令式示例启动时读取一次系统外观，按钮替换整张 Modern 样式表；声明式示例随设置重建。
+`SetScheme` 仅覆盖代码配色，传 nil 恢复当前样式；查找栏和补全的界面仍跟随 Basic/Modern。
+需要并列不同主题时，用 `gui.StyleScope` 显式包裹各编辑区及其查找浮层。
+应用覆盖、所有命名 part 与失效规则见 [样式设计](doc/DesignStyles.md)，
+验证范围见 [接入验收](doc/PlanStyles.md)。
 
 ## 接入
 
@@ -69,7 +86,7 @@ Alt/Option+上下移动逻辑行；加 Shift 复制行（Linux 还需加 Control
 自动补全和括号自动插入默认开启，可通过 SetAutomaticCompletion/SetAutoPairs 关闭；
 SetCompletionProvider 可添加应用候选，ui 提供同名薄绑定配置。
 补全列表支持独立亮暗配色、名称/说明分列、前缀强调、长文本省略和滚动位置提示；
-可通过主题的 Completion 字段定制，具体契约见 [补全设计](doc/DesignCompletion.md)。
+界面通过 `sourceview.completion` 及命名 part 定制，具体契约见 [样式接入](doc/DesignStyles.md)。
 配对提示使用淡底和细边框；主题的 BracketMatchBackground/BracketMatchBorder 可分别配色或设为透明关闭。
 当前补全提供语言关键词/名称及附近文档词，不包含 Schema、LSP 或语义类型推断。
 

@@ -5,6 +5,19 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
+## Basic / Modern 样式接入（2026-10-17）
+
+- [x] GOUI 两个主题各自 Register、确定规则组合与 GUI 默认缓存延迟构造。
+- [x] 根包自动登记 Basic / Modern；代码、FindBar 和补全遵循当前样式。
+- [x] Scheme 限于代码色；移除控件内部固定样式表与自动配色设置订阅。
+- [x] 样式覆盖、并发构造、原生资源与回调重入回归；示例统一使用 Modern。
+- [x] 两仓本机测试、相关 race；Linux Software 1x/2x、OpenGL 1x 与 18 pt 字体窗口验收。
+- [x] Windows/macOS 原生包测试、GOUI 受影响包测试与窗口程序构建。
+- [ ] Windows/macOS 桌面外观、真实 IME、分数/混合 DPI。
+- [ ] 依赖包含所需 GOUI API 的可获取发行版后通过关闭工作区的独立构建。
+
+范围、提交、命令及结果见 [样式接入验收](PlanStyles.md)。
+
 ## 查找替换浮层外观（2026-10-17）
 
 - [x] 右上角 Overlay、单行查找/二行替换、矢量图标、输入内开关与窄宽度布局。

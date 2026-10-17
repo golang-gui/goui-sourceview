@@ -188,7 +188,7 @@ type SearchQuery struct {
 - SourceView 不再中转一份永久内容信号；内容监听放在 Model。Selection 信号只报告该视图实际变化。
 - FindNext 更新选区并请求可见，空查询或无命中返回 false；ReplaceCurrent 仅替换当前选区确实对应的命中；ReplaceAll 为一个撤销单元。可选 FindBar 在当前替换成功且操作未过期时选择下一项。
 - `errors.Is` 可识别 ErrReadOnly、ErrDisabled、ErrNotMounted、ErrUnknownLanguage、ErrInvalidOptions、ErrOperationLimit；平台失败保留原错误链。被取消的过期粘贴不当作失败上报。
-- Scheme 是复制并验证后的不可变值；nil 使用自动亮暗方案。Root 包提供 wrap 类型/常量别名供 ui 使用，ui 不直接导入 typography。
+- Scheme 是复制并验证后的不可变值；nil 使用所属 Basic/Modern 样式。Root 包提供 wrap 类型/常量别名供 ui 使用，ui 不直接导入 typography。
 - 框架契约另需实现 IMClient、Scrollable、Measure/Arrange/Paint/StyleChanged/Snapshot；不将其与用户功能 API 混为一组。
 
 ## 6. 默认值与配置作用域
