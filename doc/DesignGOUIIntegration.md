@@ -128,3 +128,15 @@ G3 验收覆盖空文本、无文本、无服务、读写失败、同步/异步�
 - 固定侧栏的 reveal 和滚动锚点先用现有 ScrollIntoView 请求实现，必要验证见布局专题。
 - 若实际源代码或公开契约与本文基线不同，先复核并更新证据，不制造重复入口。
 - 本轮只在 SourceView 仓库记录提案。后续实现每项 GOUI 改动时遵循其 AGENTS、测试与跨平台规范；两仓分别交付，不把这些提案写成已具备能力。
+
+## 6. 查找浮层使用的通用扩展（2026-10-17）
+
+浮层定位直接使用公开 Overlay。FindBar 的普通 TextInput/按钮需要在同窗口中跟随各自编辑器配色，
+框架实现显式 `gui.StyleScope` 单子容器和 `ResolveWidgetStyle`，沿用 StyleSheet 与 StyleChanged。
+具体属性仍只存在于配色表，不恢复局部 concrete style rules 或隐式父属性继承。
+该扩展与所有 GUI/widgets 使用者迁移在 GOUI `210732a`，没有反向依赖 SourceView。
+
+`gui.Painter.DrawBoxShadow` 在 GOUI `00521cc` 中转发既有 graphics.BoxShadow，继续使用局部 DIP、
+普通 transform 和结构裁剪。后端算法、资源归属不变；控件须在自身分配内预留阴影空间。
+GOUI 的记录见相邻仓库 doc/PlanComponentStyles.md，本仓验收见 [浮层记录](PlanFindBarAppearance.md)。
+框架通用扩展先验证提交，再由本仓依赖；go.mod 仍不能用尚无这些 API 的发行版本完成独立构建。

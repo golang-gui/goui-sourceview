@@ -1,9 +1,10 @@
-# 可选查找替换栏
+# 可选查找替换浮层
 
 SourceView 自身提供查询、匹配高亮、结果导航与替换 API。FindBar 是同仓的可选命令式
-配套控件，应用选择是否创建，以及放在工具栏、编辑区上方或自己的容器中。
+配套控件，应用选择是否创建。推荐通过 GOUI Overlay 放在编辑器滚动视口的右上角，
+与正文处在同一窗口，不挤占编辑区。宿主仍可选择自己的容器。
 它不是 SourceView 的内置子控件，不拥有编辑器、Document 或第二份历史。
-具体实现及平台验证边界见 [本轮记录](PlanFindBar.md)。
+交互与生命周期见 [初次实现记录](PlanFindBar.md)，新外观验收见 [浮层记录](PlanFindBarAppearance.md)。
 
 ## 参考与取舍
 
@@ -11,7 +12,11 @@ SourceView 自身提供查询、匹配高亮、结果导航与替换 API。FindB
   [FindWidget](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/find/browser/findWidget.ts)
   与 [FindController](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/find/browser/findController.ts)：
   输入、查找选项、匹配数、上下项、替换和关闭作为编辑器贡献实现。采用这些局部交互，
-  不引入其浏览器浮层、服务容器、全局搜索剪贴板或工作台。
+  采用其编辑器内浮层及紧凑操作区，通过 GOUI 的普通控件树实现；不引入浏览器、
+  服务容器、全局搜索剪贴板或工作台。另核对同版本的
+  [FindWidget CSS](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/find/browser/findWidget.css)：
+  单行查找、折叠替换、输入内选项、按宽度隐藏次要项、边框与阴影。
+  本项目以 DIP 和原生排版尺寸约束布局，不直接把 CSS 像素当成字体 point。
 - GtkSourceView 5 的 [SearchContext](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.SearchContext.html)
   文档提供搜索、计数、替换、高亮，并将基础界面放在示例中。采用能力与界面可分离的边界；
   本项目计数按 GUI 帧分块，不宣称实现了其异步扫描/索引体系。
@@ -25,8 +30,12 @@ SourceView 自身提供查询、匹配高亮、结果导航与替换 API。FindB
 ```go
 find := sourceview.NewFindBar()
 find.SetTarget(editor)
-column.AddChild(find)
-column.AddChild(scroll) // scroll.Child() == editor
+viewport := gui.NewOverlay()
+viewport.SetChild(scroll) // scroll.Child() == editor
+viewport.AddOverlay(find)
+viewport.ConnectOverlayPosition(find, func(available, size geometry.Size, p *geometry.Point) {
+    p.X = max(0, available.Width-size.Width-8)
+})
 // 挂载后由应用调用，或通过编辑器中的快捷键打开：
 err := find.Open(true) // false 只查找；true 展开替换
 ```
@@ -43,8 +52,29 @@ err := find.Open(true) // false 只查找；true 展开替换
 FindBar 的外层保持普通 Widget 的 Visible；内部内容初始关闭。关闭时自然测量高度为零，
 不会因为声明式通用 Visible 默认值恢复而重新打开/关闭。普通 GOUI TextInput、Button 和
 `widgets.CheckButton` 拥有各自的输入、样式、原生资源和语义，选项有真实选中指示。
-上下项/关闭使用紧凑箭头及关闭标记并提供自然名称；选项行使用 WrapBox，在窄宽度下换行。
-不修改应用样式表，也不在 SourceView 中绘制查找栏。
+上下项、关闭和替换使用原始矢量线条图标，并提供本地化名称；Aa 和 ab 是实际的
+ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦点和禁用语义。
+
+## 浮层布局与配色
+
+- 自然宽度 448 DIP，其中左右各 8 DIP 为阴影留白。面板圆角 4 DIP，内缩 1 DIP 描边；
+  阴影在分配范围内绘制，不能越过普通结构裁剪。透明留白也参与 GOUI 普通矩形命中。
+- 一行查找：展开按钮、查询字段及右侧 Aa/整词开关、匹配计数、上下项和关闭。
+  展开时第二行的替换字段与查询字段左/右边界对齐，后接当前替换和全部替换图标。
+- 输入字体 9.75 pt（约 13 DIP），计数和选项 9 pt。行高至少 26 DIP，同时接受原生
+  TextInput 的较大测量结果；行间距 4 DIP。不复刻浏览器文本排版。
+- 小于 400 DIP 时隐藏计数；小于 285 DIP 时隐藏输入选项、上下项和替换动作。
+  输入、展开/关闭保留，Enter/Shift+Enter、替换 Enter 与 Escape 继续可用。
+  恢复宽度时恢复控制项，不清除查询、选项或替换文字；极小分配按父约束裁剪。
+- `scheme.Definition.Find` 是独立 FindColors 值，含面板、输入、边框、焦点、选项、错误与阴影色。
+  New 为全零调色板从普通代码配色和 Completion 推导默认值；文本与实色表面必须不透明。
+  选区颜色仍来自所属编辑器的 selection 配色，不能用整块面板颜色代替。
+- FindBar 自己拥有一个显式 `gui.StyleScope`，把配色映射成语义名称的完整 stylesheet，
+  TextInput/Button/CheckButton/Label/Icon 均通过正常样式失效刷新。
+  不改应用样式、不依赖父控件的隐式颜色继承，不复制 textEditor。
+  两个编辑器可同时使用不同配色；只更换其中一者不会改变另一者的控件。
+- 所属编辑器提供当前显式/系统配色选择，栏复用挂载期帧通知同步缓存，没有新增系统主题订阅。
+  字段与按钮仍是主窗口普通子树，IME、命中和键盘分发不经过另开的原生弹窗。
 
 ## 查询与交互
 
@@ -96,10 +126,13 @@ SourceView.Search 是查询的唯一来源。输入变更立即 SetSearch；外�
 ## 声明式绑定
 
 ```go
-base.VBox(
-    sourceui.FindBar("editor"),
-    base.ScrollView(sourceui.SourceView().ID("editor").Document(document)).MainWeight(1),
-).CrossAlign(layout.CrossStretch)
+base.Overlay(
+    base.ScrollView(sourceui.SourceView().ID("editor").Document(document)),
+    base.OverlayItem(sourceui.FindBar("editor")).OnPosition(
+        func(available, size geometry.Size, p *geometry.Point) {
+            p.X = max(0, available.Width-size.Width-8)
+        }),
+)
 ```
 
 `ui.FindBar(targetID)` 在既有 BuildContext.AfterUpdate 中，按同 Root 的显式 ID 解析并 SetTarget。

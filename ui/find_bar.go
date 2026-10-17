@@ -8,7 +8,8 @@ import (
 )
 
 // FindBar declares the optional companion for the SourceView with targetID in
-// the same Root. The explicit reference is resolved after each tree update.
+// the same Root. Place it in a base.OverlayItem above the editor ScrollView.
+// The explicit reference is resolved after each tree update.
 func FindBar(targetID string) *FindBarView {
 	v := &FindBarView{targetID: targetID}
 	v.Self = v

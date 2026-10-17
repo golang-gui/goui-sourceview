@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/scheme"
+	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -15,15 +17,22 @@ import (
 	"github.com/golang-gui/goui/widgets"
 )
 
-// FindBar is an optional companion widget. Mount it beside a SourceView in the
-// same Root, then SetTarget. It owns its controls, not the editor or document.
+// FindBar is an optional companion widget. Usually mount it as an Overlay
+// above the editor viewport in the same Root, then SetTarget. It owns its
+// controls, not the editor or document.
 // Its content is initially closed; the application chooses its placement.
 type FindBar struct {
 	gui.WidgetBase
 	target                                     *SourceView
-	content                                    *gui.LinearBox
+	content                                    *findSurface
+	scope                                      *gui.StyleScope
+	paletteScheme                              *scheme.Scheme
+	findColors                                 scheme.FindColors
+	findHint, replaceHint                      *gui.Label
+	toggleIcon                                 *gui.Icon
+	narrow, reduced                            bool
+	fieldRect, replacementRect                 geometry.Rectangle
 	find, replacement                          *gui.TextInput
-	replaceRow                                 *gui.LinearBox
 	previous, next, replace, replaceAll, close *gui.Button
 	matchCase, wholeWord, toggle               *widgets.CheckButton
 	status                                     *gui.Label
@@ -49,53 +58,7 @@ type FindBar struct {
 func NewFindBar() *FindBar {
 	b := &FindBar{labels: make(map[*gui.Label]mlang.Getter), names: make(map[gui.Widget]mlang.Getter)}
 	b.SetLayoutManager(layout.NewFillLayout())
-	b.content = gui.NewLinearBox(layout.DirectionVertical)
-	b.content.SetCrossAlign(layout.CrossStretch)
-	b.content.SetSpacing(6)
-	b.content.SetPadding(8)
-	b.content.SetVisible(false)
-	b.WidgetBase.AddChild(b, b.content)
-	row := gui.NewLinearBox(layout.DirectionHorizontal)
-	row.SetSpacing(6)
-	options := gui.NewWrapBox(layout.DirectionHorizontal)
-	options.SetSpacing(6)
-	options.SetLineSpacing(4)
-	b.toggle = b.option(options, "Replace", "替换", func(checked bool) { b.SetReplaceMode(checked) })
-	b.find = gui.NewTextInput()
-	b.find.SetName("Find")
-	b.find.SetMainWeight(1)
-	row.AddChild(b.find)
-	b.previous = b.iconButton(row, "↑", "Previous", "上一项", func() { b.navigate(true) })
-	b.next = b.iconButton(row, "↓", "Next", "下一项", func() { b.navigate(false) })
-	b.close = b.iconButton(row, "×", "Close", "关闭", b.Close)
-	b.content.AddChild(row)
-	b.matchCase = b.option(options, "Match case", "区分大小写", func(checked bool) {
-		if v := b.liveTarget(); v != nil {
-			q := v.Search()
-			q.IgnoreCase = !checked
-			v.SetSearch(q)
-		}
-	})
-	b.wholeWord = b.option(options, "Whole word", "整词", func(checked bool) {
-		if v := b.liveTarget(); v != nil {
-			q := v.Search()
-			q.WholeWord = checked
-			v.SetSearch(q)
-		}
-	})
-	b.status = gui.NewLabel("")
-	options.AddChild(b.status)
-	b.content.AddChild(options)
-	b.replaceRow = gui.NewLinearBox(layout.DirectionHorizontal)
-	b.replaceRow.SetSpacing(6)
-	b.replacement = gui.NewTextInput()
-	b.replacement.SetName("Replacement")
-	b.replacement.SetMainWeight(1)
-	b.replaceRow.AddChild(b.replacement)
-	b.replace = b.button(b.replaceRow, "Replace", "替换", b.replaceCurrent)
-	b.replaceAll = b.button(b.replaceRow, "Replace all", "全部替换", b.replaceEverywhere)
-	b.replaceRow.SetVisible(false)
-	b.content.AddChild(b.replaceRow)
+	b.buildSurface()
 	b.find.ConnectText(func(text string) {
 		if !b.syncing {
 			if v := b.liveTarget(); v != nil {
@@ -115,39 +78,6 @@ func NewFindBar() *FindBar {
 	b.ConnectMount(b.mount)
 	b.ConnectUnmount(b.unmount)
 	return b
-}
-
-func (b *FindBar) button(parent gui.Container, en, zh string, fn func()) *gui.Button {
-	button := gui.NewButton()
-	getter := mlang.String(mlang.En(en), mlang.ZhCN(zh))
-	label := gui.NewLabel(getter())
-	b.labels[label] = getter
-	button.SetChild(label)
-	button.ConnectClicked(fn)
-	parent.AddChild(button)
-	return button
-}
-
-func (b *FindBar) iconButton(parent gui.Container, symbol, en, zh string, fn func()) *gui.Button {
-	button := b.button(parent, en, zh, fn)
-	label := button.Children()[0].(*gui.Label)
-	getter := b.labels[label]
-	delete(b.labels, label)
-	label.SetText(symbol)
-	button.SetName(getter())
-	b.names[button] = getter
-	return button
-}
-
-func (b *FindBar) option(parent gui.Container, en, zh string, fn func(bool)) *widgets.CheckButton {
-	button := widgets.NewCheckButton()
-	getter := mlang.String(mlang.En(en), mlang.ZhCN(zh))
-	label := gui.NewLabel(getter())
-	b.labels[label] = getter
-	button.SetChild(label)
-	button.ConnectChange(func(state widgets.CheckState) { fn(state == widgets.CheckChecked) })
-	parent.AddChild(button)
-	return button
 }
 
 func (b *FindBar) Target() *SourceView { return b.target }
@@ -176,13 +106,25 @@ func (b *FindBar) SetReplaceMode(replace bool) {
 	}
 	b.replaceMode = replace
 	b.toggle.SetChecked(replace)
-	b.replaceRow.SetVisible(replace)
+	b.replacement.SetVisible(replace)
+	b.replace.SetVisible(replace && !b.narrow)
+	b.replaceAll.SetVisible(replace && !b.narrow)
+	b.replaceHint.SetVisible(replace && b.replacement.Text() == "")
+	if b.toggleIcon != nil {
+		if replace {
+			b.toggleIcon.SetSource(findIcons["down"])
+		} else {
+			b.toggleIcon.SetSource(findIcons["right"])
+		}
+	}
+	b.RequestLayout()
 	b.refresh()
 }
 func (b *FindBar) Replacement() string { return b.replacement.Text() }
 func (b *FindBar) SetReplacement(text string) {
 	if !b.Destroyed() {
 		b.replacement.SetText(text)
+		b.replaceHint.SetVisible(b.replaceMode && b.replacement.Text() == "")
 	}
 }
 func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
@@ -332,6 +274,9 @@ func (b *FindBar) refresh() {
 	b.syncing = true
 	defer func() { b.syncing = false }()
 	v := b.liveTarget()
+	b.updateAppearance(v)
+	b.findHint.SetVisible(b.find.Text() == "")
+	b.replaceHint.SetVisible(b.replaceMode && b.replacement.Text() == "")
 	epoch := b.epoch
 	valid := func() bool { return !b.Destroyed() && b.epoch == epoch && b.liveTarget() == v }
 	active := v != nil && gui.IsEnabled(v)
@@ -359,6 +304,7 @@ func (b *FindBar) refresh() {
 	// A single-line field cannot faithfully edit a programmatic multiline query.
 	// Keep that query intact until the user explicitly changes the field.
 	b.find.SetText(q.Text)
+	b.findHint.SetVisible(b.find.Text() == "")
 	if !valid() {
 		return
 	}
@@ -402,7 +348,17 @@ func (b *FindBar) updateStatus() {
 			text = fmt.Sprintf(mlang.String(mlang.En("%d matches"), mlang.ZhCN("%d 个匹配"))(), b.count.total)
 		}
 	}
+	changed := b.status.Text() != text
 	b.status.SetText(text)
+	name := "sourceview.find.status"
+	if b.message != "" || b.count.done && b.count.available && b.count.query.Text != "" && b.count.total == 0 {
+		name = "sourceview.find.error"
+	}
+	changed = changed || b.status.StyleName() != name
+	b.status.SetStyleName(name)
+	if changed {
+		b.content.RequestPaint()
+	}
 }
 func (b *FindBar) updateLabels() {
 	for label, getter := range b.labels {

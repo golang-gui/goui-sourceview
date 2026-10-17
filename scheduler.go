@@ -125,7 +125,7 @@ func detachSettings(v *SourceView) {
 		delete(settingsGroups, gui.App)
 	}
 }
-func (v *SourceView) updateScheme() {
+func (v *SourceView) colorScheme() *scheme.Scheme {
 	s := v.explicitScheme
 	if s == nil {
 		s = scheme.Light()
@@ -133,6 +133,11 @@ func (v *SourceView) updateScheme() {
 			s = scheme.Dark()
 		}
 	}
+	return s
+}
+
+func (v *SourceView) updateScheme() {
+	s := v.colorScheme()
 	if v.appliedScheme == s {
 		return
 	}

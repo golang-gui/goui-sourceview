@@ -28,7 +28,6 @@ import (
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	base "github.com/golang-gui/goui/ui"
-	"github.com/golang-gui/goui/widgets"
 )
 
 func must(err error) {
@@ -47,21 +46,6 @@ func named(w gui.Widget, name string) gui.Widget {
 	}
 	for _, c := range w.Children() {
 		if found := named(c, name); found != nil {
-			return found
-		}
-	}
-	return nil
-}
-func labelled(w gui.Widget, role gui.Role, text string) gui.Widget {
-	if w.Snapshot().Role == role {
-		for _, c := range w.Children() {
-			if c.Snapshot().Text == text {
-				return w
-			}
-		}
-	}
-	for _, c := range w.Children() {
-		if found := labelled(c, role, text); found != nil {
 			return found
 		}
 	}
@@ -133,11 +117,11 @@ func main() {
 					check(a.Selection() == (textedit.Selection{Anchor: 10, Caret: 13}), "find enter")
 					key(events.KeyEnter, events.ModifierShift)
 					check(a.Selection() == (textedit.Selection{Caret: 3}), "find shift-enter")
-					click(labelled(bar, widgets.RoleCheckBox, "Match case"))
+					click(named(bar, "Match case"))
 					check(a.Search().IgnoreCase, "case toggle pointer")
 				case 2:
 					count(4)
-					w := labelled(bar, widgets.RoleCheckBox, "Whole word")
+					w := named(bar, "Whole word")
 					check(w != nil, "word option missing")
 					win.SetFocusedWidget(w)
 					key(events.KeySpace, 0)
@@ -163,7 +147,7 @@ func main() {
 					a.SetReadOnly(true)
 					openReplace()
 				case 4:
-					check(!named(bar, "Replacement").Snapshot().Enabled && !labelled(bar, gui.RoleButton, "Replace all").Snapshot().Enabled, "readonly replacement enabled")
+					check(!named(bar, "Replacement").Snapshot().Enabled && !named(bar, "Replace all").Snapshot().Enabled, "readonly replacement enabled")
 					a.SetReadOnly(false)
 					app.RequestUpdate()
 				case 5:
@@ -213,7 +197,7 @@ func main() {
 					a.SetSelection(textedit.Selection{})
 					key(events.KeyEnter, 0)
 				case 10:
-					click(labelled(bar, gui.RoleButton, "Replace all"))
+					click(named(bar, "Replace all"))
 					check(doc.Model().Text() == "R R", "replace all")
 					win.SetFocusedWidget(a)
 					key(events.KeyZ, primary)
@@ -252,8 +236,8 @@ func main() {
 			find = sourceui.FindBar(target).ID("find").OnOpen(func(bool) { opened++ }).OnError(func(error) { errors++ })
 		}
 		return base.Window("main").Title("Optional SourceView find / replace").Size(760, 500).Content(
-			base.VBox(find,
-				base.ScrollView(sourceui.SourceView().ID("a").Document(doc)).MainWeight(1),
+			base.VBox(
+				base.Overlay(base.ScrollView(sourceui.SourceView().ID("a").Document(doc)), base.OverlayItem(find).OnPosition(func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })).MainWeight(1),
 				base.ScrollView(sourceui.SourceView().ID("b").Document(other)).MainWeight(1),
 				newProbe(),
 			).CrossAlign(layout.CrossStretch))

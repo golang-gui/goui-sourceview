@@ -6,7 +6,7 @@ import (
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
-	"github.com/golang-gui/goui/layout"
+	"github.com/golang-gui/goui/core/geometry"
 	base "github.com/golang-gui/goui/ui"
 )
 
@@ -15,10 +15,10 @@ func main() {
 	_ = document.SetLanguage(language.JSON)
 	if err := base.Run("org.golang-gui.SourceViewDeclarative", func(base.App) base.RootView {
 		return base.Window("main").Title("Declarative SourceView").Size(900, 600).Content(
-			base.VBox(
-				sourceui.FindBar("editor"),
-				base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true)).MainWeight(1),
-			).CrossAlign(layout.CrossStretch))
+			base.Overlay(
+				base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true)),
+				base.OverlayItem(sourceui.FindBar("editor")).OnPosition(func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) }),
+			))
 	}); err != nil {
 		log.Fatal(err)
 	}

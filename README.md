@@ -18,7 +18,8 @@ go.mod 保留可获取的 v0.1.1 作为依赖基线；该发行版尚不具备�
 当前需要 GOUI 提交 `2f782897684f1bfc892a11b0254e5a2162980ed8` 或之后包含这些接口的版本，
 本地通过 go.work 联调。Windows 的反复重着色还需要 GOUI `227220a` 的全范围颜色覆盖回收修正，
 详见 [着色缓存验收](doc/PlanColorCaching.md)。新增依赖尚未发布；没有提交机器专属 replace。
-菜单键盘导航使用 GOUI `ffc59f3` 的实现；本轮联调 GOUI HEAD 为 `6f684b6`，包含菜单指针选中修正。
+菜单键盘导航使用 GOUI `ffc59f3` 的实现；浮层还需要 `00521cc` 的局部阴影接口与
+`210732a` 的显式子树样式作用域。本轮联调 GOUI HEAD 为 `210732a`，含此前菜单指针修正。
 
 在本仓库运行：
 
@@ -34,7 +35,7 @@ go run ./examples/declarative
 [命令式示例](examples/editor/main.go) 可切换三种语言、只读、折行、行号、主题及查找替换。
 也可以通过 go run ./examples/editor path/to/file.json 加载一个本地文件；示例只修改内存，不保存文件。
 [声明式示例](examples/declarative/main.go) 展示稳定 Document 与 ui.ScrollView 的组合。
-两个示例都组合可选 FindBar；Ctrl/Cmd+F 打开查找，Windows/Linux Ctrl+H 或 macOS Cmd+Option+F 展开替换。
+两个示例都用 Overlay 把可选 FindBar 浮在编辑区右上角，支持紧凑查找、展开替换和亮暗配色；Ctrl/Cmd+F 打开查找，Windows/Linux Ctrl+H 或 macOS Cmd+Option+F 展开替换。
 
 ## 接入
 
@@ -80,9 +81,9 @@ Ctrl/Cmd+] / [ 整行缩进/反缩进。按词移动/删除使用 Windows/Linux 
 Ctrl/Cmd+Shift+Backslash 在已有相邻匹配括号之间跳转，F3 / Shift+F3 查找下一项/上一项。
 具体边界和平台差异见 [快捷键设计](doc/DesignEditing.md#13-常用编辑快捷键)。
 
-`NewFindBar().SetTarget(editor)` 组合出可选查找栏，`Open(false)` / `Open(true)` 打开查找/替换。
+创建 `NewFindBar()` 并 `SetTarget(editor)` 组合可选查找浮层，`Open(false)` / `Open(true)` 打开查找/替换。
 关闭保留查询和高亮，裸 SourceView 不拦截打开界面的快捷键。声明式使用
-`sourceui.FindBar("editor")` 配合 `sourceui.SourceView().ID("editor")`；未显式设置 Search 时，重建保留交互查询。
+`sourceui.FindBar("editor")` 放入 `base.OverlayItem(...)`，配合 `sourceui.SourceView().ID("editor")`；未显式设置 Search 时，重建保留交互查询。
 计数按帧推进，不保存全文件命中列表；导航/替换仍为显式同步操作。见 [查找栏设计](doc/DesignFindBar.md)。
 
 ## 验证与文档

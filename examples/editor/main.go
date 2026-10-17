@@ -50,7 +50,9 @@ func main() {
 	editor.SetAcceptsTab(true)
 	scroll := gui.NewScrollView()
 	scroll.SetChild(editor)
-	scroll.SetMainWeight(1)
+	viewport := gui.NewOverlay()
+	viewport.SetChild(scroll)
+	viewport.SetMainWeight(1)
 	toolbar := gui.NewLinearBox(layout.DirectionHorizontal)
 	toolbar.SetSpacing(6)
 	status := gui.NewLabel("")
@@ -90,6 +92,11 @@ func main() {
 	button("Line numbers", func() { editor.SetShowLineNumbers(!editor.ShowLineNumbers()) })
 	searchbar := source.NewFindBar()
 	searchbar.SetTarget(editor)
+	viewport.AddOverlay(searchbar)
+	viewport.ConnectOverlayPosition(searchbar, func(available, size geometry.Size, p *geometry.Point) {
+		p.X = max(0, available.Width-size.Width-8)
+		p.Y = 0
+	})
 	button("Find / Replace", func() {
 		if err := searchbar.Open(true); err != nil {
 			status.SetText(err.Error())
@@ -102,9 +109,8 @@ func main() {
 	content.SetCrossAlign(layout.CrossStretch)
 	content.SetSpacing(6)
 	content.AddChild(toolbar)
-	content.AddChild(searchbar)
 	content.AddChild(gui.NewLabel("Ctrl/Cmd+F: find   F3 / Shift+F3: next / previous   Ctrl+Space: complete"))
-	content.AddChild(scroll)
+	content.AddChild(viewport)
 	content.AddChild(status)
 	win.SetWidget(content)
 	update()
