@@ -175,6 +175,11 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		ctx.StopPropagation()
 		return
 	}
+	if v.editingKey(event) {
+		event.PreventDefault()
+		ctx.StopPropagation()
+		return
+	}
 	mods := event.Modifiers
 	shift := mods&events.ModifierShift != 0
 	base := mods &^ events.ModifierShift
@@ -186,6 +191,9 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		}
 	}
 	if base == primary {
+		if shift && event.Key != events.KeyZ && event.Key != events.KeyHome && event.Key != events.KeyEnd {
+			return
+		}
 		switch event.Key {
 		case events.KeyA:
 			v.cancelPreedit()
@@ -206,7 +214,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 			}
 			handled = true
 		case events.KeyY:
-			if !shift {
+			if !shift && runtime.GOOS != "darwin" {
 				v.Redo()
 				handled = true
 			}
@@ -214,22 +222,6 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 			at := 0
 			if event.Key == events.KeyEnd {
 				at = v.document.model.Len()
-			}
-			v.moveTo(at, false, shift)
-			handled = true
-		case events.KeyArrowLeft, events.KeyArrowRight:
-			at := v.Selection().Caret
-			if event.Key == events.KeyArrowLeft {
-				at = max(0, at-1)
-				for at > 0 && !v.document.model.IsRuneBoundary(at) {
-					at--
-				}
-				at = v.document.model.WordAt(at).Start
-			} else {
-				at = v.document.model.WordAt(at).End
-				if at == v.Selection().Caret {
-					at = min(v.document.model.Len(), at+1)
-				}
 			}
 			v.moveTo(at, false, shift)
 			handled = true

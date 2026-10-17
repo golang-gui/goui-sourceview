@@ -204,6 +204,7 @@ func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
 	}
 	r, ok := v.search.Find(v.document.model, start, backward)
 	if ok {
+		v.document.model.BreakUndoGroup()
 		d, revision := v.document, v.document.model.Revision()
 		expectedSelectionEpoch := v.selectionEpoch + 1
 		v.setSelection(textedit.Selection{Anchor: r.Start, Caret: r.End}, false, true)

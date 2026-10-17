@@ -278,3 +278,63 @@ IM Reset、模型通知和选区回调仍可能重入，沿用 applyPlan 的身�
 菜单与键盘共用可用状态和命令执行入口，文首上移、文末下移及空文档删除置灰，
 空文档复制仍可创建一个新空行。语义快照复用普通菜单项的角色、Enabled、边界和动作，
 不新增直接执行编辑操作的自动化动作。ui 不增加命令状态副本。
+
+## 13. 常用编辑快捷键
+
+本节补充单选区编辑命令。Primary 在 Windows/Linux 为 Control，在 macOS 为 Command。
+沿用真实事件路径、独立修改计划和模型历史，不建立字符串命令注册器或另一套快捷键系统。
+
+| 操作 | Windows / Linux | macOS |
+| --- | --- | --- |
+| 下方/上方插入行 | Ctrl+Enter / Ctrl+Shift+Enter | Cmd+Enter / Cmd+Shift+Enter |
+| 整行缩进/反缩进 | Ctrl+] / Ctrl+[ | Cmd+] / Cmd+[ |
+| 选择整行、重复向下扩展 | Ctrl+L | Cmd+L |
+| 词移动/扩选 | Ctrl+左右，Shift 扩选 | Option+左右，Shift 扩选 |
+| 删除前词/后词 | Ctrl+Backspace / Ctrl+Delete | Option+Backspace / Option+Delete |
+| 匹配括号跳转 | Ctrl+Shift+Backslash | Cmd+Shift+Backslash |
+| 下一项/上一项查找 | F3 / Shift+F3 | Cmd+G / Cmd+Shift+G，兼容 F3 / Shift+F3 |
+| 行首尾/扩选 | Home/End，Shift 扩选 | 同左，并接受 Cmd+左右及其 Shift 组合 |
+| 文档首尾/扩选 | Ctrl+Home/End，Shift 扩选 | Cmd+上下，Shift 扩选；保留 Cmd+Home/End |
+
+`InsertLine(below bool)` 保留当前文字，在 caret 所在逻辑行上方或下方创建新行，复制该行的
+前导空格/Tab，不把原行从 caret 拆开，也不删除多行选区；完成后在新行缩进末尾收起选区。
+空文档、无尾随 LF 和末尾空行都有确定位置。一次操作一个修订/历史项，与前后输入分隔。
+缩进前缀分块读取，含 LF 的新增文本最多 32 MiB，超限返回 ErrOperationLimit 且不修改模型。
+这里采用基础缩进，不承诺 Monaco 的语言自动缩进。
+
+`SelectLine()` 将选区较小端点所在行的行首作为 Anchor，选择到较大端点所在行的下一个行首；
+若已在末行则到 EOF。重复按键扩展到后续行，输出为正向选区；反向输入也按覆盖范围整行扩展。
+它与移动/复制行的“排除末端恰在下一行首”规则不同，这是选择扩展命令本身的语义。
+
+`MoveWord(forward, extend bool)` 与 `DeleteWord(forward bool)` 使用代码词边界，
+不把双击的 Unicode word segment 直接当作导航边界。ASCII 分隔符采用 Monaco 默认集合
+（含点、斜线和括号，不含下划线）；其他非空白 Unicode 字符连续成词，目标再经原生 Cluster 校正。
+不按 camelCase 拆分，不提供可配置分隔符或 Intl.Segmenter 本地化分词。
+
+向左移动到前词起点、向右到后词末尾；忽略相邻空白，最多跨一个 LF。单个分隔符紧邻后词时
+采用快速导航，例如 `foo.|bar` 左移到 foo 起点，`foo|.bar` 右移到 bar 末尾。
+删除有选区时只删除选区；相邻连续至少两个空白时先只删除这段空白，单个空白随相邻词删除。
+没有空白时删除一个词/分隔符串，不沿用快速跳过点号的导航规则。
+向后删除行首只删除 LF；向前删除行尾删除 LF 和下一行前导空白，保留下一行正文。
+生成的空括号中向后删词继续使用已有成对删除。删除是单独撤销项，文档边界正常无操作。
+读取使用 4096 字节游标缓存，不为词操作物化整条超长行，但未对扫描耗时作性能承诺。
+
+`JumpToBracket() bool` 复用已有相邻括号匹配结果，在确认的两端之间移动；不是 XML/HTML 标签跳转。
+无匹配、词法状态尚未就绪、超出原有 64 KiB 匹配预算、非空选区或预编辑中均不猜测、不修改选区。
+这一版不在任意正文位置搜索最近的包围括号。搜索导航会中断普通输入合并，但不产生文本历史项。
+
+补全先处理自身或关闭，再进入编辑命令；额外 Shift/AltGraph/其他修饰键不会宽松匹配复制、剪切、
+粘贴或全选。Redo 的 Ctrl+Y 仅在 Windows/Linux 使用；macOS 使用 Cmd+Shift+Z。
+已识别的只读编辑命令仍消费按键且不报错。物理按键的桌面保留和 IME 截获须分别实测。
+
+参考 2026-10-17 核对的 VS Code `1.105.0` 编辑器源码：
+[行命令](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/linesOperations/browser/linesOperations.ts)、
+[词命令与平台绑定](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/wordOperations/browser/wordOperations.ts)、
+[词边界](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/common/cursor/cursorWordOperations.ts)、
+[整行选择扩展](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/common/cursor/cursorMoveCommands.ts#L124)、
+[基础导航](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/browser/coreCommands.ts)、
+[括号跳转](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/bracketMatching/browser/bracketMatching.ts)。
+采用单选区命令语义和平台区分；不照搬服务/多光标对象，不宣称全套 Monaco 快捷键已兼容。
+Scintilla 的 [词与键盘命令](https://www.scintilla.org/ScintillaDoc.html#KeyboardCommands)
+以及 GtkSourceView 的 [move-words](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/signal.View.move-words.html)
+也区分词操作与字符/行操作；本项目保留 UTF-8 与 Cluster 契约，不移植这些框架的原生动作体系。
