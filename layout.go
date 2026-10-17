@@ -14,7 +14,6 @@ import (
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
-	"github.com/golang-gui/goui/style"
 )
 
 const padding float32 = 6
@@ -75,15 +74,23 @@ func (v *SourceView) invalidateLayout() {
 	v.RequestPaint()
 }
 func (v *SourceView) StyleChanged() {
-	v.closeCompletion()
-	if v.Destroyed() {
-		return
-	}
 	v.updateScheme()
 	if v.Destroyed() {
 		return
 	}
+	// Hover and other unchanged style notifications must preserve a popup.
+	// Its own UI appearance can change even with an explicit code scheme.
+	if s := v.completion; s != nil && s.list.readAppearance() {
+		v.closeCompletion()
+		if v.Destroyed() {
+			return
+		}
+	}
 	if !gui.IsEnabled(v) {
+		v.closeCompletion()
+		if v.Destroyed() {
+			return
+		}
 		v.cancelPreedit()
 		if v.Destroyed() {
 			return
@@ -94,24 +101,16 @@ func (v *SourceView) StyleChanged() {
 			return
 		}
 	}
-	// Read style and enabled state after teardown callbacks, using the view's
-	// current tree location rather than a captured document/selection state.
-	name := v.StyleName()
-	if name == "" {
-		name = "source-view"
+	font := v.styledFont()
+	if v.font == font {
+		return
 	}
-	state := style.Normal
-	if !gui.IsEnabled(v) {
-		state = style.Disabled
+	v.closeCompletion()
+	if v.Destroyed() {
+		return
 	}
-	resolved := gui.ResolveWidgetStyle(v, name, "", state)
-	font := typography.FontInfo{Family: "monospace", Size: 12}
-	if family, ok := resolved.FontFamily(); ok {
-		font.Family = family
-	}
-	if size, ok := resolved.FontSize(); ok {
-		font.Size = size
-	}
+	// Teardown callbacks may replace the stylesheet or move the view.
+	font = v.styledFont()
 	if v.font == font {
 		return
 	}
@@ -124,6 +123,7 @@ func (v *SourceView) StyleChanged() {
 	v.dropLayouts()
 	v.heights.Reset(v.displayCount(), v.lineHeight)
 }
+
 func (v *SourceView) ensureMetrics() {
 	if v.context == nil || v.metricsReady {
 		return

@@ -118,7 +118,7 @@ func (l *completionList) refresh() {
 }
 func (l *completionList) detailFont() typography.FontInfo { return l.secondaryFont }
 func (l *completionList) StyleChanged()                   { l.readAppearance() }
-func (l *completionList) readAppearance() {
+func (l *completionList) readAppearance() bool {
 	resolve := func(part string) style.Style {
 		return gui.ResolveWidgetStyle(l.view, "sourceview.completion", part, style.Normal)
 	}
@@ -129,13 +129,14 @@ func (l *completionList) readAppearance() {
 		MatchForeground: foreground(resolve("match")), SelectedMatchForeground: foreground(resolve("selected-match")), ScrollThumb: background(resolve("scroll-thumb"))}
 	font, detail, box := styleFont(root), styleFont(resolve("detail")), boxOf(root)
 	if colors == l.colors && font == l.font && detail == l.secondaryFont && box == l.box {
-		return
+		return false
 	}
 	l.release()
 	l.measured = false
 	l.colors, l.font, l.secondaryFont, l.box = colors, font, detail, box
 	l.RequestLayout()
 	l.RequestPaint()
+	return true
 }
 
 // A build transaction owns every layout until its rows are published. Native

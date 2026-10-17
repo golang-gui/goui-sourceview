@@ -102,3 +102,27 @@ func TestCompletionThemeChangesReleaseOwnedLayouts(t *testing.T) {
 		t.Fatal("popup rebuild used stale font or palette")
 	}
 }
+
+func TestUnchangedStyleNotificationsKeepCompletion(t *testing.T) {
+	l, ctx := completionFixture(t, []Completion{{Label: "transform", Detail: "JSON"}})
+	owner := themedScope(l.view, modern.Sheet(modern.Options{}))
+	l.readAppearance()
+	arrangeCompletion(l)
+	l.Paint(&completionPainter{})
+	created, destroyed := ctx.created, ctx.destroyed
+	closed := 0
+	l.session.popup = closingPopup{onClose: func() { closed++ }}
+	// Hover/focus-state invalidation can call this without changing any of the
+	// code or popup appearance values. The current session must remain usable.
+	l.view.StyleChanged()
+	if l.view.completion != l.session || closed != 0 || ctx.created != created || ctx.destroyed != destroyed {
+		t.Fatal("unchanged style notification closed or rebuilt completion")
+	}
+	// The fixture has an explicit code scheme. UI-only changes still close and
+	// release the old native popup so reopening uses the new UI font/colors.
+	owner.SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: 18}))
+	l.view.StyleChanged()
+	if l.view.completion != nil || closed != 1 || ctx.destroyed != created {
+		t.Fatal("UI-only theme change retained the old completion popup")
+	}
+}

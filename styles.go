@@ -163,3 +163,23 @@ func (v *SourceView) styledScheme() (*scheme.Scheme, error) {
 	}
 	return s, err
 }
+
+func (v *SourceView) styledFont() typography.FontInfo {
+	name := v.StyleName()
+	if name == "" {
+		name = "source-view"
+	}
+	state := style.Normal
+	if !gui.IsEnabled(v) {
+		state = style.Disabled
+	}
+	resolved := gui.ResolveWidgetStyle(v, name, "", state)
+	font := typography.FontInfo{Family: "monospace", Size: 12}
+	if family, ok := resolved.FontFamily(); ok {
+		font.Family = family
+	}
+	if size, ok := resolved.FontSize(); ok {
+		font.Size = size
+	}
+	return font
+}

@@ -8,7 +8,8 @@
 // the owner near the workarea corner, where the popup must remain on screen.
 // Up/Down, hover, wheel, Enter/Tab and clicking work without stealing editor
 // focus. -auto checks semantic row bounds, stable width while scrolling,
-// keyboard/hover/wheel selection, inert padding, pointer acceptance and undo via
+// editor hover retention, keyboard/hover/wheel selection, inert padding,
+// pointer acceptance and undo via
 // normal Window/Popover.DispatchEvent; READY means setup, not pixel acceptance.
 // Native IME and physical shortcut interception require separate verification.
 // No clipboard, files or settings change; edge moves only this program's window.
@@ -165,8 +166,21 @@ func main() {
 	})
 	must(ready.StartOnce(1250 * time.Millisecond))
 	if *auto {
+		hover := app.NewTimer()
+		hover.ConnectTimeout(func() {
+			b := v.Snapshot().Bounds
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: geometry.Point{X: b.X + 40, Y: b.Y + 40}}))
+		})
+		must(hover.StartOnce(1600 * time.Millisecond))
+		leave := app.NewTimer()
+		leave.ConnectTimeout(func() {
+			check(len(win.Popovers()) == 1, "editor hover closed completion")
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: geometry.Point{X: 10, Y: 5}}))
+		})
+		must(leave.StartOnce(2000 * time.Millisecond))
 		verify := app.NewTimer()
 		verify.ConnectTimeout(func() {
+			check(len(win.Popovers()) == 1, "editor hover leave closed completion")
 			info := popup.Widget().Snapshot()
 			check(info.Bounds.Width == initialWidth, "panel width changed after paint")
 			// Padding is inside the native surface, but must not activate a candidate.
@@ -196,7 +210,7 @@ func main() {
 			check(len(win.Popovers()) == 0 && doc.Model().Text() == expected, "pointer completion inserted wrong text")
 			key(events.KeyZ, primary)
 			check(doc.Model().Text() == text, "completion undo failed")
-			log.Print("PASS stable size, keyboard/hover/wheel, padding, pointer acceptance, focus and undo")
+			log.Print("PASS stable size, editor hover retention, keyboard/hover/wheel, padding, pointer acceptance, focus and undo")
 			complete = true
 			win.Destroy()
 		})
