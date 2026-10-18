@@ -54,6 +54,7 @@ type SourceView struct {
 	anchor                                      viewportAnchor
 	anchorRevision                              uint64
 	pendingAnchor                               bool
+	reveal                                      *operationState
 	document, private                           *Document
 	selection                                   textedit.Selection
 	selectionRevision, observed, selectionEpoch uint64
@@ -180,6 +181,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.currentMatch = nil
 	v.anchor = viewportAnchor{}
 	v.pendingAnchor = false
+	v.reveal = nil
 	v.offset = geometry.Point{}
 	v.invalidateLayout()
 	state = v.operationState()
@@ -229,6 +231,7 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 		return
 	}
 	old := v.selection
+	v.reveal = nil
 	if reveal {
 		v.pendingAnchor = false
 		v.anchor.valid = false
@@ -333,6 +336,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	defer v.searchState.Emit()
 	epoch, d := v.mountEpoch, v.document
 	v.observed = c.Revision
+	v.reveal = nil
 	v.closeCompletion()
 	if v.document != d || v.mountEpoch != epoch || !v.mounted {
 		return
@@ -394,8 +398,16 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	}
 }
 func (v *SourceView) mount() {
+	request := v.reveal
+	if request != nil && !request.valid(v) {
+		v.reveal = nil
+	}
 	v.mounted = true
 	v.mountEpoch++
+	if v.reveal != nil {
+		// A selection requested before first allocation still needs revealing.
+		*v.reveal = v.operationState()
+	}
 	if win := v.Window(); win != nil {
 		v.windowFocus = win.ConnectFocus(func(focused bool) {
 			if !focused {
@@ -431,6 +443,7 @@ func (v *SourceView) mount() {
 func (v *SourceView) unmount() {
 	v.mounted = false
 	v.mountEpoch++
+	v.reveal = nil
 	v.cancelPaste()
 	v.hideMenu()
 	v.closeCompletion()

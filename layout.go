@@ -182,7 +182,9 @@ func (v *SourceView) Measure(c layout.Constraint) layout.Measurement {
 }
 func (v *SourceView) Arrange(rect geometry.Rectangle) {
 	v.WidgetBase.Arrange(rect)
-	v.LayoutVisible(rect.Size, v.offset)
+	// ScrollView delivers its current offset separately through LayoutVisible.
+	// The retained offset can be stale after reattachment or host clamping.
+	v.layoutVisible(rect.Size, v.offset, false)
 }
 func (v *SourceView) ContentSize() geometry.Size {
 	v.ensureHeights()
@@ -198,6 +200,9 @@ func (v *SourceView) ensureHeights() {
 	}
 }
 func (v *SourceView) LayoutVisible(viewport geometry.Size, offset geometry.Point) {
+	v.layoutVisible(viewport, offset, true)
+}
+func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point, hostOffset bool) {
 	if v.viewport != viewport || v.offset != offset {
 		v.closeCompletion()
 	}
@@ -214,17 +219,37 @@ func (v *SourceView) LayoutVisible(viewport geometry.Size, offset geometry.Point
 	if v.document.model.Revision() != v.observed && v.mounted {
 		return
 	}
-	// Measure only the visible paragraphs. Updated estimates request a second
-	// ScrollView layout; they never recurse into the parent.
+	// Re-query after measuring: fallback fonts and wrapping can change which
+	// paragraphs cover the viewport. Bound the work to two passes per call.
 	old := v.ContentSize()
-	first, last := v.visibleRows()
-	for row := first; row <= last; row++ {
-		v.paragraph(row)
+	state, epoch := v.operationState(), v.layoutEpoch
+	measured := false
+	for range 2 {
+		first, last := v.visibleRows()
+		complete := true
+		for row := first; row <= last; row++ {
+			if v.paragraph(row) == nil {
+				complete = false
+			}
+			if !state.valid(v) || epoch != v.layoutEpoch || v.Destroyed() {
+				return
+			}
+		}
+		nextFirst, nextLast := v.visibleRows()
+		if nextFirst >= first && nextLast <= last {
+			measured = complete
+			break
+		}
 	}
 	if v.ContentSize() != old {
 		v.RequestLayout()
 	}
-	if v.pendingAnchor && v.projection == nil && v.anchor.valid {
+	if v.reveal != nil {
+		v.resolveReveal(measured && hostOffset)
+		if !state.valid(v) || epoch != v.layoutEpoch || v.Destroyed() {
+			return
+		}
+	} else if v.pendingAnchor && v.projection == nil && v.anchor.valid {
 		v.pendingAnchor = false
 		at := v.clampOffset(v.anchor.offset)
 		row := v.document.model.LineAt(at)
@@ -594,12 +619,72 @@ func (v *SourceView) updateIMCaret() {
 	}
 }
 func (v *SourceView) RevealSelection() {
+	if v.Destroyed() {
+		return
+	}
+	request := v.operationState()
+	v.reveal = &request
+	v.pendingAnchor = false
+	v.anchor.valid = false
+	v.resolveReveal(false)
+	v.RequestLayout()
+}
+
+// Keep the logical request until the host has delivered an offset at which the
+// caret is visible with measured paragraphs. A one-shot pixel rectangle becomes
+// stale when previously unseen rows acquire their actual heights.
+func (v *SourceView) resolveReveal(measured bool) {
+	request := v.reveal
+	if request == nil {
+		return
+	}
+	if !request.valid(v) || v.Destroyed() {
+		v.reveal = nil
+		return
+	}
 	rect, ok := v.caretRect()
-	if !ok {
+	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
 		return
 	}
 	// ScrollView receives content coordinates. Include the fixed gutter in the
 	// requested width so a caret at its leading edge remains visible.
+	rect.X += v.offset.X - v.gutter
+	rect.Y += v.offset.Y
+	rect.Width += v.gutter + padding
+	if v.viewport.Width <= 0 || v.viewport.Height <= 0 {
+		return // Retain the request until the first usable allocation.
+	}
+	visible := func(start, length, offset, viewport float32) bool {
+		// ScrollView rounds offsets to whole DIP and prefers the leading edge
+		// of a target larger than the viewport.
+		if length > viewport {
+			return offset <= start && start-offset < 1
+		}
+		return start >= offset && start+length <= offset+viewport
+	}
+	if measured && visible(rect.X, rect.Width, v.offset.X, v.viewport.Width) && visible(rect.Y, rect.Height, v.offset.Y, v.viewport.Height) {
+		v.reveal = nil
+		v.captureAnchor()
+		return
+	}
+	// Validate the destination before scrolling. Measuring just the caret's
+	// paragraph leaves the preceding visible rows estimated, so their later
+	// growth can push the caret below the viewport again. Actual paragraph
+	// heights are at least lineHeight; an estimated viewport before the target
+	// therefore covers the rows needed when revealing its bottom edge.
+	row := v.displayLine(v.displayCaret())
+	first := v.heights.At(max(0, v.heights.Top(row)-v.viewport.Height))
+	epoch := v.layoutEpoch
+	for at := first; at <= min(row+1, v.displayCount()-1); at++ {
+		p := v.paragraph(at)
+		if v.reveal != request || !request.valid(v) || epoch != v.layoutEpoch || v.Destroyed() || p == nil {
+			return
+		}
+	}
+	rect, ok = v.caretRect()
+	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
+		return
+	}
 	rect.X += v.offset.X - v.gutter
 	rect.Y += v.offset.Y
 	rect.Width += v.gutter + padding

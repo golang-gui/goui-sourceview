@@ -48,7 +48,7 @@ Wrap 开启时排版宽度为 `max(0,viewportWidth-g-2p)`；
 
 每个视图持有 HeightIndex，未度量行用基准行高估计；
 实际字体 fallback 或 Wrap 可以使行高不同，不能强制与代码字体常量相同。
-LayoutVisible 找到覆盖视口的逻辑行，测量可见行和约一页 overscan，更新实际高度。
+LayoutVisible 测量覆盖视口的逻辑行及其后一个逻辑行，更新实际高度。
 可见范围重新查询并迭代一次；仍有修正时请求下一次正常布局，不无限追算全文。
 
 HeightIndex 与 Document lineStore 的 splice 对齐；二者不共享同一个可变索引。
@@ -56,6 +56,35 @@ HeightIndex 与 Document lineStore 的 splice 对齐；二者不共享同一个�
 计算目标视口，再通过 ScrollIntoView 的视口尺寸请求实现恢复。
 程序导航有未完成 caret reveal 时优先 caret，避免与顶部锚点请求来回竞争。
 若行被删除，锚定到相邻存活逻辑位置；禁止复用已失效行号。
+
+Caret reveal 保留当前文档、修订、选区代次和挂载代次对应的逻辑请求，而不是只发送一次
+基于估计高度的矩形。每次可见区布局先测量覆盖区域，再查询一次覆盖范围；仍有变化时
+交给下一次正常布局，不预排全文。用更新后的 HeightIndex 和原生 caret 几何重新请求最小滚动。
+发送请求前，额外测量从目标前约一个估计视口至目标后一行的段落，避免先滚动再补测目标上方行
+而把光标再次推到视口外；基准行高是实际段落高度的下界，因此该范围能覆盖目标下边缘定位需要的行。
+只有收到宿主 `LayoutVisible` 的当前偏移、覆盖区域已经测量且目标可见时才完成请求，
+然后重新捕获顶部锚点。`Arrange` 使用的保留偏移仅供临时布局，不能确认请求完成：
+重挂载时宿主偏移可能已归零，而控件仍保存上次偏移。
+
+零视口或尚无 typography 时等待首次有效分配；首次挂载可接续未失效的请求。
+新选区（包括指针选择）、文档修改/替换及卸载取消旧请求；原生调用和滚动信号返回后
+核对请求身份、修订和生命周期，不能覆盖回调创建的新请求。请求完成后的普通滚动不追随 caret，
+没有未完成请求的折行、字体和主题操作仍保持顶部锚点。目标大于视口时按 ScrollView
+优先 leading edge 的契约完成，不为无法容纳的完整矩形持续请求布局。
+
+参考与取舍（2026-10-18 核对）：
+
+- [GTK 4.20.2 gtktextview.c](https://github.com/GNOME/gtk/blob/4.20.2/gtk/gtktextview.c#L2760)
+  的 queue/flush scroll 保留 mark，flush 时先验证目标附近的布局并更新 adjustments；
+  源码明确说明后续验证可能把目标推到屏幕底部之外。借鉴逻辑请求和先验证布局的顺序，
+  复用 GOUI 的事件循环与 ScrollIntoView，不引入 GTK mark/adjustment 对象。
+- [VS Code 1.105.0 viewLines.ts](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/browser/viewParts/viewLines/viewLines.ts#L566)
+  保留横向 reveal 请求，在目标行渲染后计算水平位置；这是该版本源码的横向行为，
+  不能据此声称 Monaco 使用本项目的可变行高策略。采用“几何可用后完成”的原则，不引入 DOM 或动画调度。
+- [Scintilla SCI_SCROLLCARET](https://www.scintilla.org/ScintillaDoc.html#SCI_SCROLLCARET)
+  文档承诺需要时滚动至当前光标；采用最小可见性目标，不增加 caret policy 配置矩阵。
+
+以上是参考源码/文档；本项目的旧版复现和本轮实测结果另见 [中大文件验证](PlanLargeFiles.md)。
 
 换字体、Wrap 或宽度会使高度估计重建；配色不重建高度。
 不折行时水平范围来自已度量行，维护带行身份的已测宽度索引及其有效性：
