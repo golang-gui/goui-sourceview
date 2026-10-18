@@ -1,0 +1,34 @@
+[
+  {
+    "tag": "en-US", "find": "Find", "replacement": "Replacement", "replace": "Replace", "count": "Matches: 3",
+    "menu": ["Undo", "Redo", "Cut", "Copy", "Paste", "Delete", "Move Lines Up", "Move Lines Down", "Duplicate Lines Up", "Duplicate Lines Down", "Delete Lines", "Select All"]
+  },
+  {
+    "tag": "zh-CN", "find": "查找", "replacement": "替换内容", "replace": "替换", "count": "匹配数：3",
+    "menu": ["撤销", "重做", "剪切", "复制", "粘贴", "删除", "上移行", "下移行", "向上复制行", "向下复制行", "删除整行", "全选"]
+  },
+  {
+    "tag": "ja-JP", "find": "検索", "replacement": "置換後の文字列", "replace": "置換", "count": "一致数: 3",
+    "menu": ["元に戻す", "やり直す", "切り取り", "コピー", "貼り付け", "削除", "行を上へ移動", "行を下へ移動", "行を上へ複製", "行を下へ複製", "行を削除", "すべて選択"]
+  },
+  {
+    "tag": "ko-KR", "find": "찾기", "replacement": "바꿀 내용", "replace": "바꾸기", "count": "일치 항목: 3",
+    "menu": ["실행 취소", "다시 실행", "잘라내기", "복사", "붙여넣기", "삭제", "줄 위로 이동", "줄 아래로 이동", "줄 위로 복제", "줄 아래로 복제", "줄 삭제", "모두 선택"]
+  },
+  {
+    "tag": "de-DE", "find": "Suchen", "replacement": "Ersetzung", "replace": "Ersetzen", "count": "Treffer: 3",
+    "menu": ["Rückgängig", "Wiederholen", "Ausschneiden", "Kopieren", "Einfügen", "Löschen", "Zeilen nach oben verschieben", "Zeilen nach unten verschieben", "Zeilen nach oben duplizieren", "Zeilen nach unten duplizieren", "Zeilen löschen", "Alles auswählen"]
+  },
+  {
+    "tag": "fr-FR", "find": "Rechercher", "replacement": "Texte de remplacement", "replace": "Remplacer", "count": "Résultats : 3",
+    "menu": ["Annuler", "Rétablir", "Couper", "Copier", "Coller", "Supprimer", "Déplacer les lignes vers le haut", "Déplacer les lignes vers le bas", "Dupliquer les lignes vers le haut", "Dupliquer les lignes vers le bas", "Supprimer les lignes", "Tout sélectionner"]
+  },
+  {
+    "tag": "ru-RU", "find": "Найти", "replacement": "Текст замены", "replace": "Заменить", "count": "Совпадений: 3",
+    "menu": ["Отменить", "Повторить", "Вырезать", "Копировать", "Вставить", "Удалить", "Переместить строки вверх", "Переместить строки вниз", "Дублировать строки выше", "Дублировать строки ниже", "Удалить строки", "Выделить всё"]
+  },
+  {
+    "tag": "ar-SA", "find": "بحث", "replacement": "نص الاستبدال", "replace": "استبدال", "count": "عدد النتائج: 3",
+    "menu": ["تراجع", "إعادة", "قص", "نسخ", "لصق", "حذف", "نقل الأسطر لأعلى", "نقل الأسطر لأسفل", "تكرار الأسطر لأعلى", "تكرار الأسطر لأسفل", "حذف الأسطر", "تحديد الكل"]
+  }
+]

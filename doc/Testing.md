@@ -220,3 +220,11 @@ XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/find
 输入只经正常 Window.DispatchEvent；未验证真实 IME 或桌面合成器。
 现有 editor、experience 程序保留显式统一前景的原断言，不以新默认行为删除这些覆盖。
 本轮环境、命令、结果与未验证项见 [代码选区验收](PlanSelection.md)。
+
+## 菜单和查找栏界面语言
+
+运行 `go run ./tests/window/editor/localization`，可指定 `-capture-dir` 为仓库外现有目录。
+对简中、英、日、韩、德、法、俄、阿拉伯八语言，使用独立 testdata 核对展开菜单全部文案、
+查询/替换名称、提示和计数，并验证活动项/动作、可用状态、焦点、选区、历史及查询保留。
+长菜单标签与原生测量比较，另验证查找栏缩窄/恢复、主题替换及卸载/重挂/销毁。
+初始状态、输入路径、副作用与退出规则见入口注释；具体结果见 [多语言验收](PlanLocalization.md)。
