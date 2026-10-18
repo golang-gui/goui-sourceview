@@ -1,12 +1,33 @@
 # SourceView examples / 示例
 
-Run from the repository root with the local GOUI workspace described in
-[README](../README.md#run-the-examples). Both examples use Modern and request
+Both examples use Modern and request
 `WindowChromeIntegrated`; Linux needs a compositor for Integrated decoration.
 
-在仓库根目录启动，先按[中文说明](../doc/README_CN.md#运行示例) 配置相邻 GOUI 工作区。
 两个示例均采用 Modern 与 Integrated 窗口，Linux 的 Integrated 需要桌面合成器。
 示例工具栏为英文；编辑菜单及查找栏使用 GOUI 界面语言资源。
+
+## Setup / 环境准备
+
+Requires Go 1.24 or newer and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
+For this development snapshot, place a GOUI checkout containing `903daf8` or a later
+version with the same APIs at `../goui`. The declared `goui v0.1.1` does not include
+the required batch editing, styling and registration APIs yet. From this repository
+root, create a local workspace if one does not already exist:
+
+需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。当前开发快照需将包含 `903daf8`
+或之后相同接口的 GOUI 检出放在相邻 `../goui`；`go.mod` 中的 `goui v0.1.1`
+尚不具备所需批量编辑、样式和注册接口。在本仓库根目录为首次使用创建本地工作区：
+
+```sh
+go work init . ../goui
+```
+
+For an existing workspace, use `go work use . ../goui` instead. Keep the workspace
+local; a machine-specific `replace` is unnecessary.
+
+已有工作区时改用 `go work use . ../goui`。工作区仅供本地使用，无需机器专属 `replace`。
+
+## Run / 启动
 
 ```sh
 go run ./example/editor
@@ -14,6 +35,14 @@ go run ./example/editor -theme light
 go run ./example/editor -theme dark path/to/file.html
 go run ./example/declarative
 ```
+
+The examples also build with `CGO_ENABLED=0`. In Bash, prefix a command with
+`CGO_ENABLED=0`; in Windows PowerShell, set `$env:CGO_ENABLED='0'` first.
+If Linux cannot enable Integrated decoration, GOUI may fall back to native decoration.
+
+示例支持 `CGO_ENABLED=0` 构建。Bash 可在命令前加 `CGO_ENABLED=0`；
+Windows PowerShell 先设置 `$env:CGO_ENABLED='0'`。
+Linux 不满足 Integrated 所需能力时，GOUI 可回退到原生装饰。
 
 ## Editor
 
@@ -60,6 +89,12 @@ Use Ctrl/Cmd+F to open FindBar; editing uses the same widget as the imperative e
 
 `declarative` 展示最小声明式组合及稳定 Document，样式随系统设置重建。
 Ctrl/Cmd+F 打开查找栏；编辑行为由同一个命令式控件提供。
+
+See [editor shortcuts](../doc/DesignEditing.md#13-常用编辑快捷键) for the complete
+platform-specific bindings, and [style integration](../doc/DesignStyles.md) for customization.
+
+完整平台快捷键见[编辑规则](../doc/DesignEditing.md#13-常用编辑快捷键)，
+外观定制见[样式接入](../doc/DesignStyles.md)。
 
 ## README screenshots / 截图复现
 
