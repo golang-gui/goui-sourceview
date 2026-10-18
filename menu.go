@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -27,18 +28,9 @@ const (
 )
 
 var commandLabels = [...]mlang.Getter{
-	mlang.String(mlang.En("Undo"), mlang.ZhCN("撤销")),
-	mlang.String(mlang.En("Redo"), mlang.ZhCN("重做")),
-	mlang.String(mlang.En("Cut"), mlang.ZhCN("剪切")),
-	mlang.String(mlang.En("Copy"), mlang.ZhCN("复制")),
-	mlang.String(mlang.En("Paste"), mlang.ZhCN("粘贴")),
-	mlang.String(mlang.En("Delete"), mlang.ZhCN("删除")),
-	mlang.String(mlang.En("Move Lines Up"), mlang.ZhCN("上移行")),
-	mlang.String(mlang.En("Move Lines Down"), mlang.ZhCN("下移行")),
-	mlang.String(mlang.En("Duplicate Lines Up"), mlang.ZhCN("向上复制行")),
-	mlang.String(mlang.En("Duplicate Lines Down"), mlang.ZhCN("向下复制行")),
-	mlang.String(mlang.En("Delete Lines"), mlang.ZhCN("删除整行")),
-	mlang.String(mlang.En("Select All"), mlang.ZhCN("全选")),
+	resource.Undo, resource.Redo, resource.Cut, resource.Copy, resource.Paste, resource.Delete,
+	resource.MoveLinesUp, resource.MoveLinesDown, resource.DuplicateLinesUp, resource.DuplicateLinesDown,
+	resource.DeleteLines, resource.SelectAll,
 }
 
 type editMenu struct {

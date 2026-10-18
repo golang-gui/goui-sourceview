@@ -1,11 +1,11 @@
 package sourceview
 
 import (
-	"fmt"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -338,11 +338,11 @@ func (b *FindBar) updateStatus() {
 	if text == "" && b.count.query.Text != "" {
 		switch {
 		case !b.count.available:
-			text = mlang.String(mlang.En("Query too long to count"), mlang.ZhCN("查询过长，无法计数"))()
+			text = resource.QueryTooLong()
 		case !b.count.done:
-			text = mlang.String(mlang.En("Counting…"), mlang.ZhCN("计数中…"))()
+			text = resource.Counting()
 		default:
-			text = fmt.Sprintf(mlang.String(mlang.En("%d matches"), mlang.ZhCN("%d 个匹配"))(), b.count.total)
+			text = resource.Matches(b.count.total)
 		}
 	}
 	changed := b.status.Text() != text

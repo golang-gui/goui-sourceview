@@ -54,6 +54,7 @@ FindBar 的外层保持普通 Widget 的 Visible；内部内容初始关闭。�
 `widgets.CheckButton` 拥有各自的输入、样式、原生资源和语义，选项有真实选中指示。
 上下项、关闭和替换使用原始矢量线条图标，并提供本地化名称；Aa 和 ab 是实际的
 ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦点和禁用语义。
+提示、输入/按钮名称和计数状态支持 GOUI 的八种界面语言，见 [界面语言](DesignLocalization.md)。
 
 ## 浮层布局与配色
 

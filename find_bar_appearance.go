@@ -3,6 +3,7 @@ package sourceview
 import (
 	"strings"
 
+	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/icon/svg"
@@ -38,50 +39,48 @@ func (b *FindBar) buildSurface() {
 	b.content.SetVisible(false)
 	b.WidgetBase.AddChild(b, b.content)
 	add := func(w gui.Widget) { b.content.WidgetBase.AddChild(b.content, w) }
-	name := func(w gui.Widget, en, zh string) {
-		getter := mlang.String(mlang.En(en), mlang.ZhCN(zh))
+	name := func(w gui.Widget, getter mlang.Getter) {
 		b.names[w] = getter
 		w.SetName(getter())
 	}
-	hint := func(en, zh string) *gui.Label {
-		getter := mlang.String(mlang.En(en), mlang.ZhCN(zh))
+	hint := func(getter mlang.Getter) *gui.Label {
 		l := gui.NewLabel(getter())
 		l.SetStyleName("sourceview.find.hint")
 		b.labels[l] = getter
 		add(l)
 		return l
 	}
-	b.findHint = hint("Find", "查找")
-	b.replaceHint = hint("Replace", "替换")
-	action := func(icon, en, zh string, fn func()) *gui.Button {
+	b.findHint = hint(resource.Find)
+	b.replaceHint = hint(resource.Replace)
+	action := func(icon string, getter mlang.Getter, fn func()) *gui.Button {
 		w := gui.NewButton()
 		w.SetStyleName("sourceview.find.action")
 		w.SetPadding(3)
 		i := gui.NewIcon(findIcons[icon])
 		i.SetStyleName("sourceview.find.icon")
 		w.SetChild(i)
-		name(w, en, zh)
+		name(w, getter)
 		w.ConnectClicked(fn)
 		add(w)
 		return w
 	}
-	option := func(en, zh string, child gui.Widget, fn func(bool)) *widgets.CheckButton {
+	option := func(getter mlang.Getter, child gui.Widget, fn func(bool)) *widgets.CheckButton {
 		w := widgets.NewCheckButton()
 		w.SetAppearance(widgets.CheckAppearanceButton)
 		w.SetPadding(2)
 		w.SetStyleName("sourceview.find.option")
 		w.SetChild(child)
-		name(w, en, zh)
+		name(w, getter)
 		w.ConnectChange(func(state widgets.CheckState) { fn(state == widgets.CheckChecked) })
 		add(w)
 		return w
 	}
 	b.toggleIcon = gui.NewIcon(findIcons["right"])
 	b.toggleIcon.SetStyleName("sourceview.find.icon")
-	b.toggle = option("Toggle replace", "展开替换", b.toggleIcon, b.SetReplaceMode)
+	b.toggle = option(resource.ToggleReplace, b.toggleIcon, b.SetReplaceMode)
 	b.toggle.SetStyleName("sourceview.find.expand")
 	b.find = gui.NewTextInput()
-	b.find.SetName("Find")
+	name(b.find, resource.Find)
 	b.find.SetStyleName("sourceview.find.input")
 	b.find.SetPadding(4)
 	add(b.find)
@@ -90,14 +89,14 @@ func (b *FindBar) buildSurface() {
 		l.SetStyleName("sourceview.find.option-text")
 		return l
 	}
-	b.matchCase = option("Match case", "区分大小写", textOption("Aa"), func(checked bool) {
+	b.matchCase = option(resource.MatchCase, textOption("Aa"), func(checked bool) {
 		if v := b.liveTarget(); v != nil {
 			q := v.Search()
 			q.IgnoreCase = !checked
 			v.SetSearch(q)
 		}
 	})
-	b.wholeWord = option("Whole word", "整词", textOption("ab"), func(checked bool) {
+	b.wholeWord = option(resource.WholeWord, textOption("ab"), func(checked bool) {
 		if v := b.liveTarget(); v != nil {
 			q := v.Search()
 			q.WholeWord = checked
@@ -107,16 +106,16 @@ func (b *FindBar) buildSurface() {
 	b.status = gui.NewLabel("")
 	b.status.SetStyleName("sourceview.find.status")
 	add(b.status)
-	b.previous = action("previous", "Previous", "上一项", func() { b.navigate(true) })
-	b.next = action("next", "Next", "下一项", func() { b.navigate(false) })
-	b.close = action("close", "Close", "关闭", b.Close)
+	b.previous = action("previous", resource.Previous, func() { b.navigate(true) })
+	b.next = action("next", resource.Next, func() { b.navigate(false) })
+	b.close = action("close", resource.Close, b.Close)
 	b.replacement = gui.NewTextInput()
-	b.replacement.SetName("Replacement")
+	name(b.replacement, resource.Replacement)
 	b.replacement.SetStyleName("sourceview.find.input")
 	b.replacement.SetPadding(4)
 	add(b.replacement)
-	b.replace = action("replace", "Replace", "替换", b.replaceCurrent)
-	b.replaceAll = action("replace-all", "Replace all", "全部替换", b.replaceEverywhere)
+	b.replace = action("replace", resource.Replace, b.replaceCurrent)
+	b.replaceAll = action("replace-all", resource.ReplaceAll, b.replaceEverywhere)
 	b.replacement.SetVisible(false)
 	b.replace.SetVisible(false)
 	b.replaceAll.SetVisible(false)
