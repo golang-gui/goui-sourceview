@@ -42,9 +42,3 @@ go run ./example/editor
 
 The example lets you edit JSON, XML and HTML, try search and completion, and switch
 between light and dark appearances. A [declarative example](example/declarative) is also available.
-
-## Documentation
-
-- [Example guide](example/README.md)
-- [Imperative example](example/editor/main.go) · [Declarative example](example/declarative/main.go)
-- [Development documentation](doc/DesignSourceView.md) · [Roadmap](doc/Roadmap.md)

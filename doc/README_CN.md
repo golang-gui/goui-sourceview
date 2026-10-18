@@ -41,9 +41,3 @@ go run ./example/editor
 
 示例可以编辑 JSON、XML、HTML，体验查找与补全，并切换亮暗外观。
 另提供[声明式示例](../example/declarative)。
-
-## 文档
-
-- [示例指南](../example/README.md)
-- [命令式示例](../example/editor/main.go) · [声明式示例](../example/declarative/main.go)
-- [开发文档](DesignSourceView.md) · [路线图](Roadmap.md)
