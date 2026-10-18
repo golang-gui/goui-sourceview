@@ -3,7 +3,7 @@
 当前 Basic / Modern 接入与验证见 [样式接入验收](PlanStyles.md)，
 默认选区保留语法色的后续修正见 [代码选区验收](PlanSelection.md)。
 菜单和查找栏的八语言补齐见 [多语言验收](PlanLocalization.md)。
-中大文件功能检查及冷定位失败见 [中大文件验证](PlanLargeFiles.md)。
+中大文件功能检查、冷定位修正及回归结果见 [中大文件验证](PlanLargeFiles.md)。
 
 日期：2026-10-16。本记录描述实际代码与本轮验证；专题设计中的完整矩阵和性能目标仍需逐项验收。
 
