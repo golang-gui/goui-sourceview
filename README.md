@@ -28,13 +28,13 @@ go.mod 保留可获取的 v0.1.1 作为依赖基线；该发行版尚不具备�
 go work init . ../goui
 
 go test ./...
-go run ./examples/editor
-go run ./examples/declarative
+go run ./example/editor
+go run ./example/declarative
 ~~~
 
-[命令式示例](examples/editor/main.go) 可切换三种语言、只读、折行、行号、主题及查找替换。
-也可以通过 go run ./examples/editor path/to/file.json 加载一个本地文件；示例只修改内存，不保存文件。
-[声明式示例](examples/declarative/main.go) 展示稳定 Document 与 ui.ScrollView 的组合。
+[命令式示例](example/editor/main.go) 可切换三种语言、只读、折行、行号、主题及查找替换。
+也可以通过 go run ./example/editor path/to/file.json 加载一个本地文件；示例只修改内存，不保存文件。
+[声明式示例](example/declarative/main.go) 展示稳定 Document 与 ui.ScrollView 的组合。
 两个示例都用 Overlay 把可选 FindBar 浮在编辑区右上角，支持紧凑查找、展开替换和亮暗配色；Ctrl/Cmd+F 打开查找，Windows/Linux Ctrl+H 或 macOS Cmd+Option+F 展开替换。
 
 ## 样式

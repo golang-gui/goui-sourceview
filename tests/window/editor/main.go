@@ -10,7 +10,7 @@
 // Manual: type Chinese/emoji with a real IME, replace a selection, inspect the
 // candidate position, cancel with Escape, then commit and undo once. Switch
 // focus mid-composition and close while preediting. These need native testing;
-// CommitText is not an IME simulation. Use examples/editor for three-language
+// CommitText is not an IME simulation. Use example/editor for three-language
 // visual inspection, themes, search, wrap and line numbers at 1x and 2x.
 // Initial: a JSON document, editor between two focusable buttons. AcceptsTab
 // is enabled; Escape then Tab must reach the following button. Read-only must

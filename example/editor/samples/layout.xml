@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A document keeps text and history.
+     Each view owns its selection and scroll position. -->
+<workspace name="GOUI &amp; SourceView">
+    <editor id="source" language="xml" editable="true">
+        <appearance theme="modern" line-numbers="true" />
+        <indent width="4" insert-spaces="true" />
+        <features>
+            <feature name="Incremental highlighting" enabled="true" />
+            <feature name="Find and replace" enabled="true" />
+            <feature name="Bracket matching" enabled="true" />
+        </features>
+    </editor>
+
+    <documents>
+        <document file="settings.json" language="json" />
+        <document file="layout.xml" language="xml" />
+        <document file="index.html" language="html" />
+    </documents>
+
+    <message lang="zh-CN">用 Go 构建代码编辑器。</message>
+    <raw><![CDATA[<text> is content, not a child element.]]></raw>
+</workspace>

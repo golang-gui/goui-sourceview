@@ -1,0 +1,29 @@
+{
+    "name": "GOUI SourceView",
+    "description": "A native code editor for Go applications",
+    "languages": ["JSON", "XML", "HTML"],
+    "editor": {
+        "editable": true,
+        "lineNumbers": true,
+        "tabWidth": 4,
+        "insertSpaces": true,
+        "autoPairs": true,
+        "completion": "Language names and document words"
+    },
+    "appearance": {
+        "theme": "Modern",
+        "lightAndDark": true,
+        "selection": "Preserve syntax colors"
+    },
+    "workspace": {
+        "sharedDocuments": true,
+        "findAndReplace": true,
+        "undoAndRedo": true
+    },
+    "shortcuts": {
+        "find": "Ctrl/Cmd+F",
+        "complete": "Ctrl+Space",
+        "moveLine": "Alt/Option+Up or Down"
+    },
+    "unicode": "Hello · 你好 · é · 👩‍💻"
+}
