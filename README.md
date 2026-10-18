@@ -1,136 +1,178 @@
-# GOUI SourceView
+<h1 align="center">GOUI SourceView</h1>
 
-GOUI 的可选代码编辑器扩展，模块路径为 github.com/golang-gui/goui-sourceview。
+<p align="center">A native code editor for Go applications</p>
 
-当前已提供独立的 SourceView 控件、共享 Document、JSON / XML / HTML 增量高亮、
-选择与复制、编辑与撤销、行号、缩进、字面量搜索替换、亮暗配色和薄声明式绑定。
-支持按词拖选、编辑菜单、语言/文档词补全、括号自动闭合/包裹/成对删除和匹配装饰。
-常用编辑快捷键与同仓可选 FindBar 已接入；查找栏的创建、放置由应用选择。
-控件基于 WidgetBase 与公开的 textedit、typography 设施实现，滚动条由 GOUI ScrollView 提供。
+<p align="center"><a href="doc/README_CN.md">中文</a></p>
 
-当前是开发中的初始实现，尚未完成所有平台的原生验收与独立发布。
-具体结果和限制见 [实现记录](doc/Implementation.md)，开发顺序见 [Plan](doc/Plan.md)。
+GOUI SourceView is an optional code editor extension for [GOUI](https://github.com/golang-gui/goui).
+It provides editable source text, incremental JSON / XML / HTML highlighting, completion,
+matching brackets, and a floating find-and-replace panel, with native text layout and
+Modern light/dark appearances. Use the imperative widget or its thin declarative binding.
 
-## 本地运行
+The project is under active development. Public APIs are evolving; the current source
+requires GOUI APIs newer than its declared release dependency. See [running from source](#run-the-examples).
 
-当前开发版本使用 GOUI 新增的通用批量编辑、Tab 排版和剪贴板结果接口。
-go.mod 保留可获取的 v0.1.1 作为依赖基线；该发行版尚不具备这些新增接口，
-当前需要 GOUI 提交 `2f782897684f1bfc892a11b0254e5a2162980ed8` 或之后包含这些接口的版本，
-本地通过 go.work 联调。Windows 的反复重着色还需要 GOUI `227220a` 的全范围颜色覆盖回收修正，
-详见 [着色缓存验收](doc/PlanColorCaching.md)。新增依赖尚未发布；没有提交机器专属 replace。
-菜单键盘导航使用 GOUI `ffc59f3` 的实现；浮层还需要 `00521cc` 的局部阴影接口与
-`210732a` 的显式子树样式作用域。样式注册还需要 GOUI `903daf8`。本轮联调 GOUI HEAD 为 `903daf8`。
+## See it in action
 
-在本仓库运行：
+The [editor example](example/editor) includes three editable documents, undo/redo,
+word wrap, line numbers, read-only mode, and appearance switching. Each document
+keeps its text and undo history when you switch files. Edits stay in memory.
 
-~~~bash
-# 尚无 go.work 时：
+Modern Light — JSON
+
+<img src="doc/images/editor-light.png" alt="GOUI SourceView showing JSON in a Modern Light Integrated window">
+
+Modern Dark — HTML and the floating find-and-replace panel
+
+<img src="doc/images/editor-dark.png" alt="GOUI SourceView showing HTML and find/replace in a Modern Dark Integrated window">
+
+These are actual screenshots on Linux / X11, Xfwm4 with compositing, Software
+rendering at 1x, using `WindowChromeIntegrated`. Native text and window controls
+can differ on other desktops.
+
+## What is available
+
+- **Source editing:** Unicode selection, word/line selection and dragging, clipboard,
+  undo/redo, indentation, line moving/duplicating/deleting, and familiar editor shortcuts.
+- **Language support:** incremental JSON, XML and HTML highlighting, including
+  cross-line lexical state. Language names and nearby document words provide completion candidates.
+- **Code navigation:** automatic bracket/quote pairs, selection wrapping, matching-bracket
+  decoration and jumping, line numbers, and optional word wrap.
+- **Search:** Unicode literal search, case and whole-word options, next/previous match,
+  current/all replacement, and an optional floating FindBar. Replace-all is one undo step.
+- **Integration:** Basic and Modern styles, syntax-preserving selection colors,
+  eight-language editor menus and FindBar, shared documents, and declarative views.
+
+The widget is implemented independently on GOUI's public `gui/textedit` and typography
+facilities. `Document` owns text, history and language analysis; each `SourceView` owns
+its selection, viewport and native layouts. GOUI does not depend on this module.
+
+## Run the examples
+
+Requires **Go 1.24 or newer** and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
+For this development snapshot, check out GOUI alongside this repository with commit
+`903daf8` or a later version containing the same APIs. The declared `goui v0.1.1`
+does not yet include the required batch editing, styling and registration APIs.
+
+From this repository root, create a local workspace if one does not already exist:
+
+```sh
 go work init . ../goui
-
-go test ./...
-go run ./example/editor
-go run ./example/declarative
-~~~
-
-[命令式示例](example/editor/main.go) 可切换三种语言、只读、折行、行号、主题及查找替换。
-也可以通过 go run ./example/editor path/to/file.json 加载一个本地文件；示例只修改内存，不保存文件。
-[声明式示例](example/declarative/main.go) 展示稳定 Document 与 ui.ScrollView 的组合。
-两个示例都用 Overlay 把可选 FindBar 浮在编辑区右上角，支持紧凑查找、展开替换和亮暗配色；Ctrl/Cmd+F 打开查找，Windows/Linux Ctrl+H 或 macOS Cmd+Option+F 展开替换。
-
-## 样式
-
-SourceView 根包已注册 Basic 和 Modern。默认使用 Basic；应用启用 Modern 即可同时应用到
-编辑区、查找栏与补全，无需额外导入适配包：
-
-```go
-app.SetStyleSheet(modern.FromSettings(app.Settings()))
-// 声明式 build：
-return ui.Root().StyleSheet(modern.FromSettings(app.Settings())).Windows(/* windows */)
 ```
 
-命令式示例启动时读取一次系统外观，按钮替换整张 Modern 样式表；声明式示例随设置重建。
-`SetScheme` 仅覆盖代码配色，传 nil 恢复当前样式；查找栏和补全的界面仍跟随 Basic/Modern。
-代码选区默认保留语法前景，并以半透明背景叠加；自定义 `SelectionForeground` 的 alpha 为 255
-可启用统一选区前景，设为 0 恢复语法色。
-右键菜单和查找替换栏支持 GOUI 的八种界面语言，跟随 `mlang.SetLanguage` 实时更新，
-未匹配语言回退英语；详见 [界面语言](doc/DesignLocalization.md)。
-需要并列不同主题时，用 `gui.StyleScope` 显式包裹各编辑区及其查找浮层。
-应用覆盖、所有命名 part 与失效规则见 [样式设计](doc/DesignStyles.md)，
-验证范围见 [接入验收](doc/PlanStyles.md)。
+For an existing workspace, use `go work use . ../goui` instead. Keep the workspace
+local; a machine-specific `replace` is unnecessary.
 
-## 接入
+```sh
+CGO_ENABLED=0 go run ./example/editor
+CGO_ENABLED=0 go run ./example/declarative
 
-~~~go
-document := sourceview.NewDocument("{\n    \"ready\": true\n}\n")
-if err := document.SetLanguage(language.JSON); err != nil {
-    return err
+# Choose an initial appearance, or read a local UTF-8 file:
+CGO_ENABLED=0 go run ./example/editor -theme dark
+CGO_ENABLED=0 go run ./example/editor path/to/file.json
+```
+
+On Windows PowerShell, set `$env:CGO_ENABLED='0'` and run the same `go run` commands.
+Both examples request Integrated window chrome. Linux needs a compositor to enable
+it; GOUI can fall back to native decoration when the required capability is unavailable.
+See the [example guide](example/README.md) for controls and screenshot steps.
+
+## Add an editor
+
+The [declarative example](example/declarative/main.go) creates a stable `Document`
+outside the build function, composes SourceView with GOUI's ScrollView, and places
+the optional FindBar in an Overlay. A complete program:
+
+```go
+package main
+
+import (
+	"log"
+
+	source "github.com/golang-gui/goui-sourceview"
+	"github.com/golang-gui/goui-sourceview/language"
+	sourceui "github.com/golang-gui/goui-sourceview/ui"
+	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/theme/modern"
+	ui "github.com/golang-gui/goui/ui"
+)
+
+func main() {
+	document := source.NewDocument("{\n    \"editor\": \"GOUI SourceView\",\n    \"editable\": true\n}\n")
+	_ = document.SetLanguage(language.JSON)
+	if err := ui.Run("org.golang-gui.SourceViewDeclarative", func(app ui.App) ui.RootView {
+		return ui.Root().
+			StyleSheet(modern.FromSettings(app.Settings())).
+			Windows(
+				ui.Window("main").
+					Title("Declarative SourceView").
+					Chrome(ui.WindowChromeIntegrated).
+					Size(900, 600).Center(true).
+					Content(
+						ui.VBox(
+							ui.HeaderBar(ui.Label("Declarative SourceView")).Padding(8),
+							ui.Overlay(
+								ui.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true)),
+								ui.OverlayItem(sourceui.FindBar("editor")).OnPosition(func(available, size geometry.Size, p *geometry.Point) {
+									p.X = max(0, available.Width-size.Width-8)
+								}),
+							).MainWeight(1),
+						),
+					),
+			)
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
+```
 
-editor := sourceview.NewSourceView()
-editor.SetDocument(document)
-editor.SetAcceptsTab(true)
+For imperative code, create `source.NewSourceView()`, call `SetDocument(document)`,
+and use `gui.ScrollView.SetChild(editor)`. Compose a separate `source.NewFindBar()`
+and call `SetTarget(editor)`. The [editor example](example/editor/main.go) shows the
+complete lifecycle and error handling.
 
-scroll := gui.NewScrollView()
-scroll.SetChild(editor)
-window.SetWidget(scroll)
-~~~
+## Styles, state and shortcuts
 
-Document 可由多个视图共享；光标、选区、滚动与原生排版属于各自视图。
-Document 及已挂载控件在 GUI 线程顺序访问，后台加载结果通过应用的 Post 投递。
-文档位置和选择端点使用规范化 UTF-8 文本的字节偏移，换行使用 LF。
+Importing the root package registers Basic and Modern support. Enabling
+`modern.FromSettings(app.Settings())` styles the editor, FindBar and completion UI
+together. `SetScheme` overrides code colors; `nil` restores the current theme.
+Selection backgrounds are translucent and preserve syntax colors by default.
+See [style integration](doc/DesignStyles.md).
 
-AcceptsTab 默认关闭。打开后 Tab 插入缩进，非空选区的 Tab / Shift+Tab 对选中行缩进或反缩进；
-Escape 后的下一次 Tab / Shift+Tab 交给 GOUI 焦点遍历。
-Ctrl/Cmd+A/C/X/V/Z、Ctrl/Cmd+Shift+Z、方向键、Home/End、PageUp/PageDown 可直接使用。
+Document text uses normalized UTF-8 and LF; positions are **byte offsets**.
+Share a Document to share text and history between views. Access documents and
+mounted widgets sequentially on the GUI thread; post background results through
+the application event loop. See [editing contracts](doc/DesignEditing.md).
 
-双击选择词，三击选择逻辑整行，双击后拖动按词扩展。右键或 Shift+F10 打开编辑菜单。
-Ctrl+Space 请求补全，上下选择、Enter/Tab 确认、Escape 取消，也可点击候选。
-Alt/Option+上下移动逻辑行；加 Shift 复制行（Linux 还需加 Control）；Primary+Shift+K 删除整行。
-右键菜单也提供这些命令；移动和复制保留选区方向，每次操作可一次撤销，详见 [行编辑规则](doc/DesignEditing.md#12-逻辑行编辑)。
-自动补全和括号自动插入默认开启，可通过 SetAutomaticCompletion/SetAutoPairs 关闭；
-SetCompletionProvider 可添加应用候选，ui 提供同名薄绑定配置。
-补全列表支持独立亮暗配色、名称/说明分列、前缀强调、长文本省略和滚动位置提示；
-界面通过 `sourceview.completion` 及命名 part 定制，具体契约见 [样式接入](doc/DesignStyles.md)。
-配对提示使用淡底和细边框；主题的 BracketMatchBackground/BracketMatchBorder 可分别配色或设为透明关闭。
-当前补全提供语言关键词/名称及附近文档词，不包含 Schema、LSP 或语义类型推断。
+| Operation | Shortcut |
+| --- | --- |
+| Find | Ctrl+F / macOS Cmd+F, with FindBar composed |
+| Replace | Ctrl+H / macOS Cmd+Option+F, with FindBar composed |
+| Next / previous match | F3 / Shift+F3 |
+| Completion | Ctrl+Space |
+| Move line | Alt+Up/Down / macOS Option+Up/Down |
+| Undo / redo | Ctrl+Z / Ctrl+Shift+Z; macOS uses Cmd |
 
-ReplaceSelection、Cut、Copy 等同步操作返回错误；Paste 返回请求是否接受，
-延迟的读取/插入失败经 ConnectError 通知；取消输入法时，若回调改变了文档或选区，旧命令返回 ErrOperationChanged。复制为空选区、无文本格式以及过期粘贴请求属于正常情况。
-搜索为 Unicode 字面量搜索，支持忽略大小写和整词；全部替换和多行缩进分别只占一次撤销。
-Ctrl/Cmd+Enter 在下方插入行，加 Shift 在上方；Ctrl/Cmd+L 选择整行并可重复扩展；
-Ctrl/Cmd+] / [ 整行缩进/反缩进。按词移动/删除使用 Windows/Linux 的 Ctrl 或 macOS 的 Option。
-Ctrl/Cmd+Shift+Backslash 在已有相邻匹配括号之间跳转，F3 / Shift+F3 查找下一项/上一项。
-具体边界和平台差异见 [快捷键设计](doc/DesignEditing.md#13-常用编辑快捷键)。
+Tab indentation is opt-in through `AcceptsTab(true)`. Press Escape before the next
+Tab to return to focus traversal. See the [full shortcut rules](doc/DesignEditing.md#13-常用编辑快捷键)
+for platform differences. Menus and FindBar follow `mlang.SetLanguage`; the example's
+own toolbar uses English labels.
 
-创建 `NewFindBar()` 并 `SetTarget(editor)` 组合可选查找浮层，`Open(false)` / `Open(true)` 打开查找/替换。
-关闭保留查询和高亮，裸 SourceView 不拦截打开界面的快捷键。声明式使用
-`sourceui.FindBar("editor")` 放入 `base.OverlayItem(...)`，配合 `sourceui.SourceView().ID("editor")`；未显式设置 Search 时，重建保留交互查询。
-计数按帧推进，不保存全文件命中列表；导航/替换仍为显式同步操作。见 [查找栏设计](doc/DesignFindBar.md)。
+## Verification and documentation
 
-## 验证与文档
-
-~~~bash
+```sh
 go test ./...
 go test -race ./...
 go vet ./...
+```
 
-# 真实桌面，默认不改写剪贴板：
-XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor -auto
-XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/experience
-~~~
+Desktop scenarios are explicit programs under `tests/window/`; see their entry
+comments before running. The current [medium/large-file verification](doc/PlanLargeFiles.md)
+covers 10/50 MiB JSON, XML and HTML plus a 100 MiB JSON probe. These results describe
+the recorded scenarios, rather than a general latency or memory guarantee.
+`GOWORK=off go test ./...` remains blocked by the unreleased GOUI dependency APIs.
 
-Linux 有真实输入法时应保留其 XMODIFIERS，再按窗口程序注释手动验收组合输入。
--clipboard 仅用于可丢弃内容的独立剪贴板测试，会改写系统剪贴板；
-X11 下内容可能随测试进程退出而消失。
-
-- [总设计](doc/DesignSourceView.md)
-- [编辑与输入](doc/DesignEditing.md)
-- [可选查找替换栏](doc/DesignFindBar.md)
-- [括号编辑与匹配](doc/DesignPairs.md)
-- [补全](doc/DesignCompletion.md)
-- [语言与增量高亮](doc/DesignHighlighting.md)
-- [排版与呈现](doc/DesignLayout.md)
-- [GOUI 接入与扩展](doc/DesignGOUIIntegration.md)
-- [测试矩阵](doc/Testing.md)
-- [实现和验收记录](doc/Implementation.md)
-- [编辑体验验收](doc/PlanEditorExperience.md)
+- [Architecture and scope](doc/DesignSourceView.md)
+- [Completion](doc/DesignCompletion.md) · [Bracket editing](doc/DesignPairs.md) · [FindBar](doc/DesignFindBar.md)
+- [Highlighting](doc/DesignHighlighting.md) · [Layout](doc/DesignLayout.md) · [Localization](doc/DesignLocalization.md)
+- [Development plan](doc/Plan.md) · [Testing](doc/Testing.md) · [Implementation records](doc/Implementation.md)

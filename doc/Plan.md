@@ -5,6 +5,20 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
+## 中英文 README 与示例（2026-10-18）
+
+- [x] 根目录英文 README、`doc/README_CN.md`、完整可运行接入代码及双语示例指南。
+- [x] 示例目录统一为 `example/`，命令式三语言样本各自保留文档历史，两个入口均使用 HeaderBar / Integrated / Modern。
+- [x] 本机 Linux / X11 / Xfwm4（合成开启）/ Software 1x 运行；命令式 ChromeInfo 确认 mode=1、enabled=true、controls=1。
+- [x] 浅色 JSON、深色 HTML 与浮动替换栏的真实窗口截图位于 `doc/images/`，两份 README 复用；只截取窗口边界。
+- [x] 系统输入路径检查三语言切换、主题切换、HTML 搜索 `feature` 两处匹配、编辑后切换保留、撤销及只读；声明式窗口检查 Ctrl+F 搜索 `editor` 一处匹配。
+- [x] `go test ./...`、`go vet ./...`；两份 README 的 Go 程序构建和本地链接/图片检查通过；两个示例均以 CGO_ENABLED=0 构建 Linux amd64、Windows amd64、macOS arm64 通过。
+
+GOUI 使用 `903daf8`，未修改其工作副本。截图环境为本机 Ubuntu 22.04.5 / Go 1.25.8 / Pango；
+Windows/macOS 本轮仅交叉构建，未进行原生运行。真实 IME、系统保留快捷键和混合 DPI 未验收。
+`GOWORK=off go test ./...` 仍在既有 ApplyBatch / BatchOptions 依赖处失败。
+示例只修改内存，未改写剪贴板或系统设置；完成后关闭了本次启动的窗口。
+
 ## 中大文件功能验证（2026-10-18）
 
 - [x] 独立常规 JSON/XML/HTML 样本及完整内容、导航、编辑、搜索替换和历史验证程序。
