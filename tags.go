@@ -16,8 +16,9 @@ func (v *SourceView) definitionAt(at int) *language.Language {
 	return v.document.definition
 }
 
-// Tag assistance is bounded and never treats a random truncated prefix as a
-// document boundary. Large documents retain ordinary input and token matching.
+// Tag assistance validates an immutable source region and never treats a
+// random truncated prefix as a document boundary. Root markup uses the whole
+// current document; embedded regions require analyzed boundaries.
 // embeddedSpan finds a fully analyzed contiguous child region. Unresolved
 // boundaries fail closed; no language ID has special treatment here.
 func (v *SourceView) embeddedSpan(at int) (textedit.Range, bool) {
@@ -55,7 +56,7 @@ func (v *SourceView) embeddedSpan(at int) (textedit.Range, bool) {
 }
 func (v *SourceView) tagText() (string, *language.TagRules, int) {
 	rules := v.definitionAt(v.Selection().Caret).Editing().Tags
-	if rules == nil || v.document.model.Len() > 256<<10 {
+	if rules == nil {
 		return "", nil, 0
 	}
 	r := textedit.Range{End: v.document.model.Len()}

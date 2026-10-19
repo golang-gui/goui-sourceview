@@ -3,6 +3,7 @@ package sourceview
 import (
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui/textedit"
+	"strings"
 	"testing"
 	"time"
 )
@@ -90,5 +91,26 @@ func TestLinkedTagEditNotRepeatedBySharedView(t *testing.T) {
 	}
 	if !other.Undo() || doc.Model().Text() != "<a></a>" {
 		t.Fatal("shared undo lost atomic names")
+	}
+}
+
+func TestTagAssistanceRemainsAvailableBeyondSmallDocuments(t *testing.T) {
+	prefix := "<!--" + strings.Repeat("x", 300<<10) + "-->\n"
+	v := NewSourceView()
+	doc := NewDocument(prefix + "<node")
+	doc.SetLanguage(language.XML)
+	v.SetDocument(doc)
+	observe(t, v)
+	at := doc.Model().Len()
+	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	handled, err := v.closeTag(v.Selection().Range(), ">")
+	if !handled || err != nil || doc.Model().Text() != prefix+"<node></node>" {
+		t.Fatal("tag close disabled by document size", err)
+	}
+	at = len(prefix) + 5
+	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	handled, err = v.linkedTag(v.Selection().Range(), "x")
+	if !handled || err != nil || doc.Model().Text() != prefix+"<nodex></nodex>" {
+		t.Fatal("linked name disabled by document size", err)
 	}
 }
