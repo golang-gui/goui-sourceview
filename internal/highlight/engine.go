@@ -13,7 +13,7 @@ import (
 
 const ChunkSize = 16 * 1024
 const tokenBudget = 16 * 1024 * 1024
-const maxLineTokens = tokenBudget / 24
+const maxLineTokens = tokenBudget / 40
 
 type interval struct{ start, end int }
 
@@ -21,7 +21,7 @@ type interval struct{ start, end int }
 type Splice struct{ Index, Removed, Added int }
 type work struct {
 	row, at       int
-	state, oldOut State
+	state, oldOut language.State
 	oldComplete   bool
 }
 
@@ -29,6 +29,7 @@ type work struct {
 type Engine struct {
 	model                *textedit.Model
 	id                   language.ID
+	syntax               *language.Language
 	revision             uint64
 	lines                lineStore
 	nextID               uint64
@@ -47,24 +48,32 @@ type Engine struct {
 
 // New creates an incremental analyzer without reading the document.
 func New(model *textedit.Model, id language.ID) *Engine {
-	e := &Engine{model: model, id: id}
+	l, _ := language.Builtin(id)
+	return NewWithLanguage(model, l)
+}
+func NewWithLanguage(model *textedit.Model, l *language.Language) *Engine {
+	id := l.ID()
+	e := &Engine{model: model, id: id, syntax: l}
 	e.Reset(id)
 	return e
 }
 
 // SetLanguage invalidates lexical results while retaining unchanged text-line
 // identities. The dirty interval keeps old results hidden until reanalyzed.
-func (e *Engine) SetLanguage(id language.ID) {
-	if e.id == id {
+func (e *Engine) SetLanguage(id language.ID) { l, _ := language.Builtin(id); e.SetDefinition(l) }
+func (e *Engine) SetDefinition(l *language.Language) {
+	id := l.ID()
+	if e.syntax == l {
 		return
 	}
+	e.syntax = l
 	if !e.Ready() {
 		e.Reset(id)
 		return
 	}
 	e.cancelWork()
 	e.id, e.err, e.next, e.dirty = id, nil, -1, nil
-	if id != language.Plain {
+	if e.syntax.Tokenizer() != nil {
 		e.addDirty(0, e.LineCount())
 		e.next = 0
 	}
@@ -72,6 +81,9 @@ func (e *Engine) SetLanguage(id language.ID) {
 
 // Reset invalidates every old result and starts a bounded metadata rebuild.
 func (e *Engine) Reset(id language.ID) {
+	if e.syntax == nil || e.syntax.ID() != id {
+		e.syntax, _ = language.Builtin(id)
+	}
 	e.id = id
 	e.revision = e.model.Revision()
 	e.lines = lineStore{}
@@ -110,7 +122,7 @@ func (e *Engine) discard(line *Line) {
 		e.lru.Remove(element)
 		delete(e.elements, line)
 	}
-	e.payloadBytes -= len(line.tokens) * 24
+	e.payloadBytes -= len(line.tokens) * 40
 	line.tokens = nil
 	line.loaded = false
 	line.limited = false
@@ -139,10 +151,10 @@ func (e *Engine) trim() {
 // rows are not exposed while an earlier lexical state is unresolved.
 func (e *Engine) Tokens(row int) ([]Token, uint64, bool) {
 	line := e.Line(row)
-	if line == nil {
+	if line == nil || e.err != nil {
 		return nil, 0, false
 	}
-	if e.id == language.Plain {
+	if e.syntax.Tokenizer() == nil {
 		return nil, line.version, true
 	}
 	valid := e.next < 0 || row < e.next || e.work != nil && row == e.work.row
@@ -155,7 +167,7 @@ func (e *Engine) Tokens(row int) ([]Token, uint64, bool) {
 
 // Ensure schedules evicted visible payload without invalidating prior states.
 func (e *Engine) Ensure(row int) {
-	if e.id == language.Plain {
+	if e.syntax.Tokenizer() == nil {
 		return
 	}
 	line := e.Line(row)
@@ -220,7 +232,7 @@ func (e *Engine) Change(c textedit.Change) ([]Splice, bool) {
 	if c.Revision <= e.revision {
 		return nil, false
 	}
-	if c.Reset || e.building || c.Revision != e.revision+1 {
+	if c.Reset || e.err != nil || e.building || c.Revision != e.revision+1 {
 		e.Reset(e.id)
 		return nil, true
 	}
@@ -272,6 +284,10 @@ func (e *Engine) Change(c textedit.Change) ([]Splice, bool) {
 		e.addDirty(first, first+len(inserted))
 		splices = append(splices, Splice{first, removed, len(inserted)})
 	}
+	if e.syntax.Tokenizer() == nil {
+		e.next = -1
+		e.dirty = nil
+	}
 	e.revision = c.Revision
 	return splices, false
 }
@@ -306,7 +322,7 @@ func (e *Engine) buildStep() error {
 	e.lines.root = merge(e.lines.root, e.lines.tree(e.buildBlock))
 	e.buildBlock = nil
 	e.building = false
-	if e.id != language.Plain {
+	if e.syntax.Tokenizer() != nil {
 		e.addDirty(0, e.LineCount())
 		e.next = 0
 	}
@@ -333,7 +349,7 @@ func (e *Engine) Advance(deadline time.Time) bool {
 		}
 		if e.work == nil {
 			line := e.lines.at(e.next)
-			state := Initial()
+			state := e.syntax.Tokenizer().InitialState()
 			if e.next > 0 {
 				state = e.lines.at(e.next - 1).out
 			}
@@ -360,24 +376,44 @@ func (e *Engine) Advance(deadline time.Time) bool {
 		for limit < len(text) && !e.model.IsRuneBoundary(absolute+limit) {
 			limit--
 		}
-		tokens, next, n := Scan(e.id, w.state, text, limit, absolute+len(text) == end)
-		if n < 0 || n > len(text) || n == 0 && w.at < length {
-			e.err = fmt.Errorf("highlight: scanner failed progress at line %d", w.row)
+		in := language.Input{Text: text, Offset: w.at, Limit: limit, LineEnd: absolute+len(text) == end, DocumentEnd: absolute+len(text) == e.model.Len()}
+		result, scanErr := e.syntax.Tokenizer().Scan(in, w.state)
+		if scanErr == nil {
+			scanErr = language.ValidateResult(in, result)
+		}
+		if scanErr != nil {
+			e.err = fmt.Errorf("highlight: line %d: %w", w.row, scanErr)
 			break
 		}
+		n, next := result.Consumed, result.State
 		oldLen := len(line.tokens)
-		for _, token := range tokens {
+		if result.ReplaceFrom != nil {
+			start := *result.ReplaceFrom
+			if !e.model.IsRuneBoundary(e.lines.offset(w.row) + start) {
+				e.err = fmt.Errorf("highlight: replacement splits UTF-8 at line %d", w.row)
+				break
+			}
+			for len(line.tokens) > 0 && line.tokens[len(line.tokens)-1].End > start {
+				last := &line.tokens[len(line.tokens)-1]
+				if last.Start < start {
+					last.End = start
+					break
+				}
+				line.tokens = line.tokens[:len(line.tokens)-1]
+			}
+		}
+		for _, token := range result.Tokens {
+			if !e.model.IsRuneBoundary(e.lines.offset(w.row)+token.Start) || !e.model.IsRuneBoundary(e.lines.offset(w.row)+token.End) {
+				e.err = fmt.Errorf("highlight: token splits UTF-8 at line %d", w.row)
+				break
+			}
 			if len(line.tokens) >= maxLineTokens {
 				line.limited = true
 				break
 			}
-			if w.at+token.Start < 0 || token.End > n || token.Start >= token.End {
-				e.err = fmt.Errorf("highlight: invalid token at line %d", w.row)
-				break
-			}
-			appendToken(&line.tokens, w.at+token.Start, w.at+token.End, token.Kind)
+			appendStyled(&line.tokens, token)
 		}
-		e.payloadBytes += (len(line.tokens) - oldLen) * 24
+		e.payloadBytes += (len(line.tokens) - oldLen) * 40
 		line.version++
 		w.at += n
 		w.state = next
@@ -386,7 +422,7 @@ func (e *Engine) Advance(deadline time.Time) bool {
 			line.complete = true
 			e.scanned++
 			e.cleanRow(w.row)
-			stop := w.oldComplete && next.Equal(w.oldOut)
+			stop := w.oldComplete && language.StatesEqual(next, w.oldOut)
 			e.next = w.row + 1
 			e.work = nil
 			if stop || e.next == e.LineCount() {

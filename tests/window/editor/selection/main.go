@@ -94,15 +94,12 @@ func loadSamples() []sample {
 		check(ok && len(entry.Parts) > 0, "invalid fixture language or empty parts")
 		s := sample{id: entry.Language}
 		for _, p := range entry.Parts {
-			found := false
-			for kind := language.KindPlain; kind.Valid(); kind++ {
-				if kind.String() == p.Kind {
-					s.parts = append(s.parts, part{text: p.Text, kind: kind})
-					found = true
-					break
-				}
+			kind := language.Kind(p.Kind)
+			if p.Kind == "plain" {
+				kind = language.KindPlain
 			}
-			check(found && p.Text != "", "invalid fixture part")
+			check(kind.Valid() && p.Text != "", "invalid fixture part")
+			s.parts = append(s.parts, part{text: p.Text, kind: kind})
 		}
 		result = append(result, s)
 	}

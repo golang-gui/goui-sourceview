@@ -1,7 +1,6 @@
-package highlight
+package language
 
 import (
-	"github.com/golang-gui/goui-sourceview/language"
 	"regexp"
 	"strings"
 )
@@ -9,26 +8,26 @@ import (
 var tomlNumber = regexp.MustCompile(`^[+-]?(?:inf|nan|(?:0|[1-9](?:_?[0-9])*)(?:\.[0-9](?:_?[0-9])*)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?)$|^0(?:x[0-9a-fA-F](?:_?[0-9a-fA-F])*|o[0-7](?:_?[0-7])*|b[01](?:_?[01])*)$`)
 var tomlDate = regexp.MustCompile(`^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[Tt ][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:[Zz]|[+-][0-9]{2}:[0-9]{2})?)?|[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?)$`)
 
-func (a atom) tomlKind() language.Kind {
+func (a atom) tomlKind() Kind {
 	if a.n <= 128 {
 		if a.text == "true" || a.text == "false" {
-			return language.KindKeyword
+			return KindKeyword
 		}
 		if tomlNumber.MatchString(a.text) {
-			return language.KindNumber
+			return KindNumber
 		}
 		if tomlDate.MatchString(a.text) {
-			return language.KindMeta
+			return KindMeta
 		}
 	} else {
 		if a.numeric() && !a.leadingZero {
-			return language.KindNumber
+			return KindNumber
 		}
 		if !a.tailBad && strings.Contains(a.text, ".") && tomlDate.MatchString(a.text+a.tail) {
-			return language.KindMeta
+			return KindMeta
 		}
 	}
-	return language.KindInvalid
+	return KindInvalid
 }
 
 type tomlFrame struct {
@@ -66,12 +65,12 @@ func equalTOML(a, b *tomlState) bool {
 	}
 	return true
 }
-func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, State, int) {
+func scanTOML(state builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
 	s := tomlState{key: true}
 	if state.toml != nil {
 		s = *state.toml
 	}
-	var out []Token
+	var out []lexicalToken
 	i := 0
 	finish := func() {
 		if s.valueOn {
@@ -84,14 +83,14 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 		c := input[i]
 		if s.comment {
 			n := min(limit, len(input))
-			emit(&out, i, n, language.KindComment)
+			emit(&out, i, n, KindComment)
 			i = n
 			continue
 		}
 		if s.quote != 0 {
-			kind := language.KindString
+			kind := KindString
 			if s.stringKey {
-				kind = language.KindProperty
+				kind = KindProperty
 			}
 			if s.escapeLeft > 0 {
 				if c == s.quote {
@@ -99,9 +98,9 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 					continue
 				}
 				n := runeSize(input, i)
-				kind := language.KindEscape
+				kind := KindEscape
 				if !hex(c) {
-					kind = language.KindInvalid
+					kind = KindInvalid
 					s.escapeLeft = 0
 				} else {
 					s.escapeLeft--
@@ -112,7 +111,7 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 			}
 			if s.escape {
 				s.escape = false
-				k := language.KindEscape
+				k := KindEscape
 				switch c {
 				case 'u':
 					s.escapeLeft = 4
@@ -122,7 +121,7 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 					s.escapeLeft = 2
 				default:
 					if !strings.ContainsRune("befnrt\"\\", rune(c)) && !(s.triple && space(c)) {
-						k = language.KindInvalid
+						k = KindInvalid
 					}
 				}
 				n := runeSize(input, i)
@@ -131,7 +130,7 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 				continue
 			}
 			if c == '\\' && s.quote == '"' {
-				emit(&out, i, i+1, language.KindEscape)
+				emit(&out, i, i+1, KindEscape)
 				s.escape = true
 				i++
 				continue
@@ -187,16 +186,16 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 			if s.triple {
 				n = 3
 			}
-			kind := language.KindString
+			kind := KindString
 			if s.key {
-				kind = language.KindProperty
+				kind = KindProperty
 			}
 			emit(&out, i, i+n, kind)
 			i += n
 			continue
 		}
 		if strings.ContainsRune("[]=,.{}", rune(c)) {
-			emit(&out, i, i+1, language.KindDelimiter)
+			emit(&out, i, i+1, KindDelimiter)
 			i++
 			switch c {
 			case '=':
@@ -223,9 +222,9 @@ func scanTOML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 		}
 		if s.key {
 			n := runeSize(input, i)
-			kind := language.KindProperty
+			kind := KindProperty
 			if !(alpha(c) || digit(c) || c == '_' || c == '-') {
-				kind = language.KindInvalid
+				kind = KindInvalid
 			}
 			emit(&out, i, i+n, kind)
 			i += n

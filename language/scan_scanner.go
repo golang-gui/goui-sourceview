@@ -1,18 +1,16 @@
 // Package highlight implements stateful, bounded source tokenization.
-package highlight
+package language
 
 import (
 	"strings"
 	"unicode/utf8"
-
-	"github.com/golang-gui/goui-sourceview/language"
 )
 
 // Token is a UTF-8 byte span. Engine spans are line-relative; Scan spans are
 // relative to its input and may revise an earlier range in the current line.
-type Token struct {
+type lexicalToken struct {
 	Start, End int
-	Kind       language.Kind
+	Kind       Kind
 }
 
 type mode uint8
@@ -47,27 +45,32 @@ type frame struct {
 	depth  int
 }
 
-// State is an immutable snapshot. Stacks, queues and delimiter spellings
+// builtinState is an immutable snapshot. Stacks, queues and delimiter spellings
 // referenced by an earlier snapshot are never mutated.
-type State struct {
-	mode     mode
-	back     mode
-	tag      string
-	closing  bool
-	quote    byte
-	depth    int
-	stack    *frame
-	key      bool
-	number   uint8
-	overflow int
-	script   uint8
-	toml     *tomlState
-	yaml     *yamlState
-	shell    *shellState
+type builtinState struct {
+	mode       mode
+	back       mode
+	tag        string
+	closing    bool
+	quote      byte
+	depth      int
+	stack      *frame
+	key        bool
+	number     uint8
+	overflow   int
+	script     uint8
+	pendingTag bool
+	toml       *tomlState
+	yaml       *yamlState
+	shell      *shellState
 }
 
 // Equal compares complete lexical context, not hashes or line numbers.
-func (s State) Equal(t State) bool {
+func (s builtinState) Equal(other State) bool {
+	t, ok := other.(builtinState)
+	if !ok {
+		return false
+	}
 	if !equalTOML(s.toml, t.toml) || !equalYAML(s.yaml, t.yaml) || !equalShell(s.shell, t.shell) {
 		return false
 	}
@@ -88,17 +91,17 @@ func (s State) Equal(t State) bool {
 	return true
 }
 
-func Initial() State { return State{} }
+func initialBuiltin() builtinState { return builtinState{} }
 
-func emit(out *[]Token, start, end int, kind language.Kind) {
-	if start >= end || kind == language.KindPlain {
+func emit(out *[]lexicalToken, start, end int, kind Kind) {
+	if start >= end || kind == KindPlain {
 		return
 	}
 	tokens := *out
 	if len(tokens) > 0 && tokens[len(tokens)-1].End == start && tokens[len(tokens)-1].Kind == kind {
 		tokens[len(tokens)-1].End = end
 	} else {
-		tokens = append(tokens, Token{start, end, kind})
+		tokens = append(tokens, lexicalToken{start, end, kind})
 	}
 	*out = tokens
 }
@@ -133,14 +136,14 @@ func nameStart(r rune) bool {
 func nameRune(r rune) bool {
 	return nameStart(r) || r == '-' || r == '.' || r >= '0' && r <= '9' || r == 0xb7 || r >= 0x300 && r <= 0x36f || r >= 0x203f && r <= 0x2040
 }
-func (s *State) valueDone() {
+func (s *builtinState) valueDone() {
 	if s.stack != nil {
 		p := *s.stack
 		p.expect = 3
 		s.stack = &p
 	}
 }
-func (s *State) push(array bool) {
+func (s *builtinState) push(array bool) {
 	if s.overflow > 0 {
 		s.overflow++
 		return
@@ -155,7 +158,7 @@ func (s *State) push(array bool) {
 	}
 	s.stack = &frame{parent: s.stack, array: array, depth: depth}
 }
-func (s *State) close() {
+func (s *builtinState) close() {
 	if s.overflow > 0 {
 		s.overflow--
 		if s.overflow == 0 {
@@ -175,38 +178,38 @@ func (s *State) close() {
 // Returned positions are relative to input. A negative start revises an earlier
 // span of this logical line (for example, a key confirmed by a later colon).
 // Callers apply tokens in order using appendToken, adding their line offset.
-func Scan(id language.ID, state State, input string, limit int, lineEnd bool) ([]Token, State, int) {
+func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
 	if limit < 0 || limit > len(input) {
 		panic("highlight: invalid scan limit")
 	}
-	if id == language.Plain {
+	if id == Plain {
 		return nil, state, limit
 	}
-	if id == language.JSON {
+	if id == JSON {
 		return scanJSON(state, input, limit, lineEnd)
 	}
 	switch id {
-	case language.TOML:
+	case TOML:
 		return scanTOML(state, input, limit, lineEnd)
-	case language.YAML:
+	case YAML:
 		return scanYAML(state, input, limit, lineEnd)
-	case language.Shell:
+	case Shell:
 		return scanShell(state, input, limit, lineEnd)
 	}
 	return scanMarkup(id, state, input, limit, lineEnd)
 }
 
-func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, int) {
-	var out []Token
+func scanJSON(s builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
+	var out []lexicalToken
 	i := 0
 	for i < limit {
 		start := i
 		b := input[i]
 		switch s.mode {
 		case jsonString:
-			kind := language.KindString
+			kind := KindString
 			if s.key {
-				kind = language.KindProperty
+				kind = KindProperty
 			}
 			if b == '"' {
 				i++
@@ -217,9 +220,9 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 			}
 			if b == '\\' {
 				i++
-				k := language.KindEscape
+				k := KindEscape
 				if i == len(input) {
-					k = language.KindInvalid
+					k = KindInvalid
 				} else if input[i] == 'u' {
 					i++
 					n := 0
@@ -228,13 +231,13 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 						n++
 					}
 					if n != 4 {
-						k = language.KindInvalid
+						k = KindInvalid
 					}
 				} else {
 					r, n := utf8.DecodeRuneInString(input[i:])
 					i += n
 					if !strings.ContainsRune("\"\\/bfnrt", r) {
-						k = language.KindInvalid
+						k = KindInvalid
 					}
 				}
 				emit(&out, start, i, k)
@@ -243,7 +246,7 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 			_, n := utf8.DecodeRuneInString(input[i:])
 			i += n
 			if b < 0x20 {
-				kind = language.KindInvalid
+				kind = KindInvalid
 			}
 			emit(&out, start, i, kind)
 		case jsonNumber:
@@ -256,9 +259,9 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 			i += n
 			s.number = next
 			atEnd := i == len(input)
-			kind := language.KindNumber
+			kind := KindNumber
 			if bad || atEnd && lineEnd && (next == 0 || next == 3 || next == 5 || next == 6) {
-				kind = language.KindInvalid
+				kind = KindInvalid
 			}
 			emit(&out, start, i, kind)
 			if !atEnd || lineEnd {
@@ -273,19 +276,19 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 				s.key = s.overflow == 0 && s.stack != nil && !s.stack.array && s.stack.expect == 0
 				s.mode = jsonString
 				i++
-				k := language.KindString
+				k := KindString
 				if s.key {
-					k = language.KindProperty
+					k = KindProperty
 				}
 				emit(&out, start, i, k)
 			case b == '{' || b == '[':
 				s.push(b == '[')
 				i++
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 			case b == '}' || b == ']':
 				s.close()
 				i++
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 			case b == ',':
 				if s.stack != nil {
 					p := *s.stack
@@ -293,7 +296,7 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 					s.stack = &p
 				}
 				i++
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 			case b == ':':
 				if s.stack != nil {
 					p := *s.stack
@@ -301,7 +304,7 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 					s.stack = &p
 				}
 				i++
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 			case b == '-' || digit(b):
 				s.mode = jsonNumber
 				s.number = 0
@@ -315,12 +318,12 @@ func scanJSON(s State, input string, limit int, lineEnd bool) ([]Token, State, i
 				}
 				if n > 0 {
 					i += n
-					emit(&out, start, i, language.KindKeyword)
+					emit(&out, start, i, KindKeyword)
 					s.valueDone()
 				} else {
 					_, n := utf8.DecodeRuneInString(input[i:])
 					i += n
-					emit(&out, start, i, language.KindInvalid)
+					emit(&out, start, i, KindInvalid)
 				}
 			}
 		}
@@ -428,9 +431,9 @@ func endTag(text, tag string) bool {
 func startScript(text string) bool {
 	return asciiPrefix(text, "<script") && (len(text) == 7 || space(text[7]) || text[7] == '>' || text[7] == '/')
 }
-func (s *State) finishTag(id language.ID) {
+func (s *builtinState) finishTag(id ID) {
 	s.mode = data
-	if id != language.HTML || s.closing {
+	if id != HTML || s.closing {
 		return
 	}
 	switch s.tag {
@@ -446,8 +449,8 @@ func (s *State) finishTag(id language.ID) {
 	}
 }
 
-func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) ([]Token, State, int) {
-	var out []Token
+func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
+	var out []lexicalToken
 	i := 0
 	for i < limit {
 		start := i
@@ -464,17 +467,17 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 			} else {
 				i += n
 			}
-			emit(&out, start, i, language.KindComment)
+			emit(&out, start, i, KindComment)
 		case cdata:
 			if strings.HasPrefix(input[i:], "]]>") {
 				i += 3
 				s.mode = data
-				emit(&out, start, i, language.KindMeta)
+				emit(&out, start, i, KindMeta)
 			} else {
 				i += n
 			}
 		case pi, declaration:
-			k := language.KindMeta
+			k := KindMeta
 			switch {
 			case s.quote == 0 && s.mode == declaration && strings.HasPrefix(input[i:], "<!--"):
 				i += 4
@@ -506,11 +509,11 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 		case entity:
 			if b == ';' {
 				i++
-				emit(&out, start, i, language.KindEntity)
+				emit(&out, start, i, KindEntity)
 				s.mode = s.back
 			} else if nameRune(r) || b == '#' {
 				i += n
-				emit(&out, start, i, language.KindEntity)
+				emit(&out, start, i, KindEntity)
 			} else {
 				s.mode = s.back
 			}
@@ -533,19 +536,19 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 					s.closing = true
 					s.tag = ""
 					i += 2
-					emit(&out, start, i, language.KindDelimiter)
+					emit(&out, start, i, KindDelimiter)
 				}
 			} else if s.mode == rcdata && b == '&' {
 				s.back = s.mode
 				s.mode = entity
 				i++
-				emit(&out, start, i, language.KindEntity)
+				emit(&out, start, i, KindEntity)
 			} else {
 				i += n
 			}
 		case tagName:
 			valid := nameRune(r)
-			if id == language.HTML {
+			if id == HTML {
 				valid = !space(b) && b != '>' && b != '/' && b != '=' && b != '<'
 			}
 			if valid {
@@ -553,7 +556,7 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 					s.tag += strings.ToLower(input[i : i+n])
 				}
 				i += n
-				emit(&out, start, i, language.KindTag)
+				emit(&out, start, i, KindTag)
 			} else {
 				s.mode = tagInside
 			}
@@ -563,24 +566,24 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 				i++
 			case b == '>':
 				i++
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 				s.finishTag(id)
 			case strings.HasPrefix(input[i:], "/>"):
 				i += 2
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 				s.mode = data
 			case b == '<':
 				s.mode = data
 			case b == '/':
 				i++
-				emit(&out, start, i, language.KindInvalid)
+				emit(&out, start, i, KindInvalid)
 			default:
 				s.mode = attrName
 			}
 		case attrName:
 			if !space(b) && b != '=' && b != '>' && b != '/' && b != '<' {
 				i += n
-				emit(&out, start, i, language.KindAttribute)
+				emit(&out, start, i, KindAttribute)
 			} else {
 				s.mode = afterAttr
 			}
@@ -589,7 +592,7 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 				i++
 			} else if b == '=' {
 				i++
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 				s.mode = beforeValue
 			} else {
 				s.mode = tagInside
@@ -603,7 +606,7 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 					s.mode = attrSingle
 				}
 				i++
-				emit(&out, start, i, language.KindString)
+				emit(&out, start, i, KindString)
 			} else if b == '>' || b == '<' {
 				s.mode = tagInside
 			} else {
@@ -616,16 +619,16 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 			}
 			if b == quote {
 				i++
-				emit(&out, start, i, language.KindString)
+				emit(&out, start, i, KindString)
 				s.mode = tagInside
 			} else if b == '&' {
 				s.back = s.mode
 				s.mode = entity
 				i++
-				emit(&out, start, i, language.KindEntity)
+				emit(&out, start, i, KindEntity)
 			} else {
 				i += n
-				emit(&out, start, i, language.KindString)
+				emit(&out, start, i, KindString)
 			}
 		case attrUnquoted:
 			if space(b) || b == '>' || b == '<' {
@@ -634,12 +637,12 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 				s.back = s.mode
 				s.mode = entity
 				i++
-				emit(&out, start, i, language.KindEntity)
+				emit(&out, start, i, KindEntity)
 			} else {
 				i += n
-				k := language.KindString
-				if id == language.XML {
-					k = language.KindInvalid
+				k := KindString
+				if id == XML {
+					k = KindInvalid
 				}
 				emit(&out, start, i, k)
 			}
@@ -648,28 +651,28 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 			case strings.HasPrefix(input[i:], "<!--"):
 				i += 4
 				s.mode = comment
-				emit(&out, start, i, language.KindComment)
-			case id == language.XML && strings.HasPrefix(input[i:], "<![CDATA["):
+				emit(&out, start, i, KindComment)
+			case id == XML && strings.HasPrefix(input[i:], "<![CDATA["):
 				i += 9
 				s.mode = cdata
-				emit(&out, start, i, language.KindMeta)
+				emit(&out, start, i, KindMeta)
 			case strings.HasPrefix(input[i:], "<!"):
 				i += 2
 				s.mode = declaration
 				s.depth = 0
 				s.quote = 0
-				emit(&out, start, i, language.KindMeta)
+				emit(&out, start, i, KindMeta)
 			case strings.HasPrefix(input[i:], "<?"):
 				i += 2
 				s.mode = pi
 				s.quote = 0
-				emit(&out, start, i, language.KindMeta)
+				emit(&out, start, i, KindMeta)
 			case strings.HasPrefix(input[i:], "</"):
 				i += 2
 				s.mode = tagName
 				s.tag = ""
 				s.closing = true
-				emit(&out, start, i, language.KindDelimiter)
+				emit(&out, start, i, KindDelimiter)
 			case b == '<' && i+1 < len(input):
 				next, _ := utf8.DecodeRuneInString(input[i+1:])
 				if nameStart(next) {
@@ -677,7 +680,7 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 					s.mode = tagName
 					s.tag = ""
 					s.closing = false
-					emit(&out, start, i, language.KindDelimiter)
+					emit(&out, start, i, KindDelimiter)
 				} else {
 					i += n
 				}
@@ -685,7 +688,7 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 				s.back = data
 				s.mode = entity
 				i++
-				emit(&out, start, i, language.KindEntity)
+				emit(&out, start, i, KindEntity)
 			default:
 				i += n
 			}
@@ -704,7 +707,7 @@ func scanMarkup(id language.ID, s State, input string, limit int, lineEnd bool) 
 		}
 	}
 	if s.mode == data {
-		s = State{}
+		s = builtinState{}
 	}
 	if s.mode != entity && s.mode != comment {
 		s.back = data

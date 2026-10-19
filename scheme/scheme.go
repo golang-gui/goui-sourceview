@@ -51,7 +51,7 @@ func New(d Definition) (*Scheme, error) {
 	}
 	for kind := range d.Tokens {
 		if !kind.Valid() {
-			return nil, fmt.Errorf("scheme: unknown token kind %d", kind)
+			return nil, fmt.Errorf("scheme: invalid token kind %q", kind)
 		}
 	}
 	d.Tokens = maps.Clone(d.Tokens)

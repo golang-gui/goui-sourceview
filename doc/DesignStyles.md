@@ -111,3 +111,10 @@ detail / selected / selected-detail / match / selected-match / scroll-thumb 部�
 
 Shell 变量使用 `language.KindVariable`，样式 part 为 `token-variable`，basic、modern
 及内置亮暗 Scheme 均提供默认前景；自定义 Scheme 未配置该分类时沿用普通前景。
+
+## 应用语言的样式键
+
+Kind 已扩展为字符串键。Definition.Styles 声明自定义键，按 `token-<key>` 解析前景，
+同样可以放入显式 Scheme.Tokens。未知色使用普通前景；词法语义由 Token.Class/Context
+给出，不根据颜色推断字符串/注释/括号。绑定新定义或换文档时重新解析样式，
+Basic/Modern 注册、局部 StyleScope 和选区混色机制保持统一，见 [语言扩展](DesignLanguageExtensions.md)。

@@ -1,11 +1,13 @@
 package highlight
 
+import "github.com/golang-gui/goui-sourceview/language"
+
 // Line is document metadata, not another copy of the text.
 type Line struct {
 	ID                        uint64
 	Bytes                     int // includes LF when LF is true
 	LF                        bool
-	in, out                   State
+	in, out                   language.State
 	complete, loaded, limited bool
 	tokens                    []Token
 	version                   uint64

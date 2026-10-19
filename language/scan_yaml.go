@@ -1,10 +1,8 @@
-package highlight
+package language
 
 import (
 	"regexp"
 	"strings"
-
-	"github.com/golang-gui/goui-sourceview/language"
 )
 
 type yamlState struct {
@@ -33,36 +31,36 @@ func equalYAML(a, b *yamlState) bool {
 
 var yamlNumber = regexp.MustCompile(`^[+-]?(?:[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|\.(?:inf|Inf|INF))$|^\.(?:nan|NaN|NAN)$`)
 
-func (a atom) yamlKind() language.Kind {
+func (a atom) yamlKind() Kind {
 	text := strings.TrimSpace(a.text)
 	if a.significant <= 128 {
 		switch text {
 		case "true", "True", "TRUE", "false", "False", "FALSE", "null", "Null", "NULL", "~":
-			return language.KindKeyword
+			return KindKeyword
 		}
 		if yamlNumber.MatchString(text) {
-			return language.KindNumber
+			return KindNumber
 		}
 	} else if a.numeric() && !a.underscores {
-		return language.KindNumber
+		return KindNumber
 	}
-	return language.KindPlain
+	return KindPlain
 }
 func yamlSep(s string, i int) bool {
 	return i >= len(s) || space(s[i]) || strings.ContainsRune(",[]{}", rune(s[i]))
 }
-func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, State, int) {
+func scanYAML(state builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
 	s := yamlState{lineStart: true, keyIndent: -1}
 	if state.yaml != nil {
 		s = *state.yaml
 	}
-	var out []Token
+	var out []lexicalToken
 	i := 0
 	finish := func(key bool) {
 		if s.scalarOn {
 			kind := s.scalar.yamlKind()
 			if key {
-				kind = language.KindProperty
+				kind = KindProperty
 				s.keyIndent = s.scalarColumn
 			}
 			emit(&out, i-s.scalar.n, i, kind)
@@ -91,12 +89,12 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 		}
 		if s.block && !s.blockHeader {
 			n := limit
-			emit(&out, i, n, language.KindString)
+			emit(&out, i, n, KindString)
 			i = n
 			continue
 		}
 		if s.comment {
-			emit(&out, i, limit, language.KindComment)
+			emit(&out, i, limit, KindComment)
 			i = limit
 			continue
 		}
@@ -107,9 +105,9 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 					continue
 				}
 				n := runeSize(input, i)
-				kind := language.KindEscape
+				kind := KindEscape
 				if !hex(c) {
-					kind = language.KindInvalid
+					kind = KindInvalid
 					s.escapeLeft = 0
 				} else {
 					s.escapeLeft--
@@ -120,7 +118,7 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 			}
 			if s.escape {
 				s.escape = false
-				k := language.KindEscape
+				k := KindEscape
 				switch c {
 				case 'x':
 					s.escapeLeft = 2
@@ -130,7 +128,7 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 					s.escapeLeft = 8
 				default:
 					if !strings.ContainsRune("0abtnvfre \"/\\N_LP\t\r", rune(c)) {
-						k = language.KindInvalid
+						k = KindInvalid
 					}
 				}
 				n := runeSize(input, i)
@@ -139,32 +137,32 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 				continue
 			}
 			if c == '\\' && s.quote == '"' {
-				emit(&out, i, i+1, language.KindEscape)
+				emit(&out, i, i+1, KindEscape)
 				s.escape = true
 				i++
 				continue
 			}
 			if c == s.quote {
 				if c == '\'' && i+1 < len(input) && input[i+1] == '\'' {
-					emit(&out, i, i+2, language.KindEscape)
+					emit(&out, i, i+2, KindEscape)
 					i += 2
 					continue
 				}
-				emit(&out, i, i+1, language.KindString)
+				emit(&out, i, i+1, KindString)
 				s.quote = 0
 				i++
 				s.previous = c
 				continue
 			}
 			n := runeSize(input, i)
-			emit(&out, i, i+n, language.KindString)
+			emit(&out, i, i+n, KindString)
 			i += n
 			continue
 		}
 		if s.meta {
 			if !space(c) && !strings.ContainsRune(",[]{}", rune(c)) {
 				n := runeSize(input, i)
-				emit(&out, i, i+n, language.KindMeta)
+				emit(&out, i, i+n, KindMeta)
 				i += n
 				continue
 			}
@@ -193,13 +191,13 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 		}
 		if c == '\'' || c == '"' {
 			s.quote = c
-			emit(&out, i, i+1, language.KindString)
+			emit(&out, i, i+1, KindString)
 			i++
 			continue
 		}
 		if c == '&' || c == '*' || c == '!' || c == '%' && s.indent == 0 && s.offset+i == 0 {
 			s.meta = true
-			emit(&out, i, i+1, language.KindMeta)
+			emit(&out, i, i+1, KindMeta)
 			i++
 			continue
 		}
@@ -218,12 +216,12 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 				}
 				n++
 			}
-			emit(&out, i, i+n, language.KindMeta)
+			emit(&out, i, i+n, KindMeta)
 			i += n
 			continue
 		}
 		if strings.ContainsRune("[]{},", rune(c)) || strings.ContainsRune(":?-", rune(c)) && yamlSep(input, i+1) {
-			emit(&out, i, i+1, language.KindDelimiter)
+			emit(&out, i, i+1, KindDelimiter)
 			if c == '[' || c == '{' {
 				s.flow++
 			}
@@ -235,7 +233,7 @@ func scanYAML(state State, input string, limit int, lineEnd bool) ([]Token, Stat
 			continue
 		}
 		if (strings.HasPrefix(input[i:], "---") || strings.HasPrefix(input[i:], "...")) && s.indent == 0 && yamlSep(input, i+3) {
-			emit(&out, i, i+3, language.KindMeta)
+			emit(&out, i, i+3, KindMeta)
 			i += 3
 			continue
 		}

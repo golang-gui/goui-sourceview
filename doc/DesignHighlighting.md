@@ -5,61 +5,31 @@
 
 ## 1. 对外语言接口与 token 模型
 
-`language` 包公开 ID、样式分类与只读元数据，内置 Plain、JSON、XML、HTML、TOML、YAML、Shell。
-初始通过 Document.SetLanguage 显式设置；可提供纯函数 Guess(filename, sample)，
-根据扩展名及有限前缀推测，结果不明确则 Plain。推测不能悄悄覆盖显式语言，
-也不自动读取文件、执行内容或下载语法。
+`language` 包公开不可变语言定义、Token/State/Tokenizer 和编辑规则，内置
+Plain、JSON、XML、HTML、TOML、YAML、Shell；任意定义直接传给 Document，
+不使用全局注册。完整接口、样式/语义分离和扫描校验见 [扩展契约](DesignLanguageExtensions.md)。
 
-首版不公开任意脚本、正则规则解释器或全局 Register API。
-内部语言目录将 ID 映射到版本化、不可变的扫描器工厂；将来增加语言不要求改 GUI。
-各语言有独立状态类型，不能以一个 XML 开关假装覆盖 HTML。
+Document.SetLanguage(id) 是内置便利入口；SetLanguageDefinition(l) 按对象身份绑定。
+Guess(filename,sample) 是纯推测函数，不自动覆盖显式语言、不读取文件或下载语法。
+Lookup 返回内置元数据的独立切片副本；Builtin 返回不可变内置定义。
+Guess 最多检查 4 KiB，已知扩展名优先，未知再识别有限前缀；`.xhtml` 按 XML。
 
-计划公共接口如下，Kind 的完整常量按后面的分类加 `Kind` 前缀：
-
-```go
-package language
-
-type ID string
-const (
-    Plain ID = ""
-    JSON ID = "json"
-    XML ID = "xml"
-    HTML ID = "html"
-    TOML ID = "toml"
-    YAML ID = "yaml"
-    Shell ID = "shell"
-)
-type Kind uint8
-type Info struct {
-    ID ID
-    Name string
-    Extensions []string
-    MIMETypes []string
-}
-func Lookup(id ID) (Info, bool)
-func Guess(filename string, sample []byte) ID
-```
-
-Lookup 返回元数据的独立切片副本。Guess 最多检查 4 KiB：已知扩展名优先，
-未知时才识别 UTF-8 BOM 后的 XML 声明、HTML doctype/html 起始标记或 JSON 容器前缀；
-其余返回 Plain，不据有限前缀承诺文件语法合法。`.xhtml` 作为 XML，HTML 仅对应自身规则。
-
-内部 token 是 `[Start,End) + Kind`，位置相对逻辑行起点，Kind 包括：
-Plain、Property、String、Escape、Number、Keyword、Delimiter、Tag、Attribute、
-Entity、Comment、Meta、Invalid、Variable。分类是词法样式，不是 LSP semantic token。
-Kind 定义在 `language`，供扫描器和 `scheme` 使用，避免公开 API 引用 internal 包类型。
-Token 无颜色、字体、Widget 或 Model 引用；按 Start 排序、不重叠、端点是 rune 边界。
-相邻同类可合并；未记录部分表示 Plain，LF 不作为行内 token。
-XML/HTML 属性值可以拆为 String / Entity，不能用相互覆盖的 token 表达子样式。
+Kind 为可扩展字符串样式键，内置 Plain、Property、String、Escape、Number、Keyword、
+Delimiter、Tag、Attribute、Entity、Comment、Meta、Invalid、Variable；不是 LSP semantic token。
+Token 无颜色、字体、Widget 或 Model 引用。Class 标志独立描述字符串、注释和结构符，
+不因为更换 Kind/颜色而改变编辑语义。坐标相对逻辑行，rune 边界、有序、不重叠，
+相邻同 Kind 且同 Class 可合并，LF 不进入 token；未记录区域保持普通前景。
+XML/HTML 属性值拆为 String/Entity，不能用重叠 token 表达子样式。
 
 ## 2. 扫描协议与时间片
 
-内部扫描逻辑由 `初始状态 -> 输入片段 -> token 片段 + 下一状态` 构成。
+公开 Tokenizer 的扫描逻辑由 `初始状态 -> 输入片段 -> token 片段 + 下一状态` 构成。
 状态包含当前词法模式及必要上下文，是不可变值或持久结构，不可返回后继续修改。
 State.Equal 必须精确比较影响后续扫描的所有信息；hash 仅用于加速，不能作为等价证明。
 
 驱动提供逻辑行内最多 16 KiB 的工作片段、至多 32 byte 的分隔符预读、
-本片段行内 offset、是否到达真实 LF、是否到达文档 EOF。
+本片段行内 Offset、LineEnd 和 DocumentEnd。Result 坐标相对当前逻辑行；
+延迟分类通过 ReplaceFrom 显式回撤当前行前缀，再应用新 Tokens，不使用负位置。
 状态能跨片段保存注释、引号、转义及分隔符匹配进度；只有真实行尾才发布该行出状态。
 片段边界不是语法行尾，不能把跨片段的转义或结束标记重置。
 

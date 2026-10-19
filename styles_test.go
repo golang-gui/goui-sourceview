@@ -146,3 +146,27 @@ func TestCodeFontAndPlainForegroundOverrides(t *testing.T) {
 		t.Fatal("code font or foreground overrides were lost")
 	}
 }
+
+func TestCustomStyleKeyFollowsDefinitionAndDocument(t *testing.T) {
+	v := NewSourceView()
+	color := scheme.Dark().Definition().Foreground
+	scope := themedScope(v, style.Sheet(style.Name("source-view").Part("token-custom.heading").ForegroundColor(color)))
+	_ = scope
+	definition := language.Definition{Info: language.Info{ID: "custom", Name: "Custom"}}
+	definition.Styles = []language.Kind{"custom.heading"}
+	l, err := language.New(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observe(t, v)
+	d := NewDocument("heading")
+	d.SetLanguageDefinition(l)
+	v.SetDocument(d)
+	if got := v.colors.Tokens["custom.heading"]; got != color {
+		t.Fatalf("custom color %v, want %v", got, color)
+	}
+	d.SetLanguageDefinition(nil)
+	if _, ok := v.colors.Tokens["custom.heading"]; ok {
+		t.Fatal("retained previous definition style")
+	}
+}

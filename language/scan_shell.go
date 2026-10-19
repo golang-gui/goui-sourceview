@@ -1,9 +1,7 @@
-package highlight
+package language
 
 import (
 	"strings"
-
-	"github.com/golang-gui/goui-sourceview/language"
 )
 
 type shMode uint8
@@ -212,13 +210,13 @@ func shellKeyword(word string) bool {
 	}
 	return false
 }
-func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, State, int) {
+func scanShell(state builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
 	s := shellState{}
 	if state.shell != nil {
 		s = *state.shell
 		s.pending = append([]shHere(nil), s.pending...)
 	}
-	var out []Token
+	var out []lexicalToken
 	i := 0
 	var captured strings.Builder
 	flushCapture := func() {
@@ -247,15 +245,15 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 	}
 	finishWord := func(assignment bool) {
 		if s.wordOn {
-			k := language.KindPlain
+			k := KindPlain
 			if s.word.n <= 128 && shellKeyword(s.word.text) {
-				k = language.KindKeyword
+				k = KindKeyword
 			}
 			if shTop(s.stack) == shArithmetic && s.word.numeric() {
-				k = language.KindNumber
+				k = KindNumber
 			}
 			if assignment {
-				k = language.KindVariable
+				k = KindVariable
 			}
 			emit(&out, i-s.word.n, i, k)
 			s.word = atom{}
@@ -267,7 +265,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		mode := shTop(s.stack)
 		if s.active != nil {
 			s.match(c)
-			kind := language.KindString
+			kind := KindString
 			if !s.active.literal {
 				if s.bodyEscape {
 					s.bodyEscape = false
@@ -275,7 +273,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 					s.bodyEscape = true
 					s.bodyVariable = false
 				} else if s.bodyParameter > 0 {
-					kind = language.KindVariable
+					kind = KindVariable
 					if c == '{' {
 						s.bodyParameter++
 					}
@@ -285,12 +283,12 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 				} else if s.bodyVariable && c == '{' {
 					s.bodyVariable = false
 					s.bodyParameter = 1
-					kind = language.KindVariable
+					kind = KindVariable
 				} else if c == '$' {
 					s.bodyVariable = true
-					kind = language.KindVariable
+					kind = KindVariable
 				} else if s.bodyVariable && shellName(c) {
-					kind = language.KindVariable
+					kind = KindVariable
 				} else {
 					s.bodyVariable = false
 				}
@@ -312,7 +310,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 				captured.WriteByte(c)
 				s.captureEscape = false
 				s.started = true
-				emit(&out, i, i+1, language.KindMeta)
+				emit(&out, i, i+1, KindMeta)
 				i++
 				continue
 			}
@@ -320,7 +318,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 				s.captureEscape = true
 				s.literal = true
 				s.started = true
-				emit(&out, i, i+1, language.KindMeta)
+				emit(&out, i, i+1, KindMeta)
 				i++
 				continue
 			}
@@ -330,7 +328,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 				} else {
 					captured.WriteByte(c)
 				}
-				emit(&out, i, i+1, language.KindMeta)
+				emit(&out, i, i+1, KindMeta)
 				i++
 				continue
 			}
@@ -338,7 +336,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 				s.captureQuote = c
 				s.literal = true
 				s.started = true
-				emit(&out, i, i+1, language.KindMeta)
+				emit(&out, i, i+1, KindMeta)
 				i++
 				continue
 			}
@@ -348,26 +346,26 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			}
 			captured.WriteByte(c)
 			s.started = true
-			emit(&out, i, i+1, language.KindMeta)
+			emit(&out, i, i+1, KindMeta)
 			i++
 			continue
 		}
 		if s.comment {
-			emit(&out, i, limit, language.KindComment)
+			emit(&out, i, limit, KindComment)
 			i = limit
 			continue
 		}
 		if s.escape {
 			s.wordPart = true
 			n := runeSize(input, i)
-			emit(&out, i, i+n, language.KindEscape)
+			emit(&out, i, i+n, KindEscape)
 			s.escape = false
 			i += n
 			continue
 		}
 		if mode == shVariable {
 			if shellName(c) {
-				emit(&out, i, i+1, language.KindVariable)
+				emit(&out, i, i+1, KindVariable)
 				i++
 				continue
 			}
@@ -380,21 +378,21 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 				end = '"'
 			}
 			if c == end {
-				emit(&out, i, i+1, language.KindString)
+				emit(&out, i, i+1, KindString)
 				s.pop()
 				s.wordPart = true
 				i++
 				continue
 			}
 			if c == '\\' && mode != shSingle && (mode == shANSI || i+1 == len(input) || strings.ContainsRune("$`\"\\", rune(input[i+1]))) {
-				emit(&out, i, i+1, language.KindEscape)
+				emit(&out, i, i+1, KindEscape)
 				s.escape = true
 				i++
 				continue
 			}
 			if mode != shDouble || c != '$' && c != '`' {
 				n := runeSize(input, i)
-				emit(&out, i, i+n, language.KindString)
+				emit(&out, i, i+n, KindString)
 				i += n
 				continue
 			}
@@ -404,28 +402,28 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			finishWord(false)
 			switch {
 			case strings.HasPrefix(input[i:], "$(("):
-				emit(&out, i, i+3, language.KindDelimiter)
+				emit(&out, i, i+3, KindDelimiter)
 				s.push(shArithmetic)
 				i += 3
 			case strings.HasPrefix(input[i:], "$("):
-				emit(&out, i, i+2, language.KindDelimiter)
+				emit(&out, i, i+2, KindDelimiter)
 				s.push(shCommand)
 				i += 2
 			case strings.HasPrefix(input[i:], "${"):
-				emit(&out, i, i+2, language.KindDelimiter)
+				emit(&out, i, i+2, KindDelimiter)
 				s.push(shParameter)
 				i += 2
 			case mode != shDouble && strings.HasPrefix(input[i:], "$'"):
-				emit(&out, i, i+2, language.KindString)
+				emit(&out, i, i+2, KindString)
 				s.push(shANSI)
 				i += 2
 			default:
-				emit(&out, i, i+1, language.KindVariable)
+				emit(&out, i, i+1, KindVariable)
 				i++
 				if i < len(input) && shellName(input[i]) {
 					s.push(shVariable)
 				} else if i < len(input) && strings.ContainsRune("@*#?$!-0123456789", rune(input[i])) {
-					emit(&out, i, i+1, language.KindVariable)
+					emit(&out, i, i+1, KindVariable)
 					i++
 				}
 			}
@@ -434,7 +432,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		if c == '`' {
 			s.wordPart = true
 			finishWord(false)
-			emit(&out, i, i+1, language.KindDelimiter)
+			emit(&out, i, i+1, KindDelimiter)
 			if mode == shBacktick {
 				s.pop()
 			} else {
@@ -445,7 +443,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		}
 		if c == '\\' {
 			finishWord(false)
-			emit(&out, i, i+1, language.KindEscape)
+			emit(&out, i, i+1, KindEscape)
 			s.escape = true
 			i++
 			continue
@@ -453,7 +451,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		if c == '\'' || c == '"' {
 			s.wordPart = true
 			finishWord(false)
-			emit(&out, i, i+1, language.KindString)
+			emit(&out, i, i+1, KindString)
 			if c == '\'' {
 				s.push(shSingle)
 			} else {
@@ -468,7 +466,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		}
 		if mode == shArithmetic && strings.HasPrefix(input[i:], "))") && s.stack.depth == 0 {
 			finishWord(false)
-			emit(&out, i, i+2, language.KindDelimiter)
+			emit(&out, i, i+2, KindDelimiter)
 			s.pop()
 			s.wordPart = true
 			i += 2
@@ -476,7 +474,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		}
 		if mode == shParameter && c == '}' {
 			finishWord(false)
-			emit(&out, i, i+1, language.KindDelimiter)
+			emit(&out, i, i+1, KindDelimiter)
 			s.pop()
 			s.wordPart = true
 			i++
@@ -484,14 +482,14 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		}
 		if strings.HasPrefix(input[i:], "((") && mode != shArithmetic && mode != shParameter {
 			finishWord(false)
-			emit(&out, i, i+2, language.KindDelimiter)
+			emit(&out, i, i+2, KindDelimiter)
 			s.push(shArithmetic)
 			i += 2
 			continue
 		}
 		if c == '(' || c == ')' {
 			finishWord(false)
-			emit(&out, i, i+1, language.KindDelimiter)
+			emit(&out, i, i+1, KindDelimiter)
 			i++
 			if mode == shCommand || mode == shArithmetic {
 				p := *s.stack
@@ -510,7 +508,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 		}
 		if strings.HasPrefix(input[i:], "<<<") && mode != shArithmetic {
 			finishWord(false)
-			emit(&out, i, i+3, language.KindDelimiter)
+			emit(&out, i, i+3, KindDelimiter)
 			i += 3
 			s.wordPart = false
 			continue
@@ -522,7 +520,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			if s.tabs {
 				n++
 			}
-			emit(&out, i, i+n, language.KindDelimiter)
+			emit(&out, i, i+n, KindDelimiter)
 			i += n
 			s.capture = true
 			s.started = false
@@ -534,14 +532,14 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			finishWord(c == '=')
 			s.wordPart = false
 			if !space(c) {
-				emit(&out, i, i+1, language.KindDelimiter)
+				emit(&out, i, i+1, KindDelimiter)
 			}
 			i++
 			continue
 		}
 		if mode == shParameter {
 			n := runeSize(input, i)
-			emit(&out, i, i+n, language.KindVariable)
+			emit(&out, i, i+n, KindVariable)
 			i += n
 			continue
 		}
@@ -554,7 +552,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 	if lineEnd && i == len(input) {
 		if s.active != nil {
 			if s.matching && s.matchPart == len(s.active.delimiter.parts) {
-				appendToken(&out, i-s.lineBytes, i, language.KindMeta)
+				appendToken(&out, i-s.lineBytes, i, KindMeta)
 				s.active = nil
 				s.activate()
 			}

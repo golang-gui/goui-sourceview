@@ -4,6 +4,7 @@ package sourceview
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
@@ -15,15 +16,20 @@ import (
 
 // Document shares text, language, history and lexical analysis between views.
 // It owns no native resources and requires no Destroy.
+var nextDocumentID atomic.Uint64
+
 type Document struct {
-	model      *textedit.Model
-	language   language.ID
-	engine     *highlight.Engine
-	connection signal.Handle
-	views      map[*SourceView]struct{}
-	driver     gui.Root
-	lastFrame  time.Time
-	observed   uint64
+	id            uint64
+	model         *textedit.Model
+	language      language.ID
+	definition    *language.Language
+	languageEpoch uint64
+	engine        *highlight.Engine
+	connection    signal.Handle
+	views         map[*SourceView]struct{}
+	driver        gui.Root
+	lastFrame     time.Time
+	observed      uint64
 }
 
 func NewDocument(text string) *Document { return NewDocumentWithModel(textedit.NewModel(text)) }
@@ -31,32 +37,63 @@ func NewDocumentWithModel(model *textedit.Model) *Document {
 	if model == nil {
 		model = textedit.NewModel("")
 	}
-	return &Document{model: model, views: make(map[*SourceView]struct{}), observed: model.Revision()}
+	plain, _ := language.Builtin(language.Plain)
+	return &Document{id: nextDocumentID.Add(1), definition: plain, model: model, views: make(map[*SourceView]struct{}), observed: model.Revision()}
 }
+
+// ID is stable for this document lifetime and unique within this process.
+func (d *Document) ID() uint64             { return d.id }
 func (d *Document) Model() *textedit.Model { return d.model }
 func (d *Document) Language() language.ID  { return d.language }
 func (d *Document) SetLanguage(id language.ID) error {
-	if _, ok := language.Lookup(id); !ok {
+	l, ok := language.Builtin(id)
+	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownLanguage, id)
 	}
-	if d.language == id {
-		return nil
+	d.SetLanguageDefinition(l)
+	return nil
+}
+
+// LanguageDefinition returns the immutable definition shared by all views.
+func (d *Document) LanguageDefinition() *language.Language { return d.definition }
+
+// SetLanguageDefinition binds a definition directly. Nil selects plain text.
+// Identity matters: a different definition with the same ID invalidates analysis.
+func (d *Document) SetLanguageDefinition(l *language.Language) {
+	if l == nil {
+		l, _ = language.Builtin(language.Plain)
 	}
-	d.language = id
+	if d.definition == l {
+		return
+	}
+	d.definition, d.language = l, l.ID()
+	d.languageEpoch++
 	if d.engine != nil {
-		d.engine.SetLanguage(id)
+		d.engine.SetDefinition(l)
 	}
+	views := make([]*SourceView, 0, len(d.views))
 	for v := range d.views {
+		views = append(views, v)
+	}
+	for _, v := range views {
+		if v.document != d || !v.mounted {
+			continue
+		}
+		v.pairs, v.brackets = nil, bracketState{}
 		v.closeCompletion()
+		if v.document != d || !v.mounted {
+			continue
+		}
+		v.updateScheme()
 		v.RequestPaint()
 	}
 	d.requestWork()
-	return nil
 }
+
 func (d *Document) acquire(v *SourceView) {
 	if len(d.views) == 0 {
 		d.observed = d.model.Revision()
-		d.engine = highlight.New(d.model, d.language)
+		d.engine = highlight.NewWithLanguage(d.model, d.definition)
 		d.connection = d.model.ConnectChange(d.changed)
 	}
 	d.views[v] = struct{}{}

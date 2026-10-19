@@ -21,7 +21,7 @@ var (
 	ErrClipboardUnavailable = errors.New("sourceview: clipboard unavailable")
 	ErrUnknownLanguage      = errors.New("sourceview: unknown language")
 	ErrOperationLimit       = editor.ErrOperationLimit
-	ErrOperationChanged     = errors.New("sourceview: operation superseded by a callback")
+	ErrOperationChanged     = errors.New("sourceview: operation context changed")
 )
 
 type WrapMode = typography.WrapMode
@@ -185,6 +185,12 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.offset = geometry.Point{}
 	v.invalidateLayout()
 	state = v.operationState()
+	if v.mounted {
+		v.updateScheme()
+		if !state.valid(v) {
+			return
+		}
+	}
 	v.scrollSignal.Emit(geometry.Rect(0, 0, v.viewport.Width, v.viewport.Height))
 	if state.valid(v) {
 		v.selectionSignal.Emit(v.selection)
@@ -495,15 +501,15 @@ func activeFocus(v *SourceView) bool {
 
 // Capture before operations that can synchronously call application code.
 type operationState struct {
-	document                   *Document
-	revision, mount, selection uint64
+	document                             *Document
+	revision, mount, selection, language uint64
 }
 
 func (v *SourceView) operationState() operationState {
-	return operationState{v.document, v.document.model.Revision(), v.mountEpoch, v.selectionEpoch}
+	return operationState{v.document, v.document.model.Revision(), v.mountEpoch, v.selectionEpoch, v.document.languageEpoch}
 }
 func (s operationState) valid(v *SourceView) bool {
-	return v.document == s.document && v.document.model.Revision() == s.revision && v.mountEpoch == s.mount && v.selectionEpoch == s.selection
+	return v.document == s.document && v.document.model.Revision() == s.revision && v.mountEpoch == s.mount && v.selectionEpoch == s.selection && v.document.languageEpoch == s.language
 }
 func (v *SourceView) report(err error) {
 	if err != nil {

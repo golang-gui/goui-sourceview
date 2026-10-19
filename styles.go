@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"maps"
 	"math"
+	"slices"
 
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
@@ -16,7 +17,26 @@ import (
 
 const sourceStyleID = "github.com/golang-gui/goui-sourceview"
 
-var tokenParts = []string{"plain", "property", "string", "escape", "number", "keyword", "delimiter", "tag", "attribute", "entity", "comment", "meta", "invalid", "variable"}
+var tokenKinds = []language.Kind{language.KindPlain, language.KindProperty, language.KindString, language.KindEscape, language.KindNumber, language.KindKeyword, language.KindDelimiter, language.KindTag, language.KindAttribute, language.KindEntity, language.KindComment, language.KindMeta, language.KindInvalid, language.KindVariable}
+var tokenParts = func() map[language.Kind]string {
+	m := make(map[language.Kind]string)
+	for _, k := range tokenKinds {
+		m[k] = k.String()
+	}
+	return m
+}()
+
+func styleKinds(tokens map[language.Kind]color.NRGBA) []language.Kind {
+	kinds := slices.Clone(tokenKinds)
+	var extra []language.Kind
+	for k := range tokens {
+		if _, ok := tokenParts[k]; !ok {
+			extra = append(extra, k)
+		}
+	}
+	slices.Sort(extra)
+	return append(kinds, extra...)
+}
 
 func nrgba(c color.Color) color.NRGBA {
 	if c == nil {
@@ -95,9 +115,10 @@ func codeRules(d scheme.Definition) []style.Rule {
 		style.Name("source-view").Part("preedit").ForegroundColor(d.PreeditUnderline),
 		style.Name("source-view").Part("border").BorderColor(d.Border),
 	}
-	for kind, part := range tokenParts {
-		c, ok := d.Tokens[language.Kind(kind)]
-		if language.Kind(kind) == language.KindPlain && !ok {
+	for _, kind := range styleKinds(d.Tokens) {
+		part := kind.String()
+		c, ok := d.Tokens[kind]
+		if kind == language.KindPlain && !ok {
 			continue
 		}
 		if !ok {
@@ -153,10 +174,15 @@ func (v *SourceView) styledScheme() (*scheme.Scheme, error) {
 	if c, ok := resolve("border").BorderColor(); ok {
 		d.Border = nrgba(c)
 	}
-	for kind, part := range tokenParts {
-		c, ok := resolve("token-" + part).ForegroundColor()
+	for _, kind := range v.document.definition.Styles() {
+		if _, ok := d.Tokens[kind]; !ok {
+			d.Tokens[kind] = d.Foreground
+		}
+	}
+	for _, kind := range styleKinds(d.Tokens) {
+		c, ok := resolve("token-" + kind.String()).ForegroundColor()
 		if ok {
-			d.Tokens[language.Kind(kind)] = nrgba(c)
+			d.Tokens[kind] = nrgba(c)
 		}
 	}
 	if v.themeScheme != nil && sameCodeColors(d, v.themeScheme.Definition()) {

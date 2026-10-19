@@ -36,7 +36,7 @@ func TestGuess(t *testing.T) {
 }
 
 func TestKind(t *testing.T) {
-	if KindInvalid.String() != "invalid" || Kind(255).Valid() {
+	if KindInvalid.String() != "invalid" || Kind("bad key").Valid() {
 		t.Fatal("kind contract")
 	}
 }

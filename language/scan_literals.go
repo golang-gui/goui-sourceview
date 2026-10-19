@@ -1,14 +1,12 @@
-package highlight
+package language
 
 import (
 	"unicode/utf8"
-
-	"github.com/golang-gui/goui-sourceview/language"
 )
 
 // appendToken also applies a late classification of a previously scanned span.
 // Revisions stay inside the current line and end at the current scan position.
-func appendToken(out *[]Token, start, end int, kind language.Kind) {
+func appendToken(out *[]lexicalToken, start, end int, kind Kind) {
 	for len(*out) > 0 && (*out)[len(*out)-1].End > start {
 		last := &(*out)[len(*out)-1]
 		if last.Start < start {

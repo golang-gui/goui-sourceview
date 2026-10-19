@@ -20,39 +20,46 @@ const (
 	Shell ID = "shell"
 )
 
-// Kind is a lexical style category, not a validation or semantic diagnosis.
-type Kind uint8
+// Kind is an extensible style key. Lexical behavior uses Token.Class and Context.
+// Custom keys may contain ASCII letters, digits, underscores, hyphens and dots.
+type Kind string
 
 const (
-	KindPlain Kind = iota
-	KindProperty
-	KindString
-	KindEscape
-	KindNumber
-	KindKeyword
-	KindDelimiter
-	KindTag
-	KindAttribute
-	KindEntity
-	KindComment
-	KindMeta
-	KindInvalid
-	KindVariable
+	KindPlain     Kind = ""
+	KindProperty  Kind = "property"
+	KindString    Kind = "string"
+	KindEscape    Kind = "escape"
+	KindNumber    Kind = "number"
+	KindKeyword   Kind = "keyword"
+	KindDelimiter Kind = "delimiter"
+	KindTag       Kind = "tag"
+	KindAttribute Kind = "attribute"
+	KindEntity    Kind = "entity"
+	KindComment   Kind = "comment"
+	KindMeta      Kind = "meta"
+	KindInvalid   Kind = "invalid"
+	KindVariable  Kind = "variable"
 )
 
-var kindNames = [...]string{"plain", "property", "string", "escape", "number", "keyword", "delimiter", "tag", "attribute", "entity", "comment", "meta", "invalid", "variable"}
-
-// Valid reports whether k is a defined lexical kind.
-func (k Kind) Valid() bool { return int(k) < len(kindNames) }
-
-func (k Kind) String() string {
-	if k.Valid() {
-		return kindNames[k]
+func (k Kind) Valid() bool {
+	if k == "plain" {
+		return false
 	}
-	return "unknown"
+	for _, c := range k {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	return len(k) <= 128
+}
+func (k Kind) String() string {
+	if k == KindPlain {
+		return "plain"
+	}
+	return string(k)
 }
 
-// Info describes an immutable built-in language. Lookup returns independent slices.
+// Info describes a language. Lookup returns independent metadata slices.
 type Info struct {
 	ID         ID
 	Name       string
