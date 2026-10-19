@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -9,20 +10,35 @@ import (
 )
 
 type Query struct {
-	Text                  string
-	IgnoreCase, WholeWord bool
+	Text                         string
+	IgnoreCase, WholeWord, Regex bool
 }
 
 // Search compiles a literal Unicode query and retains original byte coordinates.
 type Search struct {
-	query   Query
-	pattern []rune
-	failure []int
+	query          Query
+	pattern        []rune
+	failure        []int
+	regex          *regexp.Regexp
+	err            error
+	scope          *textedit.Range
+	cachedModel    *textedit.Model
+	cachedRevision uint64
+	cachedText     string
+	cachedMatches  [][]int
 }
 
 func Compile(q Query) *Search {
 	q.Text = textedit.Normalize(q.Text)
 	s := &Search{query: q, pattern: []rune(q.Text)}
+	if q.Regex {
+		pattern := q.Text
+		if q.IgnoreCase {
+			pattern = "(?i)" + pattern
+		}
+		s.regex, s.err = regexp.Compile(pattern)
+		return s
+	}
 	for i, r := range s.pattern {
 		if q.IgnoreCase {
 			s.pattern[i] = fold(r)
@@ -40,7 +56,7 @@ func Compile(q Query) *Search {
 	}
 	return s
 }
-func (s *Search) Empty() bool { return s == nil || len(s.pattern) == 0 }
+func (s *Search) Empty() bool { return s == nil || s.err != nil || len(s.pattern) == 0 }
 
 // CountChunk counts non-overlapping match starts in one source chunk, reading a
 // pattern-sized suffix. matchedEnd carries the last accepted range across chunks;
@@ -49,6 +65,14 @@ func (s *Search) CountChunk(m *textedit.Model, start, budget, matchedEnd int) (n
 	next = min(m.Len(), start+max(4, budget))
 	for next < m.Len() && !m.IsRuneBoundary(next) {
 		next++
+	}
+	if s.cached() {
+		for _, idx := range s.matches(m) {
+			if idx[0] >= start && (idx[0] < next || next == m.Len() && idx[0] == next) {
+				count++
+			}
+		}
+		return next, count, next
 	}
 	after = matchedEnd
 	if s.Empty() || after >= next {
@@ -92,6 +116,13 @@ func (s *Search) scan(m *textedit.Model, span textedit.Range, visit func(textedi
 		return nil
 	}
 	start, end := max(0, span.Start), min(m.Len(), span.End)
+	if s.scope != nil {
+		start = max(start, s.scope.Start)
+		end = min(end, s.scope.End)
+	}
+	if end < start {
+		return nil
+	}
 	for start > 0 && !m.IsRuneBoundary(start) {
 		start--
 	}
@@ -184,6 +215,9 @@ func runeAtModel(m *textedit.Model, at int) rune {
 
 // Find locates a match outside the current one, wrapping at most once.
 func (s *Search) Find(m *textedit.Model, start int, backward bool) (textedit.Range, bool) {
+	if s.cached() {
+		return s.findCached(m, start, backward)
+	}
 	var first, last, best textedit.Range
 	have, found := false, false
 	matchedEnd := 0
@@ -228,6 +262,19 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 	if s.Empty() || limit <= 0 {
 		return nil
 	}
+	if s.cached() {
+		var out []textedit.Range
+		for _, idx := range s.matches(m) {
+			r := textedit.Range{Start: idx[0], End: idx[1]}
+			if r.End > span.Start && r.Start < span.End || r.Start == r.End && r.Start >= span.Start && r.Start <= span.End {
+				out = append(out, r)
+				if len(out) == limit {
+					break
+				}
+			}
+		}
+		return out
+	}
 	context := len(s.pattern) * utf8.UTFMax
 	source := textedit.Range{Start: max(0, span.Start-context), End: min(m.Len(), span.End+context)}
 	singleLine := !strings.ContainsRune(s.query.Text, '\n')
@@ -256,6 +303,14 @@ func (s *Search) Matches(m *textedit.Model, r textedit.Range) bool {
 	if s.Empty() {
 		return false
 	}
+	if s.cached() {
+		for _, idx := range s.matches(m) {
+			if idx[0] == r.Start && idx[1] == r.End {
+				return true
+			}
+		}
+		return false
+	}
 	found := false
 	s.scan(m, r, func(actual textedit.Range) bool {
 		if actual == r {
@@ -268,6 +323,12 @@ func (s *Search) Matches(m *textedit.Model, r textedit.Range) bool {
 
 // ReplaceAll plans non-overlapping replacements against one original revision.
 func (s *Search) ReplaceAll(m *textedit.Model, selection textedit.Selection, replacement string) (Plan, error) {
+	if s.err != nil {
+		return Plan{}, s.err
+	}
+	if s.cached() {
+		return s.replaceCached(m, selection, replacement)
+	}
 	p := Plan{Before: selection, After: selection}
 	text := textedit.Normalize(replacement)
 	lastEnd, total := 0, 0

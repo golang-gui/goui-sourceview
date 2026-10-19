@@ -178,7 +178,8 @@ func (v *SourceView) SetSearch(q SearchQuery) {
 		return
 	}
 	v.query = q
-	v.search = editor.Compile(editor.Query{Text: q.Text, IgnoreCase: q.IgnoreCase, WholeWord: q.WholeWord})
+	v.search = editor.Compile(editor.Query{Text: q.Text, IgnoreCase: q.IgnoreCase, WholeWord: q.WholeWord, Regex: q.Regex})
+	v.search.SetRange(v.searchRange)
 	v.currentMatch = nil
 	v.RequestPaint()
 	v.searchState.Emit()
@@ -199,8 +200,14 @@ func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
 	if match := v.currentMatch; match != nil && match.revision == v.document.model.Revision() && match.selectionEpoch == v.selectionEpoch {
 		if backward {
 			start = match.raw.Start
+			if match.raw.Start == match.raw.End {
+				start--
+			}
 		} else {
 			start = match.raw.End
+			if match.raw.Start == match.raw.End {
+				start++
+			}
 		}
 	}
 	r, ok := v.search.Find(v.document.model, start, backward)
@@ -219,6 +226,9 @@ func (v *SourceView) ReplaceCurrent(text string) (bool, error) {
 	if err := v.editable(); err != nil {
 		return false, err
 	}
+	if err := v.SearchError(); err != nil {
+		return false, err
+	}
 	if v.search.Empty() {
 		return false, nil
 	}
@@ -229,10 +239,17 @@ func (v *SourceView) ReplaceCurrent(text string) (bool, error) {
 	if !v.search.Matches(v.document.model, raw) {
 		return false, nil
 	}
+	text, err := v.search.Replacement(v.document.model, raw, text)
+	if err != nil {
+		return false, err
+	}
 	return true, v.replace(raw, text, true)
 }
 func (v *SourceView) ReplaceAll(text string) (int, error) {
 	if err := v.editable(); err != nil {
+		return 0, err
+	}
+	if err := v.SearchError(); err != nil {
 		return 0, err
 	}
 	if v.search.Empty() {

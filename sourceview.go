@@ -38,8 +38,8 @@ type IndentOptions struct {
 	InsertSpaces          bool
 }
 type SearchQuery struct {
-	Text                  string
-	IgnoreCase, WholeWord bool
+	Text                         string
+	IgnoreCase, WholeWord, Regex bool
 }
 type searchMatch struct {
 	raw                      textedit.Range
@@ -118,6 +118,7 @@ type SourceView struct {
 	lastClickPoint                                                                    geometry.Point
 	query                                                                             SearchQuery
 	search                                                                            *editor.Search
+	searchRange                                                                       *textedit.Range
 	currentMatch                                                                      *searchMatch
 	searchState                                                                       signal.Signal0
 	menu                                                                              *editMenu
@@ -184,6 +185,10 @@ func (v *SourceView) SetDocument(d *Document) {
 		v.document.release(v)
 	}
 	v.document = d
+	v.searchRange = nil
+	if v.search != nil {
+		v.search.SetRange(nil)
+	}
 	v.folds = nil
 	v.hiddenLines = nil
 	v.foldRevision = d.model.Revision()
@@ -383,6 +388,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	hadFolds := len(v.folds) > 0
 	v.mapFolds(c)
 	v.mapPairs(c)
+	v.mapSearchRange(c)
 	if c.Reset {
 		v.anchor.valid = false
 		v.pendingAnchor = false
@@ -458,6 +464,10 @@ func (v *SourceView) mount() {
 		})
 	}
 	if v.observed != v.document.model.Revision() {
+		v.searchRange = nil
+		if v.search != nil {
+			v.search.SetRange(nil)
+		}
 		v.anchor.valid = false
 		v.pendingAnchor = false
 		v.offset = geometry.Point{}

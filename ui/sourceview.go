@@ -11,7 +11,9 @@ import (
 )
 
 type SourceViewView struct {
-	linkedTags *bool
+	searchRange    *gui.TextRange
+	searchRangeSet bool
+	linkedTags     *bool
 	base.ViewBase[SourceViewView]
 	document                                                             *source.Document
 	readOnly, acceptsTab                                                 bool
@@ -62,7 +64,18 @@ func (v *SourceViewView) BindSelection(s base.BindState[textedit.Selection]) *So
 	return v
 }
 func (v *SourceViewView) LinkedTags(enabled bool) *SourceViewView { v.linkedTags = &enabled; return v }
-func (v *SourceViewView) Build() base.View                        { return v }
+func (v *SourceViewView) SearchRange(r gui.TextRange) *SourceViewView {
+	copy := r
+	v.searchRange = &copy
+	v.searchRangeSet = true
+	return v
+}
+func (v *SourceViewView) ClearSearchRange() *SourceViewView {
+	v.searchRange = nil
+	v.searchRangeSet = true
+	return v
+}
+func (v *SourceViewView) Build() base.View { return v }
 
 func (v *SourceViewView) AutoPairs(enabled bool) *SourceViewView { v.autoPairs = &enabled; return v }
 func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {
@@ -206,6 +219,11 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	w.SetScheme(v.colors)
 	if v.query != nil {
 		w.SetSearch(*v.query)
+	}
+	if v.searchRangeSet {
+		if err := w.SetSearchRange(v.searchRange); err != nil {
+			panic(err)
+		}
 	}
 	if v.selection != nil && w.Selection() != *v.selection {
 		w.SetSelection(*v.selection)
