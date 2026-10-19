@@ -64,3 +64,9 @@ Markdown 当前行以最多 64 KiB 不可变前缀重放，修正分片中的围
 Markdown 的三次反引号输入补为六个字符的自有配对，仅允许在至多三前导空格的行首完成，
 Enter 在配对围栏之间留出内容行。HTML 注释中的伪标题不建立折叠。新增对应正常规则及
 超长围栏内容行的退化/恢复断言；语言身份与标签匹配缓存均随当前修订失效。
+
+HTML 名称比较只折叠 ASCII A–Z，不把其他 Unicode 字符变成相同名称；标签联动与折叠
+使用同一规则，raw-text 的结束名称也如此。独立用例覆盖 ASCII 混合大小写、希腊字母
+与 long-s 伪结束端，避免宽泛 Unicode 大小写比较误配。
+依据 2026-10-19 核对的 [HTML syntax](https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name)；
+这里只采用名称比较约束，不承诺完整 HTML 树构建或可省略标签推断。

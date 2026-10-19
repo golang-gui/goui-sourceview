@@ -175,7 +175,7 @@ func foldMarkup(ctx context.Context, text string, html bool) ([]FoldRange, error
 		startLine := line
 		if len(stack) > 0 && html && rawMarkup(stack[len(stack)-1].tag.name) {
 			tag, ok := readMarkupTag(text, at)
-			if !ok || !tag.closing || !strings.EqualFold(tag.name, stack[len(stack)-1].tag.name) {
+			if !ok || !tag.closing || foldTagASCII(tag.name) != stack[len(stack)-1].tag.name {
 				at++
 				continue
 			}
@@ -234,7 +234,7 @@ func foldMarkup(ctx context.Context, text string, html bool) ([]FoldRange, error
 			continue
 		}
 		if html {
-			tag.name = strings.ToLower(tag.name)
+			tag.name = foldTagASCII(tag.name)
 		}
 		if len(stack) > 0 && html && rawMarkup(stack[len(stack)-1].tag.name) && (!tag.closing || tag.name != stack[len(stack)-1].tag.name) {
 			at++

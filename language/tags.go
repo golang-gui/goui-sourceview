@@ -31,7 +31,7 @@ func (t *TagRules) copy() *TagRules {
 }
 func (t *TagRules) key(s string) string {
 	if !t.CaseSensitive {
-		return strings.ToLower(s)
+		return foldTagASCII(s)
 	}
 	return s
 }
@@ -170,4 +170,20 @@ func (t *TagRules) ValidName(name string) bool {
 		}
 	}
 	return true
+}
+
+// HTML name matching folds ASCII letters only; other code points are exact.
+func foldTagASCII(text string) string {
+	for at, b := range []byte(text) {
+		if b >= 'A' && b <= 'Z' {
+			copy := []byte(text)
+			for i := at; i < len(copy); i++ {
+				if copy[i] >= 'A' && copy[i] <= 'Z' {
+					copy[i] += 'a' - 'A'
+				}
+			}
+			return string(copy)
+		}
+	}
+	return text
 }

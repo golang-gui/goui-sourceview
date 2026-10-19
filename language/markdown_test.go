@@ -209,3 +209,20 @@ func TestMarkdownOverflowDoesNotOverlapOpeningCommentMarker(t *testing.T) {
 		t.Fatal("overlapped the opening comment marker across overflow")
 	}
 }
+
+func TestMarkupNameCasePolicyPreservesNonASCII(t *testing.T) {
+	if _, ok := HTMLTags().Match("<X-Node></x-node>", 2); !ok {
+		t.Fatal("ASCII case was not folded")
+	}
+	if _, ok := HTMLTags().Match("<Φ></φ>", 2); ok {
+		t.Fatal("non-ASCII tag spelling was folded")
+	}
+	ranges, err := foldMarkup(context.Background(), "<Φ>\ntext\n</φ>", true)
+	if err != nil || len(ranges) != 0 {
+		t.Fatal(ranges, err)
+	}
+	ranges, err = foldMarkup(context.Background(), "<SCRIPT>\n</ſcript>\n</script>", true)
+	if err != nil || !reflect.DeepEqual(ranges, []FoldRange{{0, 2}}) {
+		t.Fatal(ranges, err)
+	}
+}
