@@ -14,7 +14,7 @@ func TestTranslationsAndFallback(t *testing.T) {
 	t.Cleanup(func() { _ = mlang.SetLanguage(previous) })
 	getters := []mlang.Getter{Undo, Redo, Cut, Copy, Paste, Delete, MoveLinesUp, MoveLinesDown,
 		DuplicateLinesUp, DuplicateLinesDown, DeleteLines, SelectAll, Find, Replacement, Replace,
-		ReplaceAll, ToggleReplace, MatchCase, WholeWord, Previous, Next, Close, Counting, QueryTooLong, matches, Fold, Unfold, FoldAll, UnfoldAll}
+		ReplaceAll, ToggleReplace, MatchCase, WholeWord, Previous, Next, Close, Counting, QueryTooLong, matches, Fold, Unfold, FoldAll, UnfoldAll, GoTo, GoToPlaceholder, InvalidPosition}
 	if err := mlang.SetLanguage("en"); err != nil {
 		t.Fatal(err)
 	}

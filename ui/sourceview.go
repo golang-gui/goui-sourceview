@@ -12,21 +12,24 @@ import (
 
 type SourceViewView struct {
 	base.ViewBase[SourceViewView]
-	document                       *source.Document
-	readOnly, acceptsTab           bool
-	selection                      *textedit.Selection
-	indent                         *source.IndentOptions
-	wrap                           *source.WrapMode
-	lineNumbers                    *bool
-	colors                         *scheme.Scheme
-	query                          *source.SearchQuery
-	onChange                       func(textedit.Change)
-	onSelection                    func(textedit.Selection)
-	onError                        func(error)
-	autoPairs, automaticCompletion *bool
-	completionProvider             *source.CompletionProvider
-	foldingEnabled                 *bool
-	onFoldingChanged               func()
+	document                                                             *source.Document
+	readOnly, acceptsTab                                                 bool
+	selection                                                            *textedit.Selection
+	indent                                                               *source.IndentOptions
+	wrap                                                                 *source.WrapMode
+	lineNumbers                                                          *bool
+	colors                                                               *scheme.Scheme
+	query                                                                *source.SearchQuery
+	onChange                                                             func(textedit.Change)
+	onSelection                                                          func(textedit.Selection)
+	onError                                                              func(error)
+	autoPairs, automaticCompletion                                       *bool
+	completionProvider                                                   *source.CompletionProvider
+	whitespace                                                           *source.WhitespaceMode
+	lineEndings, indentGuides, smartHomeEnd, smartBackspace, occurrences *bool
+	rulers                                                               []int
+	foldingEnabled                                                       *bool
+	onFoldingChanged                                                     func()
 }
 
 func SourceView() *SourceViewView                                        { v := &SourceViewView{}; v.Self = v; return v }
@@ -76,6 +79,26 @@ func (v *SourceViewView) FoldingEnabled(enabled bool) *SourceViewView {
 func (v *SourceViewView) OnFoldingChanged(fn func()) *SourceViewView {
 	v.onFoldingChanged = fn
 	return v
+}
+
+func (v *SourceViewView) WhitespaceMode(mode source.WhitespaceMode) *SourceViewView {
+	v.whitespace = &mode
+	return v
+}
+func (v *SourceViewView) ShowLineEndings(b bool) *SourceViewView      { v.lineEndings = &b; return v }
+func (v *SourceViewView) ShowIndentGuides(b bool) *SourceViewView     { v.indentGuides = &b; return v }
+func (v *SourceViewView) SmartHomeEnd(b bool) *SourceViewView         { v.smartHomeEnd = &b; return v }
+func (v *SourceViewView) SmartBackspace(b bool) *SourceViewView       { v.smartBackspace = &b; return v }
+func (v *SourceViewView) HighlightOccurrences(b bool) *SourceViewView { v.occurrences = &b; return v }
+func (v *SourceViewView) Rulers(columns ...int) *SourceViewView {
+	v.rulers = append([]int(nil), columns...)
+	return v
+}
+func boolOption(value *bool, fallback bool) bool {
+	if value != nil {
+		return *value
+	}
+	return fallback
 }
 
 type state struct {
@@ -133,6 +156,21 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 		enabled = *v.foldingEnabled
 	}
 	w.SetFoldingEnabled(enabled)
+	w.SetShowLineEndings(boolOption(v.lineEndings, false))
+	w.SetShowIndentGuides(boolOption(v.indentGuides, true))
+	w.SetSmartHomeEnd(boolOption(v.smartHomeEnd, true))
+	w.SetSmartBackspace(boolOption(v.smartBackspace, true))
+	w.SetHighlightOccurrences(boolOption(v.occurrences, true))
+	mode := source.WhitespaceNone
+	if v.whitespace != nil {
+		mode = *v.whitespace
+	}
+	if err := w.SetWhitespaceMode(mode); err != nil {
+		panic(err)
+	}
+	if err := w.SetRulers(v.rulers); err != nil {
+		panic(err)
+	}
 	w.SetReadOnly(v.readOnly)
 	w.SetAcceptsTab(v.acceptsTab)
 	autoPairs, automatic := true, true

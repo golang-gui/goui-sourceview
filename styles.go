@@ -101,6 +101,10 @@ func (b styleBox) outset() float32 {
 }
 func codeRules(d scheme.Definition) []style.Rule {
 	rules := []style.Rule{
+		style.Name("source-view").Part("indent-guide").ForegroundColor(tint(d.GutterForeground, 65)),
+		style.Name("source-view").Part("whitespace").ForegroundColor(tint(d.GutterForeground, 125)),
+		style.Name("source-view").Part("ruler").ForegroundColor(tint(d.GutterForeground, 45)),
+		style.Name("source-view").Part("occurrence").ForegroundColor(tint(d.SearchBackground, 55)),
 		style.Name("source-view").FontFamily("monospace").FontSize(12).BackgroundColor(d.Background).ForegroundColor(d.Foreground),
 		style.Name("source-view").Part("gutter").BackgroundColor(d.GutterBackground).ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("fold-toggle").ForegroundColor(d.GutterForeground),

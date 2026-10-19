@@ -37,6 +37,9 @@ func (v *SourceView) foldBadgeRect(row int, p *paragraph) geometry.Rectangle {
 	}
 	edge := p.geometry.Caret(textedit.Position{Offset: len(p.text), Upstream: true})
 	r := geometry.Rect(v.gutter+padding-v.offset.X+edge.X+5, padding+v.paragraphTop(row)-v.offset.Y+edge.Y, 16, edge.Height)
+	if v.showLineEndings {
+		r.X += 12
+	}
 	if v.wrap != WrapNone && r.X+r.Width > v.viewport.Width-padding {
 		return geometry.Rectangle{}
 	}

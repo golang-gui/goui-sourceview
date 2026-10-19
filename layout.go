@@ -471,6 +471,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 	p.SetClipRect(geometry.Rect(v.gutter, 0, max(0, bounds.Width-v.gutter), bounds.Height))
 	caretRow := v.displayLine(v.displayCaret())
 	selection := v.Selection().Range()
+	occurrence := v.occurrenceWord()
 	var brackets []textedit.Range
 	if activeFocus(v) && (v.colors.BracketMatchBackground.A != 0 || v.colors.BracketMatchBorder.A != 0) {
 		brackets = v.matchingBrackets()
@@ -485,6 +486,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		if activeFocus(v) && row == caretRow {
 			p.FillRect(geometry.Rect(v.gutter, origin.Y, max(0, bounds.Width-v.gutter), item.height), graphics.ColorOf(v.colors.CurrentLine))
 		}
+		v.paintAssistanceBackground(p, row, item, origin, occurrence)
 		if v.projection == nil {
 			// Put the quiet fill below search/selection, and the outline above
 			// those backgrounds. Neither pass changes syntax foregrounds.
@@ -519,6 +521,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 			}
 		}
 		p.DrawTextLayout(origin, item.layout)
+		v.paintWhitespace(p, row, item, origin)
 		v.paintFoldBadge(p, row, item)
 		if v.projection != nil {
 			start := v.projection.Replacement().Start

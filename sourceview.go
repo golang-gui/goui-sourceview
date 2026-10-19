@@ -52,86 +52,90 @@ type SourceView struct {
 	pendingPaste    *pasteRequest
 	compositionSeen bool
 	gui.WidgetBase
-	anchor                                      viewportAnchor
-	anchorRevision                              uint64
-	pendingAnchor                               bool
-	reveal                                      *operationState
-	document, private                           *Document
-	selection                                   textedit.Selection
-	selectionRevision, observed, selectionEpoch uint64
-	upstream                                    bool
-	readOnly, acceptsTab, escapeTab             bool
-	indent                                      IndentOptions
-	wrap                                        WrapMode
-	showLineNumbers                             bool
-	explicitScheme                              *scheme.Scheme
-	appliedScheme                               *scheme.Scheme
-	themeScheme                                 *scheme.Scheme
-	digitWidth                                  float32
-	colors                                      scheme.Definition
-	mounted                                     bool
-	mountEpoch, pasteEpoch                      uint64
-	context                                     typography.Context
-	im                                          gui.IMContext
-	projection                                  *textedit.Projection
-	projectionRevision                          uint64
-	resettingIM                                 bool
-	source                                      textedit.EditSource
-	selectionSignal                             signal.Signal1[textedit.Selection]
-	errorSignal                                 signal.Signal1[error]
-	scrollSignal                                signal.Signal1[geometry.Rectangle]
-	changeSignal                                signal.Signal1[textedit.Change]
-	viewport                                    geometry.Size
-	offset                                      geometry.Point
-	heights                                     textedit.HeightIndex
-	visibleLines                                visibleLineMap
-	hiddenLines                                 []lineInterval
-	foldColumn                                  float32
-	foldingEnabled                              bool
-	folds                                       []foldEntry
-	foldRevision                                uint64
-	foldDefinition                              *language.Language
-	foldingSignal                               signal.Signal0
-	lineHeight, spaceWidth, gutter              float32
-	contentWidth                                float32
-	metricsReady                                bool
-	font                                        typography.FontInfo
-	layouts                                     map[layoutKey]*paragraph
-	layoutEpoch                                 uint64
-	tick                                        uint64
-	blink                                       *gui.Timer
-	blinkHandle                                 signal.Handle
-	caretOn                                     bool
-	preferredX                                  float32
-	preferredSet                                bool
-	dragging                                    bool
-	dragPoint                                   geometry.Point
-	dragGutter                                  bool
-	dragUnit                                    int // 0: caret, 1: word, 2: logical line
-	dragRange                                   textedit.Range
-	clickCount                                  int
-	lastClick                                   time.Time
-	lastClickPoint                              geometry.Point
-	query                                       SearchQuery
-	search                                      *editor.Search
-	currentMatch                                *searchMatch
-	searchState                                 signal.Signal0
-	menu                                        *editMenu
-	autoPairs                                   bool
-	pairs                                       []autoPair
-	brackets                                    bracketState
-	completion                                  *completionSession
-	completionProvider                          *CompletionProvider
-	completionQueue                             *completionQueue
-	completionEpoch                             uint64
-	closingCompletion                           bool
-	automaticCompletion                         bool
-	windowFocus                                 signal.Handle
+	anchor                                                                            viewportAnchor
+	anchorRevision                                                                    uint64
+	pendingAnchor                                                                     bool
+	reveal                                                                            *operationState
+	document, private                                                                 *Document
+	selection                                                                         textedit.Selection
+	selectionRevision, observed, selectionEpoch                                       uint64
+	upstream                                                                          bool
+	readOnly, acceptsTab, escapeTab                                                   bool
+	indent                                                                            IndentOptions
+	wrap                                                                              WrapMode
+	showLineNumbers                                                                   bool
+	explicitScheme                                                                    *scheme.Scheme
+	appliedScheme                                                                     *scheme.Scheme
+	themeScheme                                                                       *scheme.Scheme
+	digitWidth                                                                        float32
+	colors                                                                            scheme.Definition
+	mounted                                                                           bool
+	mountEpoch, pasteEpoch                                                            uint64
+	context                                                                           typography.Context
+	im                                                                                gui.IMContext
+	projection                                                                        *textedit.Projection
+	projectionRevision                                                                uint64
+	resettingIM                                                                       bool
+	source                                                                            textedit.EditSource
+	selectionSignal                                                                   signal.Signal1[textedit.Selection]
+	errorSignal                                                                       signal.Signal1[error]
+	scrollSignal                                                                      signal.Signal1[geometry.Rectangle]
+	changeSignal                                                                      signal.Signal1[textedit.Change]
+	viewport                                                                          geometry.Size
+	offset                                                                            geometry.Point
+	heights                                                                           textedit.HeightIndex
+	visibleLines                                                                      visibleLineMap
+	hiddenLines                                                                       []lineInterval
+	whitespace                                                                        WhitespaceMode
+	showLineEndings, indentGuides, smartHomeEnd, smartBackspace, highlightOccurrences bool
+	rulers                                                                            []int
+	foldColumn                                                                        float32
+	foldingEnabled                                                                    bool
+	folds                                                                             []foldEntry
+	foldRevision                                                                      uint64
+	foldDefinition                                                                    *language.Language
+	foldingSignal                                                                     signal.Signal0
+	lineHeight, spaceWidth, gutter                                                    float32
+	contentWidth                                                                      float32
+	metricsReady                                                                      bool
+	font                                                                              typography.FontInfo
+	layouts                                                                           map[layoutKey]*paragraph
+	layoutEpoch                                                                       uint64
+	tick                                                                              uint64
+	blink                                                                             *gui.Timer
+	blinkHandle                                                                       signal.Handle
+	caretOn                                                                           bool
+	preferredX                                                                        float32
+	preferredSet                                                                      bool
+	dragging                                                                          bool
+	dragPoint                                                                         geometry.Point
+	dragGutter                                                                        bool
+	dragUnit                                                                          int // 0: caret, 1: word, 2: logical line
+	dragRange                                                                         textedit.Range
+	clickCount                                                                        int
+	lastClick                                                                         time.Time
+	lastClickPoint                                                                    geometry.Point
+	query                                                                             SearchQuery
+	search                                                                            *editor.Search
+	currentMatch                                                                      *searchMatch
+	searchState                                                                       signal.Signal0
+	menu                                                                              *editMenu
+	autoPairs                                                                         bool
+	pairs                                                                             []autoPair
+	brackets                                                                          bracketState
+	completion                                                                        *completionSession
+	completionProvider                                                                *CompletionProvider
+	completionQueue                                                                   *completionQueue
+	completionEpoch                                                                   uint64
+	closingCompletion                                                                 bool
+	automaticCompletion                                                               bool
+	windowFocus                                                                       signal.Handle
 }
 
 func NewSourceView() *SourceView {
 	d := NewDocument("")
 	v := &SourceView{document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
+	v.indentGuides, v.smartHomeEnd, v.smartBackspace, v.highlightOccurrences = true, true, true, true
 	v.foldingEnabled = true
 	v.colors = scheme.Light().Definition()
 	v.automaticCompletion = true

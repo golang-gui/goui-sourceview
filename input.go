@@ -261,6 +261,9 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 					return nil
 				}
 				if event.Key == events.KeyBackspace {
+					if handled, err := v.deleteIndent(); handled {
+						return err
+					}
 					if handled, err := v.deletePair(); handled {
 						return err
 					}
@@ -410,7 +413,7 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 			pos.Upstream = !right
 		}
 	case events.KeyHome, events.KeyEnd:
-		pos = p.geometry.LineEdge(p.geometry.LineIndex(pos), key == events.KeyEnd)
+		pos = v.smartEdge(p, pos, key)
 		caret = r.Start + pos.Offset
 	case events.KeyArrowUp, events.KeyArrowDown, events.KeyPageUp, events.KeyPageDown:
 		vertical = true

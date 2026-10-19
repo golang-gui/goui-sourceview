@@ -107,6 +107,21 @@ func run() error {
 		p.X = max(0, available.Width-size.Width-8)
 	})
 
+	goTo := source.NewGoToBar()
+	goTo.SetTarget(editor)
+	viewport.AddOverlay(goTo)
+	viewport.ConnectOverlayPosition(goTo, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
+	find.ConnectOpen(func(open bool) {
+		if open {
+			goTo.Close()
+		}
+	})
+	goTo.ConnectOpen(func(open bool) {
+		if open {
+			find.Close()
+		}
+	})
+
 	current := documents[0]
 	status := gui.NewLabel("")
 	status.SetStyleName(modern.MutedText)

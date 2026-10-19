@@ -102,3 +102,9 @@ var (
 	FoldAll   = mlang.String(mlang.En("Fold all"), mlang.ZhCN("全部折叠"), mlang.Ja("すべて折りたたむ"), mlang.Ko("모두 접기"), mlang.De("Alles einklappen"), mlang.Fr("Tout replier"), mlang.Ru("Свернуть всё"), mlang.Ar("طي الكل"))
 	UnfoldAll = mlang.String(mlang.En("Unfold all"), mlang.ZhCN("全部展开"), mlang.Ja("すべて展開"), mlang.Ko("모두 펼치기"), mlang.De("Alles ausklappen"), mlang.Fr("Tout déplier"), mlang.Ru("Развернуть всё"), mlang.Ar("توسيع الكل"))
 )
+
+var (
+	GoTo            = mlang.String(mlang.En("Go to line/column"), mlang.ZhCN("跳转行列"), mlang.Ja("行・列へ移動"), mlang.Ko("줄/열로 이동"), mlang.De("Zu Zeile/Spalte"), mlang.Fr("Aller à la ligne/colonne"), mlang.Ru("Перейти к строке/столбцу"), mlang.Ar("انتقال إلى سطر/عمود"))
+	GoToPlaceholder = mlang.String(mlang.En("Line[:column]"), mlang.ZhCN("行号[:列号]"), mlang.Ja("行[:列]"), mlang.Ko("줄[:열]"), mlang.De("Zeile[:Spalte]"), mlang.Fr("Ligne[:colonne]"), mlang.Ru("Строка[:столбец]"), mlang.Ar("سطر[:عمود]"))
+	InvalidPosition = mlang.String(mlang.En("Invalid line or column"), mlang.ZhCN("行号或列号无效"), mlang.Ja("行または列が無効です"), mlang.Ko("잘못된 줄 또는 열"), mlang.De("Ungültige Zeile oder Spalte"), mlang.Fr("Ligne ou colonne invalide"), mlang.Ru("Недопустимая строка или столбец"), mlang.Ar("سطر أو عمود غير صالح"))
+)
