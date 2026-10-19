@@ -95,3 +95,47 @@ func TestCompletionLabelsStayOnOneNativeLine(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigurationAndShellCompletions(t *testing.T) {
+	for _, tc := range []struct {
+		id         language.ID
+		text, want string
+	}{
+		{language.TOML, "enabled = tr", "true"}, {language.YAML, "enabled: nu", "null"}, {language.Shell, "pri", "printf"},
+	} {
+		v := NewSourceView()
+		v.document.model.SetText(tc.text)
+		_ = v.document.SetLanguage(tc.id)
+		observe(t, v)
+		v.document.engine.Advance(time.Time{})
+		v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
+		c, ok := v.completionContext(true)
+		if !ok {
+			t.Fatal(tc)
+		}
+		items := normalizeCompletions(v.proposals(c), c)
+		if !slices.ContainsFunc(items, func(i Completion) bool { return i.Text == tc.want }) {
+			t.Fatal(tc, items)
+		}
+	}
+	for _, tc := range []struct {
+		id   language.ID
+		text string
+	}{
+		{language.TOML, "# true tr"}, {language.TOML, `s = "true tr`}, {language.YAML, "text: |\n  true tr"}, {language.Shell, "cat <<END\nthen th"},
+	} {
+		v := NewSourceView()
+		v.document.model.SetText(tc.text)
+		_ = v.document.SetLanguage(tc.id)
+		observe(t, v)
+		v.document.engine.Advance(time.Time{})
+		v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
+		c, ok := v.completionContext(true)
+		if !ok {
+			t.Fatal(tc)
+		}
+		if got := v.proposals(c); len(got) != 0 {
+			t.Fatal("suggestions inside literal", tc, got)
+		}
+	}
+}

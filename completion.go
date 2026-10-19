@@ -64,7 +64,7 @@ func (v *SourceView) SetAutomaticCompletion(enabled bool) {
 func (v *SourceView) ShowCompletion() error { return v.complete(true) }
 
 func completionRune(r rune, id language.ID) bool {
-	return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r) || r == '_' || (id == language.XML || id == language.HTML) && strings.ContainsRune("-:.", r)
+	return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r) || r == '_' || (id == language.TOML || id == language.YAML) && r == '-' || (id == language.XML || id == language.HTML) && strings.ContainsRune("-:.", r)
 }
 func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) {
 	m := v.document.model
@@ -106,11 +106,28 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 func (v *SourceView) proposals(c CompletionContext) []Completion {
 	var out []Completion
 	ctx, known := v.lexicalContext(c.Range.Start)
+	if (c.Language == language.TOML || c.Language == language.YAML || c.Language == language.Shell) && (!known || ctx.Comment || ctx.String) {
+		return nil
+	}
 	if known && !ctx.Comment && !ctx.String {
 		switch c.Language {
 		case language.JSON:
 			for _, word := range []string{"false", "null", "true"} {
 				out = append(out, Completion{Label: word, Detail: "JSON"})
+			}
+		case language.TOML:
+			if ctx.Value {
+				for _, word := range []string{"false", "true", "inf", "nan"} {
+					out = append(out, Completion{Label: word, Detail: "TOML"})
+				}
+			}
+		case language.YAML:
+			for _, word := range []string{"false", "null", "true"} {
+				out = append(out, Completion{Label: word, Detail: "YAML"})
+			}
+		case language.Shell:
+			for _, word := range []string{"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function", "select", "time", "coproc", "echo", "printf", "export", "readonly", "local", "return", "exit", "unset", "set", "test", "source", "read", "trap", "shift", "getopts"} {
+				out = append(out, Completion{Label: word, Detail: "Shell"})
 			}
 		case language.HTML:
 			words := []string{"a", "article", "body", "button", "div", "footer", "form", "h1", "head", "header", "html", "img", "input", "label", "li", "link", "main", "meta", "nav", "p", "script", "section", "span", "style", "table", "tbody", "td", "textarea", "th", "thead", "title", "tr", "ul"}

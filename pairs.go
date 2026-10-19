@@ -81,6 +81,22 @@ func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
 	}
 	selected := r.Start != r.End
 	if !selected {
+		// Let consecutive quotes form TOML multiline delimiters and YAML's
+		// doubled single quote. These are source bytes, not another empty pair.
+		if !ctx.String && (c == '\'' || c == '"') {
+			count := 1
+			if v.document.language == language.TOML {
+				count = 2
+			} else if v.document.language != language.YAML || c != '\'' {
+				count = 0
+			}
+			if count > 0 && r.Start >= count {
+				prefix, _ := v.document.model.Slice(textedit.Range{Start: r.Start - count, End: r.Start})
+				if prefix == strings.Repeat(string(c), count) {
+					return false, nil
+				}
+			}
+		}
 		if ctx.String {
 			return false, nil
 		}
@@ -125,6 +141,9 @@ func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
 }
 
 func (v *SourceView) quoteEscaped(at int) bool {
+	if ctx, known := v.lexicalContext(at); known && ctx.Literal {
+		return false
+	}
 	m := v.document.model
 	r, _ := m.LineRange(m.LineAt(at))
 	start := max(r.Start, at-(16<<10))

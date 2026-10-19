@@ -118,3 +118,12 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
 - 上述 Scintilla 在线文档的 SCI_AUTOCSETMAXWIDTH/SCI_AUTOCSETMAXHEIGHT 说明宽度限制、
   省略号与超过可见行数时的滚动条；采用有界尺寸和滚动提示，实际 DIP 度量与资源管理使用
   GOUI 公开契约。当前提示不是可拖动滚动条；三端具体像素效果由本仓窗口验收另行记录。
+
+
+## TOML、YAML、Shell 的基础建议
+
+TOML 值上下文提供 `true/false/inf/nan`，YAML 提供 Core 的 `true/false/null`，
+Shell 提供保留字及常见内建命令的字面量建议；TOML/YAML 文档词把连字符视为词的一部分。
+字符串、注释、块文本与 heredoc 内不提供这三种语言的内置或附近文档词建议。
+未知前置词法状态保持无建议；自定义 CompletionProvider 仍由应用决定。
+不为配置键推断 Schema，不查询文件系统或 PATH，不执行 Shell。

@@ -348,3 +348,13 @@ IM Reset、模型通知和选区回调仍可能重入，沿用 applyPlan 的身�
 Scintilla 的 [词与键盘命令](https://www.scintilla.org/ScintillaDoc.html#KeyboardCommands)
 以及 GtkSourceView 的 [move-words](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/signal.View.move-words.html)
 也区分词操作与字符/行操作；本项目保留 UTF-8 与 Cluster 契约，不移植这些框架的原生动作体系。
+
+
+## TOML、YAML、Shell 的引用上下文
+
+自动配对、换行和补全复用扫描器的 String/Comment 上下文；YAML 块文本及 Shell
+heredoc 按字符串处理，命令替换内部恢复代码上下文。Literal 标志表示反斜杠不转义
+结束引号：TOML literal、YAML 单引号、Shell 单引号中，生成的右引号仍可正常越过。
+TOML 连续第三个引号按原文输入形成三引号，不再生成另一组空字符串；YAML 结束单引号
+之后紧接的单引号按原文输入形成 doubled quote。只追踪本视图生成的单字节配对，
+不新增三引号补全模板或多字节配对状态机。String token 中的括号不参与代码括号匹配。

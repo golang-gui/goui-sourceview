@@ -3,6 +3,7 @@ package sourceview
 import (
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui/textedit"
+	"strings"
 	"testing"
 	"time"
 )
@@ -160,5 +161,75 @@ func TestQuoteEscapeAndPairNewline(t *testing.T) {
 	}
 	if !v.Undo() || v.document.model.Text() != "  {}" || v.Selection().Caret != 3 {
 		t.Fatal("newline history")
+	}
+}
+
+func TestConfigurationAndShellQuoteTyping(t *testing.T) {
+	for _, tc := range []struct {
+		id                   language.ID
+		initial, typed, want string
+	}{
+		{language.TOML, "text = ", `"""`, `text = """`},
+		{language.TOML, "text = ", `'''`, `text = '''`},
+		{language.TOML, "text = ", "'\\'", "text = '\\'"},
+		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},
+		{language.Shell, "echo ", "'\\'", "echo '\\'"},
+	} {
+		t.Run(string(tc.id)+tc.typed, func(t *testing.T) {
+			v := NewSourceView()
+			v.document.model.SetText(tc.initial)
+			_ = v.document.SetLanguage(tc.id)
+			observe(t, v)
+			v.SetSelection(textedit.Selection{Anchor: len(tc.initial), Caret: len(tc.initial)})
+			for _, c := range tc.typed {
+				v.document.engine.Advance(time.Time{})
+				handled, err := v.pairText(v.Selection().Range(), string(c))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !handled {
+					if err := v.ReplaceSelection(string(c)); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if got := v.document.model.Text(); got != tc.want || v.Selection().Caret != len(tc.want) {
+				t.Fatalf("got %q caret %d; want %q", got, v.Selection().Caret, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfigurationAndShellBracketContexts(t *testing.T) {
+	for _, tc := range []struct {
+		id          language.ID
+		text        string
+		open, close byte
+		pair        bool
+	}{
+		{language.TOML, `a = ["[", "]"]`, '[', ']', true},
+		{language.YAML, `a: ["]", {b: 1}]`, '[', ']', true},
+		{language.Shell, `echo "$(printf ')')"`, '(', ')', true},
+		{language.YAML, "a: |\n  [ ]\nnext: x", '[', ']', false},
+		{language.Shell, "cat <<END\n[ ]\nEND", '[', ']', false},
+	} {
+		v := NewSourceView()
+		v.document.model.SetText(tc.text)
+		_ = v.document.SetLanguage(tc.id)
+		observe(t, v)
+		v.document.engine.Advance(time.Time{})
+		at := strings.IndexByte(tc.text, tc.open)
+		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		got := v.matchingBrackets()
+		if !tc.pair {
+			if len(got) != 0 {
+				t.Fatalf("%s matched text block: %v", tc.id, got)
+			}
+			continue
+		}
+		end := strings.LastIndexByte(tc.text, tc.close)
+		if len(got) != 2 || got[0] != (textedit.Range{Start: at, End: at + 1}) || got[1] != (textedit.Range{Start: end, End: end + 1}) {
+			t.Fatalf("%s pair: %v", tc.id, got)
+		}
 	}
 }

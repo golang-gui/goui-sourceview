@@ -31,3 +31,30 @@ func TestEditingContextAcrossLinesAndInvalidation(t *testing.T) {
 		t.Fatal("unbounded prefix scan")
 	}
 }
+
+func TestConfigurationAndShellEditingContext(t *testing.T) {
+	for _, tc := range []struct {
+		id                    language.ID
+		text                  string
+		str, comment, literal bool
+	}{
+		{language.TOML, "text = '''raw\nbody", true, false, true},
+		{language.TOML, "text = \"\"\"body\nmore", true, false, false},
+		{language.TOML, "text = 1 # note", false, true, false},
+		{language.YAML, "text: |\n  content", true, false, false},
+		{language.YAML, "text: 'raw\\", true, false, true},
+		{language.YAML, "# comment", false, true, false},
+		{language.Shell, "echo 'literal\\", true, false, true},
+		{language.Shell, "echo \"$(echo ", false, false, false},
+		{language.Shell, "cat <<'END'\nbody", true, false, true},
+		{language.Shell, "echo value # note", false, true, false},
+	} {
+		m := textedit.NewModel(tc.text)
+		e := New(m, tc.id)
+		e.Advance(time.Time{})
+		c, ok := e.ContextAt(m.Len())
+		if !ok || c.String != tc.str || c.Comment != tc.comment || c.Literal != tc.literal {
+			t.Errorf("%s %q: %+v known=%v", tc.id, tc.text, c, ok)
+		}
+	}
+}
