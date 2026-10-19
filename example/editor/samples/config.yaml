@@ -1,0 +1,28 @@
+# SourceView — YAML 1.2 configuration
+---
+name: SourceView
+enabled: true
+retry: null
+
+editor: &defaults
+  font: monospace
+  font-size: 14
+  languages: [JSON, XML, HTML, TOML, YAML, Shell]
+  message: "Unicode and escapes: \u4F60\u597D"
+
+preview:
+  settings: *defaults
+  url: https://example.org/source#preview
+  label: 'It''s a native editor'
+  description: >-
+    This folded block keeps its own indentation.
+    Brackets [and braces] here are ordinary text.
+
+commands:
+  - name: test
+    script: |
+      go test ./...
+      # This is block text, not a YAML comment.
+  - name: build
+    timeout: 30
+    command: go build ./example/editor

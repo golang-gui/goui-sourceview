@@ -12,7 +12,7 @@ The project is under active development.
 
 ## Features
 
-- **Syntax highlighting** for JSON, XML and HTML.
+- **Syntax highlighting** for JSON, XML, HTML, TOML, YAML and Shell.
 - **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.
 - **Completion and brackets** with suggestions, automatic pairs and matching-bracket navigation.
 - **Find and replace** in a floating panel, with case-sensitive and whole-word search options.
@@ -40,5 +40,5 @@ the development environment, then run from the repository root:
 go run ./example/editor
 ```
 
-The example lets you edit JSON, XML and HTML, try search and completion, and switch
+The example lets you edit JSON, XML, HTML, TOML, YAML and Shell, try search and completion, and switch
 between light and dark appearances. A [declarative example](example/declarative) is also available.

@@ -1,6 +1,6 @@
 // Run: go run ./example/editor [-theme system|light|dark] [file].
 // Requires a desktop and native typography; Linux Integrated needs a compositor.
-// Embedded JSON/XML/HTML documents are editable and retain changes when switched.
+// Embedded JSON/XML/HTML/TOML/YAML/Shell documents are editable and retain changes when switched.
 // An optional UTF-8 file is read once; edits stay in memory and are never saved.
 // Use the toolbar, editor context menu and standard editing shortcuts. Restart
 // to reset the samples; close the main window to exit. No development server.
@@ -132,7 +132,11 @@ func run() error {
 		win.SetFocusedWidget(editor)
 	}
 	group := widgets.NewCheckGroup()
-	files := row(4, 8)
+	files := gui.NewWrapBox(layout.DirectionHorizontal)
+	files.SetSpacing(4)
+	files.SetLineSpacing(4)
+	files.SetPadding(8)
+	files.SetCrossAlign(layout.CrossCenter)
 	for i, d := range documents {
 		choice := widgets.NewCheckButton()
 		choice.SetGroup(group)
@@ -146,7 +150,6 @@ func run() error {
 		})
 		files.AddChild(choice)
 	}
-	files.AddChild(spacer())
 	files.AddChild(button("Find / Replace", func() {
 		if err := find.Open(true); err != nil {
 			status.SetText(err.Error())

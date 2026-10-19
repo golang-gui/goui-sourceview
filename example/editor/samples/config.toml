@@ -1,0 +1,22 @@
+# SourceView — TOML 1.1 configuration
+name = "SourceView"
+enabled = true
+released = 2026-10-19T09:30:00+08:00
+
+[editor]
+font = "monospace"
+font-size = 14
+languages = ["JSON", "XML", "HTML", "TOML", "YAML", "Shell"]
+colors = { background = "#1e1e1e", foreground = "#d4d4d4" }
+
+[paths]
+windows = 'C:\Users\developer\source'
+message = """
+Multiline basic strings support escapes: \e \x1b \u4F60\u597D.
+Select text to keep the syntax colors visible.
+"""
+
+[[tasks]]
+name = "test"
+command = "go test ./..."
+timeout = 3.0e1

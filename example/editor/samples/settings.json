@@ -1,7 +1,7 @@
 {
     "name": "GOUI SourceView",
     "description": "A native code editor for Go applications",
-    "languages": ["JSON", "XML", "HTML"],
+    "languages": ["JSON", "XML", "HTML", "TOML", "YAML", "Shell"],
     "editor": {
         "editable": true,
         "lineNumbers": true,

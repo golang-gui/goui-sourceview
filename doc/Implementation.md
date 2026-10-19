@@ -16,7 +16,7 @@
 | 编辑与输入 | 单选区；正常键盘/手势路径；Cluster 导航；只读；撤销重做；Tab 与 Enter 缩进；剪贴板异步请求身份校验，作废请求释放视图和文档引用 |
 | IME | textedit.Projection 临时呈现；原文与 preedit 分离；提交/取消及局部候选框坐标；真实组合输入尚未验收 |
 | 搜索 | 流式字面量搜索、Unicode simple fold、整词；原始匹配区间与 Cluster 选区分离；受预算约束的原子全部替换 |
-| language | Plain / JSON / XML / HTML 元数据、扩展名和有界样本识别、token Kind |
+| language | Plain / JSON / XML / HTML / TOML / YAML / Shell 元数据、扩展名和有界样本识别、token Kind |
 | internal/highlight | 分片扫描、跨行状态、旧坐标行索引、稳定行身份、向后失效与状态收敛、token LRU |
 | scheme | 不可变输入拷贝、亮暗代码配色；自动配色按应用共享一个 Settings 监听 |
 | 调度与布局 | Root 共享分析队列；4 ms 总预算、文档 2 ms；16 KiB 扫描片段；可见段落布局；固定侧栏、reveal 和字节位置视口锚点 |
@@ -28,7 +28,7 @@
 token 载荷目标为 16 MiB，另有行状态和索引开销；超大行达到 token 数限制时后续部分使用普通前景。
 
 HTML 有独立 raw text / RCDATA / script 状态；首版不递归高亮内嵌 JavaScript / CSS。
-高亮用于容错呈现，不是完整 JSON / XML / HTML 语法验证器。
+高亮用于容错呈现，不是完整 JSON / XML / HTML / TOML / YAML / Shell 语法验证器。
 
 ## 2. GOUI 依赖与跨仓变更
 
@@ -136,3 +136,12 @@ SourceView 的 Windows 长寿命布局重着色依赖该修正，后续已单独
 ui 仅协调目标、显式值及信号。未控制 Search 的声明式重建保留交互查询。
 接口、生命周期和计数边界见 [查找栏设计](DesignFindBar.md)，本机/远端验证及剩余项见
 [验收记录](PlanFindBar.md)。GOUI 未修改，独立依赖发布、真实 IME 和远端桌面验收缺口仍有效。
+
+
+## TOML、YAML、Shell（2026-10-19）
+
+新增三种内置语言、扩展名/启动文件/shebang 识别，复用分片引擎并支持当前行的延迟分类。
+对应词法与引用状态同步参与基础补全及自动配对；basic/modern 新增 `token-variable`。
+命令式示例内嵌六份可切换文档，文件选择行可换行；README 仅更新对外语言列表。
+详细规则及边界见 [语言设计](DesignHighlighting.md#9-tomlyaml-与-shell)，
+结果见 [本切片验收](PlanLanguages.md)。未修改 GOUI，也未增加第三方依赖。

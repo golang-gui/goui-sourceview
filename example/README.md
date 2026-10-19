@@ -46,13 +46,13 @@ Linux 不满足 Integrated 所需能力时，GOUI 可回退到原生装饰。
 
 ## Editor
 
-`editor` embeds original JSON/XML/HTML samples, so the binary can run from any
+`editor` embeds original JSON/XML/HTML/TOML/YAML/Shell samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and gets its own file selector. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目原创 JSON/XML/HTML 样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目原创 JSON/XML/HTML/TOML/YAML/Shell 样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并增加对应选择按钮，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
