@@ -27,6 +27,7 @@ type wordCursor struct {
 	m              *textedit.Model
 	at, start, end int
 	text           string
+	word           func(rune) bool
 }
 
 func (c *wordCursor) peek(forward bool) (rune, int) {
@@ -54,11 +55,42 @@ func (c *wordCursor) peek(forward bool) (rune, int) {
 	return utf8.DecodeLastRuneInString(c.text[:c.at-c.start])
 }
 
+func (c *wordCursor) class(r rune) int {
+	if c.word == nil {
+		return wordClass(r)
+	}
+	if unicode.IsSpace(r) {
+		return 0
+	}
+	if c.word(r) {
+		return 2
+	}
+	return 1
+}
+
+// WordRange selects a language word, whitespace run, or single punctuation rune.
+func WordRange(m *textedit.Model, at int, word func(rune) bool) textedit.Range {
+	c := wordCursor{m: m, at: at, word: word}
+	r, n := c.peek(true)
+	if n == 0 {
+		return textedit.Range{Start: at, End: at}
+	}
+	if c.class(r) == 1 || r == '\n' {
+		return textedit.Range{Start: at, End: at + n}
+	}
+	class := c.class(r)
+	c.consume(false, class)
+	start := c.at
+	c.at = at
+	c.consume(true, class)
+	return textedit.Range{Start: start, End: c.at}
+}
+
 func (c *wordCursor) consume(forward bool, class int) int {
 	count := 0
 	for {
 		r, size := c.peek(forward)
-		if size == 0 || r == '\n' || wordClass(r) != class {
+		if size == 0 || r == '\n' || c.class(r) != class {
 			return count
 		}
 		if forward {
@@ -74,7 +106,12 @@ func (c *wordCursor) consume(forward bool, class int) int {
 // Navigation crosses at most one LF and skips adjacent whitespace. Deletion
 // stops after a whitespace run of two or more, and treats a line join separately.
 func WordBoundary(m *textedit.Model, at int, forward, deleting bool) int {
-	c := wordCursor{m: m, at: at}
+	return WordBoundaryWith(m, at, forward, deleting, nil)
+}
+
+// WordBoundaryWith uses the language word predicate; nil preserves default separators.
+func WordBoundaryWith(m *textedit.Model, at int, forward, deleting bool, word func(rune) bool) int {
+	c := wordCursor{m: m, at: at, word: word}
 	r, n := c.peek(forward)
 	if n == 0 {
 		return at
@@ -100,19 +137,19 @@ func WordBoundary(m *textedit.Model, at int, forward, deleting bool) int {
 	if n == 0 || r == '\n' {
 		return c.at
 	}
-	class := wordClass(r)
+	class := c.class(r)
 	wordEnd := c.at
 	count := c.consume(forward, class)
 	if !deleting && class == 1 && count == 1 {
 		// Fast navigation over one separator adjoining the next word.
 		if forward {
-			if next, size := c.peek(true); size > 0 && wordClass(next) == 2 {
+			if next, size := c.peek(true); size > 0 && c.class(next) == 2 {
 				c.consume(true, 2)
 			}
-		} else if wordEnd < m.Len() && wordClass(runeAtModel(m, wordEnd)) == 2 {
+		} else if wordEnd < m.Len() && c.class(runeAtModel(m, wordEnd)) == 2 {
 			c.consume(false, 0)
 			if prev, size := c.peek(false); size > 0 && prev != '\n' {
-				c.consume(false, wordClass(prev))
+				c.consume(false, c.class(prev))
 			}
 		}
 	}

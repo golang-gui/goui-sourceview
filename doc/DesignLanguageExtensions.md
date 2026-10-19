@@ -1,7 +1,7 @@
 # 应用自定义语言与编辑行为
 
 语言描述、扫描协议与 GUI 行缓存分离。应用可以建立自己的源码编辑器：直接绑定语言，
-提供配色和语言策略；无需 fork SourceView、导入 internal、注册全局名称或修改 GOUI。
+提供配色、编辑策略和补全；无需 fork SourceView、导入 internal、注册全局名称或修改 GOUI。
 本专题是扩展契约；现有语言各自的词法 profile 仍见 [高亮设计](DesignHighlighting.md)。
 
 ## 定义与绑定
@@ -73,6 +73,42 @@ style.Name("source-view").Part("token-my.heading").ForegroundColor(myColor)
 结构配对只使用 ClassDelimiter，而非某个 Kind 名字。Context.String/Comment/Literal
 控制插入策略与转义，Data 可带应用专用的不可变上下文。它们由扫描器保持一致，
 不从着色结果反推完整语法树。换代码配色不会改变括号或补全结果。
+
+## 编辑策略
+
+`EditingRules.Word` 供双击、词移动/删除和补全取词共用；默认 Unicode 字母、数字、
+Mark、下划线。Word 与静态 Suggest 可能被后台补全 helper 调用，必须可并发读取；
+AllowPair/Newline 只在 GUI 线程运行。实际指针选择仍用原生 Cluster 几何，避免选中半个组合字符。
+
+AutoClosingPairs、SurroundingPairs、Brackets 是三个独立列表，空列表明确关闭相应规则。
+开闭序列是无换行 UTF-8，分别最长 128 byte；结构配对两端必须不同（引号可自动闭合，
+不作为结构匹配）。完成多字符 opening 时优先最长规则，允许三反引号。
+`NotInString/NotInComment`、AutoCloseBefore 与纯 AllowPair 回调控制自动插入；
+选区包裹保留方向，字符串中可显式包裹，注释排除仍有效。
+控件负责生成闭合端所有权、逐段跳过、删除、随编辑映射、IME 边界与撤销，应用不接管状态机。
+结构匹配沿用两侧各 64 KiB、有类型栈与未知状态不猜测的规则。
+
+Newline 回调收到有界 Before/After、Indent、当前视图 Unit 及语法上下文。
+返回 NewlineEdit 可删除选区前后邻接字节并插入文本，Caret 相对插入文本；
+DeleteBefore/After 不得越过给定片段，端点须 rune 边界，Text 最多 64 KiB、UTF-8/LF。
+返回 handled=false 使用默认缩进与配置结构括号内换行。回调重入换文档/语言/修订/选区
+会使操作取消。回调运行于 GUI，应保持纯函数。
+
+Comments 配置行/块标记，供 ToggleLineComment / ToggleBlockComment 使用。
+无对应标记时正常无操作；Ctrl/Cmd+/ 切换行注释。块命令对选区按字面包裹或剥除完整外层，
+不分析嵌套块注释；换行和注释操作均为一个带前后选区的历史项。
+
+## 应用编辑事务
+
+```go
+err := view.ApplyEdits(document, revision, edits, afterSelection)
+```
+
+文档对象与修订都必须匹配，避免延迟格式化结果误写同修订的另一文档。
+Edits 是原始文档坐标，排序且不重叠，同位置插入应先合并；AfterSelection 使用规范化后
+文本的坐标。复用 GOUI ApplyBatch，提交前校验所有范围和选区；一次修订、一个撤销项，
+保留来源与历史选区。遵守禁用/只读、预编辑取消和回调重入检查。
+这是应用正常命令接口，窗口交互测试仍通过 DispatchEvent/CommitText。
 
 ## 参考与取舍
 

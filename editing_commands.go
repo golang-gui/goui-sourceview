@@ -24,7 +24,7 @@ func (v *SourceView) MoveWord(forward, extend bool) {
 	if v.Destroyed() || !gui.IsEnabled(v) {
 		return
 	}
-	at := editor.WordBoundary(v.document.model, v.Selection().Caret, forward, false)
+	at := editor.WordBoundaryWith(v.document.model, v.Selection().Caret, forward, false, v.document.definition.IsWord)
 	v.moveTo(at, false, extend)
 }
 
@@ -42,7 +42,7 @@ func (v *SourceView) DeleteWord(forward bool) error {
 	s := v.Selection()
 	r := s.Range()
 	if r.Start == r.End {
-		at := editor.WordBoundary(v.document.model, s.Caret, forward, true)
+		at := editor.WordBoundaryWith(v.document.model, s.Caret, forward, true, v.document.definition.IsWord)
 		if forward {
 			r.End = v.snapOffset(at, true)
 		} else {

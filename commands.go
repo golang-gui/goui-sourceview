@@ -285,3 +285,13 @@ func (r *pasteRequest) complete(text string, err error) {
 	}
 	v.report(v.ReplaceSelection(text))
 }
+
+// ApplyEdits applies original-coordinate edits as one undo unit, with an
+// explicit post-edit selection. Document identity and revision must match.
+// All ranges and the selection are validated before mutation by textedit.
+func (v *SourceView) ApplyEdits(document *Document, revision uint64, edits []textedit.Edit, after textedit.Selection) error {
+	if document != v.document || revision != v.document.model.Revision() {
+		return ErrOperationChanged
+	}
+	return v.applyPlan(editor.Plan{Edits: edits, Before: v.Selection(), After: after})
+}

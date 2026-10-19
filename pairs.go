@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -13,7 +14,7 @@ import (
 
 type autoPair struct {
 	open, close int
-	left, right byte
+	left, right string
 }
 
 // AutoPairs controls insertion, surrounding and deletion of generated pairs.
@@ -27,7 +28,7 @@ func (v *SourceView) SetAutoPairs(enabled bool) {
 }
 
 func (v *SourceView) lexicalContext(at int) (highlight.Context, bool) {
-	if v.document.language == language.Plain {
+	if v.document.definition.Tokenizer() == nil {
 		return highlight.Context{}, true
 	}
 	if v.document.engine == nil {
@@ -36,86 +37,64 @@ func (v *SourceView) lexicalContext(at int) (highlight.Context, bool) {
 	return v.document.engine.ContextAt(at)
 }
 
+// pairText handles literal (non-IME) typing; language policy never owns history.
 func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
-	if !v.autoPairs || len(text) != 1 {
+	if !v.autoPairs || text == "" {
 		return false, nil
 	}
-	c := text[0]
-	if r.Start == r.End {
+	rules := v.document.definition.Editing()
+	beforeText, afterText := v.lineContext(r)
+	selected := r.Start != r.End
+	pairs := rules.AutoClosingPairs
+	if selected {
+		pairs = rules.SurroundingPairs
+	}
+	// Prefer the longest completed opening sequence before overtyping a shorter
+	// generated closer (e.g. a third backtick completing a fenced delimiter).
+	var pair language.Pair
+	for _, p := range pairs {
+		matches := text == p.Open
+		if !selected && len(text) <= len(p.Open) {
+			matches = strings.HasSuffix(beforeText+text, p.Open)
+		}
+		if matches && len(p.Open) > len(pair.Open) {
+			pair = p
+		}
+	}
+	if !selected && len(pair.Open) <= len(text) {
 		for i := len(v.pairs) - 1; i >= 0; i-- {
 			p := v.pairs[i]
-			if p.close == r.Start && p.right == c && v.pairValid(p) && (c != '"' && c != '\'' || !v.quoteEscaped(r.Start)) {
-				v.pairs = append(v.pairs[:i], v.pairs[i+1:]...)
-				v.moveTo(r.Start+1, false, false)
+			at := r.Start - p.close
+			if at >= 0 && at < len(p.right) && strings.HasPrefix(p.right[at:], text) && v.pairValid(p) && (p.right != `"` && p.right != "'" || !v.quoteEscaped(r.Start)) {
+				if at+len(text) == len(p.right) {
+					v.pairs = append(v.pairs[:i], v.pairs[i+1:]...)
+				}
+				v.moveTo(r.Start+len(text), false, false)
 				return true, nil
 			}
 		}
 	}
-	markup := v.document.language == language.XML || v.document.language == language.HTML
-	close := byte(0)
-	switch c {
-	case '(':
-		close = ')'
-	case '[':
-		close = ']'
-	case '{':
-		close = '}'
-	case '"':
-		close = '"'
-	case '\'':
-		close = '\''
-	case '<':
-		if markup {
-			close = '>'
-		}
-	}
-	if close == 0 {
-		return false, nil
-	}
-	if v.document.language == language.JSON && (c == '(' || c == '\'') {
+	if pair.Open == "" {
 		return false, nil
 	}
 	ctx, known := v.lexicalContext(r.Start)
-	if !known || ctx.Comment {
+	if !known || pair.NotInComment && ctx.Comment || !selected && pair.NotInString && ctx.String {
 		return false, nil
 	}
-	selected := r.Start != r.End
-	if !selected {
-		// Let consecutive quotes form TOML multiline delimiters and YAML's
-		// doubled single quote. These are source bytes, not another empty pair.
-		if !ctx.String && (c == '\'' || c == '"') {
-			count := 1
-			if v.document.language == language.TOML {
-				count = 2
-			} else if v.document.language != language.YAML || c != '\'' {
-				count = 0
-			}
-			if count > 0 && r.Start >= count {
-				prefix, _ := v.document.model.Slice(textedit.Range{Start: r.Start - count, End: r.Start})
-				if prefix == strings.Repeat(string(c), count) {
-					return false, nil
-				}
-			}
+	state := v.operationState()
+	if rules.AllowPair != nil {
+		allowed := rules.AllowPair(language.PairContext{Typed: text, Before: beforeText, After: afterText, Context: ctx, Known: known, Selected: selected})
+		if !state.valid(v) {
+			return true, ErrOperationChanged
 		}
-		if ctx.String {
+		if !allowed {
 			return false, nil
 		}
-		if markup && (c == '"' || c == '\'') && !ctx.Value {
+	}
+	if !selected && afterText != "" {
+		next, _ := utf8.DecodeRuneInString(afterText)
+		if !unicode.IsSpace(next) && !strings.ContainsRune(rules.AutoCloseBefore, next) {
 			return false, nil
-		}
-		if markup && c == '<' && ctx.Tag {
-			return false, nil
-		}
-		if r.End < v.document.model.Len() {
-			end := min(v.document.model.Len(), r.End+4)
-			for !v.document.model.IsRuneBoundary(end) {
-				end--
-			}
-			next, _ := v.document.model.Slice(textedit.Range{Start: r.End, End: end})
-			rune, _ := utf8.DecodeRuneInString(next)
-			if !unicode.IsSpace(rune) && !strings.ContainsRune(")]},:;>", rune) {
-				return false, nil
-			}
 		}
 	}
 	before := v.Selection()
@@ -123,21 +102,37 @@ func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	after := textedit.Selection{Anchor: r.Start + 1, Caret: r.Start + 1}
+	inserted := text + content + pair.Close
+	after := textedit.Selection{Anchor: r.Start + len(text), Caret: r.Start + len(text)}
 	if selected {
-		after = textedit.Selection{Anchor: before.Anchor + 1, Caret: before.Caret + 1}
+		after = textedit.Selection{Anchor: before.Anchor + len(text), Caret: before.Caret + len(text)}
 	}
-	p := editor.Plan{Before: before, After: after, Edits: []textedit.Edit{{Range: r, Text: string(c) + content + string(close)}}}
-	state := v.operationState()
-	err = v.applyPlan(p)
-	if err == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == after {
+	err = v.applyPlan(editor.Plan{Before: before, After: after, Edits: []textedit.Edit{{Range: r, Text: inserted}}})
+	if err == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.languageEpoch == state.language && v.document.model.Revision() == state.revision+1 && v.Selection() == after {
 		if len(v.pairs) == 1024 {
 			copy(v.pairs, v.pairs[1:])
 			v.pairs = v.pairs[:1023]
 		}
-		v.pairs = append(v.pairs, autoPair{r.Start, r.Start + 1 + len(content), c, close})
+		v.pairs = append(v.pairs, autoPair{r.Start + len(text) - len(pair.Open), r.Start + len(text) + len(content), pair.Open, pair.Close})
 	}
 	return true, err
+}
+
+// lineContext copies at most 16 KiB on each side, excluding LF.
+func (v *SourceView) lineContext(r textedit.Range) (string, string) {
+	m := v.document.model
+	left, _ := m.LineRange(m.LineAt(r.Start))
+	right, _ := m.LineRange(m.LineAt(r.End))
+	start, end := max(left.Start, r.Start-(16<<10)), min(right.End, r.End+(16<<10))
+	for !m.IsRuneBoundary(start) {
+		start++
+	}
+	for !m.IsRuneBoundary(end) {
+		end--
+	}
+	before, _ := m.Slice(textedit.Range{Start: start, End: r.Start})
+	after, _ := m.Slice(textedit.Range{Start: r.End, End: end})
+	return before, after
 }
 
 func (v *SourceView) quoteEscaped(at int) bool {
@@ -161,20 +156,37 @@ func (v *SourceView) quoteEscaped(at int) bool {
 func (v *SourceView) newline() error {
 	m := v.document.model
 	s := v.Selection()
+	r := s.Range()
 	base := editor.LeadingIndent(m, s.Caret)
-	if s.Anchor == s.Caret && s.Caret > 0 && s.Caret < m.Len() {
-		previous := v.adjacent(s.Caret, false)
-		next := v.adjacent(s.Caret, true)
-		text, _ := m.Slice(textedit.Range{Start: previous, End: next})
-		ctx, known := v.lexicalContext(s.Caret)
-		if known && !ctx.String && !ctx.Comment && (text == "{}" || text == "[]" || text == "()") {
-			unit := "\t"
-			if v.indent.InsertSpaces {
-				unit = strings.Repeat(" ", v.indent.IndentWidth)
+	unit := "\t"
+	if v.indent.InsertSpaces {
+		unit = strings.Repeat(" ", v.indent.IndentWidth)
+	}
+	before, after := v.lineContext(r)
+	ctx, known := v.lexicalContext(r.Start)
+	rules := v.document.definition.Editing()
+	if rules.Newline != nil {
+		state := v.operationState()
+		edit, handled := rules.Newline(language.NewlineContext{Before: before, After: after, Indent: base, Unit: unit, Context: ctx, Known: known})
+		if !state.valid(v) {
+			return ErrOperationChanged
+		}
+		if handled {
+			if len(edit.Text) > 64<<10 || edit.DeleteBefore < 0 || edit.DeleteAfter < 0 || edit.DeleteBefore > len(before) || edit.DeleteAfter > len(after) || edit.Caret < 0 || edit.Caret > len(edit.Text) || !utf8.ValidString(edit.Text) || !utf8.ValidString(edit.Text[:edit.Caret]) || strings.ContainsRune(edit.Text, '\r') {
+				return fmt.Errorf("sourceview: invalid newline edit")
 			}
-			text = "\n" + base + unit + "\n" + base
-			end := s.Caret + 1 + len(base) + len(unit)
-			return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: end, Caret: end}, Edits: []textedit.Edit{{Range: s.Range(), Text: text}}})
+			rng := textedit.Range{Start: r.Start - edit.DeleteBefore, End: r.End + edit.DeleteAfter}
+			end := rng.Start + edit.Caret
+			return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: end, Caret: end}, Edits: []textedit.Edit{{Range: rng, Text: edit.Text}}})
+		}
+	}
+	if s.Anchor == s.Caret && known && !ctx.String && !ctx.Comment {
+		for _, p := range rules.Brackets {
+			if strings.HasSuffix(before, p.Open) && strings.HasPrefix(after, p.Close) {
+				text := "\n" + base + unit + "\n" + base
+				end := s.Caret + 1 + len(base) + len(unit)
+				return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: end, Caret: end}, Edits: []textedit.Edit{{Range: r, Text: text}}})
+			}
 		}
 	}
 	return v.ReplaceSelection("\n" + base)
@@ -182,15 +194,15 @@ func (v *SourceView) newline() error {
 
 func (v *SourceView) pairValid(p autoPair) bool {
 	m := v.document.model
-	if p.open < 0 || p.close >= m.Len() || p.close <= p.open {
+	if p.open < 0 || p.close+len(p.right) > m.Len() || p.close <= p.open {
 		return false
 	}
-	a, err := m.Slice(textedit.Range{Start: p.open, End: p.open + 1})
+	a, err := m.Slice(textedit.Range{Start: p.open, End: p.open + len(p.left)})
 	if err != nil {
 		return false
 	}
-	b, err := m.Slice(textedit.Range{Start: p.close, End: p.close + 1})
-	return err == nil && a == string(p.left) && b == string(p.right)
+	b, err := m.Slice(textedit.Range{Start: p.close, End: p.close + len(p.right)})
+	return err == nil && a == p.left && b == p.right
 }
 func (v *SourceView) deletePair() (bool, error) {
 	s := v.Selection()
@@ -198,9 +210,9 @@ func (v *SourceView) deletePair() (bool, error) {
 		return false, nil
 	}
 	for _, p := range v.pairs {
-		if p.open+1 == s.Caret && p.close == s.Caret && v.pairValid(p) {
+		if p.open+len(p.left) == s.Caret && p.close == s.Caret && v.pairValid(p) {
 			after := textedit.Selection{Anchor: p.open, Caret: p.open}
-			return true, v.applyPlan(editor.Plan{Before: s, After: after, Edits: []textedit.Edit{{Range: textedit.Range{Start: p.open, End: p.close + 1}}}})
+			return true, v.applyPlan(editor.Plan{Before: s, After: after, Edits: []textedit.Edit{{Range: textedit.Range{Start: p.open, End: p.close + len(p.right)}}}})
 		}
 	}
 	return false, nil
@@ -213,7 +225,7 @@ func (v *SourceView) mapPairs(c textedit.Change) {
 	for _, e := range c.Edits {
 		kept := v.pairs[:0]
 		for _, p := range v.pairs {
-			if e.Range.Start <= p.open && p.open < e.Range.End || e.Range.Start <= p.close && p.close < e.Range.End {
+			if touchesPair(e.Range, p.open, len(p.left)) || touchesPair(e.Range, p.close, len(p.right)) {
 				continue
 			}
 			p.open = textedit.MapOffset(p.open, e)
@@ -224,11 +236,18 @@ func (v *SourceView) mapPairs(c textedit.Change) {
 	}
 }
 
+func touchesPair(r textedit.Range, at, size int) bool {
+	if r.Start == r.End {
+		return r.Start > at && r.Start < at+size
+	}
+	return r.Start < at+size && r.End > at
+}
+
 type bracketState struct {
 	document *Document
 	revision uint64
 	caret    int
-	language language.ID
+	language uint64
 	ranges   []textedit.Range
 	valid    bool
 }
@@ -243,10 +262,10 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 		return nil
 	}
 	cache := v.brackets
-	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == s.Caret && cache.language == v.document.language {
+	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == s.Caret && cache.language == v.document.languageEpoch {
 		return cache.ranges
 	}
-	result := bracketState{document: v.document, revision: m.Revision(), caret: s.Caret, language: v.document.language}
+	result := bracketState{document: v.document, revision: m.Revision(), caret: s.Caret, language: v.document.languageEpoch}
 	start, end := max(0, s.Caret-(64<<10)), min(m.Len(), s.Caret+(64<<10))
 	for !m.IsRuneBoundary(start) {
 		start++
@@ -256,7 +275,7 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 	}
 	text, _ := m.Slice(textedit.Range{Start: start, End: end})
 	allowed := make([]bool, len(text))
-	if v.document.language == language.Plain {
+	if v.document.definition.Tokenizer() == nil {
 		for i := range allowed {
 			allowed[i] = true
 		}
@@ -274,7 +293,7 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 			}
 			r, _ := m.LineRange(row)
 			for _, t := range tokens {
-				if t.Kind != language.KindDelimiter {
+				if t.Class&language.ClassDelimiter == 0 {
 					continue
 				}
 				for i, limit := max(start, r.Start+t.Start), min(end, r.Start+t.End); i < limit; i++ {
@@ -283,47 +302,80 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 			}
 		}
 	}
-	markup := v.document.language == language.XML || v.document.language == language.HTML
-	isBracket := func(i int) bool {
-		return i >= 0 && i < len(text) && allowed[i] && (strings.ContainsRune("()[]{}", rune(text[i])) || markup && (text[i] == '<' || text[i] == '>'))
+	type delimiter struct {
+		at, end, pair int
+		open          bool
 	}
-	at := s.Caret - start
-	if !isBracket(at) {
-		at--
+	rules := v.document.definition.Editing()
+	var delimiters []delimiter
+	for i := 0; i < len(text); {
+		best := delimiter{}
+		found := false
+		for index, p := range rules.Brackets {
+			for side, seq := range []string{p.Open, p.Close} {
+				if i+len(seq) > len(text) || !strings.HasPrefix(text[i:], seq) {
+					continue
+				}
+				valid := true
+				for j := i; j < i+len(seq); j++ {
+					if !allowed[j] {
+						valid = false
+						break
+					}
+				}
+				if valid && (!found || len(seq) > best.end-best.at) {
+					best = delimiter{i, i + len(seq), index, side == 0}
+					found = true
+				}
+			}
+		}
+		if found {
+			delimiters = append(delimiters, best)
+			i = best.end
+		} else {
+			i++
+		}
 	}
-	if !isBracket(at) {
+	at := -1
+	local := s.Caret - start
+	for i, d := range delimiters {
+		if d.at <= local && local < d.end {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		for i, d := range delimiters {
+			if d.end == local {
+				at = i
+				break
+			}
+		}
+	}
+	if at < 0 {
 		result.valid = true
 		v.brackets = result
 		return nil
 	}
-	left, right := "([{<", ")]}>"
+	current := delimiters[at]
 	step := 1
-	if strings.IndexByte(right, text[at]) >= 0 {
+	if !current.open {
 		step = -1
 	}
-	stack := []byte{text[at]}
-	result.ranges = []textedit.Range{{Start: start + at, End: start + at + 1}}
-	for i := at + step; i >= 0 && i < len(text); i += step {
-		if !isBracket(i) {
+	stack := []int{current.pair}
+	result.ranges = []textedit.Range{{Start: start + current.at, End: start + current.end}}
+	for i := at + step; i >= 0 && i < len(delimiters); i += step {
+		d := delimiters[i]
+		if d.open == current.open {
+			stack = append(stack, d.pair)
 			continue
 		}
-		c := text[i]
-		opening := strings.IndexByte(left, c) >= 0
-		if opening == (step > 0) {
-			stack = append(stack, c)
-			continue
-		}
-		last := stack[len(stack)-1]
-		matched := strings.IndexByte(left, last) == strings.IndexByte(right, c)
-		if step < 0 {
-			matched = strings.IndexByte(right, last) == strings.IndexByte(left, c)
-		}
-		if !matched {
+		if stack[len(stack)-1] != d.pair {
 			break
 		}
 		stack = stack[:len(stack)-1]
 		if len(stack) == 0 {
-			result.ranges = append(result.ranges, textedit.Range{Start: start + i, End: start + i + 1})
+			result.ranges = append(result.ranges, textedit.Range{Start: start + d.at, End: start + d.end})
 			break
 		}
 	}

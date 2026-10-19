@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -145,7 +146,11 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 			}
 		}
 	}
-	return v.document.model.WordAt(pos.Offset)
+	selected := editor.WordRange(v.document.model, pos.Offset, v.document.definition.IsWord)
+	if p := v.paragraph(row); p != nil && selected.End > selected.Start {
+		selected.End = max(selected.End, r.Start+p.geometry.Adjacent(selected.Start-r.Start, true))
+	}
+	return selected
 }
 
 func containsPoint(r geometry.Rectangle, p geometry.Point) bool {
@@ -199,6 +204,8 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 			v.cancelPreedit()
 			v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
 			handled = true
+		case events.KeySlash:
+			run(v.ToggleLineComment)
 		case events.KeyC:
 			v.report(v.Copy())
 			handled = true

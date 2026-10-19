@@ -15,7 +15,8 @@
 6. 调用返回后，仅当对象、文档和修订仍对应这次操作时，应用计划中的最终选区和 reveal。
 7. 发必要的视图状态信号；外部回调后不继续使用未重新核验的对象。
 
-EditPlan 是内部数据，不是另一套文档或 undo 栈；真实输入仍经过
+EditPlan 保持内部；应用通过 ApplyEdits(document, revision, edits, afterSelection)
+提交有身份/修订防护的公开事务，规则见 [语言扩展](DesignLanguageExtensions.md)。它不另建文档或 undo 栈；真实输入仍经过
 `Window.DispatchEvent -> EventController -> 编辑命令`。
 公开编辑 API 是应用编程能力，不能成为自动化绕过正常输入分发的接口。
 已销毁控件的修改入口返回 ErrDisabled，不能因对象仍有 Go 引用而继续修改原共享文档。
