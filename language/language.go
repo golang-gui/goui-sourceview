@@ -128,9 +128,28 @@ func shellShebang(sample []byte) bool {
 	interpreter := filepath.Base(fields[0])
 	if interpreter == "env" {
 		fields = fields[1:]
-		for len(fields) > 0 && (strings.HasPrefix(fields[0], "-") || strings.Contains(fields[0], "=")) {
-			fields = fields[1:]
+		for len(fields) > 0 {
+			arg := fields[0]
+			switch {
+			case arg == "--":
+				fields = fields[1:]
+				goto interpreter
+			case arg == "-S" || arg == "--split-string" || arg == "-i" || arg == "--ignore-environment":
+				fields = fields[1:]
+			case arg == "-u" || arg == "--unset" || arg == "-C" || arg == "--chdir":
+				if len(fields) < 2 {
+					return false
+				}
+				fields = fields[2:]
+			case strings.HasPrefix(arg, "--unset=") || strings.HasPrefix(arg, "--chdir=") || !strings.HasPrefix(arg, "-") && strings.Contains(arg, "="):
+				fields = fields[1:]
+			case strings.HasPrefix(arg, "-"):
+				return false
+			default:
+				goto interpreter
+			}
 		}
+	interpreter:
 		if len(fields) == 0 {
 			return false
 		}

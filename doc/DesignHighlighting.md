@@ -271,6 +271,7 @@ token 的 16 MiB 预算不包含状态引用的 delimiter 拼写，此类状态�
 
 已知扩展名优先：`.toml`、`.yaml/.yml`、`.sh/.bash`。Shell 另识别
 `.bashrc/.bash_profile/.bash_login/.bash_logout/.profile`，以及位于 byte 0 的
-`sh`/`bash` shebang（含常用 `env`、`env -S` 写法）。最多读取调用方的 4 KiB 样本，
+`sh`/`bash` shebang（含常用 `env`、`env -S` 写法）。识别 `env` 时跳过已知选项及
+其参数，不把 `-u bash` 的变量名或 `--chdir bash` 的目录当解释器；未知选项保守返回 Plain。最多读取调用方的 4 KiB 样本，
 不 I/O、不执行 shebang。未知文件不凭 `key=value` 或 `key: value` 猜 TOML/YAML，
 `.env` 不自动视为 Shell；显式 SetLanguage 不受 Guess 影响。
