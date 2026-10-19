@@ -102,3 +102,23 @@ GUI 测试没有写入剪贴板或系统设置。GOUI 无新增要求。
 - 标签辅助取消按文档整体 256 KiB 禁用的限制，新增 300 KiB 标签闭合/名称联动回归；
   使用当前完整文本同步确认，原文和配对的临时空间随输入增长，不作低延迟承诺。
   嵌入边界仍需已分析，不猜截断前缀。没有提出 GOUI 改动要求。
+
+### 最终交付验证（2026-10-19）
+
+- SourceView 继续使用正式 GOUI v0.2.0；本轮未改动 GOUI，未新增依赖或机器专属 replace。
+  go test ./...、GOWORK=off go test ./...、全仓 race 和 go vet 全部通过；
+  Windows amd64 / macOS arm64 的 CGO_ENABLED=0 全仓构建通过。
+- Linux amd64 / Go 1.25.8 / Pango / Xvnc + Xfwm4 合成环境：折叠新增窗口以 -race 再跑通过；
+  原编辑器、快捷键、公共扩展、TOML/YAML/Shell、查找、八语言菜单与选区窗口均通过。
+  新查找窗口覆盖 Software 环境 1x/2x Dark、OpenGL 环境；折叠窗口的实际 imageResource
+  和 PixelScale 探测已在 A2 记录。其他只配置环境而未单独探测的结果不作为独立后端证据。
+- JSON 50 MiB（52,428,615 字节，257,006 行）完整 53 步、0 失败；取消标签文档大小禁用后，
+  XML 与 HTML 10 MiB 各再跑 53 步、0 失败。该结果是功能验收，不是延迟/峰值内存结论。
+- 18pt/2x 浮层外观在 2560x1800 隔离桌面通过；1x 原色值和裁剪断言通过并查看了实际截图。
+  中大文件临时数据正常删除，截图/二进制/日志在仓库外；所有临时窗口与 :140/:141 桌面已关闭。
+- 技能中的“没有内置 Markdown”旧描述已修正，并补充有效子语言、标签规则、查询范围、
+  折叠和 GoToBar 接入；skill-creator 的 quick_validate.py 通过。中英文 README 只更新对外能力，
+  具体机制留在设计文档；本轮 Markdown 本地链接检查通过。
+- 未执行 Windows/macOS 原生窗口、物理 IME、混合/分数 DPI 或 RTL 视觉矩阵。
+  Markdown 为源码编辑词法 profile，不宣称完整 CommonMark 解析/渲染。
+  正则缓存首次扫描与根标签确认仍同步，资源/后台优化留作后续专题。

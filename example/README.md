@@ -36,13 +36,13 @@ Linux 不满足 Integrated 所需能力时，GOUI 可回退到原生装饰。
 
 ## Editor
 
-`editor` embeds original JSON/XML/HTML/TOML/YAML/Shell samples, so the binary can run from any
+`editor` embeds original JSON/XML/HTML/Markdown/TOML/YAML/Shell samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and gets its own file selector. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目原创 JSON/XML/HTML/TOML/YAML/Shell 样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目原创 JSON/XML/HTML/Markdown/TOML/YAML/Shell 样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并增加对应选择按钮，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
@@ -116,3 +116,19 @@ Markdown subset, without a preview or embedded Go highlighting.
 反引号配对、列表续行和可取消补全。输入 `[` 选择链接后光标进入 URL，输入 `@`
 插入引用并在文末添加定义，Ctrl+Space 提供模板；Bold/Comment、查找和主题按钮可交互验证。
 语法是演示子集，没有预览或围栏内 Go 高亮。所有修改只在内存，重启复位，关闭窗口退出。
+
+## Folding and navigation / 折叠与导航
+
+Use the gutter arrows to fold structured markup, headings or code fences.
+Control+G opens line[:column] navigation; Escape returns focus to the editor.
+The example keeps GoToBar and FindBar mutually exclusive.
+
+点击侧栏箭头折叠结构、标题或围栏；Control+G 打开行[:列]跳转，Escape 返回编辑器。
+示例显式让跳转栏与查找栏互斥。XML/HTML 的确认名称对支持输入/删除联动，撤销只需一次。
+
+The find panel preserves multiline query/replacement text. Alt+Enter inserts
+newlines; Enter/Shift+Enter navigates. Toggle .* for Go regular expressions,
+use $1/${name} in replacements, or capture the current editor selection as scope.
+
+查找栏支持多行查询及替换；Alt+Enter 输入换行，Enter/Shift+Enter 导航。
+.* 启用 Go 正则，替换使用 $1/${name}；选区按钮捕获当前编辑器范围，结果导航不改变查询范围。

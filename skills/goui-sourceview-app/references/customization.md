@@ -68,6 +68,18 @@ func NewProvider() *source.CompletionProvider {
 `editor.SetCompletionProvider(provider)` 或声明式 `.CompletionProvider(provider)`。
 示例只保留两种结构括号的自动闭合/包裹，不自动闭合引号；JSON 的扫描器仍来自内置定义。
 
+## 标记语言与围栏
+
+先取 language.Builtin(language.Markdown) 返回的语言对象，再用 Definition() 的副本定制；子语言表使用
+language.NewMarkdown(map[string]*language.Language)，nil 选默认表，非 nil 空表禁用嵌入。
+没有全局注册。Context.Embedded 与 CompletionContext.Language/Definition 说明当前位置的
+有效子语言；DocumentID 仍指外层文档。应用提供者需要围栏内默认建议时显式转调
+source.DefaultCompletions(c)，参考 example/markdown/markdown/completion.go。
+
+XML/HTML 的 EditingRules.Tags 提供名称大小写、空元素与 raw-text 策略；Definition 的副本
+可以修改这些列表。SourceView.LinkedTags 控制确认名称对的输入/删除联动，粘贴、IME 和
+应用直接修改模型不会自动生成镜像编辑。未确认结构不应由应用猜配对。
+
 ## 实现自己的高亮扫描器
 
 先检查 `language.Tokenizer`、Input / Result / State 的实际公开注释：

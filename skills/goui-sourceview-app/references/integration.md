@@ -8,7 +8,7 @@
 | 需求 | 公开入口与同版本示例 |
 | --- | --- |
 | 命令式控件、属性和信号 | 根包 SourceView、Document；example/editor |
-| 声明式接入 | ui.SourceView、ui.FindBar；example/declarative |
+| 声明式接入 | ui.SourceView、ui.FindBar、ui.GoToBar；example/declarative |
 | 文档修改及选区事务 | Document.Model、SourceView.ApplyEdits；commands.go |
 | 查找、替换和浮层 | SourceView.SetSearch、FindNext、ReplaceCurrent、ReplaceAll；FindBar |
 | 代码配色 | scheme、SourceView.SetScheme，以及 styles.go 的公开样式部件 |
@@ -77,6 +77,18 @@ Integrated 采用 GOUI 的平台支持与降级规则。自定义窗口装饰不
 没有 FindBar 的应用仍能使用编辑器的搜索与替换 API；不要给每个按键重复创建查找栏。
 手工 ConnectChange / ConnectSelection / ConnectError 等长期连接由所属应用状态释放；
 声明式 OnChange / OnSelection / OnError 的连接由协调器管理。
+
+## 查询、跳转和折叠
+
+- SearchQuery.Regex 启用 Go regexp；SearchError() 保留非法表达式的反馈。捕获组替换使用
+  $1/${name}/$$，字面模式的替换保持字面值，不套用 JavaScript/PCRE 语义。
+- SetSearchRange(&scope) 复制独立查询范围，nil 清除；不能每次根据 FindNext 的结果重新设置。
+  换文档清除范围。FindBar 的查询/替换保留 LF，Alt+Enter 换行，Enter 仍执行查找/替换。
+- 可选 NewGoToBar/SetTarget 与 FindBar 一样放在同 Root 的 Overlay，通过 Control+G 打开，
+  输入 1 起始 line[:column]；这里的列是 Unicode 码点，最终吸附到合法停靠点。两种浮层同时
+  存在时由应用显式安排显示关系，参考 example/editor，不增加中心协调器。
+- 折叠状态属于视图，不写入文档/历史。应用用 Fold/Unfold/FoldAll/UnfoldAll 或对应声明式
+  开关/信号；语言的 FoldingFunc 提供 0 起始、保留头行的范围，处理取消和不可变快照。
 
 ## 文档、文件与编辑
 

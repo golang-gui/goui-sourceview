@@ -12,11 +12,13 @@ The project is under active development.
 
 ## Features
 
-- **Syntax highlighting** for JSON, XML, HTML, TOML, YAML and Shell.
+- **Syntax highlighting** for JSON, XML, HTML, Markdown, TOML, YAML and Shell.
+- **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.
+- **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
 - **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.
-- **Completion and brackets** with suggestions, automatic pairs and matching-bracket navigation.
+- **Completion and brackets** with suggestions, automatic pairs, matching-bracket navigation and linked tag names.
 - **Custom languages** with application-defined highlighting, editing rules and completion.
-- **Find and replace** in a floating panel, with case-sensitive and whole-word search options.
+- **Find and replace** in a floating panel, with multiline queries, regular expressions, capture replacements and selection scopes.
 - **Light and dark appearances** with syntax colors preserved in selections.
 - **Multilingual controls** with editor menus and find/replace available in eight languages.
 
@@ -53,5 +55,5 @@ the development environment, then run from the repository root:
 go run ./example/editor
 ```
 
-The example lets you edit JSON, XML, HTML, TOML, YAML and Shell, try search and completion, and switch
+The example lets you edit JSON, XML, HTML, Markdown, TOML, YAML and Shell, try search and completion, and switch
 between light and dark appearances. A [declarative example](example/declarative) and a [custom Markdown editor](example/markdown) are also available.

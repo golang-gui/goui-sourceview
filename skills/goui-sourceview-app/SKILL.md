@@ -34,15 +34,15 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
 
 - SourceView 是独立编辑控件。`gui` 接入用根包，声明式接入用本模块的 `ui`；滚动仍由
   GOUI ScrollView 提供，查找栏按需组合到 Overlay。不要嵌套 TextView 或复制编辑状态机。
-- Document 保存文本、历史和语言，可由多个视图共享；选区、滚动、配对与补全会话属于视图。
+- Document 保存文本、历史和语言，可由多个视图共享；选区、滚动、折叠、配对与补全会话属于视图。
   Document 不需要 Destroy。把文档、语言定义和补全提供者放在 build 之外或明确的持久状态中，
   不在每次重建时重载文本、重新创建提供者或手工销毁窗口拥有的控件树。
 - 文档范围、光标、token 和补全编辑使用归一化 UTF-8 文本的**字节偏移**。
   协议的 UTF-16 位置、用户看到的行列或原始 CRLF 文件偏移需要在应用边界转换。
 - GUI 控件和已挂载文档在 GUI 线程顺序访问；后台只处理独立数据，通过 App.Post 回到界面。
   文件读取、保存、编码和项目索引属于应用。组件不会因为创建文档或技能安装而自动读写文件。
-- 语言定义直接绑定到 Document，没有全局语言注册。内置 Markdown 不存在；同版本
-  `example/markdown` 展示的是应用定义的演示子集，不能当作完整 CommonMark 实现。
+- 语言定义直接绑定到 Document，没有全局语言注册。内置 language.Markdown 提供源码编辑
+  profile，example/markdown 从其副本定制规则和应用补全；它不是完整 CommonMark 渲染器。
 - 根包已登记 Basic / Modern 外观，应用按 GOUI 普通方式启用 Modern 即可。
   Scheme 只覆盖代码区域；FindBar 等界面跟随所属 stylesheet。选择前景的默认行为是保留语法色。
 
