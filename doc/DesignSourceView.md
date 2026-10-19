@@ -21,7 +21,7 @@ GOUI 不反向依赖本模块。
 | 1 | 本文 | 组成、公共 API、所有权、默认值及固定决策 |
 | 2 | [GOUI 接入与扩展](DesignGOUIIntegration.md) | 已有公开能力、真实缺口、跨仓扩展契约 |
 | 3 | [编辑核心](DesignEditing.md) | 命令、历史、选区、IME、剪贴板、查找替换 |
-| 4 | [语言与高亮](DesignHighlighting.md) | 扫描器、三种语言、行缓存、增量传播与调度 |
+| 4 | [语言与高亮](DesignHighlighting.md) | 扫描器、内置及自定义语言、行缓存、增量传播与调度 |
 | 5 | [布局与呈现](DesignLayout.md) | 视口、行号、Tab、排版、装饰与资源 |
 | 6 | [测试约定与验收](Testing.md) | 样本、断言、规模、平台矩阵与性能目标 |
 | 7 | [开发计划](Plan.md) | 切片顺序、前置依赖、产物及退出条件 |
@@ -39,7 +39,7 @@ GOUI 不反向依赖本模块。
 7. 首版 token 样式只改变前景色。字号、字重和斜体等按 token 改变度量的能力后续单独设计。
 8. 批量编辑与历史选区、可配置 Tab 排版、剪贴板错误反馈的通用缺口单独提案；不要求扩展 TextView。
 
-自有扫描器让三种语言的状态、取消边界和错误恢复可控。它不承担完整语义解析，
+自有扫描器让各语言的状态、取消边界和错误恢复可控。它不承担完整语义解析，
 也不承诺读取其他编辑器的语言规则格式；应用可实现公开 Tokenizer 适配其他引擎，
 绑定及编辑配置见 [语言扩展](DesignLanguageExtensions.md)。
 
@@ -50,10 +50,10 @@ GOUI 不反向依赖本模块。
 | 包或目录 | 首版职责 |
 | --- | --- |
 | 根包 `sourceview` | Document、SourceView、可选 FindBar、公共编辑与查找 API、信号 |
-| `language` | 语言 ID、元数据和内置语言查询；不导入 gui |
+| `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
 | `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
-| `internal/highlight` | 扫描器、行元数据与高亮缓存；不导入 gui |
+| `internal/highlight` | 行元数据、增量调度与高亮缓存；不导入 gui |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
@@ -70,7 +70,7 @@ flowchart LR
     V --> G["GOUI Widget / IME / ScrollView / typography"]
     D --> M["textedit.Model：内容与历史"]
     D --> H["highlight：行索引与分析"]
-    H --> L["language：内置语言"]
+    H --> L["language：内置及自定义定义"]
     V --> S["scheme：配色"]
 ```
 
@@ -78,7 +78,7 @@ flowchart LR
 
 | 对象 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| Document | 模型引用、语言 ID、语言 epoch、共享行元数据和 token 缓存 | 活动光标、视口、原生对象、文件路径 |
+| Document | 模型引用、不可变语言定义、语言 ID/epoch、共享行元数据和 token 缓存 | 活动光标、视口、原生对象、文件路径 |
 | SourceView | Document 引用、EditSource、选区与视觉 affinity、预编辑、搜索、布局缓存、挂载期订阅 | 其他视图状态、模型历史栈、Application |
 | FindBar（可选） | 输入与按钮子树、替换文字、分块计数、挂载期连接 | 借用的 SourceView、Document、历史 |
 | ScrollView | 滚动偏移、滚动条与视口裁剪 | 文档和代码编辑策略 |
@@ -118,9 +118,12 @@ import (
 type Document struct { /* private */ }
 func NewDocument(text string) *Document
 func NewDocumentWithModel(model *textedit.Model) *Document
+func (d *Document) ID() uint64
 func (d *Document) Model() *textedit.Model
 func (d *Document) Language() language.ID
 func (d *Document) SetLanguage(id language.ID) error
+func (d *Document) LanguageDefinition() *language.Language
+func (d *Document) SetLanguageDefinition(l *language.Language)
 
 type WrapMode = typography.WrapMode
 const (
@@ -147,6 +150,7 @@ func (v *SourceView) SetWrapMode(mode WrapMode)
 func (v *SourceView) SetShowLineNumbers(value bool)
 func (v *SourceView) SetScheme(value *scheme.Scheme)
 func (v *SourceView) ReplaceSelection(text string) error
+func (v *SourceView) ApplyEdits(d *Document, revision uint64, edits []textedit.Edit, after textedit.Selection) error
 func (v *SourceView) MoveLines(down bool) error
 func (v *SourceView) DuplicateLines(down bool) error
 func (v *SourceView) DeleteLines() error

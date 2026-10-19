@@ -180,7 +180,7 @@ Token payload 首版 LRU 目标 16 MiB，超长行以片段缓存；
 
 2026-10 扩展内置 `language.TOML`、`language.YAML`、`language.Shell`，不新增依赖或
 全局规则注册。沿用同一 Document、行身份、调度与 token 缓存；扫描分别在
-`internal/highlight/toml.go`、`yaml.go`、`shell.go`，不借用 XML 状态。
+`language/scan_toml.go`、`scan_yaml.go`、`scan_shell.go`，不借用 XML 状态。
 
 ### 9.1 规范及参考取舍
 

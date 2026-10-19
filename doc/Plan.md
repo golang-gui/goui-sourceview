@@ -5,6 +5,17 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
+## 自定义语言与 Markdown（2026-10-19）
+
+- [x] 公开不可变语言/扫描契约、自定义样式键与独立词法角色，迁移六种内置语言。
+- [x] 统一词边界、多字符配对、换行/注释及有文档身份/修订防护的编辑事务。
+- [x] 可取消后台补全、空前缀触发、提供者候选控制、每项范围/光标与附加编辑，薄声明式绑定。
+- [x] 完全使用公开 API 的 Integrated / Modern Markdown 编辑器，纯逻辑及窗口验证。
+- [x] 本机 test/race/vet、Software 1×/2×、OpenGL 1×，Windows/macOS 示例交叉构建。
+- [ ] Windows/macOS 原生窗口、真实 IME/物理快捷键、混合 DPI；可获取 GOUI 依赖的独立构建。
+
+具体改动、过程中发现的缺陷、命令及适用条件见 [扩展验证](PlanLanguageExtensions.md)。
+
 ## 中英文 README 与示例（2026-10-18）
 
 - [x] 根目录英文 README、`doc/README_CN.md` 聚焦项目展示；运行前置与操作说明集中到示例指南，完整接入代码保留在示例中。

@@ -1,9 +1,9 @@
 # SourceView examples / 示例
 
-Both examples use Modern and request
+The examples use Modern and request
 `WindowChromeIntegrated`; Linux needs a compositor for Integrated decoration.
 
-两个示例均采用 Modern 与 Integrated 窗口，Linux 的 Integrated 需要桌面合成器。
+示例均采用 Modern 与 Integrated 窗口，Linux 的 Integrated 需要桌面合成器。
 示例工具栏为英文；编辑菜单及查找栏使用 GOUI 界面语言资源。
 
 ## Setup / 环境准备
@@ -34,6 +34,8 @@ go run ./example/editor
 go run ./example/editor -theme light
 go run ./example/editor -theme dark path/to/file.html
 go run ./example/declarative
+go run ./example/markdown
+go run ./example/markdown -dark
 ```
 
 The examples also build with `CGO_ENABLED=0`. In Bash, prefix a command with
@@ -112,3 +114,17 @@ into the image. Sample data comes from the embedded files in `editor/samples/`.
 按上述步骤先捕获浅色 JSON，再切到 HTML、深色主题，打开查找替换并输入 `feature` 后截图。
 需确认实际 Integrated 已启用；Linux 无合成器时的原生回退不能标注为 Integrated。
 完成后关闭示例，图片作为文档资源保存在 `doc/images/`。
+
+## Markdown customization / 自定义 Markdown
+
+`markdown` is a small code editor built entirely with public APIs. Its adjacent
+`markdown` package supplies an application-owned tokenizer, custom color keys, word
+rules, backtick pairs, list continuation and a cancellable completion provider.
+It demonstrates links with a custom range/caret, references with an additional
+definition edit, and Bold using a single undo transaction. It is an illustrative
+Markdown subset, without a preview or embedded Go highlighting.
+
+`markdown` 示例完全使用公开接口。相邻子包提供应用自己的扫描器、样式键、词边界、
+反引号配对、列表续行和可取消补全。输入 `[` 选择链接后光标进入 URL，输入 `@`
+插入引用并在文末添加定义，Ctrl+Space 提供模板；Bold/Comment、查找和主题按钮可交互验证。
+语法是演示子集，没有预览或围栏内 Go 高亮。所有修改只在内存，重启复位，关闭窗口退出。

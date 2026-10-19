@@ -14,6 +14,7 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 - **语法高亮：** 支持 JSON、XML、HTML、TOML、YAML、Shell。
 - **源码编辑：** Unicode 选区、剪贴板、撤销/重做、缩进和整行操作。
 - **补全与括号：** 补全建议、自动配对及匹配括号跳转。
+- **自定义语言：** 由应用配置高亮、编辑规则及补全。
 - **查找替换：** 浮动面板，支持区分大小写和整词搜索。
 - **亮暗外观：** 选中文本时保留语法颜色。
 - **多语言界面：** 编辑菜单及查找替换支持八种语言。
@@ -40,4 +41,4 @@ go run ./example/editor
 ```
 
 示例可以编辑 JSON、XML、HTML、TOML、YAML、Shell，体验查找与补全，并切换亮暗外观。
-另提供[声明式示例](../example/declarative)。
+另提供[声明式示例](../example/declarative)和[自定义 Markdown 编辑器](../example/markdown)。
