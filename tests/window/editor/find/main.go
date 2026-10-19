@@ -141,9 +141,10 @@ func main() {
 					check(doc.Model().Text() == "one ONE stone one", "replace undo")
 					win.SetFocusedWidget(named(bar, "Find"))
 					key(events.KeyEscape, 0)
-					check(!bar.Opened() && a.Focused() && a.Search().Text == "one", "close focus/query")
+					check(!bar.Opened() && a.Focused() && a.Search().Text == "one" && !a.HighlightSearchMatches(), "close focus/query/highlights")
 					key(events.KeyF3, 0)
 					check(a.Selection() == (textedit.Selection{Anchor: 4, Caret: 7}), "closed-bar search navigation")
+					check(!a.HighlightSearchMatches(), "F3 restored closed-bar highlights")
 					a.SetReadOnly(true)
 					openReplace()
 				case 4:
@@ -156,6 +157,7 @@ func main() {
 					app.RequestUpdate()
 				case 6:
 					check(bar.Target() == b && len(a.EventControllers()) == baseControllers && len(b.EventControllers()) == otherControllers+1, "retarget leaked binding")
+					check(!a.HighlightSearchMatches() && b.HighlightSearchMatches(), "retarget leaked search decorations")
 					win.SetFocusedWidget(a)
 					key(events.KeyF, primary)
 					check(fallback == 1, "old editor still intercepts find")
@@ -166,6 +168,7 @@ func main() {
 					app.RequestUpdate()
 				case 7:
 					check(bar == nil && len(b.EventControllers()) == otherControllers, "removed bar retained binding")
+					check(!b.HighlightSearchMatches(), "removed open bar retained search decorations")
 					win.SetFocusedWidget(b)
 					key(events.KeyF, primary)
 					check(fallback == 2, "removed panel intercepted find")

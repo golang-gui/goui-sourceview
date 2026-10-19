@@ -20,7 +20,7 @@ var findIcons = func() map[string]gui.IconSource {
 		"previous": "M8 13V3M4 7l4-4 4 4", "next": "M8 3v10M4 9l4 4 4-4",
 		"close":       "M4 4l8 8M12 4l-8 8",
 		"replace":     "M3 3h7a3 3 0 0 1 0 6H4m3-3L4 9l3 3M10 12h3v2h-3z",
-		"selection":   "M3 3h10v10H3zM5 6h6M5 8h6M5 10h4",
+		"selection":   "M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3M5 5h6M5 8h6M5 11h4",
 		"replace-all": "M2 3h8a3 3 0 0 1 0 6H3m3-3L3 9l3 3M8 12h2v2H8zM12 12h2v2h-2z",
 	}
 	icons := make(map[string]gui.IconSource, len(paths))
@@ -107,19 +107,7 @@ func (b *FindBar) buildSurface() {
 	})
 	selectionIcon := gui.NewIcon(findIcons["selection"])
 	selectionIcon.SetStyleName("sourceview.find.icon")
-	b.selectionOnly = option(resource.InSelection, selectionIcon, func(checked bool) {
-		if b.syncing {
-			return
-		}
-		if v := b.liveTarget(); v != nil {
-			if checked {
-				r := v.Selection().Range()
-				b.fail(v.SetSearchRange(&r))
-			} else {
-				b.fail(v.SetSearchRange(nil))
-			}
-		}
-	})
+	b.selectionOnly = option(resource.InSelection, selectionIcon, b.setSelectionOnly)
 
 	b.status = gui.NewLabel("")
 	b.status.SetStyleName("sourceview.find.status")

@@ -54,6 +54,8 @@ FindBar 的外层保持普通 Widget 的 Visible；内部内容初始关闭。�
 `widgets.CheckButton` 拥有各自的输入、样式、原生资源和语义，选项有真实选中指示。
 上下项、关闭和替换使用原始矢量线条图标，并提供本地化名称；Aa 和 ab 是实际的
 ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦点和禁用语义。
+选区选项采用四角选区边界和文本行的 16 DIP 矢量图形，名称为本地化的“在选区中查找”，
+使用同一按钮样式的选中、悬停、禁用状态，不依赖单独颜色表达功能。
 提示、输入/按钮名称和计数状态支持 GOUI 的八种界面语言，见 [界面语言](DesignLocalization.md)。
 
 查询和替换的占位提示使用 GOUI TextView.SetPlaceholder，由输入框统一管理字体、基线、
@@ -80,7 +82,7 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
 ## 查询与交互
 
 SourceView.Search 是查询的唯一来源。输入变更立即 SetSearch；外部 API 更改查询时同步字段与选项，
-不重复建立搜索模型。FindBar 不控制 SourceView 的 Selection。
+不重复建立搜索模型。结果导航和范围切换通过同一搜索核心更新 SourceView 的 Selection。
 
 - 从编辑器打开时，以非空、最多 4096 字节且不含 LF 的选区作为查询；保留大小写/整词选项。
   多行/超长选区保留既有查询。栏内再次打开不拿当前匹配覆盖用户正在输入的查询。
@@ -91,8 +93,29 @@ SourceView.Search 是查询的唯一来源。输入变更立即 SetSearch；外�
 - 当前替换只修改已核验的当前源范围；无当前匹配时只定位下一项。替换成功后只有文档、修订、
   选区代次和栏目标仍属于这次操作时才继续查找，不覆盖回调切换的新文档或新选区。
 - 全部替换复用 ReplaceAll 的预算与单次撤销。只读/禁用时替换输入和按钮不可用，仍能查找和复制。
-- Escape/关闭按钮关闭栏；只有焦点原本在栏内时才把焦点归还目标。关闭保留查询及高亮，F3 可继续导航。
+- “在选区中查找”未启用且当前选区为空时禁用；启用后即使当前选区变为空仍可关闭。
+  开启时复制非空源范围，结果导航不重新捕获范围；低层 SetSearchRange 仍允许用于零长度正则的空范围。
+  切换后立即使旧计数失效，从原选区起点（包含该点）重新定位新范围内的下一匹配并环绕。
+  当前选区已对应合法匹配时保留位置；无匹配保留普通选区并清除当前搜索匹配状态。
+  第一个 64 KiB 计数分块在操作中推进，后续继续按帧计数，未完成时显示“计数中”。
+- Escape/关闭按钮关闭栏；只有焦点原本在栏内时才把焦点归还目标。关闭保留查询、替换文字和
+  大小写/整词/正则选项，清除独立查找范围并关闭普通/当前搜索背景；保留普通文本选区。
+  F3 可继续按保留的查询在全文件导航，保持搜索背景关闭；重开时恢复搜索背景。
   隐藏或卸载的栏不拦截编辑器输入；卸载后应用的相同快捷键恢复可达。
+
+搜索背景显隐由 SourceView.HighlightSearchMatches / SetHighlightSearchMatches(bool) 管理，
+新建视图默认 true，裸 SourceView 的程序化搜索行为不变；该属性只参与绘制，不改变查询、
+计数、替换或普通选区。FindBar 打开时启用，关闭或释放已打开的目标时停用；关闭范围通过
+SetSearchRange(nil) 实现。换目标、目标卸载或栏卸载时清理旧会话，打开状态重新挂载时恢复。
+同一 Document 的其他视图不受影响；不引入全局搜索会话或通用装饰注册体系。
+语义上的查询、普通选区与导航仍可用，不因背景隐藏伪装为空文本。
+范围/选区通知可重入，操作继续前核对生命周期、目标、Document、修订、查询、范围及选区代次。
+
+以上修正参照 VS Code / Monaco 1.105.0
+[选区按钮条件](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/find/browser/findWidget.ts#L415)、
+[范围切换及关闭](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/find/browser/findController.ts#L159)，
+并采用 GtkSourceView 5 [独立搜索高亮开关](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/method.SearchContext.set_highlight.html)
+的能力边界；本项目关闭后 F3 只导航的行为以上述契约为准，不宣称完全复制参考实现。
 
 | 绑定 | Windows / Linux | macOS |
 | --- | --- | --- |
@@ -140,3 +163,4 @@ base.Overlay(
 每次协调后重新解析，不引入隐式依赖追踪、窗口特例或新的调度器。缺失/错误类型目标解除旧绑定。
 Replacement/Open/ReplaceMode 仅在显式指定时受声明控制；OnOpen/OnError 的连接随协调更新和释放。
 SourceView.Search 同样仅在显式指定时受声明控制，普通重建保留交互查询；传入空 SearchQuery 可清除。
+SourceView.HighlightSearchMatches 同样仅在显式指定时受声明控制，未配置的普通重建保留关闭后的显隐状态。

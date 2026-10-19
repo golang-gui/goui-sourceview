@@ -37,6 +37,10 @@ SetSearchRange(*textedit.Range) 复制并验证原文范围；nil 恢复全文�
 当作新的文首/文末。空范围可接受位于该点的零长度匹配。ui 的 SearchRange/ClearSearchRange
 只协调显式配置，未指定时保留交互状态。
 
+FindBar 的范围按钮只允许从非空选区开启，已开启时始终允许关闭（编辑器本身禁用时除外）。
+切换范围会即时更新当前结果、搜索背景和计数状态，具体交互见 [FindBar](DesignFindBar.md#查询与交互)。
+FindBar 关闭、卸载或更换目标会释放旧会话的范围；查询及替换文本保留。
+
 ## 搜索高亮显隐
 
 HighlightSearchMatches 默认 true；false 仅停止绘制普通/当前搜索背景，不改变上述搜索、
@@ -63,6 +67,10 @@ Enter/Shift+Enter 仍查找下一/上一项，替换字段的无修饰 Enter 执
 行高依据公开 ContentSize 和 Padding，显示至多五个逻辑行的高度预算，单字段至多 200 DIP，
 更多内容由原生文本布局和滚动容器处理；不按字体 point 推断排版行高。
 浮层自然宽度 512 DIP 以容纳四个选项，窄宽度仍隐藏次要操作，保持主要输入可用。
+
+上述为当前实现记录，并不表示 GOUI 已具备紧凑自动增高的多行输入框契约。
+单行垂直居中、多行自动增高、上限滚动及统一基线由 GOUI 另行规划；本轮仅修正范围交互和
+搜索会话显隐，不继续在 FindBar 增加 TextView 排版补丁，见 [修正记录](PlanFindBarSearch.md)。
 
 ## 验证与参考
 

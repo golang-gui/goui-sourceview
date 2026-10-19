@@ -53,3 +53,20 @@ func TestZeroWidthFindProgressAndInvalidRegex(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSearchResultDiscardedWhenSelectionCallbackChangesScope(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText("foo foo")
+	v.SetSearch(SearchQuery{Text: "foo"})
+	h := v.ConnectSelection(func(textedit.Selection) {
+		r := textedit.Range{Start: 4, End: 7}
+		if err := v.SetSearchRange(&r); err != nil {
+			t.Fatal(err)
+		}
+	})
+	defer h.Disconnect()
+	v.FindNext(false)
+	if v.currentMatch != nil {
+		t.Fatal("obsolete raw match survived a reentrant scope change")
+	}
+}

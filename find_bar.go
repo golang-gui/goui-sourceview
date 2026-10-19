@@ -88,7 +88,11 @@ func (b *FindBar) SetTarget(v *SourceView) {
 	if b.Destroyed() || b.target == v {
 		return
 	}
+	epoch := b.epoch
 	b.disconnect()
+	if b.Destroyed() || b.epoch != epoch {
+		return
+	}
 	b.target = v
 	b.epoch++
 	b.count.document = nil
@@ -171,8 +175,12 @@ func (b *FindBar) Open(replace bool) error {
 		}
 	}
 	b.SetReplaceMode(replace)
+	if b.Destroyed() || b.epoch != epoch || b.liveTarget() != v {
+		return ErrOperationChanged
+	}
 	changed := !b.open
 	b.open = true
+	v.SetHighlightSearchMatches(true)
 	b.content.SetVisible(true)
 	b.refresh()
 	if b.liveTarget() != v || b.epoch != epoch {
@@ -189,8 +197,9 @@ func (b *FindBar) Open(replace bool) error {
 	return nil
 }
 
-// Close returns focus only when it was inside the bar. The query and its
-// highlights stay in the editor so next/previous bindings continue to work.
+// Close hides search backgrounds and clears the search scope, retaining the
+// query for reopening and next/previous navigation. It returns focus only when
+// focus was inside the bar, preserving ordinary text selection.
 func (b *FindBar) Close() {
 	if b.Destroyed() || !b.open {
 		return
@@ -198,7 +207,20 @@ func (b *FindBar) Close() {
 	focus := b.ContainsFocus()
 	b.open = false
 	b.epoch++
+	epoch, v := b.epoch, b.target
+	attached := len(b.attached) != 0
+	valid := func() bool { return !b.Destroyed() && !b.open && b.epoch == epoch && b.target == v }
 	b.content.SetVisible(false)
+	if !valid() {
+		return
+	}
+	if attached && v != nil {
+		v.SetHighlightSearchMatches(false)
+		_ = v.SetSearchRange(nil)
+		if !valid() {
+			return
+		}
+	}
 	if focus {
 		if v := b.liveTarget(); v != nil && visible(v) {
 			if host, ok := b.Root().(gui.EventTarget); ok {
@@ -206,7 +228,7 @@ func (b *FindBar) Close() {
 			}
 		}
 	}
-	if !b.Destroyed() && !b.open {
+	if valid() {
 		b.openSignal.Emit(false)
 	}
 }
@@ -256,16 +278,29 @@ func (b *FindBar) attach() {
 	}
 	b.target.AddEventController(b.keys)
 	b.attached = signal.Handles{b.target.searchState.Connect(b.refresh)}
+	if b.open {
+		b.target.SetHighlightSearchMatches(true)
+	}
 	b.refresh()
 }
 func (b *FindBar) detach() {
-	if b.target != nil {
-		b.target.RemoveEventController(b.keys)
+	v := b.target
+	attached := len(b.attached) != 0
+	if v != nil {
+		v.RemoveEventController(b.keys)
 	}
 	b.attached.Disconnect()
 	b.attached = nil
+	if attached && b.open && v != nil && !v.Destroyed() {
+		v.SetHighlightSearchMatches(false)
+		_ = v.SetSearchRange(nil)
+	}
 }
-func (b *FindBar) disconnect() { b.detach(); b.lifetime.Disconnect(); b.lifetime = nil }
+func (b *FindBar) disconnect() {
+	b.lifetime.Disconnect()
+	b.lifetime = nil
+	b.detach()
+}
 
 func (b *FindBar) refresh() {
 	if b.Destroyed() || b.syncing {
@@ -279,11 +314,17 @@ func (b *FindBar) refresh() {
 	active := v != nil && gui.IsEnabled(v)
 	editable := active && !v.ReadOnly()
 	searchable := active && v.SearchError() == nil && v.query.Text != ""
+	canScope := false
+	if active {
+		_, limited := v.SearchRange()
+		selection := v.Selection().Range()
+		canScope = limited || selection.Start < selection.End
+	}
 	for _, item := range []struct {
 		widget  gui.Widget
 		enabled bool
 	}{
-		{b.find, active}, {b.matchCase, active}, {b.wholeWord, active}, {b.regex, active}, {b.selectionOnly, active},
+		{b.find, active}, {b.matchCase, active}, {b.wholeWord, active}, {b.regex, active}, {b.selectionOnly, canScope},
 		{b.previous, searchable}, {b.next, searchable},
 		{b.replacement, editable}, {b.replace, editable && searchable}, {b.replaceAll, editable && searchable},
 	} {

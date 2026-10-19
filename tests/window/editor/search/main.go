@@ -4,21 +4,27 @@
 // Alt+Enter inserts a query newline, toggle regex and selection scope, replace
 // captures once and undo, retain invalid syntax with inline feedback, navigate
 // zero-width matches. All assertions concern text, selection, count and enabled
-// state. No files/clipboard/settings changes; closing early fails, restart
+// state. Also checks disabled empty-selection scope, immediate results/counts
+// on toggling literal/regex scopes, closing clears scope/highlights but keeps
+// query/replacement/F3, and scope navigation yields to reentrant callbacks.
+// No files/clipboard/settings changes; closing early fails, restart
 // resets; exits after PASS. Physical IME and real DPI transitions are separate.
 package main
 
 import (
 	"flag"
+	"log"
+	"runtime"
+	"strings"
+	"time"
+
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
-	"log"
-	"runtime"
-	"time"
+	"github.com/golang-gui/goui/widgets"
 )
 
 func must(e error) {
@@ -144,12 +150,120 @@ func main() {
 		check(v.Selection().Caret == 4, "zero match did not progress")
 	})
 
+	count := func(want int, complete bool) {
+		state := bar.Snapshot().Attributes["sourceview.find"].(map[string]any)
+		check(state["count"] == want && state["countComplete"] == complete, "scope result count was stale")
+	}
+	checked := func() bool {
+		return named(bar, "Find in selection").Snapshot().Attributes[widgets.CheckInfoKey].(widgets.CheckInfo).State == widgets.CheckChecked
+	}
+	for _, regex := range []bool{false, true} {
+		steps = append(steps, func() {
+			bar.Close()
+			doc.Model().SetText("foo bar foo bar foo")
+			v.SetSelection(textedit.Selection{})
+			v.SetSearch(source.SearchQuery{Text: "foo", Regex: regex})
+			win.SetFocusedWidget(v)
+			key(events.KeyF, primary)
+			check(!gui.IsEnabled(named(bar, "Find in selection")), "empty-selection scope enabled")
+			click("Find in selection")
+			_, limited := v.SearchRange()
+			check(!limited && !checked(), "disabled scope button changed search range")
+		})
+		steps = append(steps, func() {
+			v.SetSelection(textedit.Selection{Anchor: 4, Caret: 19})
+			check(gui.IsEnabled(named(bar, "Find in selection")), "selection did not enable scope synchronously")
+			v.SetReadOnly(true)
+			click("Find in selection")
+			r, limited := v.SearchRange()
+			check(limited && checked() && r == (textedit.Range{Start: 4, End: 19}), "captured scope lost")
+			check(v.Selection().Range() == (textedit.Range{Start: 8, End: 11}), "scope activation did not select its first match")
+			count(2, true)
+			v.SetReadOnly(false)
+		})
+		steps = append(steps, func() {
+			v.SetSelection(textedit.Selection{})
+			r, limited := v.SearchRange()
+			check(limited && r == (textedit.Range{Start: 4, End: 19}), "result selection replaced captured scope")
+			check(gui.IsEnabled(named(bar, "Find in selection")), "active scope cannot be turned off without a selection")
+			click("Find in selection")
+			_, limited = v.SearchRange()
+			check(!limited && !checked() && v.Selection().Range() == (textedit.Range{Start: 0, End: 3}), "scope deactivation did not update result")
+			count(3, true)
+		})
+		steps = append(steps, func() {
+			v.SetSelection(textedit.Selection{Anchor: 4, Caret: 7})
+			click("Find in selection")
+			check(v.Selection().Range() == (textedit.Range{Start: 4, End: 7}), "empty result replaced user selection")
+			count(0, true)
+			click("Find in selection")
+			check(v.Selection().Range() == (textedit.Range{Start: 8, End: 11}), "removing empty scope kept stale result")
+			count(3, true)
+		})
+		steps = append(steps, func() {
+			click("Find in selection")
+			count(1, true)
+			selection, query, replacement := v.Selection(), v.Search(), bar.Replacement()
+			win.SetFocusedWidget(named(bar, "Find"))
+			key(events.KeyEscape, 0)
+			_, limited := v.SearchRange()
+			check(!bar.Opened() && !limited && !v.HighlightSearchMatches(), "close left search scope/decorations")
+			check(v.Focused() && v.Selection() == selection && v.Search() == query && bar.Replacement() == replacement, "close lost focus/selection/query/replacement")
+			key(events.KeyF3, 0)
+			check(v.Selection().Range() == (textedit.Range{Start: 16, End: 19}) && !v.HighlightSearchMatches(), "closed F3 search restored decorations or kept scope")
+			v.SetSelection(textedit.Selection{})
+			key(events.KeyF, primary)
+			check(bar.Opened() && v.HighlightSearchMatches() && v.Search() == query && !checked(), "reopening failed to restore whole-document search")
+		})
+	}
+	steps = append(steps, func() {
+		// Keep this a chunked-count scenario. A single enormous paragraph with
+		// whole-word/whitespace decorations exercises a separate rendering cost.
+		doc.Model().SetText(strings.Repeat("foo\n", 20000))
+		v.SetSearch(source.SearchQuery{Text: "foo"})
+		v.SetSelection(textedit.Selection{Anchor: 40000, Caret: 40007})
+		click("Find in selection")
+		count(2, false)
+	})
+	steps = append(steps, func() {
+		count(2, true)
+		bar.Close()
+		doc.Model().SetText("foo bar foo bar foo")
+		v.SetSelection(textedit.Selection{})
+		must(bar.Open(false))
+		v.SetSelection(textedit.Selection{Anchor: 4, Caret: 19})
+		replacement := source.NewDocument("keep")
+		h := v.ConnectSelection(func(s textedit.Selection) {
+			if s.Range() == (textedit.Range{Start: 8, End: 11}) {
+				v.SetDocument(replacement)
+				bar.Close()
+			}
+		})
+		click("Find in selection")
+		h.Disconnect()
+		check(v.Document() == replacement && v.Selection() == (textedit.Selection{}) && !bar.Opened() && !v.HighlightSearchMatches(), "scope navigation overwrote reentrant document/close")
+	})
+	steps = append(steps, func() {
+		must(bar.Open(false))
+		foreign := source.NewSourceView()
+		foreign.Document().Model().SetText("foo")
+		foreign.SetSearch(source.SearchQuery{Text: "foo"})
+		scope := textedit.Range{Start: 0, End: 3}
+		must(foreign.SetSearchRange(&scope))
+		bar.SetTarget(foreign) // Not mounted: this bar has never managed its search.
+		bar.Close()
+		actual, limited := foreign.SearchRange()
+		check(foreign.HighlightSearchMatches() && limited && actual == scope, "bar cleared an unattached target's independent search")
+		bar.SetTarget(v)
+	})
+
 	index := 0
 	complete := false
 	timer := app.NewTimer()
 	defer timer.Stop()
 	timer.ConnectTimeout(func() {
 		if index < len(steps) {
+			log.Printf("search scenario %d/%d", index+1, len(steps))
 			steps[index]()
 			index++
 		} else {

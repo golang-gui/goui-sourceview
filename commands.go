@@ -210,13 +210,21 @@ func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
 			}
 		}
 	}
+	return v.findFrom(start, backward)
+}
+
+// findFrom includes the starting position, unlike advancing past a current
+// match. FindBar uses it to reconcile results after changing the search scope.
+func (v *SourceView) findFrom(start int, backward bool) (textedit.Range, bool) {
 	r, ok := v.search.Find(v.document.model, start, backward)
 	if ok {
 		v.document.model.BreakUndoGroup()
-		d, revision := v.document, v.document.model.Revision()
+		d, revision, search := v.document, v.document.model.Revision(), v.search
+		scope, limited := v.SearchRange()
 		expectedSelectionEpoch := v.selectionEpoch + 1
 		v.setSelection(textedit.Selection{Anchor: r.Start, Caret: r.End}, false, true)
-		if v.document == d && d.model.Revision() == revision && v.selectionEpoch == expectedSelectionEpoch {
+		actual, scoped := v.SearchRange()
+		if !v.Destroyed() && v.document == d && v.search == search && actual == scope && scoped == limited && d.model.Revision() == revision && v.selectionEpoch == expectedSelectionEpoch {
 			v.currentMatch = &searchMatch{raw: r, revision: revision, selectionEpoch: v.selectionEpoch}
 		}
 	}
