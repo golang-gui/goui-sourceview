@@ -1,12 +1,14 @@
 package sourceview
 
 import (
+	"context"
+	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -14,26 +16,43 @@ import (
 	"github.com/golang-gui/goui/platform/events"
 )
 
-// Completion is a literal replacement for CompletionContext.Range. Empty Text
-// inserts Label. Snippets, asynchronous work and additional edits are separate
-// capabilities; providers do not own the popup or an undo stack.
-type Completion struct{ Label, Text, Detail string }
-
-// CompletionContext describes one synchronous request on the GUI thread.
-// Range covers the complete word, Prefix ends at Caret; offsets are UTF-8 bytes.
-type CompletionContext struct {
-	Document *Document
-	Revision uint64
-	Language language.ID
-	Range    textedit.Range
-	Caret    int
-	Prefix   string
-	Explicit bool
+// Completion is a literal edit. Nil Range uses the requested word range. Empty
+// Text uses Label. Caret, when set, is a UTF-8 offset relative to inserted Text.
+// AdditionalEdits use the same original document coordinates as the primary edit.
+type Completion struct {
+	Label, Text, Detail string
+	Range               *textedit.Range
+	AdditionalEdits     []textedit.Edit
+	Caret               *int
 }
 
-// CompletionProvider adds application proposals to built-in language and word
-// suggestions. Return promptly; do not access GUI objects from background work.
-type CompletionProvider func(CompletionContext) ([]Completion, error)
+// CompletionContext is an immutable, bounded snapshot, safe on a worker. It has
+// no live Model, Document or Widget. Offsets are UTF-8 bytes. NearbyText has at
+// most 32 KiB on either side; Before/After have at most 16 KiB of the current line.
+type CompletionContext struct {
+	DocumentID, Revision         uint64
+	Language                     language.ID
+	Definition                   *language.Language
+	Range                        textedit.Range
+	Caret                        int
+	Prefix                       string
+	Explicit                     bool
+	Trigger                      string
+	Lexical                      language.Context
+	ContextKnown                 bool
+	Before, After, NearbyText    string
+	NearbyOffset, DocumentLength int
+}
+
+// CompletionProvider completely owns candidates, filtering and order. Treat
+// this configuration as immutable; reuse its pointer across declarative updates.
+// Complete runs on one worker per view, must honor cancellation, and must not
+// touch GUI objects. Nil provider selects DefaultCompletions. Empty results stay
+// empty. TriggerCharacters allows automatic requests even with an empty prefix.
+type CompletionProvider struct {
+	TriggerCharacters string
+	Complete          func(context.Context, CompletionContext) ([]Completion, error)
+}
 
 type completionSession struct {
 	state    operationState
@@ -47,7 +66,10 @@ type completionSession struct {
 	shown    bool
 }
 
-func (v *SourceView) SetCompletionProvider(provider CompletionProvider) {
+func (v *SourceView) SetCompletionProvider(provider *CompletionProvider) {
+	if v.completionProvider == provider {
+		return
+	}
 	v.closeCompletion()
 	v.completionProvider = provider
 }
@@ -60,12 +82,9 @@ func (v *SourceView) SetAutomaticCompletion(enabled bool) {
 }
 
 // ShowCompletion requests suggestions at the current caret. No proposals is a
-// normal result. Errors from providers or popup creation are returned directly.
+// normal result. Asynchronous failures are delivered once through ConnectError.
 func (v *SourceView) ShowCompletion() error { return v.complete(true) }
 
-func completionRune(r rune, id language.ID) bool {
-	return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r) || r == '_' || (id == language.TOML || id == language.YAML) && r == '-' || (id == language.XML || id == language.HTML) && strings.ContainsRune("-:.", r)
-}
 func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) {
 	m := v.document.model
 	s := v.Selection()
@@ -85,14 +104,14 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	a, b := s.Caret-start, s.Caret-start
 	for a > 0 {
 		r, n := utf8.DecodeLastRuneInString(text[:a])
-		if !completionRune(r, v.document.language) {
+		if !v.document.definition.IsWord(r) {
 			break
 		}
 		a -= n
 	}
 	for b < len(text) {
 		r, n := utf8.DecodeRuneInString(text[b:])
-		if !completionRune(r, v.document.language) {
+		if !v.document.definition.IsWord(r) {
 			break
 		}
 		b += n
@@ -100,66 +119,44 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	if a == 0 && start > r.Start || b == len(text) && end < r.End {
 		return CompletionContext{}, false
 	}
-	return CompletionContext{Document: v.document, Revision: m.Revision(), Language: v.document.language, Range: textedit.Range{Start: start + a, End: start + b}, Caret: s.Caret, Prefix: text[a : s.Caret-start], Explicit: explicit}, true
+	before, after := v.lineContext(s.Range())
+	nearbyStart, nearbyEnd := max(0, s.Caret-(32<<10)), min(m.Len(), s.Caret+(32<<10))
+	for !m.IsRuneBoundary(nearbyStart) {
+		nearbyStart++
+	}
+	for !m.IsRuneBoundary(nearbyEnd) {
+		nearbyEnd--
+	}
+	nearby, _ := m.Slice(textedit.Range{Start: nearbyStart, End: nearbyEnd})
+	wordRange := textedit.Range{Start: start + a, End: start + b}
+	ctx, known := v.lexicalContext(wordRange.Start)
+	return CompletionContext{DocumentID: v.document.id, Revision: m.Revision(), Language: v.document.language, Definition: v.document.definition, Range: wordRange, Caret: s.Caret, Prefix: text[a : s.Caret-start], Explicit: explicit, Lexical: ctx, ContextKnown: known, Before: before, After: after, NearbyText: nearby, NearbyOffset: nearbyStart, DocumentLength: m.Len()}, true
 }
 
-func (v *SourceView) proposals(c CompletionContext) []Completion {
-	var out []Completion
-	ctx, known := v.lexicalContext(c.Range.Start)
-	if (c.Language == language.TOML || c.Language == language.YAML || c.Language == language.Shell) && (!known || ctx.Comment || ctx.String) {
+// LanguageCompletions returns the definition's static suggestions in code context.
+func LanguageCompletions(c CompletionContext) []Completion {
+	if c.Definition == nil || !c.ContextKnown || c.Lexical.String || c.Lexical.Comment {
 		return nil
 	}
-	if known && !ctx.Comment && !ctx.String {
-		switch c.Language {
-		case language.JSON:
-			for _, word := range []string{"false", "null", "true"} {
-				out = append(out, Completion{Label: word, Detail: "JSON"})
-			}
-		case language.TOML:
-			if ctx.Value {
-				for _, word := range []string{"false", "true", "inf", "nan"} {
-					out = append(out, Completion{Label: word, Detail: "TOML"})
-				}
-			}
-		case language.YAML:
-			for _, word := range []string{"false", "null", "true"} {
-				out = append(out, Completion{Label: word, Detail: "YAML"})
-			}
-		case language.Shell:
-			for _, word := range []string{"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function", "select", "time", "coproc", "echo", "printf", "export", "readonly", "local", "return", "exit", "unset", "set", "test", "source", "read", "trap", "shift", "getopts"} {
-				out = append(out, Completion{Label: word, Detail: "Shell"})
-			}
-		case language.HTML:
-			words := []string{"a", "article", "body", "button", "div", "footer", "form", "h1", "head", "header", "html", "img", "input", "label", "li", "link", "main", "meta", "nav", "p", "script", "section", "span", "style", "table", "tbody", "td", "textarea", "th", "thead", "title", "tr", "ul"}
-			if ctx.Tag && !ctx.TagName {
-				words = []string{"alt", "class", "disabled", "href", "id", "lang", "name", "rel", "role", "src", "style", "title", "type", "value"}
-			}
-			if ctx.Tag {
-				for _, word := range words {
-					out = append(out, Completion{Label: word, Detail: "HTML"})
-				}
-			}
-		case language.XML:
-			if ctx.Tag && !ctx.TagName {
-				for _, word := range []string{"xmlns", "xml:lang", "xml:space"} {
-					out = append(out, Completion{Label: word, Detail: "XML"})
-				}
-			}
-		}
+	var out []Completion
+	name := c.Definition.Info().Name
+	for _, word := range c.Definition.Suggestions(c.Lexical) {
+		out = append(out, Completion{Label: word, Detail: name})
 	}
-	// Document words use a bounded nearby window, never a full-file scan per key.
-	m := c.Document.model
-	start, end := max(0, c.Caret-(32<<10)), min(m.Len(), c.Caret+(32<<10))
-	for !m.IsRuneBoundary(start) {
-		start++
+	return out
+}
+
+// DocumentCompletions returns whole words from the bounded nearby snapshot.
+func DocumentCompletions(c CompletionContext) []Completion {
+	if c.Definition == nil {
+		return nil
 	}
-	for !m.IsRuneBoundary(end) {
-		end--
-	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: end})
+	text := c.NearbyText
+	start, end := c.NearbyOffset, c.NearbyOffset+len(text)
+	var out []Completion
 	wordStart := -1
 	for i, r := range text {
-		if completionRune(r, c.Language) {
+		if c.Definition.IsWord(r) {
 			if wordStart < 0 {
 				wordStart = i
 			}
@@ -172,18 +169,27 @@ func (v *SourceView) proposals(c CompletionContext) []Completion {
 			wordStart = -1
 		}
 	}
-	if wordStart >= 0 && end == m.Len() && start+wordStart != c.Range.Start {
+	if wordStart >= 0 && end == c.DocumentLength && start+wordStart != c.Range.Start {
 		out = append(out, Completion{Label: text[wordStart:], Detail: "word"})
 	}
 	return out
 }
 
-func normalizeCompletions(items []Completion, c CompletionContext) []Completion {
+// DefaultCompletions explicitly combines language suggestions and nearby words,
+// with case-insensitive prefix filtering, de-duplication and alphabetical order.
+func DefaultCompletions(c CompletionContext) []Completion {
+	out := LanguageCompletions(c)
+	if c.Definition != nil && c.Definition.AllowsWordSuggestions(c.Lexical, c.ContextKnown) {
+		out = append(out, DocumentCompletions(c)...)
+	}
+	return normalizeCompletions(out, c)
+}
+func (v *SourceView) proposals(c CompletionContext) []Completion { return DefaultCompletions(c) }
+
+func sanitizeCompletions(items []Completion) []Completion {
 	out := make([]Completion, 0, min(64, len(items)))
-	seen := map[string]bool{}
-	prefix := strings.ToLower(c.Prefix)
 	for _, item := range items {
-		if len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 {
+		if len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 || len(item.AdditionalEdits) > 128 {
 			continue
 		}
 		item.Label = textedit.Normalize(item.Label)
@@ -192,17 +198,47 @@ func normalizeCompletions(items []Completion, c CompletionContext) []Completion 
 			item.Text = item.Label
 		}
 		item.Text = textedit.Normalize(item.Text)
-		if item.Label == "" || len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 || strings.ContainsAny(item.Label, "\r\n\t\v\f\u0085\u2028\u2029") {
+		if item.Label == "" || len(item.Text) > 64<<10 || strings.ContainsAny(item.Label, "\r\n\t\v\f\u0085\u2028\u2029") {
 			continue
 		}
+		total := len(item.Text)
+		valid := true
+		for _, e := range item.AdditionalEdits {
+			total += len(e.Text)
+			if len(e.Text) > 64<<10 || total > 1<<20 {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			continue
+		}
+		if item.Range != nil {
+			r := *item.Range
+			item.Range = &r
+		}
+		if item.Caret != nil {
+			at := *item.Caret
+			item.Caret = &at
+		}
+		item.AdditionalEdits = slices.Clone(item.AdditionalEdits)
+		out = append(out, item)
+		if len(out) == 64 {
+			break
+		}
+	}
+	return out
+}
+func normalizeCompletions(items []Completion, c CompletionContext) []Completion {
+	var out []Completion
+	seen := map[string]bool{}
+	prefix := strings.ToLower(c.Prefix)
+	for _, item := range sanitizeCompletions(items) {
 		if !strings.HasPrefix(strings.ToLower(item.Label), prefix) || item.Text == c.Prefix || seen[item.Text] {
 			continue
 		}
 		seen[item.Text] = true
 		out = append(out, item)
-		if len(out) == 64 {
-			break
-		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Label < out[j].Label })
 	return out
@@ -241,7 +277,8 @@ func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rect
 	return geometry.Point{X: x - completionTextInset, Y: caret.Y + caret.Height + 2}
 }
 
-func (v *SourceView) complete(explicit bool) error {
+func (v *SourceView) complete(explicit bool) error { return v.completeTriggered(explicit, "") }
+func (v *SourceView) completeTriggered(explicit bool, trigger string) error {
 	if v.closingCompletion {
 		return ErrOperationChanged
 	}
@@ -256,22 +293,32 @@ func (v *SourceView) complete(explicit bool) error {
 		return nil
 	}
 	c, ok := v.completionContext(explicit)
-	if !ok || !explicit && c.Prefix == "" {
+	c.Trigger = trigger
+	triggers := ""
+	if v.completionProvider != nil {
+		triggers = v.completionProvider.TriggerCharacters
+	} else if c.Language == language.XML || c.Language == language.HTML {
+		triggers = "<"
+	}
+	triggered := utf8.RuneCountInString(trigger) == 1 && strings.Contains(triggers, trigger)
+	if !ok || !explicit && c.Prefix == "" && !triggered {
 		return nil
 	}
 	state, epoch := v.operationState(), v.completionEpoch
-	items := v.proposals(c)
-	if v.completionProvider != nil {
-		extra, err := v.completionProvider(c)
-		if !state.valid(v) || epoch != v.completionEpoch || v.document.language != c.Language {
-			return ErrOperationChanged
+	if provider := v.completionProvider; provider != nil {
+		if provider.Complete == nil {
+			return nil
 		}
-		if err != nil {
-			return err
-		}
-		items = append(extra, items...)
+		v.queueCompletion(state, epoch, c, provider.Complete)
+		return nil
 	}
-	items = normalizeCompletions(items, c)
+	return v.presentCompletions(state, epoch, c, DefaultCompletions(c))
+}
+func (v *SourceView) presentCompletions(state operationState, epoch uint64, c CompletionContext, items []Completion) error {
+	if !state.valid(v) || epoch != v.completionEpoch || !v.mounted || !v.Focused() || v.editable() != nil || v.projection != nil {
+		return nil
+	}
+	items = sanitizeCompletions(items)
 	if len(items) == 0 {
 		return nil
 	}
@@ -314,6 +361,9 @@ func (v *SourceView) closeCompletion() {
 	v.closingCompletion = true
 	defer func() { v.closingCompletion = false }()
 	v.completionEpoch++
+	if v.completionQueue != nil {
+		v.completionQueue.cancel()
+	}
 	s := v.completion
 	v.completion = nil
 	if s != nil {
@@ -326,20 +376,46 @@ func (v *SourceView) acceptCompletion(s *completionSession, index int) error {
 	if v.completion != s || !s.state.valid(v) || s.language != v.document.language || index < 0 || index >= len(s.items) {
 		return nil
 	}
-	text := s.items[index].Text
+	item := s.items[index]
 	r := s.range_
-	before := v.Selection()
+	if item.Range != nil {
+		r = *item.Range
+	}
+	caret := len(item.Text)
+	if item.Caret != nil {
+		caret = *item.Caret
+	}
+	if caret < 0 || caret > len(item.Text) || !utf8.ValidString(item.Text[:caret]) {
+		return fmt.Errorf("sourceview: invalid completion caret")
+	}
+	edits := slices.Clone(item.AdditionalEdits)
+	for _, e := range edits {
+		if e.Range.Start < r.End && e.Range.End > r.Start || e.Range.Start == r.Start || e.Range.End == r.Start && e.Range.Start == e.Range.End {
+			return fmt.Errorf("sourceview: overlapping completion edits")
+		}
+	}
+	edits = append(edits, textedit.Edit{Range: r, Text: item.Text})
+	sort.SliceStable(edits, func(i, j int) bool { return edits[i].Range.Start < edits[j].Range.Start })
+	end := r.Start + caret
+	for _, e := range item.AdditionalEdits {
+		if e.Range.End <= r.Start {
+			end += len(textedit.Normalize(e.Text)) - (e.Range.End - e.Range.Start)
+		}
+	}
 	v.closeCompletion()
-	if !s.state.valid(v) || s.language != v.document.language {
+	if !s.state.valid(v) {
 		return ErrOperationChanged
 	}
-	end := r.Start + len(text)
-	return v.applyPlan(editor.Plan{Edits: []textedit.Edit{{Range: r, Text: text}}, Before: before, After: textedit.Selection{Anchor: end, Caret: end}})
+	return v.ApplyEdits(s.state.document, s.state.revision, edits, textedit.Selection{Anchor: end, Caret: end})
 }
 
 func (v *SourceView) completionKey(event events.KeyEvent) bool {
 	s := v.completion
 	if s == nil {
+		if event.Key == events.KeyEscape && v.completionQueue != nil && v.completionQueue.pending() {
+			v.closeCompletion()
+			return true
+		}
 		return false
 	}
 	if !s.state.valid(v) || s.language != v.document.language {

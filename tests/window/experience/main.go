@@ -4,7 +4,7 @@
 // Initial state: a plain-text editor with line numbers hidden. Checks double
 // click including the trailing half of a character, word dragging, triple click,
 // partial selection foreground, right-click preservation, menu keyboard/pointer
-// activation, completion keyboard/pointer/cancellation/provider reentry, bracket
+// activation, completion keyboard/pointer/cancellation/stale asynchronous provider results, bracket
 // insertion/overtype/surround/deletion/newline and atomic undo via normal
 // window/popup event dispatch. No clipboard, files or settings are changed.
 // Record OS, backend and scale. Native IME is outside this program's coverage.
@@ -13,7 +13,7 @@ package main
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"image/color"
 	"log"
 	"runtime"
@@ -251,15 +251,15 @@ func main() {
 			v.SetReadOnly(true)
 			check(len(win.Popovers()) == 0, "read-only retained completion")
 			v.SetReadOnly(false)
-			var reported error
-			h := v.ConnectError(func(err error) { reported = err })
-			defer h.Disconnect()
-			v.SetCompletionProvider(func(c source.CompletionContext) ([]source.Completion, error) {
-				d.Model().SetText("changed")
+			v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
+				// Application mutation belongs on GUI, even from a provider.
+				app.Post(func() { d.Model().SetText("changed") })
 				return []source.Completion{{Label: "div"}}, nil
-			})
+			}})
 			key(events.KeySpace, events.ModifierControl)
-			check(errors.Is(reported, source.ErrOperationChanged) && len(win.Popovers()) == 0 && d.Model().Text() == "changed", "reentrant completion escaped guard")
+		},
+		func() {
+			check(len(win.Popovers()) == 0 && d.Model().Text() == "changed", "late completion escaped revision guard")
 			v.SetCompletionProvider(nil)
 			must(d.SetLanguage(language.JSON))
 			d.Model().SetText("tr")
@@ -268,7 +268,7 @@ func main() {
 			scroll.SetChild(nil)
 			check(len(win.Popovers()) == 0, "unmount retained completion")
 			scroll.SetChild(v)
-			log.Print("PASS JSON/HTML completion keyboard/pointer, cancellation, provider reentry, pair insertion/overtype/surround/deletion and atomic history")
+			log.Print("PASS JSON/HTML completion keyboard/pointer, cancellation, stale asynchronous provider results, pair insertion/overtype/surround/deletion and atomic history")
 			completed = true
 			win.Destroy()
 		},

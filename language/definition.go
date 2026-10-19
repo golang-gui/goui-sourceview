@@ -121,6 +121,9 @@ type Definition struct {
 	Styles    []Kind
 	// Suggest returns static candidates and must be safe for concurrent use.
 	Suggest func(Context) []string
+	// AllowWordSuggestions controls the default nearby-word source. Nil allows it.
+	// This pure callback may run on a completion worker.
+	AllowWordSuggestions func(Context, bool) bool
 }
 
 // Language is an immutable, directly bindable definition. ID is descriptive,
@@ -180,6 +183,11 @@ func (l *Language) Suggestions(c Context) []string {
 		return nil
 	}
 	return slices.Clone(l.definition.Suggest(c))
+}
+
+// AllowsWordSuggestions applies the definition's default nearby-word policy.
+func (l *Language) AllowsWordSuggestions(c Context, known bool) bool {
+	return l.definition.AllowWordSuggestions == nil || l.definition.AllowWordSuggestions(c, known)
 }
 func (l *Language) IsWord(r rune) bool { return l.definition.Editing.Word(r) }
 func IdentifierRune(r rune) bool {

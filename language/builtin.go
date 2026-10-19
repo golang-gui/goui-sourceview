@@ -55,6 +55,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 				}
 			}
 		case TOML, YAML:
+			d.AllowWordSuggestions = codeWordSuggestions
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '-' }
 			d.Editing.Comments.Line = "#"
 			id := info.ID
@@ -81,6 +82,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 				d.Suggest = func(Context) []string { return []string{"false", "null", "true"} }
 			}
 		case Shell:
+			d.AllowWordSuggestions = codeWordSuggestions
 			d.Editing.Comments.Line = "#"
 			d.Suggest = func(Context) []string {
 				return []string{"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function", "select", "time", "coproc", "echo", "printf", "export", "readonly", "local", "return", "exit", "unset", "set", "test", "source", "read", "trap", "shift", "getopts"}
@@ -143,3 +145,5 @@ func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
 	}
 	return result, nil
 }
+
+func codeWordSuggestions(c Context, known bool) bool { return known && !c.Comment && !c.String }

@@ -112,7 +112,8 @@ type SourceView struct {
 	pairs                                       []autoPair
 	brackets                                    bracketState
 	completion                                  *completionSession
-	completionProvider                          CompletionProvider
+	completionProvider                          *CompletionProvider
+	completionQueue                             *completionQueue
 	completionEpoch                             uint64
 	closingCompletion                           bool
 	automaticCompletion                         bool
@@ -453,6 +454,9 @@ func (v *SourceView) unmount() {
 	v.cancelPaste()
 	v.hideMenu()
 	v.closeCompletion()
+	if v.completionQueue != nil {
+		v.completionQueue.owner = nil
+	}
 	if v.windowFocus != nil {
 		v.windowFocus.Disconnect()
 		v.windowFocus = nil

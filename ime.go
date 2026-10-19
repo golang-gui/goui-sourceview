@@ -66,8 +66,8 @@ func (v *SourceView) commit(c gui.IMCommit) {
 		state := v.operationState()
 		if handled, err := v.pairText(r, c.Text); handled {
 			v.report(err)
-			if err == nil && c.Text == "<" && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection().Caret == r.Start+1 {
-				v.report(v.complete(true))
+			if err == nil && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection().Caret == r.Start+1 {
+				v.report(v.completeTriggered(false, c.Text))
 			}
 			return
 		}
@@ -77,7 +77,7 @@ func (v *SourceView) commit(c gui.IMCommit) {
 	v.report(err)
 	end := r.Start + len(textedit.Normalize(c.Text))
 	if err == nil && !atomic && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == (textedit.Selection{Anchor: end, Caret: end}) {
-		v.report(v.complete(false))
+		v.report(v.completeTriggered(false, c.Text))
 	}
 }
 func (v *SourceView) displayCount() int {

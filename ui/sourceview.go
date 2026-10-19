@@ -24,7 +24,7 @@ type SourceViewView struct {
 	onSelection                    func(textedit.Selection)
 	onError                        func(error)
 	autoPairs, automaticCompletion *bool
-	completionProvider             source.CompletionProvider
+	completionProvider             *source.CompletionProvider
 }
 
 func SourceView() *SourceViewView                                        { v := &SourceViewView{}; v.Self = v; return v }
@@ -62,7 +62,7 @@ func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {
 	v.automaticCompletion = &enabled
 	return v
 }
-func (v *SourceViewView) CompletionProvider(provider source.CompletionProvider) *SourceViewView {
+func (v *SourceViewView) CompletionProvider(provider *source.CompletionProvider) *SourceViewView {
 	v.completionProvider = provider
 	return v
 }
@@ -76,18 +76,12 @@ type state struct {
 	onSelection func(textedit.Selection)
 	onError     func(error)
 	handles     signal.Handles
-	provider    source.CompletionProvider
 }
 
 func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 	w := source.NewSourceView()
 	s := &state{document: w.Document(), indent: w.IndentOptions(), wrap: w.WrapMode(), lineNumbers: w.ShowLineNumbers()}
-	w.SetCompletionProvider(func(c source.CompletionContext) ([]source.Completion, error) {
-		if s.provider != nil {
-			return s.provider(c)
-		}
-		return nil, nil
-	})
+
 	s.handles = signal.Handles{
 		w.ConnectChange(func(c textedit.Change) {
 			if s.onChange != nil {
@@ -128,7 +122,7 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	}
 	w.SetAutoPairs(autoPairs)
 	w.SetAutomaticCompletion(automatic)
-	s.provider = v.completionProvider
+	w.SetCompletionProvider(v.completionProvider)
 	indent := s.indent
 	if v.indent != nil {
 		indent = *v.indent
@@ -157,10 +151,10 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	s.onSelection = v.onSelection
 	s.onError = v.onError
 }
-func (v *SourceViewView) Unmount(ctx base.BuildContext, _ gui.Widget) {
+func (v *SourceViewView) Unmount(ctx base.BuildContext, widget gui.Widget) {
 	if s, ok := ctx.State().(*state); ok {
 		s.handles.Disconnect()
-		s.provider = nil
+		widget.(*source.SourceView).SetCompletionProvider(nil)
 	}
 }
 

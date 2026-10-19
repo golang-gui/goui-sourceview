@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"image"
@@ -111,7 +112,7 @@ func main() {
 		items[31].Detail = "A considerably longer description outside the first page"
 	}
 	if items != nil {
-		v.SetCompletionProvider(func(source.CompletionContext) ([]source.Completion, error) { return items, nil })
+		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(context.Context, source.CompletionContext) ([]source.Completion, error) { return items, nil }})
 	}
 	caret := len(text)
 	v.SetSelection(textedit.Selection{Anchor: caret, Caret: caret})
@@ -145,12 +146,12 @@ func main() {
 	opened.ConnectTimeout(func() {
 		v.RevealSelection()
 		key(events.KeySpace, events.ModifierControl)
-		check(len(win.Popovers()) == 1, "completion did not open")
-		popup = win.Popovers()[0]
 	})
 	must(opened.StartOnce(750 * time.Millisecond))
 	ready := app.NewTimer()
 	ready.ConnectTimeout(func() {
+		check(len(win.Popovers()) == 1, "completion did not open")
+		popup = win.Popovers()[0]
 		check(popup != nil && win.Focused() && v.Focused() && probe.scale > 0, "native popup/focus/painter not ready")
 		info := popup.Widget().Snapshot()
 		check(info.Role == "completion-list" && len(info.Children) > 0 && selected(info) >= 0, "completion rows not ready")

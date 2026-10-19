@@ -15,19 +15,43 @@
 XML/HTML 名称允许连字符、冒号和点，普通标识符按 Unicode 字母、数字、Mark 与下划线取词。
 这是一层词法补全，不承诺 JSON Schema、HTML DOM、XML XSD 或语义类型推断。
 
-应用通过 `SetCompletionProvider(CompletionProvider)` 提供额外候选。
-提供者是同步 GUI 线程函数，输入 CompletionContext，返回 `[]Completion, error`：
+应用通过 `SetCompletionProvider(*CompletionProvider)` **替换**候选来源。nil 使用默认，
+非 nil 不暗中追加内建建议。配置对象不可变，声明式重建复用同一指针：
 
-- Context 带文档、修订、语言、caret、完整词 Range、caret 前的 Prefix 和 Explicit。
-- Completion 带 Label、Text、Detail；空 Text 使用 Label，Text 为字面替换文本。
-- 自定义候选优先参与去重和数量截断，再补内建候选。匹配按 Label 的大小写无关前缀，
-  排序按 Label，不伪装为模糊排序、项目符号索引或完整语义补全。
-- 替换覆盖整个词，避免在词中间确认时遗留后缀；确认是一个带选区的 ApplyBatch 历史项。
-- 没有候选是正常结果。ShowCompletion 直接返回提供者或创建失败；事件路径通过
-  ConnectError 报告一次。提供者重入改变文档、修订、选区、语言或配置时返回 ErrOperationChanged。
+```go
+provider := &sourceview.CompletionProvider{
+    TriggerCharacters: "[.@",
+    Complete: func(ctx context.Context, request sourceview.CompletionContext) ([]sourceview.Completion, error) {
+        // Read copied strings / a thread-safe project index; honor ctx.Done().
+        return myCandidates(ctx, request)
+    },
+}
+view.SetCompletionProvider(provider)
+```
 
-提供者应及时返回；当前没有异步 provider、网络请求或额外编辑协议。
-未来异步接口必须增加取消、请求身份与投递语义，不能把 goroutine 操作 GUI 当作扩展方案。
+- Complete 在后台执行。请求没有活 Document、Model、Widget，只带 DocumentID、修订、
+  不可变 Definition、语言、完整词 Range、caret、Prefix、Explicit、Trigger、词法上下文及
+  有界 Before/After/NearbyText。偏移都是 UTF-8 byte；不能假定 NearbyText 是全文。
+- 自定义提供者决定过滤、排序、去重和是否返回空集。控件仅校验展示数据、复制可变切片、
+  限制数量；不再进行隐含前缀过滤/字母排序。可显式调用 LanguageCompletions、
+  DocumentCompletions 或 DefaultCompletions 来组合静态语言建议和附近词。
+  默认函数保留原大小写无关前缀、去重和按名称排序。
+  Definition.AllowWordSuggestions 配置默认文档词的上下文策略，不从 ID 猜测应用语言行为。
+- TriggerCharacters 是允许空前缀请求的字符集合；显式 Ctrl+Space 不要求前缀。
+  普通输入前缀由语言 Word 规则决定。输入字符经正常 CommitText/IME 路径，
+  组合 IME 文本、粘贴和 ReplaceSelection 不额外触发。
+- Completion 提供 Label/Text/Detail。空 Text 用 Label；Range 为 nil 时替换请求完整词，
+  非 nil 使用项自己的范围。Caret 为 nil 时在插入末尾，否则是规范化 Text 内的 byte 位置。
+  AdditionalEdits 与主编辑使用同一旧修订坐标，不得互相重叠，不能与主编辑共用起点。
+  确认时排序、校验，按前置附加编辑映射 caret，再复用 ApplyEdits 一次提交一个撤销项。
+- ShowCompletion 返回请求建立或同步弹窗失败；异步提供者/弹窗失败经 ConnectError 报告一次。
+  无候选、context.Canceled 和正常过期是无操作。坏范围/光标在确认时返回错误，不修改正文。
+
+每视图最多一个运行中的后台调用与一个最新待处理请求。新输入取消旧 context，替换待处理项；
+即便提供者忽略取消也不无限创建 goroutine，但会推迟该视图后续自定义请求，故提供者必须配合取消。
+请求完成经 Application.Post 投递，后台不访问 GUI；投递后检查文档身份、修订、选区、挂载、
+语言定义代次、请求代次、焦点和可编辑性。取消清除 operationState 引用；卸载还断开队列的
+视图引用。重新挂载仍复用同一队列，避免不合作任务导致并行数增长。
 
 ## 弹窗与输入
 
@@ -80,10 +104,11 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
 文档词扫描两侧各 32 KiB；语法上下文沿用 [括号设计](DesignPairs.md) 的可靠状态与 16 KiB 前缀上限。
 不在每次输入时遍历全文，也不把不完整词窗边界当成新词。
 
-最多保留 64 个去重候选，一次显示至多八行。Label 最长 512 byte、Detail 最长 1024 byte、
+默认最多保留 64 个去重候选；自定义提供者的前 64 个有效候选保持顺序，一次显示至多八行。Label 最长 512 byte、Detail 最长 1024 byte、
 替换文本最长 64 KiB，输入按 UTF-8/LF 契约规范化；列表说明压为单行。
 名称拒绝换行、Tab、VT/FF、NEL 和 Unicode 行/段分隔符，不让原生硬换行破坏候选行几何。
-提供者自己产生的数据和运行时间由应用负责，提供者必须避免阻塞事件循环。
+附加编辑至多 128 项，每项文本最多 64 KiB，与主文本合计最多 1 MiB。
+提供者自己产生的数据和运行时间由应用负责；后台函数必须响应取消，不能访问 GUI。
 
 列表静置时至多拥有十六个原生文本布局，按可见片段释放并重建；单个测量/省略过程逐一
 释放探针，构建期间最多十七个布局。构建事务暂持未发布资源，防止原生回调取消或卸载时
@@ -93,8 +118,8 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
 这些快照是正常指针输入规划信息，不提供执行候选的测试后门。
 
 `ui` 提供 AutoPairs、AutomaticCompletion、CompletionProvider 薄绑定，未声明的布尔配置恢复默认。
-提供者经稳定代理调用最新回调，避免普通声明式重建反复关闭补全；回调替换影响后续请求，
-已显示候选仍按原请求身份和上下文确认。卸载清除代理引用。
+相同配置指针不取消现有请求，替换配置会取消旧请求并关闭旧列表；不建立读取可变 UI 状态的
+后台代理。卸载断开 signal 并清除提供者引用。语言与事务契约见 [语言扩展](DesignLanguageExtensions.md)。
 
 ## 参考与取舍
 
@@ -102,13 +127,12 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
 
 - [GtkSourceView 5 CompletionContext](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.CompletionContext.html)
   把请求信息与 provider 分开；[5.18.0 gtksourcecompletion.c](https://github.com/GNOME/gtksourceview/blob/5.18.0/gtksourceview/gtksourcecompletion.c#L1192)
-  监听视图移动以隐藏失效弹窗。采用显式上下文和生命周期，当前不照搬其异步对象体系。
+  监听视图移动以隐藏失效弹窗。采用显式上下文和生命周期，采用 context.Context 与普通 Go 值，不照搬 GObject 异步对象体系。
 - [Scintilla 5 Autocompletion](https://www.scintilla.org/ScintillaDoc.html#Autocompletion)
   由宿主触发候选，候选选择与实际插入有独立步骤。采用可替换的候选来源，
   通过 GOUI 模型提交命令，省略消息和通知协议。
 - [VS Code 1.105.0 SuggestController](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/suggest/browser/suggestController.ts#L247)
-  防护选择过程中的取消，并在失焦时取消模型。采用重入后核验；本轮不建设它的
-  snippet、additionalTextEdits、异步 resolve 和语言服务基础。
+  防护选择过程中的取消，并在失焦时取消模型。采用重入后核验；采用独立的 Range/Caret/AdditionalEdits 与取消，尚不建设 snippet、异步 resolve 和语言服务基础。
 - [GtkSourceView 5.22.1 CompletionCell](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.CompletionCell.html)
   文档允许一个候选由名称、参数等多个单元呈现；采用分列和信息层级，保持现有 Label/Text/Detail
   公共接口。没有可靠的候选种类数据，不根据说明字符串猜图标。
@@ -127,3 +151,10 @@ Shell 提供保留字及常见内建命令的字面量建议；TOML/YAML 文档�
 字符串、注释、块文本与 heredoc 内不提供这三种语言的内置或附近文档词建议。
 未知前置词法状态保持无建议；自定义 CompletionProvider 仍由应用决定。
 不为配置键推断 Schema，不查询文件系统或 PATH，不执行 Shell。
+
+2026-10-19 扩展补充核对官方 [Monaco CompletionItemProvider](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.CompletionItemProvider.html)、
+[CompletionItem](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.CompletionItem.html)
+的 trigger、取消、每项 range 和非重叠 additionalTextEdits；
+[GtkSourceView 5.22.1 CompletionProvider](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/iface.CompletionProvider.html)
+推荐异步 populate 避免阻塞主循环。采用这些能力边界，以有界复制输入和单工作队列实现，
+不把 Monaco 的可变模型传到 Go 后台，也不复制其完整服务框架。
