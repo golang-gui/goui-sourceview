@@ -200,6 +200,7 @@ type findBarLayout struct {
 	bar               *FindBar
 	rowHeight         float32
 	replacementHeight float32
+	controlsHeight    float32
 	statusWidth       float32
 	optionSizes       [4]geometry.Size
 }
@@ -235,9 +236,12 @@ func (l *findBarLayout) Measure(children []layout.Child, c layout.Constraint) la
 	b := l.bar
 	width := min(float32(512), c.Max.Width)
 	slots := l.slots(children)
+	l.controlsHeight = 28
 
 	if !b.reduced {
-		l.statusWidth = max(64, slots[b.status].Measure(layout.Unbounded()).Width)
+		m := slots[b.status].Measure(layout.Unbounded())
+		l.statusWidth = max(64, m.Width)
+		l.controlsHeight = max(l.controlsHeight, m.Height+6)
 		if b.message != "" {
 			l.statusWidth = min(144, l.statusWidth)
 		}
@@ -247,6 +251,7 @@ func (l *findBarLayout) Measure(children []layout.Child, c layout.Constraint) la
 		for i, w := range []gui.Widget{b.matchCase, b.wholeWord, b.regex, b.selectionOnly} {
 			m := slots[w].Measure(layout.Unbounded())
 			l.optionSizes[i] = geometry.Size{Width: max(22, m.Width), Height: max(22, m.Height)}
+			l.controlsHeight = max(l.controlsHeight, l.optionSizes[i].Height+6)
 			optionsWidth += l.optionSizes[i].Width + 3
 		}
 	}
@@ -267,7 +272,7 @@ func (l *findBarLayout) Measure(children []layout.Child, c layout.Constraint) la
 	}
 	fieldHeight := func(scroll *gui.ScrollView, width float32) float32 {
 		m := slots[scroll].Measure(layout.Loose(geometry.Size{Width: max(0, width), Height: max(0, maximum-2)}))
-		return min(maximum, max(float32(28), m.Height+2))
+		return min(maximum, max(l.controlsHeight, m.Height+2))
 	}
 	l.rowHeight = fieldHeight(b.findScroll, fieldWidth-optionsWidth-2)
 	l.replacementHeight = 0
@@ -291,6 +296,11 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	widgets := []gui.Widget{b.toggle, b.findScroll, b.matchCase, b.wholeWord, b.status, b.previous, b.next, b.close, b.replacementScroll, b.replace, b.replaceAll, b.regex, b.selectionOnly}
 	edge := b.inset + 5
 	x, y, right := edge, edge, max(edge, r.Width-edge)
+	// Controls occupy a compact strip at the top of each input frame. Only the
+	// input viewport grows with its content; scrolling never moves the strip.
+	controlY := func(height float32) float32 {
+		return y + max(0, (min(h, l.controlsHeight)-height)/2)
+	}
 	place := func(i int, x, y, w, h float32) {
 		if child := slots[widgets[i]]; child != nil {
 			child.Arrange(geometry.Rect(x, y, max(0, w), max(0, h)))
@@ -299,7 +309,7 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	// Allocate from the right so actions retain their targets at narrow widths.
 	take := func(i int) {
 		right -= 22
-		place(i, max(x, right), y+(h-22)/2, min(float32(22), max(0, right+22-x)), 22)
+		place(i, max(x, right), controlY(22), min(float32(22), max(0, right+22-x)), 22)
 		right -= 2
 	}
 	take(7)
@@ -309,11 +319,11 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	}
 	if !b.reduced {
 		right -= l.statusWidth + 2
-		height := slots[b.status].Measure(layout.Loose(geometry.Size{Width: l.statusWidth, Height: h})).Height
-		place(4, right, y+(h-height)/2, l.statusWidth, height)
+		height := slots[b.status].Measure(layout.Loose(geometry.Size{Width: l.statusWidth, Height: min(h, l.controlsHeight)})).Height
+		place(4, right, controlY(height), l.statusWidth, height)
 		right -= 4
 	}
-	place(0, x, y+(h-22)/2, 18, 22)
+	place(0, x, controlY(22), 18, 22)
 	x += 21
 	b.fieldRect = geometry.Rect(x, y, max(0, right-x), h)
 	inputRight := right
@@ -327,7 +337,7 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 		cursor := inputRight + 1
 		for i, index := range []int{2, 3, 11, 12} {
 			size := l.optionSizes[i]
-			place(index, cursor, y+(h-size.Height)/2, size.Width, size.Height)
+			place(index, cursor, controlY(size.Height), size.Width, size.Height)
 			cursor += size.Width + 3
 		}
 
@@ -340,8 +350,8 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 		place(8, x+1, y+1, max(0, b.fieldRect.Width-2), h-2)
 		// Replace actions align with the leading edge of the count/action area.
 		if !b.narrow {
-			place(9, right+4, y+(h-22)/2, 22, 22)
-			place(10, right+28, y+(h-22)/2, 22, 22)
+			place(9, right+4, controlY(22), 22, 22)
+			place(10, right+28, controlY(22), 22, 22)
 		}
 	}
 }

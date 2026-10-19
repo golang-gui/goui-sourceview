@@ -9,8 +9,10 @@
 // dispatches smaller/restored logical window size events. This exercises layout,
 // not native window-manager resizing. Assertions use independent palette constants and
 // allocated semantic bounds. Text entry uses CommitText. Multiline queries
-// grow independently of replacement, reach the 200-DIP
-// input cap and scroll, and return to one line with zero scroll range/offset.
+// and replacements grow independently, reach the 200-DIP input cap, scroll,
+// and return to one line with zero scroll range/offset. Checks fixed control
+// positions relative to each input frame throughout growth, scrolling,
+// soft wrapping and shrinking, including the query options and row actions.
 // Closes automatically; early close or failed assertion exits nonzero. No clipboard or system settings
 // change. Restart to reset. -inspect keeps the restored light/dark window open
 // after checks for manual resize/hover/keyboard inspection; close normally.
@@ -127,6 +129,51 @@ func main() {
 		}
 	}
 	var before [2]geometry.Rectangle
+	var controlTops [2]map[gui.Widget]float32
+	var beforeScroll [2]float32
+	inputScroll := func(bar *source.FindBar, field string) *gui.ScrollView {
+		return named(bar, field).Parent().Parent().(*gui.ScrollView)
+	}
+	checkControls := func(i int, field string, remember bool) {
+		bar := bars[i]
+		controls := []gui.Widget{named(bar, "Replace"), named(bar, "Replace all")}
+		if field == "Find" {
+			status := styled(bar, "sourceview.find.status")
+			if status == nil {
+				status = styled(bar, "sourceview.find.error")
+			}
+			controls = []gui.Widget{status}
+			for _, name := range []string{"Toggle replace", "Match case", "Whole word", "Regular expression", "Find in selection", "Previous", "Next", "Close"} {
+				controls = append(controls, named(bar, name))
+			}
+		}
+		viewport := inputScroll(bar, field).Snapshot().Bounds
+		if controlTops[i] == nil {
+			controlTops[i] = make(map[gui.Widget]float32)
+		}
+		for _, control := range controls {
+			check(control != nil, "missing "+field+" control")
+			bounds := control.Snapshot().Bounds
+			top := bounds.Y - (viewport.Y - 1) // The input frame includes a 1-DIP border.
+			if remember {
+				check(top >= 0 && top+bounds.Height <= viewport.Height+2, "control does not fit compact row: "+control.Name())
+				controlTops[i][control] = top
+			} else {
+				want, ok := controlTops[i][control]
+				check(ok && top == want, fmt.Sprintf("%s control moved with input height/scroll: %s top=%g want=%g", field, control.Name(), top, want))
+			}
+		}
+	}
+	wheelInput := func(i int, field string) {
+		scroll := inputScroll(bars[i], field)
+		beforeScroll[i] = scroll.ScrollY()
+		delta := float32(48)
+		if beforeScroll[i] > 0 {
+			delta = -delta
+		}
+		bounds := scroll.Snapshot().Bounds
+		must(win.DispatchEvent(events.WheelEvent{Position: geometry.Point{X: bounds.X + bounds.Width/2, Y: bounds.Y + bounds.Height/2}, DeltaY: delta}))
+	}
 	sample := func(i int, dark bool, tag string) {
 		overlay, bar := overlays[i], bars[i]
 		img, err := gui.RenderWidget(overlay, 0)
@@ -206,6 +253,7 @@ func main() {
 					minInput = 120
 				}
 				check(named(bar, "Find").Rect().Width > minInput, "input too narrow")
+				checkControls(i, "Find", true)
 				status := styled(bar, "sourceview.find.status")
 				check(status.Rect().Width >= status.Measure(layout.Unbounded()).Width, "match count text clipped")
 				// The status and option text must fit their native measurement,
@@ -226,6 +274,8 @@ func main() {
 		case 2:
 			for i, bar := range bars {
 				check(bar.ReplaceMode() && bar.Rect().Height == 2*(named(bar, "Find").Rect().Height+2)+30, "expanded compact bounds")
+				checkControls(i, "Find", false)
+				checkControls(i, "Replacement", true)
 				sample(i, i == 1, fmt.Sprintf("%d-expanded", i))
 			}
 			// A code-only scheme must leave the Dark panel unchanged.
@@ -260,6 +310,7 @@ func main() {
 			for _, bar := range bars {
 				check(named(bar, "Previous").Visible() && named(bar, "Match case").Visible(), "wide controls not restored")
 			}
+			scopes[1].SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: float32(*fontSize)}))
 			for _, bar := range bars {
 				bar.SetReplaceMode(true)
 				win.SetFocusedWidget(named(bar, "Find"))
@@ -267,31 +318,97 @@ func main() {
 				must(win.CommitText("one\none\none"))
 			}
 		case 7:
-			for _, bar := range bars {
+			for i, bar := range bars {
 				query, replacement := named(bar, "Find"), named(bar, "Replacement")
 				check(query.Rect().Height > replacement.Rect().Height, "multiline query stretched replacement")
 				check(bar.Rect().Height == query.Rect().Height+replacement.Rect().Height+34, fmt.Sprintf("independent row heights: bar=%v query=%v replacement=%v", bar.Rect(), query.Rect(), replacement.Rect()))
+				checkControls(i, "Find", false)
+				checkControls(i, "Replacement", false)
+				sample(i, i == 1, fmt.Sprintf("%d-query-multiline", i))
 				win.SetFocusedWidget(query)
 				key(events.KeyA, primary)
 				must(win.CommitText(strings.Repeat("one\n", 30)))
 			}
 		case 8:
-			for _, bar := range bars {
+			for i, bar := range bars {
 				query := named(bar, "Find")
 				scroll := query.Parent().Parent().(*gui.ScrollView)
 				check(query.Rect().Height <= 200 && scroll.Snapshot().MaxScrollY > 0, "capped multiline query did not scroll")
+				checkControls(i, "Find", false)
+				wheelInput(i, "Find")
+			}
+		case 9:
+			for i, bar := range bars {
+				check(inputScroll(bar, "Find").ScrollY() != beforeScroll[i], "query wheel did not scroll")
+				checkControls(i, "Find", false)
+				sample(i, i == 1, fmt.Sprintf("%d-query-scrolled", i))
+				query := named(bar, "Find")
 				win.SetFocusedWidget(query)
 				key(events.KeyA, primary)
 				must(win.CommitText("one"))
 			}
-		case 9:
-			for _, bar := range bars {
+		case 10:
+			for i, bar := range bars {
 				query := named(bar, "Find")
 				scroll := query.Parent().Parent().(*gui.ScrollView)
 				check(query.Rect().Height == named(bar, "Replacement").Rect().Height && scroll.Snapshot().MaxScrollY == 0 && scroll.ScrollY() == 0, "query shrink retained row height or scroll")
+				checkControls(i, "Find", false)
+				win.SetFocusedWidget(named(bar, "Replacement"))
+				must(win.CommitText("one\none\none"))
+			}
+		case 11:
+			for i, bar := range bars {
+				query, replacement := named(bar, "Find"), named(bar, "Replacement")
+				check(replacement.Rect().Height > query.Rect().Height, "multiline replacement stretched query")
+				checkControls(i, "Find", false)
+				checkControls(i, "Replacement", false)
+				sample(i, i == 1, fmt.Sprintf("%d-replacement-multiline", i))
+				win.SetFocusedWidget(replacement)
+				key(events.KeyA, primary)
+				must(win.CommitText(strings.Repeat("one\n", 30)))
+			}
+		case 12:
+			for i, bar := range bars {
+				replacement := named(bar, "Replacement")
+				scroll := inputScroll(bar, "Replacement")
+				check(replacement.Rect().Height <= 200 && scroll.Snapshot().MaxScrollY > 0, "capped multiline replacement did not scroll")
+				checkControls(i, "Replacement", false)
+				wheelInput(i, "Replacement")
+			}
+		case 13:
+			for i, bar := range bars {
+				check(inputScroll(bar, "Replacement").ScrollY() != beforeScroll[i], "replacement wheel did not scroll")
+				checkControls(i, "Replacement", false)
+				win.SetFocusedWidget(named(bar, "Replacement"))
+				key(events.KeyA, primary)
+				must(win.CommitText("one"))
+			}
+		case 14:
+			for i, bar := range bars {
+				scroll := inputScroll(bar, "Replacement")
+				check(named(bar, "Replacement").Rect().Height == named(bar, "Find").Rect().Height && scroll.Snapshot().MaxScrollY == 0 && scroll.ScrollY() == 0, "replacement shrink retained row height or scroll")
+				checkControls(i, "Replacement", false)
+				win.SetFocusedWidget(named(bar, "Find"))
+				key(events.KeyA, primary)
+				must(win.CommitText(strings.Repeat("one ", 12)))
+			}
+		case 15:
+			for i, bar := range bars {
+				check(named(bar, "Find").Rect().Height > named(bar, "Replacement").Rect().Height, "soft-wrapped query did not grow")
+				checkControls(i, "Find", false)
+				sample(i, i == 1, fmt.Sprintf("%d-query-wrapped", i))
+				win.SetFocusedWidget(named(bar, "Find"))
+				key(events.KeyA, primary)
+				must(win.CommitText("one"))
+			}
+		case 16:
+			for i, bar := range bars {
+				check(named(bar, "Find").Rect().Height == named(bar, "Replacement").Rect().Height, "wrapped query did not shrink")
+				checkControls(i, "Find", false)
+				checkControls(i, "Replacement", false)
 			}
 			done = true
-			log.Print("PASS floating find geometry, colors, scopes, narrow/restore, independent multiline rows, cap/shrink, focus and hit testing")
+			log.Printf("PASS floating find geometry, colors, scopes, narrow/restore, independent multiline rows, top controls, cap/scroll/shrink, wrapping, focus and hit testing; scale=%g font=%g", scale, *fontSize)
 			if *inspect {
 				timer.Stop()
 				scopes[1].SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: float32(*fontSize)}))

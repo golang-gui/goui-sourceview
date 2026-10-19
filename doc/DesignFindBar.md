@@ -16,6 +16,9 @@ SourceView 自身提供查询、匹配高亮、结果导航与替换 API。FindB
   服务容器、全局搜索剪贴板或工作台。另核对同版本的
   [FindWidget CSS](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/find/browser/findWidget.css)：
   单行查找、折叠替换、输入内选项、按宽度隐藏次要项、边框与阴影。
+  同版本 [FindInput CSS](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/base/browser/ui/findinput/findInput.css#L14)
+  将选项固定在输入顶部附近，FindWidget 的查找/替换操作区也使用独立的紧凑高度。
+  采用操作区位置与多行输入高度分离的规则，不让选项随整个输入框垂直居中。
   本项目以 DIP 和原生排版尺寸约束布局，不直接把 CSS 像素当成字体 point。
 - GtkSourceView 5 的 [SearchContext](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.SearchContext.html)
   文档提供搜索、计数、替换、高亮，并将基础界面放在示例中。采用能力与界面可分离的边界；
@@ -73,6 +76,10 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
 - 两行独立测量，常规行高至少 28 DIP，行间距 4 DIP。先预留按钮、计数及选项宽度，
   再以实际输入宽度调用 ScrollView.Measure；高度上限通过既有 MaxSize 和父约束表达，
   每个输入视口至多 200 DIP。软换行参与高度；不从逻辑行数或 ContentSize 推算字段高度。
+- 每个输入框顶部设紧凑操作行：查找行包含展开、选项、计数、上下项和关闭；替换行包含替换动作。
+  操作行至少 28 DIP，并容纳原生测量的选项/状态高度及上下各 3 DIP 留白；输入行高度同时容纳
+  操作行和输入内容。按钮在该操作行内居中，字段增高仅向下扩展，不改变按钮相对字段顶部的位置。
+  输入滚动不移动操作行。回归与平台记录见 [顶部对齐验证](PlanFindBarAlignment.md)。
 - 紧凑字段使用 ScrollVertical / MainWeight(0)。外框由 FindBar 绘制，TextView 维持无边框内容样式；
   文字、Placeholder、光标和输入几何由 GOUI 共用的排版规则负责。
   完整自动增高体验需要 GOUI 的内容驱动 Measure 修正；v0.2.0 尚不含此行为，
