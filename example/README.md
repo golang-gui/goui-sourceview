@@ -9,14 +9,14 @@ The examples use Modern and request
 ## Setup / 环境准备
 
 Requires Go 1.24 or newer and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
-For this development snapshot, place a GOUI checkout containing `903daf8` or a later
+For this development snapshot, place a GOUI checkout containing `1ada17e` or a later
 version with the same APIs at `../goui`. The declared `goui v0.1.1` does not include
-the required batch editing, styling and registration APIs yet. From this repository
+the required batch editing, styling, registration and TextInput placeholder APIs yet. From this repository
 root, create a local workspace if one does not already exist:
 
-需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。当前开发快照需将包含 `903daf8`
+需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。当前开发快照需将包含 `1ada17e`
 或之后相同接口的 GOUI 检出放在相邻 `../goui`；`go.mod` 中的 `goui v0.1.1`
-尚不具备所需批量编辑、样式和注册接口。在本仓库根目录为首次使用创建本地工作区：
+尚不具备所需批量编辑、样式、注册和 TextInput 占位提示接口。在本仓库根目录为首次使用创建本地工作区：
 
 ```sh
 go work init . ../goui

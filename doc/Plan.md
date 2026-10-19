@@ -277,3 +277,14 @@ G1/G2/G3 尚未发布；独立依赖验证失败原因与后续门槛见 Impleme
 - [x] 分片、超长键/数字/delimiter、增量恢复、畸形语法及 Unicode 字符范围边界回归。
 - [x] 原创示例、双语 README 语言列表及具体设计同步。
 - 原生排版、窗口矩阵、独立依赖结果与未验证项见 [验收记录](PlanLanguages.md)。
+
+## 13. 应用开发 Skill（2026-10-19）
+
+- [x] 在本仓库维护 `skills/goui-sourceview-app`，入口按需加载应用接入、语言与补全定制两份参考；覆盖命令式/声明式组合、文档、主题、公开扩展及线程/字节坐标契约。
+- [x] 增加独立安装说明及双语 README 入口；GOUI 的双语 README 和 goui-app 只链接本仓库，不复制技能。安装与应用 Go 依赖升级分开。
+- [x] 修正 example/README 的 GOUI 前置提交为 `1ada17e` 或具备相同 API 的后续版本，纳入已使用的 TextInput Placeholder。
+- [x] 两份技能入口通过 skill-creator 的 quick_validate；Markdown 本地路径、技能内部引用、代码块和图片路径检查通过。新增远端技能链接按本地目标核对，提交尚未推送时不宣称在线可用。
+- [x] 从参考文档提取的完整应用编译通过；定制包测试验证词边界/内置定义隔离、语言绑定、补全过滤和取消。样例与临时测试均在仓库外，未安装个人技能。
+- [x] Linux amd64 / Go 1.25.8：本仓库 `go test ./...` 工作区验证通过（GOUI `136e775`，SourceView 基线 `1cc09d7`）；GOUI `GOWORK=off go test ./...` 在独立 X11/Xvnc/Xfwm4 测试桌面通过。首次测试桌面进程退出导致 GOUI 无法连接显示，保持服务存活后重跑通过；未修改断言或 skip。
+- 独立验证 `GOWORK=off go test ./...` 仍因声明的 GOUI v0.1.1 缺少 `textedit.Model.ApplyBatch` / `BatchOptions` 构建失败；本次为文档和技能改动，未发布或升级依赖。
+- 本次未做跨平台窗口体验、IME 或技能工具的实际安装验收；GOUI 既有测试的窗口/图片副作用限定在测试桌面及原有输出路径，不代表新增示例的桌面行为已验收。
