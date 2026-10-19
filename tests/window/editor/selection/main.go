@@ -178,6 +178,7 @@ func main() {
 	must(win.SetTitle("SourceView — syntax-preserving selection"))
 	v := source.NewSourceView()
 	v.SetShowLineNumbers(false)
+	v.SetFoldingEnabled(false) // Isolate selection pixels at the documented 6-DIP content origin.
 	v.SetReadOnly(true)
 	scroll := gui.NewScrollView()
 	scroll.SetChild(v)

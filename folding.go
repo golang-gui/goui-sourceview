@@ -161,21 +161,25 @@ func (v *SourceView) finishFoldCommand() {
 	}
 }
 
-func (v *SourceView) refreshFoldGeometry() {
-	v.hiddenLines = nil
+func (v *SourceView) foldedLines() []lineInterval {
+	var hidden []lineInterval
 	if v.foldingEnabled {
 		for _, r := range v.folds {
 			if !r.Collapsed {
 				continue
 			}
 			h := lineInterval{r.StartLine + 1, r.EndLine + 1}
-			if n := len(v.hiddenLines); n > 0 && h.start <= v.hiddenLines[n-1].end {
-				v.hiddenLines[n-1].end = max(v.hiddenLines[n-1].end, h.end)
+			if n := len(hidden); n > 0 && h.start <= hidden[n-1].end {
+				hidden[n-1].end = max(hidden[n-1].end, h.end)
 			} else {
-				v.hiddenLines = append(v.hiddenLines, h)
+				hidden = append(hidden, h)
 			}
 		}
 	}
+	return hidden
+}
+func (v *SourceView) refreshFoldGeometry() {
+	v.hiddenLines = v.foldedLines()
 	if v.anchor.valid {
 		row := v.document.model.LineAt(v.anchor.offset)
 		for _, r := range v.folds {
@@ -212,7 +216,13 @@ func (v *SourceView) acceptFolds(ranges []language.FoldRange) {
 	}
 	v.foldRevision = v.document.model.Revision()
 	v.foldDefinition = v.document.definition
-	v.refreshFoldGeometry()
+	// Candidate analysis changes controls, not paragraph visibility, when no
+	// collapsed extent changed. Preserve measured rows and completed reveals.
+	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.total == v.displayCount() && v.heights.Count() == v.visibleLines.count {
+		v.RequestPaint()
+	} else {
+		v.refreshFoldGeometry()
+	}
 	v.foldingSignal.Emit()
 }
 func (v *SourceView) clearFolds() {

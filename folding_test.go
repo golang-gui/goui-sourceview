@@ -22,13 +22,13 @@ func TestFoldWorkerDiscardsStaleAndDetachedResults(t *testing.T) {
 	if ctx.Err() != context.Canceled || q.active != nil {
 		t.Fatal("edit retained obsolete job")
 	}
-	q.finish([]language.FoldRange{{0, 5}}, nil)
+	q.finish([]language.FoldRange{{StartLine: 0, EndLine: 5}}, nil)
 	if len(v.folds) != 2 || v.folds[0].StartLine != 1 {
 		t.Fatal("stale result replaced mapped regions", v.FoldingRegions())
 	}
 	q.owner = nil
 	q.active = job
-	q.finish([]language.FoldRange{{0, 5}}, nil)
+	q.finish([]language.FoldRange{{StartLine: 0, EndLine: 5}}, nil)
 	if len(v.folds) != 2 || v.folds[0].StartLine != 1 {
 		t.Fatal("detached queue published result")
 	}
@@ -74,7 +74,7 @@ func TestFoldOwnershipVisibilitySelectionAndHistory(t *testing.T) {
 	b := NewSourceView()
 	b.SetDocument(v.document)
 	observe(t, b)
-	b.acceptFolds([]language.FoldRange{{0, 5}, {1, 4}})
+	b.acceptFolds([]language.FoldRange{{StartLine: 0, EndLine: 5}, {StartLine: 1, EndLine: 4}})
 	if !v.Fold(1) || !v.Fold(0) || v.heights.Count() != 2 || b.FoldingRegions()[0].Collapsed {
 		t.Fatal("fold state/visibility isolation")
 	}
@@ -142,13 +142,27 @@ func TestFoldSnapshotHasTrueDiscontinuousText(t *testing.T) {
 	}
 }
 func TestFoldValidation(t *testing.T) {
-	for _, bad := range [][]language.FoldRange{{{-1, 2}}, {{0, 4}}, {{2, 2}}, {{0, 2}, {1, 3}}} {
+	for _, bad := range [][]language.FoldRange{{{StartLine: -1, EndLine: 2}}, {{StartLine: 0, EndLine: 4}}, {{StartLine: 2, EndLine: 2}}, {{StartLine: 0, EndLine: 2}, {StartLine: 1, EndLine: 3}}} {
 		if _, err := normalizeFolds(bad, 4); err == nil {
 			t.Fatal("accepted invalid ranges", bad)
 		}
 	}
-	got, err := normalizeFolds([]language.FoldRange{{1, 2}, {0, 3}, {0, 2}}, 4)
+	got, err := normalizeFolds([]language.FoldRange{{StartLine: 1, EndLine: 2}, {StartLine: 0, EndLine: 3}, {StartLine: 0, EndLine: 2}}, 4)
 	if err != nil || len(got) != 2 || got[0] != (language.FoldRange{StartLine: 0, EndLine: 3}) {
 		t.Fatal(got, err)
 	}
+}
+
+func TestFoldAnalysisPreservesUnchangedVisibleGeometry(t *testing.T) {
+	v, scroll := revealFixture(t)
+	at := v.document.model.Len() - 1
+	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	assertRevealed(t, v, scroll)
+	size, offset, epoch := v.ContentSize(), v.offset, v.layoutEpoch
+	v.acceptFolds([]language.FoldRange{{StartLine: 0, EndLine: 199}})
+	if v.ContentSize() != size || v.offset != offset || v.layoutEpoch != epoch || v.pendingAnchor {
+		t.Fatal("uncollapsed fold analysis reset measured rows or queued an anchor restore", size, v.ContentSize(), epoch, v.layoutEpoch, v.pendingAnchor)
+	}
+	scroll.Arrange(scroll.Rect())
+	assertRevealed(t, v, scroll)
 }
