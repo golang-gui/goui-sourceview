@@ -96,7 +96,7 @@ func main() {
 				count := func(want int) {
 					check(bar != nil, "bar missing")
 					state := bar.Snapshot().Attributes["sourceview.find"].(map[string]any)
-					check(state["countComplete"] == true && state["count"] == want, "incorrect completed match count")
+					check(state["countComplete"] == true && state["count"] == want, fmt.Sprintf("step %d: completed match count=%v complete=%v, want %d; query=%+v", step, state["count"], state["countComplete"], want, a.Search()))
 				}
 				switch step {
 				case 0:

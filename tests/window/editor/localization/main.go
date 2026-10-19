@@ -133,17 +133,14 @@ func main() {
 		assertState()
 		check(find.Name() == entry.Find && replacement.Name() == entry.Replacement, "input names were not translated")
 		check(replacement.Selection() == inputSelected, "language change altered input selection")
-		var hints []string
 		var count bool
 		walk(bar, func(w gui.Widget) {
-			if w.StyleName() == "sourceview.find.hint" {
-				hints = append(hints, w.(*gui.Label).Text())
-			}
 			if w.StyleName() == "sourceview.find.status" {
 				count = w.(*gui.Label).Text() == entry.Count
 			}
 		})
-		check(slices.Equal(hints, []string{entry.Find, entry.Replace}) && count, fmt.Sprintf("%s hints/count mismatch: %v", entry.Tag, hints))
+		check(find.Placeholder() == entry.Find && replacement.Placeholder() == entry.Replace && count, fmt.Sprintf("%s placeholders/count mismatch: %q/%q", entry.Tag, find.Placeholder(), replacement.Placeholder()))
+		check(find.Snapshot().TextEditing.Placeholder == entry.Find && replacement.Snapshot().TextEditing.Placeholder == entry.Replace, "placeholder semantics were not translated")
 		check(find.Rect().Width > 0 && replacement.Rect().Width > 0, "translated status displaced input")
 		state := bar.Snapshot().Attributes["sourceview.find"].(map[string]any)
 		check(state["count"] == 3 && state["countComplete"] == true, "language change invalidated count")

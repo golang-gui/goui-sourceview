@@ -60,6 +60,7 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
 裁剪、空内容/IME 显隐及语义快照；FindBar 在创建和语言变化时设置翻译后的普通字符串。
 提示使用 sourceview.find.input 的 placeholder part。FindBar 不创建提示 Label，
 不维护第二套提示定位或显隐监听；修改提示不改变查询、替换文本、选区或历史。
+版本条件和平台结果见 [占位提示接入验证](PlanTextPlaceholder.md)。
 
 ## 浮层布局与配色
 
