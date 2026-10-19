@@ -10,6 +10,20 @@ import (
 // their text for editing, produce no matches and never mutate the document.
 func (v *SourceView) SearchError() error { return v.search.Err() }
 
+// HighlightSearchMatches reports whether search backgrounds are drawn.
+// New views highlight matches, including searches made without a FindBar.
+func (v *SourceView) HighlightSearchMatches() bool { return v.highlightSearchMatches }
+
+// SetHighlightSearchMatches changes presentation only. Query, navigation,
+// replacement and ordinary text selection are unaffected. FindBar enables it
+// on open and disables it when closing or releasing an open search session.
+func (v *SourceView) SetHighlightSearchMatches(highlight bool) {
+	if !v.Destroyed() && v.highlightSearchMatches != highlight {
+		v.highlightSearchMatches = highlight
+		v.RequestPaint()
+	}
+}
+
 // SearchRange is independent of the current selection and FindNext results.
 func (v *SourceView) SearchRange() (textedit.Range, bool) {
 	if v.searchRange == nil {

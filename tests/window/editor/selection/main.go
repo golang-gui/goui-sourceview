@@ -320,6 +320,11 @@ func main() {
 		case 2:
 			assertText(false, true)
 			assertBackground(true, true)
+			v.SetHighlightSearchMatches(false)
+			assertBackground(true, false)
+			assertText(false, true)
+			v.SetHighlightSearchMatches(true)
+			assertBackground(true, true)
 			key(events.KeyArrowLeft, events.ModifierShift)
 		case 3:
 			assertText(false, true)

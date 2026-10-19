@@ -496,12 +496,14 @@ func (v *SourceView) Paint(p gui.Painter) {
 					p.FillRect(rect, graphics.ColorOf(c))
 				}
 			}
-			for _, match := range v.search.InRange(v.document.model, r, 2000) {
-				c := v.colors.SearchBackground
-				if v.currentMatch != nil && v.currentMatch.raw == match {
-					c = v.colors.CurrentSearchBackground
+			if v.highlightSearchMatches {
+				for _, match := range v.search.InRange(v.document.model, r, 2000) {
+					c := v.colors.SearchBackground
+					if v.currentMatch != nil && v.currentMatch.raw == match {
+						c = v.colors.CurrentSearchBackground
+					}
+					v.paintRange(p, item, r, origin, match, c)
 				}
-				v.paintRange(p, item, r, origin, match, c)
 			}
 			c := v.colors.InactiveSelectionBackground
 			if activeFocus(v) {

@@ -37,6 +37,13 @@ SetSearchRange(*textedit.Range) 复制并验证原文范围；nil 恢复全文�
 当作新的文首/文末。空范围可接受位于该点的零长度匹配。ui 的 SearchRange/ClearSearchRange
 只协调显式配置，未指定时保留交互状态。
 
+## 搜索高亮显隐
+
+HighlightSearchMatches 默认 true；false 仅停止绘制普通/当前搜索背景，不改变上述搜索、
+计数、替换契约，不改变普通选区。裸视图和同 Document 的其他视图拥有独立显隐设置。
+SetHighlightSearchMatches 不重建排版或修改语法前景；未显式配置的声明式重建保留交互显隐状态。
+搜索查询和原始当前匹配仍可用于导航及替换，包括零长度匹配的进展。
+
 ## 缓存与资源
 
 单行字面量保留分块扫描。正则与多行字面量按 Search 对象缓存一个规范结果序列，键为

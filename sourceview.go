@@ -117,6 +117,7 @@ type SourceView struct {
 	lastClick                                                                         time.Time
 	lastClickPoint                                                                    geometry.Point
 	query                                                                             SearchQuery
+	highlightSearchMatches                                                            bool
 	search                                                                            *editor.Search
 	searchRange                                                                       *textedit.Range
 	currentMatch                                                                      *searchMatch
@@ -138,6 +139,7 @@ func NewSourceView() *SourceView {
 	d := NewDocument("")
 	v := &SourceView{linkedTags: true, document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
 	v.indentGuides, v.smartHomeEnd, v.smartBackspace, v.highlightOccurrences = true, true, true, true
+	v.highlightSearchMatches = true
 	v.foldingEnabled = true
 	v.colors = scheme.Light().Definition()
 	v.automaticCompletion = true

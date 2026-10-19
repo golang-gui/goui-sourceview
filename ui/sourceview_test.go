@@ -59,9 +59,14 @@ func TestUncontrolledSearchSurvivesDeclarativeUpdate(t *testing.T) {
 	w := v.Mount(ctx).(*source.SourceView)
 	v.Update(ctx, w)
 	w.SetSearch(source.SearchQuery{Text: "user query", WholeWord: true})
+	w.SetHighlightSearchMatches(false)
 	v.Update(ctx, w)
-	if w.Search() != (source.SearchQuery{Text: "user query", WholeWord: true}) {
+	if w.Search() != (source.SearchQuery{Text: "user query", WholeWord: true}) || w.HighlightSearchMatches() {
 		t.Fatal("rebuild cleared interactive query")
+	}
+	SourceView().HighlightSearchMatches(true).Update(ctx, w)
+	if !w.HighlightSearchMatches() {
+		t.Fatal("explicit search highlight option ignored")
 	}
 	SourceView().Search(source.SearchQuery{}).Update(ctx, w)
 	if w.Search() != (source.SearchQuery{}) {

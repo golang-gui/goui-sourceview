@@ -23,6 +23,7 @@ type SourceViewView struct {
 	lineNumbers                                                          *bool
 	colors                                                               *scheme.Scheme
 	query                                                                *source.SearchQuery
+	highlightSearchMatches                                               *bool
 	onChange                                                             func(textedit.Change)
 	onSelection                                                          func(textedit.Selection)
 	onError                                                              func(error)
@@ -48,6 +49,10 @@ func (v *SourceViewView) WrapMode(w source.WrapMode) *SourceViewView  { v.wrap =
 func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView      { v.lineNumbers = &b; return v }
 func (v *SourceViewView) Scheme(s *scheme.Scheme) *SourceViewView     { v.colors = s; return v }
 func (v *SourceViewView) Search(q source.SearchQuery) *SourceViewView { v.query = &q; return v }
+func (v *SourceViewView) HighlightSearchMatches(b bool) *SourceViewView {
+	v.highlightSearchMatches = &b
+	return v
+}
 func (v *SourceViewView) OnChange(fn func(textedit.Change)) *SourceViewView {
 	v.onChange = fn
 	return v
@@ -219,6 +224,9 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	w.SetScheme(v.colors)
 	if v.query != nil {
 		w.SetSearch(*v.query)
+	}
+	if v.highlightSearchMatches != nil {
+		w.SetHighlightSearchMatches(*v.highlightSearchMatches)
 	}
 	if v.searchRangeSet {
 		if err := w.SetSearchRange(v.searchRange); err != nil {
