@@ -9,8 +9,8 @@
 - [x] A1：可见段落映射与原生几何接入。
 - [x] A2：折叠范围、后台分析、JSON/XML/HTML 规则、交互、样式、语义和薄 UI。
 - [x] B：编辑辅助与可选 GoToBar。
-- [ ] C1：XML/HTML 标签编辑、正式 Markdown。
-- [ ] C2：嵌入高亮/编辑和标签名称联动。
+- [x] C1：XML/HTML 标签编辑、正式 Markdown。
+- [x] C2：嵌入高亮/编辑和标签名称联动。
 - [ ] D：正则/捕获组替换、独立选区查询范围及多行输入。
 
 每个切片记录实际范围和验证，未执行不写成完成；多光标、通用装饰、语言服务及编程语言后置。
@@ -60,3 +60,15 @@ Linux / Pango 全仓 GOWORK=off 测试通过；新增纯逻辑/假排版断言�
 Xvnc :140 / Xfwm4 的原生按键/CommitText 窗口在 Software 环境 1x 及 2x Dark 运行通过。
 本窗口未独立探测后端类型，环境设置不作为实际比例/后端证据；未执行物理 IME、RTL 视觉或跨平台运行。
 GOUI 无新增要求。
+
+### C1/C2
+
+内置 Markdown、六种现有语言围栏、标题/围栏折叠、列表/引用 Enter、默认配色，
+以及 Tags 策略、标签闭合/匹配和名称一次事务联动已接入。ui.LinkedTags 默认协调开启，
+主示例增加 guide.md，自定义示例基于内置定义副本。设计文档记录了词法 profile 和尺寸边界，
+未宣称完整 CommonMark/DOM 一致性，未增加编程语言。
+Linux GOWORK=off 全仓及 race 通过；分片一致性、子定义隔离、保守标签规则、
+名称联动/撤销和嵌入补全身份有断言。独立 Xvnc/Xfwm4 的 markup 窗口以
+Software 环境 1x、2x Dark 正常 Window.CommitText/DispatchEvent 验证闭合、名称删除与撤销、
+HTML 空元素、列表以及围栏内 JSON 配对和换行。比例/后端设置未在该窗口独立探测，
+物理 IME/跨平台原生运行未执行；GOUI 无新增要求。

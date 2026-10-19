@@ -11,13 +11,14 @@ import (
 type ID string
 
 const (
-	Plain ID = ""
-	JSON  ID = "json"
-	XML   ID = "xml"
-	HTML  ID = "html"
-	TOML  ID = "toml"
-	YAML  ID = "yaml"
-	Shell ID = "shell"
+	Plain    ID = ""
+	JSON     ID = "json"
+	XML      ID = "xml"
+	HTML     ID = "html"
+	TOML     ID = "toml"
+	YAML     ID = "yaml"
+	Shell    ID = "shell"
+	Markdown ID = "markdown"
 )
 
 // Kind is an extensible style key. Lexical behavior uses Token.Class and Context.
@@ -75,6 +76,7 @@ var builtins = []Info{
 	{ID: TOML, Name: "TOML", Extensions: []string{".toml"}, MIMETypes: []string{"application/toml"}},
 	{ID: YAML, Name: "YAML", Extensions: []string{".yaml", ".yml"}, MIMETypes: []string{"application/yaml"}},
 	{ID: Shell, Name: "Shell", Extensions: []string{".sh", ".bash"}, MIMETypes: []string{"application/x-sh", "application/x-shellscript"}},
+	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
 // Lookup returns a detached description of a supported language.

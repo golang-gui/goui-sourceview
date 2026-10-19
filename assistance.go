@@ -168,7 +168,7 @@ func (v *SourceView) occurrenceWord() string {
 	if err != nil || strings.ContainsRune(text, '\n') {
 		return ""
 	}
-	word := v.document.definition.IsWord
+	word := v.definitionAt(v.Selection().Caret).IsWord
 	for _, c := range text {
 		if !word(c) {
 			return ""

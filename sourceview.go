@@ -49,6 +49,7 @@ type searchMatch struct {
 // SourceView is an independent editable leaf. Put it in gui.ScrollView to add
 // scrollbars. Construction owns no model/settings/root subscriptions.
 type SourceView struct {
+	linkedTags      bool
 	pendingPaste    *pasteRequest
 	compositionSeen bool
 	gui.WidgetBase
@@ -134,7 +135,7 @@ type SourceView struct {
 
 func NewSourceView() *SourceView {
 	d := NewDocument("")
-	v := &SourceView{document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
+	v := &SourceView{linkedTags: true, document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
 	v.indentGuides, v.smartHomeEnd, v.smartBackspace, v.highlightOccurrences = true, true, true, true
 	v.foldingEnabled = true
 	v.colors = scheme.Light().Definition()

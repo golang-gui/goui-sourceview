@@ -42,7 +42,7 @@ func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
 	if !v.autoPairs || text == "" {
 		return false, nil
 	}
-	rules := v.document.definition.Editing()
+	rules := v.definitionAt(v.Selection().Caret).Editing()
 	beforeText, afterText := v.lineContext(r)
 	selected := r.Start != r.End
 	pairs := rules.AutoClosingPairs
@@ -164,7 +164,7 @@ func (v *SourceView) newline() error {
 	}
 	before, after := v.lineContext(r)
 	ctx, known := v.lexicalContext(r.Start)
-	rules := v.document.definition.Editing()
+	rules := v.definitionAt(v.Selection().Caret).Editing()
 	if rules.Newline != nil {
 		state := v.operationState()
 		edit, handled := rules.Newline(language.NewlineContext{Before: before, After: after, Indent: base, Unit: unit, Context: ctx, Known: known})
@@ -261,6 +261,9 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 	if s.Anchor != s.Caret || v.projection != nil {
 		return nil
 	}
+	if ranges := v.matchingTags(); len(ranges) > 0 {
+		return ranges
+	}
 	cache := v.brackets
 	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == s.Caret && cache.language == v.document.languageEpoch {
 		return cache.ranges
@@ -272,6 +275,10 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 	}
 	for !m.IsRuneBoundary(end) {
 		end--
+	}
+	if span, ok := v.embeddedSpan(s.Caret); ok {
+		start = max(start, span.Start)
+		end = min(end, span.End)
 	}
 	text, _ := m.Slice(textedit.Range{Start: start, End: end})
 	allowed := make([]bool, len(text))
@@ -306,7 +313,7 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 		at, end, pair int
 		open          bool
 	}
-	rules := v.document.definition.Editing()
+	rules := v.definitionAt(v.Selection().Caret).Editing()
 	var delimiters []delimiter
 	for i := 0; i < len(text); {
 		best := delimiter{}

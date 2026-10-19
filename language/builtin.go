@@ -16,6 +16,20 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Markdown:
+			table := map[string]*Language{}
+			for _, id := range []ID{JSON, XML, HTML, TOML, YAML, Shell} {
+				table[string(id)] = out[id]
+			}
+			table["sh"] = out[Shell]
+			table["bash"] = out[Shell]
+			table["yml"] = out[YAML]
+			l, err := newMarkdown(table)
+			if err != nil {
+				panic(err)
+			}
+			out[info.ID] = l
+			continue
 		case JSON:
 			d.Folding = foldJSON
 			d.Editing.AutoClosingPairs = []Pair{{Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}, {Open: `"`, Close: `"`, NotInString: true, NotInComment: true}}
@@ -24,6 +38,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return []string{"false", "null", "true"} }
 		case XML, HTML:
 			html := info.ID == HTML
+			d.Editing.Tags = XMLTags()
+			if html {
+				d.Editing.Tags = HTMLTags()
+			}
 			d.Folding = func(ctx context.Context, text string) ([]FoldRange, error) { return foldMarkup(ctx, text, html) }
 			d.CompletionTriggers = "<"
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("-:.", r) }

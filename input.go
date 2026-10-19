@@ -151,7 +151,7 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 			}
 		}
 	}
-	selected := editor.WordRange(v.document.model, pos.Offset, v.document.definition.IsWord)
+	selected := editor.WordRange(v.document.model, pos.Offset, v.definitionAt(v.Selection().Caret).IsWord)
 	if p := v.paragraph(row); p != nil && selected.End > selected.Start {
 		selected.End = max(selected.End, r.Start+p.geometry.Adjacent(selected.Start-r.Start, true))
 	}
@@ -275,6 +275,9 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 					} else {
 						r.End = v.adjacent(r.End, true)
 					}
+				}
+				if handled, err := v.linkedTag(r, ""); handled {
+					return err
 				}
 				return v.replace(r, "", false)
 			})

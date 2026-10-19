@@ -187,13 +187,16 @@ func (tokenizer) Scan(in language.Input, previous language.State) (language.Resu
 	return language.Result{Consumed: i, State: s, Tokens: out}, nil
 }
 
-// NewLanguage builds an independent definition with application-owned styles
-// and editing rules. SourceView itself does not gain a Markdown builtin.
+// NewLanguage derives the built-in Markdown profile, retaining the small
+// application-owned tokenizer above as an independent extension example.
+// The app changes word rules, auto pairs, styles and newline policy explicitly.
 func NewLanguage() (*language.Language, error) {
-	pair := func(open, close string) language.Pair {
-		return language.Pair{Open: open, Close: close, NotInString: true, NotInComment: true}
-	}
-	brackets := []language.Pair{pair("[", "]"), pair("(", ")")}
-	pairs := append(append([]language.Pair(nil), brackets...), pair("`", "`"), pair("```", "```"), pair("**", "**"))
-	return language.New(language.Definition{Info: language.Info{ID: "markdown", Name: "Markdown", Extensions: []string{".md"}}, Tokenizer: tokenizer{}, Styles: []language.Kind{Heading, Emphasis, Code, Fence, Link, Marker}, Editing: language.EditingRules{Word: func(r rune) bool { return language.IdentifierRune(r) || r == '-' }, AutoClosingPairs: pairs, SurroundingPairs: pairs, Brackets: brackets, AutoCloseBefore: ")]},:;*`", Newline: newline, Comments: language.Comments{Block: language.Pair{Open: "<!--", Close: "-->"}}}})
+	base, _ := language.Builtin(language.Markdown)
+	definition := base.Definition()
+	definition.Info.Name = "Application Markdown"
+	definition.Editing.Word = func(r rune) bool { return language.IdentifierRune(r) || r == '-' }
+	definition.Editing.Newline = newline
+	definition.Editing.AutoClosingPairs = append(definition.Editing.AutoClosingPairs, language.Pair{Open: "```", Close: "```", NotInString: true, NotInComment: true})
+	definition.Editing.SurroundingPairs = definition.Editing.AutoClosingPairs
+	return language.New(definition)
 }

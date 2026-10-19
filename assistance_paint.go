@@ -52,7 +52,7 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 		start := at + n
 		end := start + len(word)
 		at = end
-		isWord := v.document.definition.IsWord
+		isWord := v.definitionAt(v.Selection().Caret).IsWord
 		if start > 0 {
 			c, _ := utf8.DecodeLastRuneInString(p.text[:start])
 			if isWord(c) {

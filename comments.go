@@ -10,7 +10,7 @@ import (
 // ToggleLineComment uses the language's line marker. Empty configuration is a
 // normal no-op. A selection ending at the next line start excludes that line.
 func (v *SourceView) ToggleLineComment() error {
-	marker := v.document.definition.Editing().Comments.Line
+	marker := v.definitionAt(v.Selection().Caret).Editing().Comments.Line
 	if marker == "" {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (v *SourceView) ToggleLineComment() error {
 // ToggleBlockComment wraps the selection or removes its exact configured
 // wrapper. Content is literal; this does not parse or nest block comments.
 func (v *SourceView) ToggleBlockComment() error {
-	p := v.document.definition.Editing().Comments.Block
+	p := v.definitionAt(v.Selection().Caret).Editing().Comments.Block
 	if p.Open == "" || p.Close == "" {
 		return nil
 	}

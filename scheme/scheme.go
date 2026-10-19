@@ -93,6 +93,7 @@ var light = builtin(Definition{
 	BracketMatchBackground: rgb(0xe6eef7), BracketMatchBorder: rgb(0x9aafc4),
 	Caret: rgb(0x24292f), PreeditUnderline: rgb(0x24292f), Border: rgb(0xd0d7de),
 	Tokens: map[language.Kind]color.NRGBA{
+		language.KindHeading: rgb(0x0550ae), language.KindCode: rgb(0x953800), language.KindEmphasis: rgb(0x8250df), language.KindLink: rgb(0x0969da), language.KindFence: rgb(0x6e7781), language.KindMarker: rgb(0x6e7781),
 		language.KindProperty: rgb(0x005cc5), language.KindString: rgb(0x0a7f39), language.KindEscape: rgb(0x6f42c1),
 		language.KindNumber: rgb(0x0550ae), language.KindKeyword: rgb(0x8250df), language.KindDelimiter: rgb(0x57606a),
 		language.KindTag: rgb(0x116329), language.KindAttribute: rgb(0x953800), language.KindEntity: rgb(0x8250df),
@@ -108,6 +109,7 @@ var dark = builtin(Definition{
 	BracketMatchBackground: rgb(0x35414d), BracketMatchBorder: rgb(0x667a8d),
 	Caret: rgb(0xd4d4d4), PreeditUnderline: rgb(0xd4d4d4), Border: rgb(0x454545),
 	Tokens: map[language.Kind]color.NRGBA{
+		language.KindHeading: rgb(0x569cd6), language.KindCode: rgb(0xce9178), language.KindEmphasis: rgb(0xc586c0), language.KindLink: rgb(0x9cdcfe), language.KindFence: rgb(0x858585), language.KindMarker: rgb(0x858585),
 		language.KindProperty: rgb(0x9cdcfe), language.KindString: rgb(0xce9178), language.KindEscape: rgb(0xd7ba7d),
 		language.KindNumber: rgb(0xb5cea8), language.KindKeyword: rgb(0x569cd6), language.KindDelimiter: rgb(0xd4d4d4),
 		language.KindTag: rgb(0x569cd6), language.KindAttribute: rgb(0x9cdcfe), language.KindEntity: rgb(0xd7ba7d),

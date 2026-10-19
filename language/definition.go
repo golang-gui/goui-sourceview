@@ -28,7 +28,9 @@ type Token struct {
 // must be immutable. Tag/TagName/Value are optional markup/value hints.
 type Context struct {
 	String, Comment, Literal, Tag, TagName, Value bool
-	Data                                          any
+	// Embedded identifies an explicit child language at this lexical position.
+	Embedded *Language
+	Data     any
 }
 
 // State is an immutable scanner snapshot. Equal compares all future-relevant
@@ -104,6 +106,7 @@ type Comments struct {
 // by completion helpers. AllowPair/Newline run on GUI and must not modify the
 // document or retain mutable application state.
 type EditingRules struct {
+	Tags                                         *TagRules
 	Word                                         func(rune) bool
 	AutoClosingPairs, SurroundingPairs, Brackets []Pair
 	AutoCloseBefore                              string
@@ -169,6 +172,7 @@ func New(d Definition) (*Language, error) {
 func copyDefinition(d Definition) Definition {
 	d.Info.Extensions = slices.Clone(d.Info.Extensions)
 	d.Info.MIMETypes = slices.Clone(d.Info.MIMETypes)
+	d.Editing.Tags = d.Editing.Tags.copy()
 	d.Editing.AutoClosingPairs = slices.Clone(d.Editing.AutoClosingPairs)
 	d.Editing.SurroundingPairs = slices.Clone(d.Editing.SurroundingPairs)
 	d.Editing.Brackets = slices.Clone(d.Editing.Brackets)

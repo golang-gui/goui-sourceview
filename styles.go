@@ -17,7 +17,7 @@ import (
 
 const sourceStyleID = "github.com/golang-gui/goui-sourceview"
 
-var tokenKinds = []language.Kind{language.KindPlain, language.KindProperty, language.KindString, language.KindEscape, language.KindNumber, language.KindKeyword, language.KindDelimiter, language.KindTag, language.KindAttribute, language.KindEntity, language.KindComment, language.KindMeta, language.KindInvalid, language.KindVariable}
+var tokenKinds = []language.Kind{language.KindHeading, language.KindCode, language.KindEmphasis, language.KindLink, language.KindFence, language.KindMarker, language.KindPlain, language.KindProperty, language.KindString, language.KindEscape, language.KindNumber, language.KindKeyword, language.KindDelimiter, language.KindTag, language.KindAttribute, language.KindEntity, language.KindComment, language.KindMeta, language.KindInvalid, language.KindVariable}
 var tokenParts = func() map[language.Kind]string {
 	m := make(map[language.Kind]string)
 	for _, k := range tokenKinds {

@@ -11,6 +11,7 @@ import (
 )
 
 type SourceViewView struct {
+	linkedTags *bool
 	base.ViewBase[SourceViewView]
 	document                                                             *source.Document
 	readOnly, acceptsTab                                                 bool
@@ -60,7 +61,8 @@ func (v *SourceViewView) BindSelection(s base.BindState[textedit.Selection]) *So
 	}
 	return v
 }
-func (v *SourceViewView) Build() base.View { return v }
+func (v *SourceViewView) LinkedTags(enabled bool) *SourceViewView { v.linkedTags = &enabled; return v }
+func (v *SourceViewView) Build() base.View                        { return v }
 
 func (v *SourceViewView) AutoPairs(enabled bool) *SourceViewView { v.autoPairs = &enabled; return v }
 func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {
@@ -180,6 +182,7 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	if v.automaticCompletion != nil {
 		automatic = *v.automaticCompletion
 	}
+	w.SetLinkedTags(boolOption(v.linkedTags, true))
 	w.SetAutoPairs(autoPairs)
 	w.SetAutomaticCompletion(automatic)
 	w.SetCompletionProvider(v.completionProvider)

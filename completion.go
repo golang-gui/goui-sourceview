@@ -91,6 +91,7 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	if s.Anchor != s.Caret {
 		return CompletionContext{}, false
 	}
+	definition := v.definitionAt(s.Caret)
 	r, _ := m.LineRange(m.LineAt(s.Caret))
 	// A word never causes an unbounded copy of a long logical line.
 	start, end := max(r.Start, s.Caret-4096), min(r.End, s.Caret+4096)
@@ -104,14 +105,14 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	a, b := s.Caret-start, s.Caret-start
 	for a > 0 {
 		r, n := utf8.DecodeLastRuneInString(text[:a])
-		if !v.document.definition.IsWord(r) {
+		if !definition.IsWord(r) {
 			break
 		}
 		a -= n
 	}
 	for b < len(text) {
 		r, n := utf8.DecodeRuneInString(text[b:])
-		if !v.document.definition.IsWord(r) {
+		if !definition.IsWord(r) {
 			break
 		}
 		b += n
@@ -130,7 +131,7 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	nearby, _ := m.Slice(textedit.Range{Start: nearbyStart, End: nearbyEnd})
 	wordRange := textedit.Range{Start: start + a, End: start + b}
 	ctx, known := v.lexicalContext(wordRange.Start)
-	return CompletionContext{DocumentID: v.document.id, Revision: m.Revision(), Language: v.document.language, Definition: v.document.definition, Range: wordRange, Caret: s.Caret, Prefix: text[a : s.Caret-start], Explicit: explicit, Lexical: ctx, ContextKnown: known, Before: before, After: after, NearbyText: nearby, NearbyOffset: nearbyStart, DocumentLength: m.Len()}, true
+	return CompletionContext{DocumentID: v.document.id, Revision: m.Revision(), Language: definition.ID(), Definition: definition, Range: wordRange, Caret: s.Caret, Prefix: text[a : s.Caret-start], Explicit: explicit, Lexical: ctx, ContextKnown: known, Before: before, After: after, NearbyText: nearby, NearbyOffset: nearbyStart, DocumentLength: m.Len()}, true
 }
 
 // LanguageCompletions returns the definition's static suggestions in code context.

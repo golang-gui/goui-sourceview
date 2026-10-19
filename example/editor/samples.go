@@ -27,6 +27,9 @@ var yamlSample string
 //go:embed samples/script.sh
 var shellSample string
 
+//go:embed samples/guide.md
+var markdownSample string
+
 type exampleDocument struct {
 	name     string
 	document *source.Document
@@ -44,6 +47,7 @@ func sampleDocuments() []exampleDocument {
 		{"config.toml", tomlSample, language.TOML},
 		{"config.yaml", yamlSample, language.YAML},
 		{"script.sh", shellSample, language.Shell},
+		{"guide.md", markdownSample, language.Markdown},
 	} {
 		doc := source.NewDocument(sample.text)
 		if err := doc.SetLanguage(sample.language); err != nil {

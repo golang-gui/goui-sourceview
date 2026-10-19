@@ -40,3 +40,22 @@ AsciiDoc/reStructuredText 后续按独立语法 profile 设计，编程语言、
 参考：[CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/)，
 [Monaco LanguageConfiguration](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.LanguageConfiguration.html)。
 参考用于语法与职责，不引入 Monarch 解释器、浏览器或 IDE 子系统。
+
+## 已落实的接口与边界（2026-10-19）
+
+`language.NewMarkdown(map[string]*Language)` 复制围栏名称表；nil 使用已有六语言及 sh/bash/yml
+别名，显式空表禁用嵌入。`Context.Embedded` 给出当前位置的子定义；SourceView 用它选择词边界、
+配对、注释、换行和默认补全，括号查找限制在已分析的连续子区域，Document 定义不变。
+
+`EditingRules.Tags` 为可复制的 TagRules：大小写、空元素和 raw-text 名单；XMLTags/HTMLTags
+为默认策略。Match 返回已确认名称范围，ClosingTag 对完整前缀保守决策。无需语言 ID 分支。
+SourceView.LinkedTags 默认开启；普通输入/删除在原修订中验证并一次 ApplyBatch 镜像，
+直接模型编辑、粘贴、IME 不镜像。每次重新确认结构而非持有跨修订的名称所有权。
+未配对、改变另一端、非法新名称自然退出；普通编辑、撤销及只读语义保持。
+
+为保证 GUI 有界，标签辅助只在文档不超过 256 KiB 且嵌入边界已分析时运行，
+否则保留普通输入及原有括号功能；嵌入连续区域扫描至多各 64 KiB，不猜截断上下文。
+Markdown 当前行以最多 64 KiB 不可变前缀重放，修正分片中的围栏/行内规则；超限行降为
+普通/代码前景，并暂停该围栏子语言到关闭围栏。不是完整 CommonMark 解析器：Setext 下划线
+着色和标题折叠已实现，但上行标题文字不回溯重着色；复杂嵌套容器/强调与链接容错继续完善。
+未知围栏不运行子语言编辑规则。示例从内置定义副本定制规则/样式/应用补全。

@@ -66,6 +66,14 @@ func (v *SourceView) commit(c gui.IMCommit) {
 		atomic = true
 	}
 	if !atomic {
+		if handled, err := v.linkedTag(r, c.Text); handled {
+			v.report(err)
+			return
+		}
+		if handled, err := v.closeTag(r, c.Text); handled {
+			v.report(err)
+			return
+		}
 		state := v.operationState()
 		if handled, err := v.pairText(r, c.Text); handled {
 			v.report(err)
