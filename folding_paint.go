@@ -3,13 +3,11 @@ package sourceview
 import (
 	"fmt"
 	"image/color"
-	"runtime"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
-	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 )
@@ -99,20 +97,6 @@ func (v *SourceView) foldAtCaret(collapsed bool) bool {
 		}
 	}
 	return false
-}
-func (v *SourceView) foldingKey(e events.KeyEvent) bool {
-	if e.Key != events.KeyBracketLeft && e.Key != events.KeyBracketRight {
-		return false
-	}
-	mods, _ := (gui.ModPrimary | gui.ModShift).Resolve()
-	if runtime.GOOS == "darwin" {
-		mods, _ = (gui.ModPrimary | gui.ModAlt).Resolve()
-	}
-	if e.Modifiers != mods {
-		return false
-	}
-	v.foldAtCaret(e.Key == events.KeyBracketLeft)
-	return true
 }
 func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 	meta := info.Attributes["goui.sourceview"].(map[string]any)

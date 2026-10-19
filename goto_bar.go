@@ -218,8 +218,8 @@ func (b *GoToBar) key(ctx gui.EventContext, e events.KeyEvent) {
 	if b.liveTarget() == nil || !visible(b) || !gui.IsEnabled(b) {
 		return
 	}
-	control, _ := gui.ModControl.Resolve()
-	if e.Key == events.KeyG && e.Modifiers == control {
+	command, bound := b.liveTarget().keyCommand(e)
+	if bound && command == CommandGoTo {
 		if err := b.Open(); err != nil {
 			b.errorSignal.Emit(err)
 		}

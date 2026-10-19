@@ -11,6 +11,8 @@ import (
 )
 
 type SourceViewView struct {
+	keyBindings    source.KeyBindings
+	keyBindingsSet bool
 	searchRange    *gui.TextRange
 	searchRangeSet bool
 	linkedTags     *bool
@@ -49,6 +51,17 @@ func (v *SourceViewView) WrapMode(w source.WrapMode) *SourceViewView  { v.wrap =
 func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView      { v.lineNumbers = &b; return v }
 func (v *SourceViewView) Scheme(s *scheme.Scheme) *SourceViewView     { v.colors = s; return v }
 func (v *SourceViewView) Search(q source.SearchQuery) *SourceViewView { v.query = &q; return v }
+
+// KeyBindings explicitly replaces command bindings; nil clears them. Omission
+// preserves the widget's existing bindings across declarative updates.
+func (v *SourceViewView) KeyBindings(bindings source.KeyBindings) *SourceViewView {
+	v.keyBindings = make(source.KeyBindings, len(bindings))
+	for command, keys := range bindings {
+		v.keyBindings[command] = append([]gui.KeyGesture(nil), keys...)
+	}
+	v.keyBindingsSet = true
+	return v
+}
 func (v *SourceViewView) HighlightSearchMatches(b bool) *SourceViewView {
 	v.highlightSearchMatches = &b
 	return v
@@ -222,6 +235,11 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	}
 	w.SetShowLineNumbers(lines)
 	w.SetScheme(v.colors)
+	if v.keyBindingsSet {
+		if err := w.SetKeyBindings(v.keyBindings); err != nil {
+			panic(err)
+		}
+	}
 	if v.query != nil {
 		w.SetSearch(*v.query)
 	}

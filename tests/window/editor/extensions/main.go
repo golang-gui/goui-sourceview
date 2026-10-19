@@ -59,6 +59,9 @@ func main() {
 	doc := source.NewDocument("")
 	doc.SetLanguageDefinition(definition)
 	v := source.NewSourceView()
+	bindings := v.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	must(v.SetKeyBindings(bindings))
 	v.SetDocument(doc)
 	v.SetAcceptsTab(true)
 	scroll := gui.NewScrollView()
@@ -152,7 +155,7 @@ func main() {
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(context.Context, source.CompletionContext) ([]source.Completion, error) {
 			return []source.Completion{{Label: "zebra"}, {Label: "alpha"}}, nil
 		}})
-		key(events.KeySpace, events.ModifierControl)
+		key(events.KeyF2, 0)
 	})
 	waitPopup("zebra", events.KeyEnter)
 	next(func() { check(doc.Model().Text() == "zebra", "provider candidate was prefix-filtered or reordered") })
@@ -165,7 +168,7 @@ func main() {
 			cancelled <- struct{}{}
 			return []source.Completion{{Label: "stale"}}, nil
 		}})
-		key(events.KeySpace, events.ModifierControl)
+		key(events.KeyF2, 0)
 	})
 	steps = append(steps, func() bool {
 		select {
@@ -192,7 +195,7 @@ func main() {
 	v.ConnectError(func(err error) { check(errors.Is(err, failure), "unexpected error: "+err.Error()); reported++ })
 	next(func() {
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(context.Context, source.CompletionContext) ([]source.Completion, error) { return nil, failure }})
-		key(events.KeySpace, events.ModifierControl)
+		key(events.KeyF2, 0)
 	})
 	steps = append(steps, func() bool {
 		if reported == 0 {

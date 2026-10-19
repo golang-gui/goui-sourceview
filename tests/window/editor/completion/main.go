@@ -87,6 +87,9 @@ func main() {
 	doc := source.NewDocument(text)
 	must(doc.SetLanguage(id))
 	v := source.NewSourceView()
+	bindings := v.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	must(v.SetKeyBindings(bindings))
 	v.SetDocument(doc)
 	v.SetAcceptsTab(true)
 
@@ -121,7 +124,7 @@ func main() {
 	scroll.SetMainWeight(1)
 	box := gui.NewLinearBox(layout.DirectionVertical)
 	box.SetCrossAlign(layout.CrossStretch)
-	box.AddChild(gui.NewLabel("Completion · " + *scenario + "   Ctrl+Space · ↑/↓ · Enter/Tab · Esc"))
+	box.AddChild(gui.NewLabel("Completion · " + *scenario + "   F2 · ↑/↓ · Enter/Tab · Esc"))
 	box.AddChild(scroll)
 	probe := &scaleProbe{}
 	box.AddChild(probe)
@@ -145,7 +148,7 @@ func main() {
 	opened := app.NewTimer()
 	opened.ConnectTimeout(func() {
 		v.RevealSelection()
-		key(events.KeySpace, events.ModifierControl)
+		key(events.KeyF2, 0)
 	})
 	must(opened.StartOnce(750 * time.Millisecond))
 	ready := app.NewTimer()

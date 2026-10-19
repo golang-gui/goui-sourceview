@@ -1,7 +1,6 @@
 package sourceview
 
 import (
-	"runtime"
 	"strings"
 	"time"
 
@@ -464,18 +463,12 @@ func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 	if v == nil || !gui.IsEnabled(b) || !gui.IsEnabled(v) || !visible(b) {
 		return
 	}
-	primary, _ := gui.ModPrimary.Resolve()
-	open := e.Key == events.KeyF && e.Modifiers == primary
-	replace := e.Key == events.KeyH && e.Modifiers == primary
-	if runtime.GOOS == "darwin" {
-		alt, _ := gui.ModAlt.Resolve()
-		replace = e.Key == events.KeyF && e.Modifiers == primary|alt
-	}
+	command, bound := v.keyCommand(e)
 	handled := false
 	switch {
-	case open || replace:
+	case bound && (command == CommandFind || command == CommandReplace):
 		handled = true
-		b.fail(b.Open(replace))
+		b.fail(b.Open(command == CommandReplace))
 	case b.open && e.Key == events.KeyEscape && e.Modifiers == 0:
 		handled = true
 		b.Close()
@@ -486,9 +479,9 @@ func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 		} else {
 			b.navigate(e.Modifiers != 0)
 		}
-	case b.open && inBar && (e.Key == events.KeyF3 && e.Modifiers&^events.ModifierShift == 0 || runtime.GOOS == "darwin" && e.Key == events.KeyG && e.Modifiers&^events.ModifierShift == primary):
+	case b.open && inBar && bound && (command == CommandFindNext || command == CommandFindPrevious):
 		handled = true
-		b.navigate(e.Modifiers&events.ModifierShift != 0)
+		b.navigate(command == CommandFindPrevious)
 	}
 	if handled {
 		e.PreventDefault()

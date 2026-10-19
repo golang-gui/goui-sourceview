@@ -70,6 +70,9 @@ func main() {
 	must(err)
 	defer win.Destroy()
 	v := source.NewSourceView()
+	bindings := v.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	must(v.SetKeyBindings(bindings))
 	v.SetShowLineNumbers(false)
 	// Preserve the existing explicit-foreground regression. Default syntax
 	// preservation is exercised by editor/selection with tokenized samples.
@@ -181,13 +184,13 @@ func main() {
 			key(events.KeyF10, events.ModifierShift)
 			key(events.KeyEscape, 0)
 			check(len(win.Popovers()) == 0, "Escape did not close menu")
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 0, "completion opened for a nonempty selection")
 			log.Printf("PASS double/triple click, partial selection colors, context menu and history; backend=%s", app.Typography().Name())
 			must(d.SetLanguage(language.JSON))
 			d.Model().SetText("tr")
 			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "JSON completion popup missing")
 		},
 		func() {
@@ -234,7 +237,7 @@ func main() {
 			must(d.SetLanguage(language.HTML))
 			d.Model().SetText("<di")
 			v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "HTML completion missing")
 		},
 		func() {
@@ -249,7 +252,7 @@ func main() {
 			check(d.Model().Text() == "<div" && len(win.Popovers()) == 0, "completion pointer activation failed")
 			d.Model().SetText("<di")
 			v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			v.SetReadOnly(true)
 			check(len(win.Popovers()) == 0, "read-only retained completion")
 			v.SetReadOnly(false)
@@ -258,7 +261,7 @@ func main() {
 				app.Post(func() { d.Model().SetText("changed") })
 				return []source.Completion{{Label: "div"}}, nil
 			}})
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 		},
 		func() {
 			check(len(win.Popovers()) == 0 && d.Model().Text() == "changed", "late completion escaped revision guard")
@@ -266,7 +269,7 @@ func main() {
 			must(d.SetLanguage(language.JSON))
 			d.Model().SetText("tr")
 			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			scroll.SetChild(nil)
 			check(len(win.Popovers()) == 0, "unmount retained completion")
 			scroll.SetChild(v)

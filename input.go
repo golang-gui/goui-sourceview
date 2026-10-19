@@ -2,7 +2,6 @@ package sourceview
 
 import (
 	"math"
-	"runtime"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
@@ -165,27 +164,21 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 	if !v.mounted || !v.Focused() || !gui.IsEnabled(v) {
 		return
 	}
-	primary, _ := gui.ModPrimary.Resolve()
+	state, bindingsEpoch := v.operationState(), v.keyBindingsEpoch
+	command, bound := v.keyCommand(event)
 	if v.completionKey(event) {
 		event.PreventDefault()
 		ctx.StopPropagation()
 		return
 	}
-	if event.Key == events.KeySpace && event.Modifiers == events.ModifierControl {
-		if v.editable() == nil {
-			v.report(v.ShowCompletion())
-		}
+	// Closing transient UI invokes external callbacks. They may replace the
+	// document, bindings or focus; the same key must not edit replacement state.
+	if v.Destroyed() || !v.mounted || !state.valid(v) || v.keyBindingsEpoch != bindingsEpoch || !v.Focused() || !gui.IsEnabled(v) {
 		event.PreventDefault()
 		ctx.StopPropagation()
 		return
 	}
-	if command, ok := lineKeyCommand(event); ok {
-		v.runCommand(command)
-		event.PreventDefault()
-		ctx.StopPropagation()
-		return
-	}
-	if v.foldingKey(event) || v.editingKey(event) {
+	if bound && v.runBoundCommand(command) {
 		event.PreventDefault()
 		ctx.StopPropagation()
 		return
@@ -200,45 +193,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 			v.report(f())
 		}
 	}
-	if base == primary {
-		if shift && event.Key != events.KeyZ && event.Key != events.KeyHome && event.Key != events.KeyEnd {
-			return
-		}
-		switch event.Key {
-		case events.KeyA:
-			v.cancelPreedit()
-			v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
-			handled = true
-		case events.KeySlash:
-			run(v.ToggleLineComment)
-		case events.KeyC:
-			v.report(v.Copy())
-			handled = true
-		case events.KeyX:
-			run(v.Cut)
-		case events.KeyV:
-			run(v.Paste)
-		case events.KeyZ:
-			if shift {
-				v.Redo()
-			} else {
-				v.Undo()
-			}
-			handled = true
-		case events.KeyY:
-			if !shift && runtime.GOOS != "darwin" {
-				v.Redo()
-				handled = true
-			}
-		case events.KeyHome, events.KeyEnd:
-			at := 0
-			if event.Key == events.KeyEnd {
-				at = v.document.model.Len()
-			}
-			v.moveTo(at, false, shift)
-			handled = true
-		}
-	} else if base == 0 {
+	if base == 0 {
 		switch event.Key {
 		case events.KeyEscape:
 			v.cancelPreedit()
@@ -293,39 +248,6 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		event.PreventDefault()
 		ctx.StopPropagation()
 	}
-}
-
-func lineKeyCommand(event events.KeyEvent) (editCommand, bool) {
-	if event.Key == events.KeyK {
-		mods, ok := (gui.ModPrimary | gui.ModShift).Resolve()
-		return commandDeleteLines, ok && event.Modifiers == mods
-	}
-	if event.Key != events.KeyArrowUp && event.Key != events.KeyArrowDown {
-		return 0, false
-	}
-	alt, ok := gui.ModAlt.Resolve()
-	if !ok {
-		return 0, false
-	}
-	duplicate := gui.ModAlt | gui.ModShift
-	if runtime.GOOS == "linux" {
-		duplicate |= gui.ModControl
-	}
-	copyMods, copyOK := duplicate.Resolve()
-	down := event.Key == events.KeyArrowDown
-	if event.Modifiers == alt {
-		if down {
-			return commandMoveLinesDown, true
-		}
-		return commandMoveLinesUp, true
-	}
-	if copyOK && event.Modifiers == copyMods {
-		if down {
-			return commandDuplicateLinesDown, true
-		}
-		return commandDuplicateLinesUp, true
-	}
-	return 0, false
 }
 
 func (v *SourceView) moveTo(at int, upstream, extend bool) {

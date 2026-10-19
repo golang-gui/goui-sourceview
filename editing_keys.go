@@ -1,87 +1,77 @@
 package sourceview
 
 import (
-	"runtime"
-
-	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
-// editingKey recognizes exact editor bindings after transient completion input.
-// A recognized editing key remains consumed in read-only mode.
-func (v *SourceView) editingKey(e events.KeyEvent) bool {
-	primary, _ := gui.ModPrimary.Resolve()
-	word := primary
-	if runtime.GOOS == "darwin" {
-		word, _ = gui.ModAlt.Resolve()
-	}
-	shift := e.Modifiers&events.ModifierShift != 0
-	base := e.Modifiers &^ events.ModifierShift
+// runBoundCommand executes core commands after transient completion handling.
+// Companion commands return false; only their mounted owner consumes them.
+func (v *SourceView) runBoundCommand(command Command) bool {
 	run := func(fn func() error) {
 		if v.editable() == nil {
 			v.report(fn())
 		}
 	}
-	if base == word {
-		switch e.Key {
-		case events.KeyArrowLeft, events.KeyArrowRight:
-			v.MoveWord(e.Key == events.KeyArrowRight, shift)
-			return true
-		case events.KeyBackspace, events.KeyDelete:
-			if !shift {
-				run(func() error { return v.DeleteWord(e.Key == events.KeyDelete) })
-				return true
-			}
+	switch command {
+	case CommandFind, CommandReplace, CommandGoTo:
+		return false
+	case CommandComplete:
+		run(v.ShowCompletion)
+	case CommandUndo:
+		v.Undo()
+	case CommandRedo:
+		v.Redo()
+	case CommandCopy:
+		v.report(v.Copy())
+	case CommandCut:
+		run(v.Cut)
+	case CommandPaste:
+		run(v.Paste)
+	case CommandDeleteSelection:
+		run(func() error { return v.ReplaceSelection("") })
+	case CommandSelectAll:
+		state := v.operationState()
+		v.cancelPreedit()
+		if state.valid(v) {
+			v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
 		}
-	}
-	if base == primary {
-		switch e.Key {
-		case events.KeyEnter:
-			run(func() error { return v.InsertLine(!shift) })
-			return true
-		case events.KeyBracketLeft, events.KeyBracketRight:
-			if !shift {
-				run(func() error { return v.Indent(e.Key == events.KeyBracketLeft) })
-				return true
-			}
-		case events.KeyL:
-			if !shift {
-				v.SelectLine()
-				return true
-			}
-		case events.KeyBackslash:
-			if shift {
-				v.JumpToBracket()
-				return true
-			}
-		case events.KeyG:
-			if runtime.GOOS == "darwin" {
-				v.FindNext(shift)
-				return true
-			}
-		case events.KeyArrowLeft, events.KeyArrowRight:
-			if runtime.GOOS == "darwin" {
-				key := events.KeyHome
-				if e.Key == events.KeyArrowRight {
-					key = events.KeyEnd
-				}
-				v.navigate(key, shift)
-				return true
-			}
-		case events.KeyArrowUp, events.KeyArrowDown:
-			if runtime.GOOS == "darwin" {
-				at := 0
-				if e.Key == events.KeyArrowDown {
-					at = v.document.model.Len()
-				}
-				v.moveTo(at, false, shift)
-				return true
-			}
+	case CommandToggleLineComment:
+		run(v.ToggleLineComment)
+	case CommandToggleBlockComment:
+		run(v.ToggleBlockComment)
+	case CommandMoveLinesUp, CommandMoveLinesDown, CommandDuplicateLinesUp, CommandDuplicateLinesDown,
+		CommandDeleteLines, CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll:
+		v.runCommand(command)
+	case CommandInsertLineAbove, CommandInsertLineBelow:
+		run(func() error { return v.InsertLine(command == CommandInsertLineBelow) })
+	case CommandIndent, CommandOutdent:
+		run(func() error { return v.Indent(command == CommandOutdent) })
+	case CommandSelectLine:
+		v.SelectLine()
+	case CommandJumpToBracket:
+		v.JumpToBracket()
+	case CommandMoveWordLeft, CommandMoveWordRight, CommandSelectWordLeft, CommandSelectWordRight:
+		v.MoveWord(command == CommandMoveWordRight || command == CommandSelectWordRight,
+			command == CommandSelectWordLeft || command == CommandSelectWordRight)
+	case CommandDeleteWordLeft, CommandDeleteWordRight:
+		run(func() error { return v.DeleteWord(command == CommandDeleteWordRight) })
+	case CommandMoveLineStart, CommandMoveLineEnd, CommandSelectLineStart, CommandSelectLineEnd:
+		key := events.KeyHome
+		if command == CommandMoveLineEnd || command == CommandSelectLineEnd {
+			key = events.KeyEnd
 		}
+		v.navigate(key, command == CommandSelectLineStart || command == CommandSelectLineEnd)
+	case CommandMoveDocumentStart, CommandMoveDocumentEnd, CommandSelectDocumentStart, CommandSelectDocumentEnd:
+		at := 0
+		if command == CommandMoveDocumentEnd || command == CommandSelectDocumentEnd {
+			at = v.document.model.Len()
+		}
+		v.moveTo(at, false, command == CommandSelectDocumentStart || command == CommandSelectDocumentEnd)
+	case CommandFindNext, CommandFindPrevious:
+		v.FindNext(command == CommandFindPrevious)
+	default:
+		return false
 	}
-	if e.Key == events.KeyF3 && base == 0 {
-		v.FindNext(shift)
-		return true
-	}
-	return false
+	return true
 }

@@ -7,7 +7,8 @@
 ## 候选与公共接口
 
 默认开启 AutomaticCompletion。普通非组合文本输入后按前缀请求候选；XML/HTML
-输入 `<` 后也可显示标签候选。Ctrl+Space 显式唤出，应用也可调用 ShowCompletion。
+输入 `<` 后也可显示标签候选。手动触发默认没有按键；应用通过 KeyBindings 绑定
+CommandComplete，或调用 ShowCompletion。示例显式选择 F2，见 [命令快捷键](DesignKeyBindings.md)。
 只读、禁用、未挂载和 IME 预编辑期间不开始补全。
 
 内建候选包括 JSON 的 true/false/null、HTML 常见标签和属性、XML 命名空间属性，
@@ -38,7 +39,7 @@ view.SetCompletionProvider(provider)
   默认函数保留原大小写无关前缀、去重和按名称排序。
   Definition.AllowWordSuggestions 配置默认文档词的上下文策略，不从 ID 猜测应用语言行为。
 - TriggerCharacters 是允许空前缀请求的字符集合；默认取 Definition.CompletionTriggers，
-  提供者配置可覆盖。不以 ID 推断触发字符。显式 Ctrl+Space 不要求前缀。
+  提供者配置可覆盖。不以 ID 推断触发字符。显式补全请求不要求前缀。
   普通输入前缀由语言 Word 规则决定。输入字符经正常 CommitText/IME 路径，
   组合 IME 文本、粘贴和 ReplaceSelection 不额外触发。
 - Completion 提供 Label/Text/Detail。空 Text 用 Label；Range 为 nil 时替换请求完整词，
@@ -66,7 +67,7 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
 - 记录 document/revision/mount/selection/语言及请求代次；提供者返回、弹窗创建及关闭后
   都重新核验。先清除会话身份再释放弹窗，关闭回调不能递归创建新会话或提交旧范围。
 
-原生窗口或系统输入法可能先占用 Ctrl+Space；应用可按自己的快捷键方案调用 ShowCompletion。
+Ctrl+Space 不再由控件默认处理，以便系统输入法正常使用；应用可按自己的环境显式配置组合键。
 模拟事件验证应用内分发，并不证明每种桌面的物理快捷键配置。
 
 ## 列表呈现

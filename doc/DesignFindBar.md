@@ -130,6 +130,8 @@ SetSearchRange(nil) 实现。换目标、目标卸载或栏卸载时清理旧会
 | 下一项/上一项 | F3 / Shift+F3 | Cmd+G / Cmd+Shift+G，同时接受 F3 / Shift+F3 |
 
 前两项只在配套栏挂载、目标同 Root 且栏可见可用时注册处理；裸 SourceView 保留给应用。
+表中为默认绑定。打开/替换及结果导航读取目标 SourceView 当前 KeyBindings，解除后旧键不再消费；
+字段本地的 Enter/Shift+Enter/Escape 保持不变，见 [命令快捷键](DesignKeyBindings.md)。
 末项属于 SourceView 的核心导航，栏内输入聚焦时由栏转发到同一目标。所有绑定精确匹配修饰键，
 仍经过正常 Window/Popover 分发；不添加语义执行协议。
 

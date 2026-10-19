@@ -50,6 +50,9 @@ func main() {
 	defer win.Destroy()
 	must(win.SetTitle("SourceView language integration"))
 	v := source.NewSourceView()
+	bindings := v.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	must(v.SetKeyBindings(bindings))
 	v.SetAutomaticCompletion(false)
 	scroll := gui.NewScrollView()
 	scroll.SetChild(v)
@@ -88,7 +91,7 @@ func main() {
 			win.SetFocusedWidget(v)
 		})
 		steps = append(steps, func() {
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "missing completion for "+string(tc.id))
 			info := win.Popovers()[0].Widget().Snapshot()
 			found := -1

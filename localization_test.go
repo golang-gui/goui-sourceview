@@ -27,8 +27,8 @@ func TestEditorCommandTranslations(t *testing.T) {
 		if err := mlang.SetLanguage(tc.tag); err != nil {
 			t.Fatal(err)
 		}
-		if commandLabels[commandCopy]() != tc.copy || commandLabels[commandMoveLinesUp]() != tc.move {
-			t.Errorf("%s: copy=%q move=%q", tc.tag, commandLabels[commandCopy](), commandLabels[commandMoveLinesUp]())
+		if commandLabels[CommandCopy]() != tc.copy || commandLabels[CommandMoveLinesUp]() != tc.move {
+			t.Errorf("%s: copy=%q move=%q", tc.tag, commandLabels[CommandCopy](), commandLabels[CommandMoveLinesUp]())
 		}
 	}
 }

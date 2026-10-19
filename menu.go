@@ -10,108 +10,100 @@ import (
 	"github.com/golang-gui/goui/mlang"
 )
 
-type editCommand int
-
-const (
-	commandUndo editCommand = iota
-	commandRedo
-	commandCut
-	commandCopy
-	commandPaste
-	commandDelete
-	commandMoveLinesUp
-	commandMoveLinesDown
-	commandDuplicateLinesUp
-	commandDuplicateLinesDown
-	commandDeleteLines
-	commandSelectAll
-	commandFold
-	commandUnfold
-	commandFoldAll
-	commandUnfoldAll
-)
-
 var commandLabels = [...]mlang.Getter{
-	resource.Undo, resource.Redo, resource.Cut, resource.Copy, resource.Paste, resource.Delete,
-	resource.MoveLinesUp, resource.MoveLinesDown, resource.DuplicateLinesUp, resource.DuplicateLinesDown,
-	resource.DeleteLines, resource.SelectAll, resource.Fold, resource.Unfold, resource.FoldAll, resource.UnfoldAll,
+	CommandUndo:               resource.Undo,
+	CommandRedo:               resource.Redo,
+	CommandCut:                resource.Cut,
+	CommandCopy:               resource.Copy,
+	CommandPaste:              resource.Paste,
+	CommandDeleteSelection:    resource.Delete,
+	CommandMoveLinesUp:        resource.MoveLinesUp,
+	CommandMoveLinesDown:      resource.MoveLinesDown,
+	CommandDuplicateLinesUp:   resource.DuplicateLinesUp,
+	CommandDuplicateLinesDown: resource.DuplicateLinesDown,
+	CommandDeleteLines:        resource.DeleteLines,
+	CommandSelectAll:          resource.SelectAll,
+	CommandFold:               resource.Fold,
+	CommandUnfold:             resource.Unfold,
+	CommandFoldAll:            resource.FoldAll,
+	CommandUnfoldAll:          resource.UnfoldAll,
 }
 
 type editMenu struct {
 	popup    *gui.PopoverMenu
-	items    map[editCommand]*gui.MenuItem
+	items    map[Command]*gui.MenuItem
 	language signal.Handle
 }
 
-func (v *SourceView) canCommand(c editCommand) bool {
+func (v *SourceView) canCommand(c Command) bool {
 	if v.Destroyed() || !v.mounted || !gui.IsEnabled(v) {
 		return false
 	}
 	selected := v.Selection().Anchor != v.Selection().Caret
 	clipboard := gui.App != nil && gui.App.Clipboard() != nil
 	switch c {
-	case commandFold, commandUnfold, commandFoldAll, commandUnfoldAll:
+	case CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll:
 		return v.canFold() && len(v.folds) > 0
-	case commandUndo:
+	case CommandUndo:
 		return !v.readOnly && v.document.model.CanUndo()
-	case commandRedo:
+	case CommandRedo:
 		return !v.readOnly && v.document.model.CanRedo()
-	case commandCopy:
+	case CommandCopy:
 		return selected && clipboard
-	case commandCut:
+	case CommandCut:
 		return !v.readOnly && selected && clipboard
-	case commandPaste:
+	case CommandPaste:
 		return !v.readOnly && clipboard
-	case commandDelete:
+	case CommandDeleteSelection:
 		return !v.readOnly && selected
-	case commandMoveLinesUp, commandMoveLinesDown:
+	case CommandMoveLinesUp, CommandMoveLinesDown:
 		if v.readOnly {
 			return false
 		}
 		first, last, err := editor.SelectedLines(v.document.model, v.Selection())
-		return err == nil && (c == commandMoveLinesUp && first > 0 || c == commandMoveLinesDown && last+1 < v.document.model.LineCount())
-	case commandDuplicateLinesUp, commandDuplicateLinesDown:
+		return err == nil && (c == CommandMoveLinesUp && first > 0 || c == CommandMoveLinesDown && last+1 < v.document.model.LineCount())
+	case CommandDuplicateLinesUp, CommandDuplicateLinesDown:
 		return !v.readOnly
-	case commandDeleteLines:
+	case CommandDeleteLines:
 		return !v.readOnly && v.document.model.Len() > 0
-	case commandSelectAll:
+	case CommandSelectAll:
 		return v.document.model.Len() > 0
 	}
 	return false
 }
 
-func (v *SourceView) runCommand(c editCommand) {
+func (v *SourceView) runCommand(c Command) {
 	if !v.canCommand(c) {
 		return
 	}
 	switch c {
-	case commandFold:
+	case CommandFold:
 		v.foldAtCaret(true)
-	case commandUnfold:
+	case CommandUnfold:
 		v.foldAtCaret(false)
-	case commandFoldAll:
+	case CommandFoldAll:
 		v.FoldAll()
-	case commandUnfoldAll:
+	case CommandUnfoldAll:
 		v.UnfoldAll()
-	case commandUndo:
+	case CommandUndo:
 		v.Undo()
-	case commandRedo:
+	case CommandRedo:
 		v.Redo()
-	case commandCut:
+	case CommandCut:
 		v.report(v.Cut())
-	case commandCopy:
+	case CommandCopy:
 		v.report(v.Copy())
-	case commandPaste:
+	case CommandPaste:
 		v.report(v.Paste())
-	case commandDelete:
+	case CommandDeleteSelection:
 		v.report(v.ReplaceSelection(""))
-	case commandMoveLinesUp, commandMoveLinesDown:
-		v.report(v.MoveLines(c == commandMoveLinesDown))
-	case commandDuplicateLinesUp, commandDuplicateLinesDown:
-		v.report(v.DuplicateLines(c == commandDuplicateLinesDown))
-	case commandDeleteLines:
+	case CommandMoveLinesUp, CommandMoveLinesDown:
+		v.report(v.MoveLines(c == CommandMoveLinesDown))
+	case CommandDuplicateLinesUp, CommandDuplicateLinesDown:
+		v.report(v.DuplicateLines(c == CommandDuplicateLinesDown))
+	case CommandDeleteLines:
 		v.report(v.DeleteLines())
-	case commandSelectAll:
+	case CommandSelectAll:
 		v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
 	}
 }
@@ -161,9 +153,9 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 		m.language = mlang.ConnectChanged(v.updateMenu)
 	}
 	items := gui.NewMenu()
-	m.items = make(map[editCommand]*gui.MenuItem)
-	for c := commandUndo; c <= commandUnfoldAll; c++ {
-		if c == commandCut || c == commandMoveLinesUp || c == commandSelectAll || c == commandFold {
+	m.items = make(map[Command]*gui.MenuItem)
+	for c := CommandUndo; c <= CommandUnfoldAll; c++ {
+		if c == CommandCut || c == CommandMoveLinesUp || c == CommandSelectAll || c == CommandFold {
 			items.AppendSeparator()
 		}
 		item := items.Append(commandLabels[c](), func() {

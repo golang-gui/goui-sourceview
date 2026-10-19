@@ -49,9 +49,12 @@ type searchMatch struct {
 // SourceView is an independent editable leaf. Put it in gui.ScrollView to add
 // scrollbars. Construction owns no model/settings/root subscriptions.
 type SourceView struct {
-	linkedTags      bool
-	pendingPaste    *pasteRequest
-	compositionSeen bool
+	keyBindings      KeyBindings
+	boundKeys        []boundKey
+	keyBindingsEpoch uint64
+	linkedTags       bool
+	pendingPaste     *pasteRequest
+	compositionSeen  bool
 	gui.WidgetBase
 	anchor                                                                            viewportAnchor
 	anchorRevision                                                                    uint64
@@ -159,6 +162,9 @@ func NewSourceView() *SourceView {
 		v.resetBlink()
 		v.RequestPaint()
 	})
+	if err := v.SetKeyBindings(DefaultKeyBindings()); err != nil {
+		panic(err) // Built-in tables are validated on every supported platform.
+	}
 	v.installInput()
 	v.installContextMenu()
 	return v

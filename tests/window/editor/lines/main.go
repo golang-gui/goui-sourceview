@@ -71,6 +71,9 @@ func main() {
 	must(win.SetTitle("GOUI SourceView line commands"))
 	doc := source.NewDocument("one\n中two\nlast")
 	a, b := source.NewSourceView(), source.NewSourceView()
+	bindings := a.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	must(a.SetKeyBindings(bindings))
 	a.SetDocument(doc)
 	b.SetDocument(doc)
 	columns := gui.NewLinearBox(layout.DirectionHorizontal)
@@ -209,7 +212,7 @@ func main() {
 			must(doc.SetLanguage(language.JSON))
 			doc.Model().SetText("tr\nx")
 			a.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
-			key(events.KeySpace, events.ModifierControl)
+			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "completion fixture missing")
 			key(events.KeyArrowDown, alt)
 			check(doc.Model().Text() == "x\ntr" && len(win.Popovers()) == 0, "line move did not cancel completion")

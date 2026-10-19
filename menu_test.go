@@ -11,25 +11,25 @@ func TestMenuCommandsRespectStateAndHistory(t *testing.T) {
 	observe(t, v)
 	v.Document().Model().SetText("abc")
 	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 2})
-	if !v.canCommand(commandDelete) || v.canCommand(commandUndo) {
+	if !v.canCommand(CommandDeleteSelection) || v.canCommand(CommandUndo) {
 		t.Fatal("initial command state")
 	}
-	v.runCommand(commandDelete)
-	if v.Document().Model().Text() != "ac" || !v.canCommand(commandUndo) {
+	v.runCommand(CommandDeleteSelection)
+	if v.Document().Model().Text() != "ac" || !v.canCommand(CommandUndo) {
 		t.Fatal("delete command")
 	}
-	v.runCommand(commandUndo)
+	v.runCommand(CommandUndo)
 	if v.Document().Model().Text() != "abc" || v.Selection() != (textedit.Selection{Anchor: 1, Caret: 2}) {
 		t.Fatal("undo command")
 	}
 	v.SetReadOnly(true)
-	for _, c := range []editCommand{commandDelete, commandCut, commandPaste, commandUndo, commandRedo} {
+	for _, c := range []Command{CommandDeleteSelection, CommandCut, CommandPaste, CommandUndo, CommandRedo} {
 		if v.canCommand(c) {
 			t.Fatal("read-only command enabled", c)
 		}
 		v.runCommand(c)
 	}
-	v.runCommand(commandSelectAll)
+	v.runCommand(CommandSelectAll)
 	if v.Selection() != (textedit.Selection{Caret: 3}) || v.Document().Model().Text() != "abc" {
 		t.Fatal("read-only select all")
 	}

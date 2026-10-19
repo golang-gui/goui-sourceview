@@ -74,3 +74,27 @@ func TestUncontrolledSearchSurvivesDeclarativeUpdate(t *testing.T) {
 	}
 	v.Unmount(ctx, w)
 }
+
+func TestKeyBindingsAreExplicitAndCopied(t *testing.T) {
+	ctx := &context{}
+	view := SourceView()
+	w := view.Mount(ctx).(*source.SourceView)
+	view.Update(ctx, w)
+	bindings := source.KeyBindings{source.CommandComplete: {{Key: gui.KeyF2}}}
+	configured := SourceView().KeyBindings(bindings)
+	bindings[source.CommandComplete][0].Key = gui.KeyF4
+	configured.Update(ctx, w)
+	if got := w.KeyBindings()[source.CommandComplete]; len(got) != 1 || got[0].Key != gui.KeyF2 {
+		t.Fatal("view retained caller key slices", got)
+	}
+	view.Update(ctx, w)
+	if len(w.KeyBindings()) != 1 {
+		t.Fatal("uncontrolled update restored default bindings")
+	}
+	SourceView().KeyBindings(nil).Update(ctx, w)
+	view.Update(ctx, w)
+	if len(w.KeyBindings()) != 0 {
+		t.Fatal("explicit empty bindings were ignored or reset")
+	}
+	view.Unmount(ctx, w)
+}
