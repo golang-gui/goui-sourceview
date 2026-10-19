@@ -267,7 +267,7 @@ func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rect
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil {
 		start := p.geometry.Caret(textedit.Position{Offset: c.Range.Start - r.Start})
-		start = start.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.heights.Top(row) - v.offset.Y})
+		start = start.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y})
 		// A wrapped or horizontally hidden word start cannot anchor the visible
 		// list. Keep it at the caret in that case; never alter editor selection.
 		if start.Y == caret.Y && start.X >= v.gutter+padding {

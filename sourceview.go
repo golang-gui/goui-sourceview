@@ -83,6 +83,8 @@ type SourceView struct {
 	viewport                                    geometry.Size
 	offset                                      geometry.Point
 	heights                                     textedit.HeightIndex
+	visibleLines                                visibleLineMap
+	hiddenLines                                 []lineInterval
 	lineHeight, spaceWidth, gutter              float32
 	contentWidth                                float32
 	metricsReady                                bool

@@ -138,7 +138,7 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil && pos.Offset > r.Start {
 		previous := p.geometry.Adjacent(pos.Offset-r.Start, false)
-		local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.heights.Top(row)}
+		local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
 		for _, rect := range p.geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
 			if containsPoint(rect, local) {
 				pos.Offset = r.Start + previous
@@ -416,18 +416,18 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 			delta = 1
 		}
 		if key == events.KeyPageUp || key == events.KeyPageDown {
-			target := v.heights.Top(row) + p.geometry.Caret(pos).Y + float32(delta)*max(v.lineHeight, v.viewport.Height-v.lineHeight)
-			row = v.heights.At(max(0, target))
+			target := v.paragraphTop(row) + p.geometry.Caret(pos).Y + float32(delta)*max(v.lineHeight, v.viewport.Height-v.lineHeight)
+			row = v.paragraphAt(max(0, target))
 			r, _ = m.LineRange(row)
 			p = v.paragraph(row)
 			if p != nil {
-				pos = p.geometry.Hit(geometry.Point{X: x, Y: target - v.heights.Top(row)})
+				pos = p.geometry.Hit(geometry.Point{X: x, Y: target - v.paragraphTop(row)})
 				caret = r.Start + pos.Offset
 			}
 		} else {
 			index += delta
 			if index < 0 || index >= p.geometry.LineCount() {
-				next := row + delta
+				next := v.neighboringRow(row, delta)
 				if next >= 0 && next < m.LineCount() {
 					row = next
 					r, _ = m.LineRange(row)

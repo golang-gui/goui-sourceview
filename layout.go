@@ -69,7 +69,7 @@ func (v *SourceView) invalidateLayout() {
 	}
 
 	v.dropLayouts()
-	v.heights.Reset(v.displayCount(), v.lineHeight)
+	v.resetHeights()
 	v.contentWidth = 0
 	v.RequestLayout()
 	v.RequestPaint()
@@ -122,7 +122,7 @@ func (v *SourceView) StyleChanged() {
 		v.pendingAnchor = true
 	}
 	v.dropLayouts()
-	v.heights.Reset(v.displayCount(), v.lineHeight)
+	v.resetHeights()
 }
 
 func (v *SourceView) ensureMetrics() {
@@ -151,7 +151,7 @@ func (v *SourceView) ensureMetrics() {
 	}
 	v.lineHeight = max(1, h)
 	v.metricsReady = true
-	v.heights.Reset(v.displayCount(), v.lineHeight)
+	v.resetHeights()
 }
 func (v *SourceView) updateGutter() {
 	old := v.gutter
@@ -161,7 +161,7 @@ func (v *SourceView) updateGutter() {
 	}
 	if old != v.gutter && v.wrap != WrapNone {
 		v.dropLayouts()
-		v.heights.Reset(v.displayCount(), v.lineHeight)
+		v.resetHeights()
 	}
 }
 func (v *SourceView) Measure(c layout.Constraint) layout.Measurement {
@@ -196,8 +196,8 @@ func (v *SourceView) ContentSize() geometry.Size {
 	return geometry.Size{Width: max(v.viewport.Width, width), Height: 2*padding + v.heights.Total()}
 }
 func (v *SourceView) ensureHeights() {
-	if v.heights.Count() != v.displayCount() {
-		v.heights.Reset(v.displayCount(), v.lineHeight)
+	if v.visibleLines.total != v.displayCount() || v.heights.Count() != v.visibleLines.count {
+		v.resetHeights()
 	}
 }
 func (v *SourceView) LayoutVisible(viewport geometry.Size, offset geometry.Point) {
@@ -209,7 +209,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 	}
 	if v.viewport.Width != viewport.Width && v.wrap != WrapNone {
 		v.dropLayouts()
-		v.heights.Reset(v.displayCount(), v.lineHeight)
+		v.resetHeights()
 		v.contentWidth = 0
 	}
 	v.viewport = viewport
@@ -228,7 +228,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 	for range 2 {
 		first, last := v.visibleRows()
 		complete := true
-		for row := first; row <= last; row++ {
+		for row := first; row <= last; row = v.nextDisplayRow(row) {
 			if v.paragraph(row) == nil {
 				complete = false
 			}
@@ -257,7 +257,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		r, _ := v.document.model.LineRange(row)
 		if p := v.paragraph(row); p != nil {
 			rect := p.geometry.Caret(textedit.Position{Offset: at - r.Start})
-			y := max(0, min(padding+v.heights.Top(row)+rect.Y+v.anchor.inset, max(0, v.ContentSize().Height-viewport.Height)))
+			y := max(0, min(padding+v.paragraphTop(row)+rect.Y+v.anchor.inset, max(0, v.ContentSize().Height-viewport.Height)))
 			v.offset = geometry.Point{X: v.anchor.x, Y: y}
 			v.scrollSignal.Emit(geometry.Rect(v.anchor.x, y, viewport.Width, viewport.Height))
 		}
@@ -270,8 +270,9 @@ func (v *SourceView) visibleRows() (int, int) {
 	v.ensureHeights()
 	first := v.heights.At(max(0, v.offset.Y-padding))
 	last := v.heights.At(max(0, v.offset.Y+v.viewport.Height-padding))
-	return max(0, first), min(v.displayCount()-1, max(first, last)+1)
+	return v.visibleLines.line(first), v.visibleLines.line(min(v.visibleLines.count-1, max(first, last)+1))
 }
+
 func (v *SourceView) paragraph(row int) *paragraph {
 	if v.context == nil || row < 0 || row >= v.displayCount() {
 		return nil
@@ -280,6 +281,9 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		return nil
 	}
 	v.ensureHeights()
+	if _, visible := v.visibleLines.index(row); !visible {
+		return nil
+	}
 	r := v.displayRange(row)
 	key := layoutKey{revision: v.document.model.Revision(), row: row}
 	e := v.document.engine
@@ -331,7 +335,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 			return nil
 		}
 		p.used = v.tick
-		v.heights.Set(row, p.height)
+		v.setParagraphHeight(row, p.height)
 		v.contentWidth = max(v.contentWidth, p.width)
 		return p
 	}
@@ -362,7 +366,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	p.geometry, p.width, p.height = g, w, max(v.lineHeight, h)
 	oldSize := v.ContentSize()
 	v.layouts[key] = p
-	v.heights.Set(row, p.height)
+	v.setParagraphHeight(row, p.height)
 	v.contentWidth = max(v.contentWidth, w)
 	if v.ContentSize() != oldSize {
 		v.RequestLayout()
@@ -459,13 +463,13 @@ func (v *SourceView) Paint(p gui.Painter) {
 	if activeFocus(v) && (v.colors.BracketMatchBackground.A != 0 || v.colors.BracketMatchBorder.A != 0) {
 		brackets = v.matchingBrackets()
 	}
-	for row := first; row <= last; row++ {
+	for row := first; row <= last; row = v.nextDisplayRow(row) {
 		item := v.paragraph(row)
 		if item == nil {
 			continue
 		}
 		r := v.displayRange(row)
-		origin := geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.heights.Top(row) - v.offset.Y}
+		origin := geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}
 		if activeFocus(v) && row == caretRow {
 			p.FillRect(geometry.Rect(v.gutter, origin.Y, max(0, bounds.Width-v.gutter), item.height), graphics.ColorOf(v.colors.CurrentLine))
 		}
@@ -526,7 +530,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		p.Save()
 		p.SetClipRect(geometry.Rect(0, 0, v.gutter, bounds.Height))
 		p.FillRect(geometry.Rect(0, 0, v.gutter, bounds.Height), graphics.ColorOf(v.colors.GutterBackground))
-		for row := first; row <= last; row++ {
+		for row := first; row <= last; row = v.nextDisplayRow(row) {
 			item := v.paragraph(row)
 			if item == nil {
 				continue
@@ -549,7 +553,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 				item.numberText = numberText
 			}
 			w, _ := item.number.MeasureSize()
-			p.DrawTextLayout(geometry.Point{X: v.gutter - padding - w, Y: padding + v.heights.Top(row) - v.offset.Y}, item.number)
+			p.DrawTextLayout(geometry.Point{X: v.gutter - padding - w, Y: padding + v.paragraphTop(row) - v.offset.Y}, item.number)
 		}
 		p.Restore()
 		p.DrawLine(geometry.Point{X: v.gutter - .5}, geometry.Point{X: v.gutter - .5, Y: bounds.Height}, 1, graphics.ColorOf(v.colors.Border))
@@ -612,7 +616,7 @@ func (v *SourceView) caretRect() (geometry.Rectangle, bool) {
 		return geometry.Rectangle{}, false
 	}
 	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
-	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.heights.Top(row) - v.offset.Y}), true
+	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
 }
 func (v *SourceView) updateIMCaret() {
 	if r, ok := v.caretRect(); ok {
@@ -674,9 +678,9 @@ func (v *SourceView) resolveReveal(measured bool) {
 	// heights are at least lineHeight; an estimated viewport before the target
 	// therefore covers the rows needed when revealing its bottom edge.
 	row := v.displayLine(v.displayCaret())
-	first := v.heights.At(max(0, v.heights.Top(row)-v.viewport.Height))
+	first := v.paragraphAt(max(0, v.paragraphTop(row)-v.viewport.Height))
 	epoch := v.layoutEpoch
-	for at := first; at <= min(row+1, v.displayCount()-1); at++ {
+	for at, end := first, v.neighboringRow(row, 1); at <= min(end, v.displayCount()-1); at = v.nextDisplayRow(at) {
 		p := v.paragraph(at)
 		if v.reveal != request || !request.valid(v) || epoch != v.layoutEpoch || v.Destroyed() || p == nil {
 			return
@@ -692,11 +696,11 @@ func (v *SourceView) resolveReveal(measured bool) {
 	v.scrollSignal.Emit(rect)
 }
 func (v *SourceView) hit(point geometry.Point) textedit.Position {
-	row := v.heights.At(max(0, point.Y+v.offset.Y-padding))
+	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	r := v.displayRange(row)
 	pos := textedit.Position{Offset: r.Start}
 	if p := v.paragraph(row); p != nil {
-		pos = p.geometry.Hit(geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.heights.Top(row)})
+		pos = p.geometry.Hit(geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)})
 		pos.Offset += r.Start
 	}
 	if v.projection != nil {
@@ -739,16 +743,16 @@ func (v *SourceView) captureAnchor() {
 	if v.projection != nil || !v.mounted || v.observed != v.document.model.Revision() {
 		return
 	}
-	row := v.heights.At(max(0, v.offset.Y-padding))
+	row := v.paragraphAt(max(0, v.offset.Y-padding))
 	r := v.displayRange(row)
 	p := v.paragraph(row)
 	if p == nil {
 		return
 	}
-	y := max(0, v.offset.Y-padding-v.heights.Top(row))
+	y := max(0, v.offset.Y-padding-v.paragraphTop(row))
 	pos := p.geometry.Hit(geometry.Point{Y: y})
 	index := p.geometry.LineIndex(pos)
 	edge := p.geometry.LineEdge(index, false)
-	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: v.offset.Y - padding - v.heights.Top(row) - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
+	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: v.offset.Y - padding - v.paragraphTop(row) - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
 	v.anchorRevision = v.document.model.Revision()
 }

@@ -184,7 +184,7 @@ func (v *SourceView) selectionContains(point geometry.Point) bool {
 	if point.X < v.gutter {
 		return false
 	}
-	row := v.heights.At(max(0, point.Y+v.offset.Y-padding))
+	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	r, _ := v.document.model.LineRange(row)
 	s := v.Selection().Range()
 	if s.End <= r.Start || s.Start > r.End {
@@ -194,7 +194,7 @@ func (v *SourceView) selectionContains(point geometry.Point) bool {
 	if p == nil {
 		return false
 	}
-	local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.heights.Top(row)}
+	local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
 	for _, rect := range p.geometry.Selection(textedit.Range{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
 		if containsPoint(rect, local) {
 			return true
