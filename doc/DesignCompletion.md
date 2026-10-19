@@ -37,7 +37,8 @@ view.SetCompletionProvider(provider)
   DocumentCompletions 或 DefaultCompletions 来组合静态语言建议和附近词。
   默认函数保留原大小写无关前缀、去重和按名称排序。
   Definition.AllowWordSuggestions 配置默认文档词的上下文策略，不从 ID 猜测应用语言行为。
-- TriggerCharacters 是允许空前缀请求的字符集合；显式 Ctrl+Space 不要求前缀。
+- TriggerCharacters 是允许空前缀请求的字符集合；默认取 Definition.CompletionTriggers，
+  提供者配置可覆盖。不以 ID 推断触发字符。显式 Ctrl+Space 不要求前缀。
   普通输入前缀由语言 Word 规则决定。输入字符经正常 CommitText/IME 路径，
   组合 IME 文本、粘贴和 ReplaceSelection 不额外触发。
 - Completion 提供 Label/Text/Detail。空 Text 用 Label；Range 为 nil 时替换请求完整词，

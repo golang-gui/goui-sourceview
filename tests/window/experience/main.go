@@ -181,6 +181,8 @@ func main() {
 			key(events.KeyF10, events.ModifierShift)
 			key(events.KeyEscape, 0)
 			check(len(win.Popovers()) == 0, "Escape did not close menu")
+			key(events.KeySpace, events.ModifierControl)
+			check(len(win.Popovers()) == 0, "completion opened for a nonempty selection")
 			log.Printf("PASS double/triple click, partial selection colors, context menu and history; backend=%s", app.Typography().Name())
 			must(d.SetLanguage(language.JSON))
 			d.Model().SetText("tr")

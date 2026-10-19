@@ -124,6 +124,8 @@ type Definition struct {
 	// AllowWordSuggestions controls the default nearby-word source. Nil allows it.
 	// This pure callback may run on a completion worker.
 	AllowWordSuggestions func(Context, bool) bool
+	// CompletionTriggers is the default set of automatic trigger characters.
+	CompletionTriggers string
 }
 
 // Language is an immutable, directly bindable definition. ID is descriptive,
@@ -172,12 +174,13 @@ func copyDefinition(d Definition) Definition {
 	d.Styles = slices.Clone(d.Styles)
 	return d
 }
-func (l *Language) Definition() Definition { return copyDefinition(l.definition) }
-func (l *Language) Info() Info             { return l.Definition().Info }
-func (l *Language) ID() ID                 { return l.definition.Info.ID }
-func (l *Language) Tokenizer() Tokenizer   { return l.definition.Tokenizer }
-func (l *Language) Editing() EditingRules  { return l.Definition().Editing }
-func (l *Language) Styles() []Kind         { return slices.Clone(l.definition.Styles) }
+func (l *Language) Definition() Definition     { return copyDefinition(l.definition) }
+func (l *Language) Info() Info                 { return l.Definition().Info }
+func (l *Language) ID() ID                     { return l.definition.Info.ID }
+func (l *Language) Tokenizer() Tokenizer       { return l.definition.Tokenizer }
+func (l *Language) Editing() EditingRules      { return l.Definition().Editing }
+func (l *Language) CompletionTriggers() string { return l.definition.CompletionTriggers }
+func (l *Language) Styles() []Kind             { return slices.Clone(l.definition.Styles) }
 func (l *Language) Suggestions(c Context) []string {
 	if l.definition.Suggest == nil {
 		return nil

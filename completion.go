@@ -293,15 +293,16 @@ func (v *SourceView) completeTriggered(explicit bool, trigger string) error {
 		return nil
 	}
 	c, ok := v.completionContext(explicit)
+	if !ok {
+		return nil
+	}
 	c.Trigger = trigger
-	triggers := ""
+	triggers := c.Definition.CompletionTriggers()
 	if v.completionProvider != nil {
 		triggers = v.completionProvider.TriggerCharacters
-	} else if c.Language == language.XML || c.Language == language.HTML {
-		triggers = "<"
 	}
 	triggered := utf8.RuneCountInString(trigger) == 1 && strings.Contains(triggers, trigger)
-	if !ok || !explicit && c.Prefix == "" && !triggered {
+	if !explicit && c.Prefix == "" && !triggered {
 		return nil
 	}
 	state, epoch := v.operationState(), v.completionEpoch

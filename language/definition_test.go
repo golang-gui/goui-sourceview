@@ -65,3 +65,23 @@ func TestBuiltinDefinitions(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionTriggersBelongToDefinition(t *testing.T) {
+	custom, err := language.New(language.Definition{Info: language.Info{ID: language.HTML, Name: "Custom"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtin, _ := language.Builtin(language.HTML)
+	if custom.CompletionTriggers() != "" || builtin.CompletionTriggers() != "<" {
+		t.Fatal("trigger policy inferred from ID")
+	}
+	d := builtin.Definition()
+	d.CompletionTriggers = "["
+	derived, err := language.New(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if derived.CompletionTriggers() != "[" || builtin.CompletionTriggers() != "<" {
+		t.Fatal("trigger configuration was not isolated")
+	}
+}

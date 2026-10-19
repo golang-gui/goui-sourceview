@@ -21,6 +21,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Editing.Brackets = d.Editing.Brackets[1:]
 			d.Suggest = func(Context) []string { return []string{"false", "null", "true"} }
 		case XML, HTML:
+			d.CompletionTriggers = "<"
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("-:.", r) }
 			d.Editing.Brackets = append(d.Editing.Brackets, Pair{Open: "<", Close: ">"})
 			p := Pair{Open: "<", Close: ">", NotInString: true, NotInComment: true}
