@@ -1,6 +1,7 @@
 package language
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -16,11 +17,14 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		}
 		switch info.ID {
 		case JSON:
+			d.Folding = foldJSON
 			d.Editing.AutoClosingPairs = []Pair{{Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}, {Open: `"`, Close: `"`, NotInString: true, NotInComment: true}}
 			d.Editing.SurroundingPairs = d.Editing.AutoClosingPairs
 			d.Editing.Brackets = d.Editing.Brackets[1:]
 			d.Suggest = func(Context) []string { return []string{"false", "null", "true"} }
 		case XML, HTML:
+			html := info.ID == HTML
+			d.Folding = func(ctx context.Context, text string) ([]FoldRange, error) { return foldMarkup(ctx, text, html) }
 			d.CompletionTriggers = "<"
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("-:.", r) }
 			d.Editing.Brackets = append(d.Editing.Brackets, Pair{Open: "<", Close: ">"})

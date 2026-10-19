@@ -117,6 +117,7 @@ type EditingRules struct {
 type Definition struct {
 	Info      Info
 	Tokenizer Tokenizer
+	Folding   FoldingFunc
 	Editing   EditingRules
 	Styles    []Kind
 	// Suggest returns static candidates and must be safe for concurrent use.
@@ -175,6 +176,7 @@ func copyDefinition(d Definition) Definition {
 	return d
 }
 func (l *Language) Definition() Definition     { return copyDefinition(l.definition) }
+func (l *Language) Folding() FoldingFunc       { return l.definition.Folding }
 func (l *Language) Info() Info                 { return l.Definition().Info }
 func (l *Language) ID() ID                     { return l.definition.Info.ID }
 func (l *Language) Tokenizer() Tokenizer       { return l.definition.Tokenizer }
