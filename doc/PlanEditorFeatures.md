@@ -11,7 +11,7 @@
 - [x] B：编辑辅助与可选 GoToBar。
 - [x] C1：XML/HTML 标签编辑、正式 Markdown。
 - [x] C2：嵌入高亮/编辑和标签名称联动。
-- [ ] D：正则/捕获组替换、独立选区查询范围及多行输入。
+- [x] D：正则/捕获组替换、独立选区查询范围及多行输入。
 
 每个切片记录实际范围和验证，未执行不写成完成；多光标、通用装饰、语言服务及编程语言后置。
 查找增强沿用公开 SearchQuery，Regex=false 保留字面搜索。采用 Go regexp 语义；零长度匹配
@@ -72,3 +72,18 @@ Linux GOWORK=off 全仓及 race 通过；分片一致性、子定义隔离、保
 Software 环境 1x、2x Dark 正常 Window.CommitText/DispatchEvent 验证闭合、名称删除与撤销、
 HTML 空元素、列表以及围栏内 JSON 配对和换行。比例/后端设置未在该窗口独立探测，
 物理 IME/跨平台原生运行未执行；GOUI 无新增要求。
+
+### D
+
+SearchQuery.Regex、Go 捕获组替换、原文规范匹配缓存、零长度进展，以及独立 SearchRange
+和薄 ui 协调已完成。单行字面量继续分块；正则/多行的首次规范结果同步建立，未宣称异步。
+FindBar 的查询/替换改用公开 TextView/ScrollView，支持 LF 和 Alt+Enter，新增正则及选区选项，
+错误表达式原位保留并显示本地化提示/边框。自然宽度增为 512 DIP，行高读取真实 ContentSize，
+修正字体估算产生的单行滚动条。完整机制见 DesignSearch.md。
+新增逻辑断言及正常 Window.DispatchEvent/CommitText 窗口：多行、范围隔离、捕获组一次撤销、
+非法表达式、零长度、Software 环境 1x/2x Dark 与 OpenGL 环境运行通过；Software 1x 窗口
+以 -race 构建运行通过。原 find 窗口及外观像素/字体/窄宽度断言通过，外观另验证 18pt/2x。
+2x 大窗口最初超过 1920 像素虚拟桌面而使尺寸断言失败，在 2560x1800 隔离桌面重跑通过，
+没有删除或放宽原有断言。多语言窗口的具体字段类型及完整菜单夹具同步到多行输入和折叠命令，
+八语言、展开菜单原地刷新、操作可达、焦点/历史/窄布局断言通过。
+GUI 测试没有写入剪贴板或系统设置。GOUI 无新增要求。

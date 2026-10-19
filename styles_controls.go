@@ -21,6 +21,7 @@ func findRules(base style.StyleSheet, c findColors, size, radius, inputRadius, f
 		style.Name("sourceview.find.input").Part("placeholder").ForegroundColor(c.MutedForeground),
 		style.Name("sourceview.find.input").Part("frame").BackgroundColor(c.InputBackground).BorderColor(c.InputBorder).BorderWidth(1).Radius(inputRadius),
 		style.Name("sourceview.find.input").Part("frame").State(style.Focused).BorderColor(c.FocusBorder).BorderWidth(focusWidth),
+		style.Name("sourceview.find.input").Part("error-frame").BackgroundColor(c.InputBackground).BorderColor(c.ErrorForeground).BorderWidth(focusWidth).Radius(inputRadius),
 		style.Name("sourceview.find.input").Part("frame").State(style.Disabled).BorderColor(c.InputBorder).BorderWidth(1),
 		style.Name("sourceview.find.action").BackgroundColor(transparent).BorderWidth(0).Radius(inputRadius),
 		style.Name("sourceview.find.action").State(style.Hovered).BackgroundColor(c.HoverBackground),

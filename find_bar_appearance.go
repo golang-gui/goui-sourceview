@@ -20,6 +20,7 @@ var findIcons = func() map[string]gui.IconSource {
 		"previous": "M8 13V3M4 7l4-4 4 4", "next": "M8 3v10M4 9l4 4 4-4",
 		"close":       "M4 4l8 8M12 4l-8 8",
 		"replace":     "M3 3h7a3 3 0 0 1 0 6H4m3-3L4 9l3 3M10 12h3v2h-3z",
+		"selection":   "M3 3h10v10H3zM5 6h6M5 8h6M5 10h4",
 		"replace-all": "M2 3h8a3 3 0 0 1 0 6H3m3-3L3 9l3 3M8 12h2v2H8zM12 12h2v2h-2z",
 	}
 	icons := make(map[string]gui.IconSource, len(paths))
@@ -70,12 +71,14 @@ func (b *FindBar) buildSurface() {
 	b.toggleIcon.SetStyleName("sourceview.find.icon")
 	b.toggle = option(resource.ToggleReplace, b.toggleIcon, b.SetReplaceMode)
 	b.toggle.SetStyleName("sourceview.find.expand")
-	b.find = gui.NewTextInput()
+	b.find = gui.NewTextView()
 	b.find.SetPlaceholder(resource.Find())
 	name(b.find, resource.Find)
 	b.find.SetStyleName("sourceview.find.input")
 	b.find.SetPadding(4)
-	add(b.find)
+	b.findScroll = gui.NewScrollView()
+	b.findScroll.SetChild(b.find)
+	add(b.findScroll)
 	textOption := func(text string) gui.Widget {
 		l := gui.NewLabel(text)
 		l.SetStyleName("sourceview.find.option-text")
@@ -95,29 +98,59 @@ func (b *FindBar) buildSurface() {
 			v.SetSearch(q)
 		}
 	})
+	b.regex = option(resource.RegularExpression, textOption(".*"), func(checked bool) {
+		if v := b.liveTarget(); v != nil {
+			q := v.Search()
+			q.Regex = checked
+			v.SetSearch(q)
+		}
+	})
+	selectionIcon := gui.NewIcon(findIcons["selection"])
+	selectionIcon.SetStyleName("sourceview.find.icon")
+	b.selectionOnly = option(resource.InSelection, selectionIcon, func(checked bool) {
+		if b.syncing {
+			return
+		}
+		if v := b.liveTarget(); v != nil {
+			if checked {
+				r := v.Selection().Range()
+				b.fail(v.SetSearchRange(&r))
+			} else {
+				b.fail(v.SetSearchRange(nil))
+			}
+		}
+	})
+
 	b.status = gui.NewLabel("")
 	b.status.SetStyleName("sourceview.find.status")
 	add(b.status)
 	b.previous = action("previous", resource.Previous, func() { b.navigate(true) })
 	b.next = action("next", resource.Next, func() { b.navigate(false) })
 	b.close = action("close", resource.Close, b.Close)
-	b.replacement = gui.NewTextInput()
+	b.replacement = gui.NewTextView()
 	b.replacement.SetPlaceholder(resource.Replace())
 	name(b.replacement, resource.Replacement)
 	b.replacement.SetStyleName("sourceview.find.input")
 	b.replacement.SetPadding(4)
-	add(b.replacement)
+	b.replacementScroll = gui.NewScrollView()
+	b.replacementScroll.SetChild(b.replacement)
+	add(b.replacementScroll)
 	b.replace = action("replace", resource.Replace, b.replaceCurrent)
 	b.replaceAll = action("replace-all", resource.ReplaceAll, b.replaceEverywhere)
+	b.replacementScroll.SetVisible(false)
 	b.replacement.SetVisible(false)
 	b.replace.SetVisible(false)
 	b.replaceAll.SetVisible(false)
+	b.replacement.ConnectChange(func(_ gui.TextChange) { b.RequestLayout() })
+	b.find.ConnectChange(func(_ gui.TextChange) { b.RequestLayout() })
+	b.find.ConnectScrollIntoView(func(geometry.Rectangle) { b.RequestLayout() })
+	b.replacement.ConnectScrollIntoView(func(geometry.Rectangle) { b.RequestLayout() })
 	b.find.ConnectFocused(func(bool) { b.content.RequestPaint() })
 	b.replacement.ConnectFocused(func(bool) { b.content.RequestPaint() })
 	b.updateAppearance()
 }
 
-type findAppearance struct{ surface, normal, focused, disabled styleBox }
+type findAppearance struct{ surface, normal, focused, disabled, invalid styleBox }
 
 func (b *FindBar) StyleChanged() { b.updateAppearance() }
 func (b *FindBar) updateAppearance() {
@@ -128,6 +161,7 @@ func (b *FindBar) updateAppearance() {
 	next := findAppearance{surface: boxOf(gui.ResolveWidgetStyle(b, name, "", style.Normal)),
 		normal:   boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "frame", style.Normal)),
 		focused:  boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "frame", style.Focused)),
+		invalid:  boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "error-frame", style.Normal)),
 		disabled: boxOf(gui.ResolveWidgetStyle(b, "sourceview.find.input", "frame", style.Disabled))}
 	if b.appearance == next {
 		return
@@ -147,12 +181,17 @@ type findSurface struct {
 func (s *findSurface) Paint(p gui.Painter) {
 	b := s.bar
 	b.appearance.surface.paint(p, geometry.Rect(0, 0, s.Rect().Width, s.Rect().Height).Inset(b.inset))
-	input := func(r geometry.Rectangle, w *gui.TextInput) {
+	input := func(r geometry.Rectangle, w *gui.TextView) {
 		skin := b.appearance.normal
 		if !gui.IsEnabled(w) {
 			skin = b.appearance.disabled
 		} else if w.Focused() {
 			skin = b.appearance.focused
+		}
+		if w == b.find {
+			if v := b.liveTarget(); v != nil && v.SearchError() != nil {
+				skin = b.appearance.invalid
+			}
 		}
 		skin.paint(p, r)
 	}
@@ -167,18 +206,18 @@ type findBarLayout struct {
 	bar         *FindBar
 	rowHeight   float32
 	statusWidth float32
-	optionSizes [2]geometry.Size
+	optionSizes [4]geometry.Size
 }
 
 // Density changes precede WidgetBase's visible-child snapshot.
 func (s *findSurface) Measure(c layout.Constraint) layout.Measurement {
 	b := s.bar
-	width := min(float32(448), c.Max.Width)
+	width := min(float32(512), c.Max.Width)
 	narrow, reduced := width < 285, width < 400
 	if b.narrow != narrow || b.reduced != reduced {
 		b.narrow, b.reduced = narrow, reduced
 		b.status.SetVisible(!reduced)
-		for _, w := range []gui.Widget{b.matchCase, b.wholeWord, b.previous, b.next} {
+		for _, w := range []gui.Widget{b.matchCase, b.wholeWord, b.regex, b.selectionOnly, b.previous, b.next} {
 			w.SetVisible(!narrow)
 		}
 		b.replace.SetVisible(b.replaceMode && !narrow)
@@ -199,17 +238,32 @@ func (l *findBarLayout) slots(children []layout.Child) map[gui.Widget]layout.Chi
 }
 func (l *findBarLayout) Measure(children []layout.Child, c layout.Constraint) layout.Measurement {
 	b := l.bar
-	width := min(float32(448), c.Max.Width)
+	width := min(float32(512), c.Max.Width)
 	slots := l.slots(children)
-	l.rowHeight = max(float32(26), slots[b.find].Measure(layout.Loose(geometry.Size{Width: max(0, width-80), Height: layout.Inf})).Height)
-	if b.replaceMode {
-		l.rowHeight = max(l.rowHeight, slots[b.replacement].Measure(layout.Loose(geometry.Size{Width: max(0, width-80), Height: layout.Inf})).Height)
+
+	// Read public content extents after framework style/measurement. This avoids
+	// estimating native line height from a font's point size.
+	fieldHeight := func(scroll *gui.ScrollView, field *gui.TextView) float32 {
+		slots[scroll].Measure(layout.Loose(geometry.Size{Width: width, Height: 200}))
+		height := field.ContentSize().Height
+		if count := field.Model().LineCount(); count > 5 {
+			height = (height-2*field.Padding())*5/float32(count) + 2*field.Padding()
+		}
+		return min(float32(200), height+2)
 	}
+	l.rowHeight = max(float32(28), fieldHeight(b.findScroll, b.find))
+	if b.replaceMode {
+		l.rowHeight = max(l.rowHeight, fieldHeight(b.replacementScroll, b.replacement))
+	}
+
 	if !b.reduced {
 		l.statusWidth = max(64, slots[b.status].Measure(layout.Unbounded()).Width)
+		if b.message != "" {
+			l.statusWidth = min(144, l.statusWidth)
+		}
 	}
 	if !b.narrow {
-		for i, w := range []gui.Widget{b.matchCase, b.wholeWord} {
+		for i, w := range []gui.Widget{b.matchCase, b.wholeWord, b.regex, b.selectionOnly} {
 			m := slots[w].Measure(layout.Unbounded())
 			l.optionSizes[i] = geometry.Size{Width: max(22, m.Width), Height: min(l.rowHeight, max(22, m.Height))}
 		}
@@ -229,7 +283,7 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	b := l.bar
 	h := l.rowHeight
 	slots := l.slots(children)
-	widgets := []gui.Widget{b.toggle, b.find, b.matchCase, b.wholeWord, b.status, b.previous, b.next, b.close, b.replacement, b.replace, b.replaceAll}
+	widgets := []gui.Widget{b.toggle, b.findScroll, b.matchCase, b.wholeWord, b.status, b.previous, b.next, b.close, b.replacementScroll, b.replace, b.replaceAll, b.regex, b.selectionOnly}
 	edge := b.inset + 5
 	x, y, right := edge, edge, max(edge, r.Width-edge)
 	place := func(i int, x, y, w, h float32) {
@@ -259,10 +313,19 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	b.fieldRect = geometry.Rect(x, y, max(0, right-x), h)
 	inputRight := right
 	if !b.narrow {
-		a, b := l.optionSizes[0], l.optionSizes[1]
-		inputRight -= a.Width + b.Width + 6
-		place(2, inputRight+1, y+(h-a.Height)/2, a.Width, a.Height)
-		place(3, inputRight+a.Width+4, y+(h-b.Height)/2, b.Width, b.Height)
+
+		total := float32(0)
+		for _, size := range l.optionSizes {
+			total += size.Width + 3
+		}
+		inputRight -= total
+		cursor := inputRight + 1
+		for i, index := range []int{2, 3, 11, 12} {
+			size := l.optionSizes[i]
+			place(index, cursor, y+(h-size.Height)/2, size.Width, size.Height)
+			cursor += size.Width + 3
+		}
+
 	}
 	place(1, x+1, y+1, max(0, inputRight-x-2), h-2)
 	if b.replaceMode {

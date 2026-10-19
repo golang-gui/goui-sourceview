@@ -22,29 +22,32 @@ import (
 // Its content is initially closed; the application chooses its placement.
 type FindBar struct {
 	gui.WidgetBase
-	target                                     *SourceView
-	content                                    *findSurface
-	appearance                                 findAppearance
-	inset                                      float32
-	toggleIcon                                 *gui.Icon
-	narrow, reduced                            bool
-	fieldRect, replacementRect                 geometry.Rectangle
-	find, replacement                          *gui.TextInput
-	previous, next, replace, replaceAll, close *gui.Button
-	matchCase, wholeWord, toggle               *widgets.CheckButton
-	status                                     *gui.Label
-	names                                      map[gui.Widget]mlang.Getter
-	keys                                       *gui.KeyEventController
-	lifetime, attached                         signal.Handles
-	frame, language                            signal.Handle
-	mounted, open, replaceMode, syncing        bool
-	epoch                                      uint64
-	openSignal                                 signal.Signal1[bool]
-	errorSignal                                signal.Signal1[error]
-	count                                      struct {
+	target                                             *SourceView
+	content                                            *findSurface
+	appearance                                         findAppearance
+	inset                                              float32
+	toggleIcon                                         *gui.Icon
+	narrow, reduced                                    bool
+	fieldRect, replacementRect                         geometry.Rectangle
+	find, replacement                                  *gui.TextView
+	findScroll, replacementScroll                      *gui.ScrollView
+	previous, next, replace, replaceAll, close         *gui.Button
+	matchCase, wholeWord, regex, selectionOnly, toggle *widgets.CheckButton
+	status                                             *gui.Label
+	names                                              map[gui.Widget]mlang.Getter
+	keys                                               *gui.KeyEventController
+	lifetime, attached                                 signal.Handles
+	frame, language                                    signal.Handle
+	mounted, open, replaceMode, syncing                bool
+	epoch                                              uint64
+	openSignal                                         signal.Signal1[bool]
+	errorSignal                                        signal.Signal1[error]
+	count                                              struct {
 		document              *Document
 		revision              uint64
 		query                 SearchQuery
+		scope                 textedit.Range
+		limited               bool
 		at, total, matchedEnd int
 		done, available       bool
 	}
@@ -55,7 +58,8 @@ func NewFindBar() *FindBar {
 	b := &FindBar{names: make(map[gui.Widget]mlang.Getter)}
 	b.SetLayoutManager(layout.NewFillLayout())
 	b.buildSurface()
-	b.find.ConnectText(func(text string) {
+	b.find.ConnectChange(func(textedit.Change) {
+		text := b.find.Model().Text()
 		if !b.syncing {
 			if v := b.liveTarget(); v != nil {
 				q := v.Search()
@@ -102,6 +106,7 @@ func (b *FindBar) SetReplaceMode(replace bool) {
 	}
 	b.replaceMode = replace
 	b.toggle.SetChecked(replace)
+	b.replacementScroll.SetVisible(replace)
 	b.replacement.SetVisible(replace)
 	b.replace.SetVisible(replace && !b.narrow)
 	b.replaceAll.SetVisible(replace && !b.narrow)
@@ -115,10 +120,11 @@ func (b *FindBar) SetReplaceMode(replace bool) {
 	b.RequestLayout()
 	b.refresh()
 }
-func (b *FindBar) Replacement() string { return b.replacement.Text() }
+func (b *FindBar) Replacement() string { return b.replacement.Model().Text() }
 func (b *FindBar) SetReplacement(text string) {
 	if !b.Destroyed() {
-		b.replacement.SetText(text)
+		setFindText(b.replacement, text)
+		b.RequestLayout()
 	}
 }
 func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
@@ -176,7 +182,7 @@ func (b *FindBar) Open(replace bool) error {
 	if b.Destroyed() || b.epoch != epoch || !b.open {
 		return nil
 	}
-	b.find.SetSelection(textedit.Selection{Caret: len(b.find.Text())})
+	b.find.SetSelection(textedit.Selection{Caret: len(b.find.Model().Text())})
 	if changed && !b.Destroyed() && b.epoch == epoch && b.open {
 		b.openSignal.Emit(true)
 	}
@@ -272,13 +278,14 @@ func (b *FindBar) refresh() {
 	valid := func() bool { return !b.Destroyed() && b.epoch == epoch && b.liveTarget() == v }
 	active := v != nil && gui.IsEnabled(v)
 	editable := active && !v.ReadOnly()
+	searchable := active && v.SearchError() == nil && v.query.Text != ""
 	for _, item := range []struct {
 		widget  gui.Widget
 		enabled bool
 	}{
-		{b.find, active}, {b.matchCase, active}, {b.wholeWord, active},
-		{b.previous, active && v.query.Text != ""}, {b.next, active && v.query.Text != ""},
-		{b.replacement, editable}, {b.replace, editable && v.query.Text != ""}, {b.replaceAll, editable && v.query.Text != ""},
+		{b.find, active}, {b.matchCase, active}, {b.wholeWord, active}, {b.regex, active}, {b.selectionOnly, active},
+		{b.previous, searchable}, {b.next, searchable},
+		{b.replacement, editable}, {b.replace, editable && searchable}, {b.replaceAll, editable && searchable},
 	} {
 		item.widget.SetEnabled(item.enabled)
 		if !valid() {
@@ -292,13 +299,16 @@ func (b *FindBar) refresh() {
 	q := v.Search()
 	b.matchCase.SetChecked(!q.IgnoreCase)
 	b.wholeWord.SetChecked(q.WholeWord)
-	// A single-line field cannot faithfully edit a programmatic multiline query.
-	// Keep that query intact until the user explicitly changes the field.
-	b.find.SetText(q.Text)
+	b.regex.SetChecked(q.Regex)
+	scope, limited := v.SearchRange()
+	b.selectionOnly.SetChecked(limited)
+	// The multiline field preserves programmatic and pasted line breaks.
+	setFindText(b.find, q.Text)
 	if !valid() {
 		return
 	}
-	if b.count.document != v.document || b.count.revision != v.document.model.Revision() || b.count.query != q {
+	if b.count.document != v.document || b.count.revision != v.document.model.Revision() || b.count.query != q || b.count.scope != scope || b.count.limited != limited {
+		b.count.scope, b.count.limited = scope, limited
 		b.count.document = v.document
 		b.count.revision = v.document.model.Revision()
 		b.count.query = q
@@ -306,6 +316,10 @@ func (b *FindBar) refresh() {
 		b.count.done = q.Text == ""
 		b.count.available = len(q.Text) <= 4096
 		b.message = ""
+		if err := v.SearchError(); err != nil {
+			b.message = resource.InvalidExpression()
+			b.count.done = true
+		}
 		if b.open && !b.count.done {
 			b.RequestPaint()
 		}
@@ -340,6 +354,10 @@ func (b *FindBar) updateStatus() {
 	}
 	changed := b.status.Text() != text
 	b.status.SetText(text)
+	b.status.SetName(text)
+	if v := b.liveTarget(); v != nil && v.SearchError() != nil {
+		b.status.SetName(text + ": " + v.SearchError().Error())
+	}
 	name := "sourceview.find.status"
 	if b.message != "" || b.count.done && b.count.available && b.count.query.Text != "" && b.count.total == 0 {
 		name = "sourceview.find.error"
@@ -439,9 +457,21 @@ func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 func (b *FindBar) Snapshot() gui.WidgetInfo {
 	info := b.WidgetBase.Snapshot()
 	info.Role = gui.Role("sourceview-find-bar")
-	info.Text = b.find.Text()
-	info.SetAttribute("sourceview.find", map[string]any{"open": b.open, "replace": b.replaceMode, "count": b.count.total, "countComplete": b.count.done && b.count.available})
+	info.Text = b.find.Model().Text()
+	queryError := ""
+	if v := b.liveTarget(); v != nil && v.SearchError() != nil {
+		queryError = v.SearchError().Error()
+	}
+	info.SetAttribute("sourceview.find", map[string]any{"queryError": queryError, "open": b.open, "replace": b.replaceMode, "count": b.count.total, "countComplete": b.count.done && b.count.available})
 	return info
 }
 
 var _ gui.Widget = (*FindBar)(nil)
+
+// setFindText preserves field history/selection on ordinary refreshes.
+func setFindText(field *gui.TextView, text string) {
+	text = textedit.Normalize(text)
+	if !field.Model().EqualText(text) {
+		field.Model().SetText(text)
+	}
+}

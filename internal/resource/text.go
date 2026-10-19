@@ -108,3 +108,9 @@ var (
 	GoToPlaceholder = mlang.String(mlang.En("Line[:column]"), mlang.ZhCN("行号[:列号]"), mlang.Ja("行[:列]"), mlang.Ko("줄[:열]"), mlang.De("Zeile[:Spalte]"), mlang.Fr("Ligne[:colonne]"), mlang.Ru("Строка[:столбец]"), mlang.Ar("سطر[:عمود]"))
 	InvalidPosition = mlang.String(mlang.En("Invalid line or column"), mlang.ZhCN("行号或列号无效"), mlang.Ja("行または列が無効です"), mlang.Ko("잘못된 줄 또는 열"), mlang.De("Ungültige Zeile oder Spalte"), mlang.Fr("Ligne ou colonne invalide"), mlang.Ru("Недопустимая строка или столбец"), mlang.Ar("سطر أو عمود غير صالح"))
 )
+
+var (
+	RegularExpression = mlang.String(mlang.En("Regular expression"), mlang.ZhCN("正则表达式"), mlang.Ja("正規表現"), mlang.Ko("정규식"), mlang.De("Regulärer Ausdruck"), mlang.Fr("Expression régulière"), mlang.Ru("Регулярное выражение"), mlang.Ar("تعبير نمطي"))
+	InSelection       = mlang.String(mlang.En("Find in selection"), mlang.ZhCN("在选区中查找"), mlang.Ja("選択範囲内を検索"), mlang.Ko("선택 영역에서 찾기"), mlang.De("In Auswahl suchen"), mlang.Fr("Chercher dans la sélection"), mlang.Ru("Искать в выделении"), mlang.Ar("بحث في التحديد"))
+	InvalidExpression = mlang.String(mlang.En("Invalid expression"), mlang.ZhCN("表达式无效"), mlang.Ja("無効な正規表現"), mlang.Ko("잘못된 정규식"), mlang.De("Ungültiger Ausdruck"), mlang.Fr("Expression invalide"), mlang.Ru("Недопустимое выражение"), mlang.Ar("تعبير غير صالح"))
+)

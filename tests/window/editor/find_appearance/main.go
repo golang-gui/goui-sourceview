@@ -187,9 +187,16 @@ func main() {
 				check(bar.Opened() && !bar.ReplaceMode(), "collapsed open state")
 				check(editors[i].Rect() == before[i], "overlay changed editor allocation")
 				input := named(bar, "Find")
+				for _, child := range bar.Children() {
+					for _, control := range child.Children() {
+						if scroll, ok := control.(*gui.ScrollView); ok && scroll.Child() == input {
+							check(scroll.Snapshot().MaxScrollY == 0, "single-line field shows an unnecessary scrollbar")
+						}
+					}
+				}
 				// Native font metrics differ by platform. The row's allocated
 				// input height plus its 2-DIP frame and 26-DIP panel chrome is exact.
-				check(bar.Rect().Width == 448 && bar.Rect().Height == input.Rect().Height+28, "compact natural bounds")
+				check(bar.Rect().Width == 512 && bar.Rect().Height == input.Rect().Height+28, fmt.Sprintf("compact natural bounds: bar=%v input=%v", bar.Rect(), input.Rect()))
 				check(named(bar, "Match case").Snapshot().Attributes[widgets.CheckInfoKey].(widgets.CheckInfo).State == widgets.CheckChecked, "selected option semantics")
 				minInput := float32(90)
 				if *fontSize == 14 {

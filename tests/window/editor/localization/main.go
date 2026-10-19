@@ -78,7 +78,7 @@ func main() {
 	must(json.Unmarshal(fixture, &languages))
 	check(len(languages) == 8, "missing language fixtures")
 	for _, entry := range languages {
-		check(len(entry.Menu) == 12, "missing menu fixtures")
+		check(len(entry.Menu) == 16, "missing menu fixtures")
 	}
 	previous := mlang.Language()
 	defer func() { must(mlang.SetLanguage(previous)) }()
@@ -118,8 +118,8 @@ func main() {
 			key(events.KeyH, primary)
 		}
 	}
-	find := named(bar, "Find").(*gui.TextInput)
-	replacement := named(bar, "Replacement").(*gui.TextInput)
+	find := named(bar, "Find").(*gui.TextView)
+	replacement := named(bar, "Replacement").(*gui.TextView)
 	var selected textedit.Selection
 	var inputSelected gui.TextSelection
 	var revision uint64
@@ -212,13 +212,15 @@ func main() {
 			check(len(win.Popovers()) == 1 && win.Popovers()[0] == menu, "language change recreated menu")
 			var labels []string
 			var states []bool
-			var lastSelected bool
+			var selectAllSelected bool
 			walk(menu.Widget(), func(w gui.Widget) {
 				info := w.Snapshot()
 				if info.Role == gui.RoleMenuItem && info.Visible {
 					labels = append(labels, info.Text)
 					states = append(states, info.Enabled)
-					lastSelected = info.Selected
+					if info.Text == entry.Menu[11] {
+						selectAllSelected = info.Selected
+					}
 				}
 				if label, ok := w.(*gui.Label); ok && label.Visible() {
 					width := label.Measure(layout.Unbounded()).Width
@@ -226,7 +228,7 @@ func main() {
 				}
 			})
 			check(slices.Equal(labels, entry.Menu), fmt.Sprintf("%s menu=%q want=%q", entry.Tag, labels, entry.Menu))
-			check(lastSelected, "language change lost menu navigation")
+			check(selectAllSelected, "language change lost menu navigation")
 			if enabled == nil {
 				enabled = states
 			} else {

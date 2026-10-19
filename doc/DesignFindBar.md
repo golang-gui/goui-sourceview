@@ -50,13 +50,13 @@ err := find.Open(true) // false 只查找；true 展开替换
 - 一个编辑器由一个配套栏处理打开快捷键。应用自己的栏不需要创建 FindBar，直接使用 SourceView API。
 
 FindBar 的外层保持普通 Widget 的 Visible；内部内容初始关闭。关闭时自然测量高度为零，
-不会因为声明式通用 Visible 默认值恢复而重新打开/关闭。普通 GOUI TextInput、Button 和
+不会因为声明式通用 Visible 默认值恢复而重新打开/关闭。普通 GOUI TextView/ScrollView、Button 和
 `widgets.CheckButton` 拥有各自的输入、样式、原生资源和语义，选项有真实选中指示。
 上下项、关闭和替换使用原始矢量线条图标，并提供本地化名称；Aa 和 ab 是实际的
 ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦点和禁用语义。
 提示、输入/按钮名称和计数状态支持 GOUI 的八种界面语言，见 [界面语言](DesignLocalization.md)。
 
-查询和替换的占位提示使用 GOUI TextInput.SetPlaceholder，由输入框统一管理字体、基线、
+查询和替换的占位提示使用 GOUI TextView.SetPlaceholder，由输入框统一管理字体、基线、
 裁剪、空内容/IME 显隐及语义快照；FindBar 在创建和语言变化时设置翻译后的普通字符串。
 提示使用 sourceview.find.input 的 placeholder part。FindBar 不创建提示 Label，
 不维护第二套提示定位或显隐监听；修改提示不改变查询、替换文本、选区或历史。
@@ -64,15 +64,15 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
 
 ## 浮层布局与配色
 
-- 自然宽度 448 DIP，阴影留白由当前样式计算；表面、圆角、边框和阴影来自注册规则。
+- 自然宽度 512 DIP，阴影留白由当前样式计算；表面、圆角、边框和阴影来自注册规则。
   Basic 保留 4 DIP 面板圆角与紧凑字体；Modern 跟随官方 menu / text-input 及 UI 字号。
-- 一行查找：展开按钮、查询字段及右侧 Aa/整词开关、匹配计数、上下项和关闭。
+- 一行查找：展开按钮、查询字段及右侧 Aa/整词/正则/选区开关、匹配计数、上下项和关闭。
   展开时第二行替换字段与查询字段左右对齐，后接当前/全部替换图标。
-- 行高至少 26 DIP，接受原生 TextInput 的较大测量结果；行间距 4 DIP。
+- 行高至少 28 DIP，读取 TextView 的公开 ContentSize，至多五逻辑行/200 DIP；行间距 4 DIP。
 - 小于 400 DIP 隐藏计数；小于 285 DIP 隐藏输入选项、上下项和替换动作。
   输入、展开/关闭及快捷键保留；恢复宽度时恢复控制项，不清除查询或替换文字。
 - FindBar 不再拥有内部固定 StyleScope，也不从代码 Scheme 推导界面配色。
-  使用自身所在子树的样式，TextInput/Button/CheckButton/Label/Icon 正常响应 StyleChanged。
+  使用自身所在子树的样式，TextView/ScrollView/Button/CheckButton/Label/Icon 正常响应 StyleChanged。
   两个编辑区需要独立主题时，由应用显式包裹完整编辑区和查找浮层。
 - 选区来自注册的原生 input selection 规则；字段、焦点、IME、命中和键盘分发仍在主窗口。
   完整样式名和覆盖方式见 [样式接入](DesignStyles.md#查找浮层)。
@@ -84,8 +84,8 @@ SourceView.Search 是查询的唯一来源。输入变更立即 SetSearch；外�
 
 - 从编辑器打开时，以非空、最多 4096 字节且不含 LF 的选区作为查询；保留大小写/整词选项。
   多行/超长选区保留既有查询。栏内再次打开不拿当前匹配覆盖用户正在输入的查询。
-- 查询字段采用 GOUI 的单行输入契约。程序化多行查询继续在核心中有效；栏中显示其单行规范化文本，
-  同步显示不反写查询。用户显式修改字段后成为新的单行查询。不承诺多行查询输入界面。
+- 查询和替换使用多行输入，LF 原样保留；Alt+Enter 在当前字段插入换行。
+  不把多行查询规范化为空格，更多内容在 ScrollView 内滚动。
 - Enter / Shift+Enter 查找下一项/上一项；替换输入中的未修改 Enter 执行当前替换并推进。
   普通按钮/选项仍拥有自己的 Enter 和 Space，不被栏的导航抢占。
 - 当前替换只修改已核验的当前源范围；无当前匹配时只定位下一项。替换成功后只有文档、修订、
@@ -106,11 +106,11 @@ SourceView.Search 是查询的唯一来源。输入变更立即 SetSearch；外�
 
 ## 计数、失效与生命周期
 
-计数是栏的展示缓存，键为目标 Document 身份、模型修订和 SearchQuery。每个 GUI 帧最多推进
-64 KiB 源区间，再读取一个查询长度的后缀上下文，跨块命中只按其起点计数一次。
-只保存扫描位置、上次匹配末端和总数，不保存全文件命中数组。计数、Find 和 ReplaceAll
-均使用从文首确定的不重叠序列，例如在 `aaaaa` 查找 `aa` 为两个匹配，
-不因从第二个字符发起查找而改成另一套重叠范围。整词边界沿用搜索核心的 Word/NonWord 变化定义。
+计数是栏的展示缓存，键为目标 Document 身份、模型修订、SearchQuery 和独立范围。
+单行字面量每帧最多推进 64 KiB 源区间及查询后缀，保留扫描位置和总数；
+正则/多行查询复用搜索核心当前修订的规范匹配数组，首次构建是同步全量分析。
+三类查询的计数、Find 和 ReplaceAll 使用规范不重叠序列，整词保留既有边界策略。
+缓存所有权、捕获组、零长度匹配及预算详见 [查询设计](DesignSearch.md)。
 
 尚未完成显示“计数中”，没有完成前不把局部数字冒充总数。查询超过 4096 字节时不执行界面计数，
 显示查询过长提示，显式导航仍可用。空查询不计数。关闭/不可见时暂停计数，文档、修订或查询变化
