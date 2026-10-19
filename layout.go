@@ -43,12 +43,13 @@ type paragraph struct {
 // Paint-only state is deliberately separate from the native layout's text,
 // font, tab and wrapping identity.
 type paragraphStyle struct {
-	scheme       *scheme.Scheme
-	language     language.ID
-	tokenVersion uint64
-	tokenValid   bool
-	selection    textedit.Range
-	focused      bool
+	scheme        *scheme.Scheme
+	language      language.ID
+	tokenVersion  uint64
+	languageEpoch uint64
+	tokenValid    bool
+	selection     textedit.Range
+	focused       bool
 }
 
 func (v *SourceView) dropLayouts() {
@@ -308,7 +309,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	}
 	// Selection geometry is painted independently. Only an actual foreground
 	// override makes selection/focus part of the native text's color identity.
-	style := paragraphStyle{scheme: v.appliedScheme, language: v.document.language, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
+	style := paragraphStyle{scheme: v.appliedScheme, language: v.document.language, languageEpoch: v.document.languageEpoch, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
 	var tokens []highlight.Token
 	if valid {
 		tokens, _, _ = e.Tokens(tokenRow)
