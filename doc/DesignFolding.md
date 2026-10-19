@@ -69,3 +69,5 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 [Scintilla 5 文档](https://www.scintilla.org/ScintillaDoc.html#Folding)（页面 2026-07-22）明确行可见性属于视图。
 [VS Code 1.105.0 hiddenRangeModel.ts](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/folding/browser/hiddenRangeModel.ts)
 首行保留、合并隐藏祖先；采用这一模型，位置跟踪先保持私有，不引入通用装饰 API。
+
+折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。

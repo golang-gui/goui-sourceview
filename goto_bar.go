@@ -96,7 +96,14 @@ func (b *GoToBar) SetTarget(v *SourceView) {
 	if b.Destroyed() || v == b.target {
 		return
 	}
+	expected := b.epoch
+	if b.open {
+		expected++
+	}
 	b.Close()
+	if b.Destroyed() || b.epoch != expected {
+		return
+	}
 	b.disconnect()
 	b.target = v
 	b.epoch++
@@ -110,9 +117,21 @@ func (b *GoToBar) SetQuery(text string) {
 		b.input.SetText(text)
 	}
 }
-func (b *GoToBar) Opened() bool                              { return b.open }
-func (b *GoToBar) ConnectError(fn func(error)) signal.Handle { return b.errorSignal.Connect(fn) }
-func (b *GoToBar) ConnectOpen(fn func(bool)) signal.Handle   { return b.openSignal.Connect(fn) }
+func (b *GoToBar) Opened() bool { return b.open }
+func (b *GoToBar) ConnectError(fn func(error)) signal.Handle {
+	return b.errorSignal.Connect(func(err error) {
+		if !b.Destroyed() {
+			fn(err)
+		}
+	})
+}
+func (b *GoToBar) ConnectOpen(fn func(bool)) signal.Handle {
+	return b.openSignal.Connect(func(open bool) {
+		if !b.Destroyed() && b.open == open {
+			fn(open)
+		}
+	})
+}
 func (b *GoToBar) liveTarget() *SourceView {
 	v := b.target
 	if b.Destroyed() || !b.mounted || v == nil || v.Destroyed() || !v.mounted || v.Root() != b.Root() || b.Root() == nil {

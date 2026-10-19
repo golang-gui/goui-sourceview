@@ -343,7 +343,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		v.setParagraphHeight(row, p.height)
 		width := p.width
 		if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
-			width += 21
+			width += 33 // Reserve the maximum badge extent, independent of paint-only LF markers.
 		}
 		v.contentWidth = max(v.contentWidth, width)
 		return p
@@ -377,7 +377,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	v.layouts[key] = p
 	v.setParagraphHeight(row, p.height)
 	if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
-		w += 21
+		w += 33
 	}
 	v.contentWidth = max(v.contentWidth, w)
 	if v.ContentSize() != oldSize {

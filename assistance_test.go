@@ -126,3 +126,33 @@ func TestGoToOffsetUsesOneBasedRuneColumns(t *testing.T) {
 		}
 	}
 }
+
+func TestGoToRetargetHonorsCloseCallback(t *testing.T) {
+	bar := NewGoToBar()
+	a, b, c := NewSourceView(), NewSourceView(), NewSourceView()
+	bar.SetTarget(a)
+	bar.open = true
+	bar.ConnectOpen(func(open bool) {
+		if !open {
+			bar.SetTarget(c)
+		}
+	})
+	bar.SetTarget(b)
+	if bar.Target() != c {
+		t.Fatal("outer setter overwrote callback target")
+	}
+}
+func TestFoldBadgeExtentDoesNotDependOnWhitespaceFlag(t *testing.T) {
+	v := foldingFixture(t)
+	if !v.Fold(0) {
+		t.Fatal("fold")
+	}
+	v.LayoutVisible(geometry.Size{Width: 30, Height: 200}, geometry.Point{})
+	before := v.ContentSize()
+	v.SetShowLineEndings(true)
+	p := v.paragraph(0)
+	r := v.foldBadgeRect(0, p)
+	if v.ContentSize() != before || r.X+r.Width > v.ContentSize().Width {
+		t.Fatal("badge clipped or marker changed content width", r, v.ContentSize(), before)
+	}
+}
