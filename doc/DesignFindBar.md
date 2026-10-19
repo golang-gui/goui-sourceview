@@ -70,7 +70,13 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
   Basic 保留 4 DIP 面板圆角与紧凑字体；Modern 跟随官方 menu / text-input 及 UI 字号。
 - 一行查找：展开按钮、查询字段及右侧 Aa/整词/正则/选区开关、匹配计数、上下项和关闭。
   展开时第二行替换字段与查询字段左右对齐，后接当前/全部替换图标。
-- 行高至少 28 DIP，读取 TextView 的公开 ContentSize，至多五逻辑行/200 DIP；行间距 4 DIP。
+- 两行独立测量，常规行高至少 28 DIP，行间距 4 DIP。先预留按钮、计数及选项宽度，
+  再以实际输入宽度调用 ScrollView.Measure；高度上限通过既有 MaxSize 和父约束表达，
+  每个输入视口至多 200 DIP。软换行参与高度；不从逻辑行数或 ContentSize 推算字段高度。
+- 紧凑字段使用 ScrollVertical / MainWeight(0)。外框由 FindBar 绘制，TextView 维持无边框内容样式；
+  文字、Placeholder、光标和输入几何由 GOUI 共用的排版规则负责。
+  完整自动增高体验需要 GOUI 的内容驱动 Measure 修正；v0.2.0 尚不含此行为，
+  本地通过 go.work 联调，正式依赖升级与验收见 PlanTextViewSizing.md。
 - 小于 400 DIP 隐藏计数；小于 285 DIP 隐藏输入选项、上下项和替换动作。
   输入、展开/关闭及快捷键保留；恢复宽度时恢复控制项，不清除查询或替换文字。
 - FindBar 不再拥有内部固定 StyleScope，也不从代码 Scheme 推导界面配色。

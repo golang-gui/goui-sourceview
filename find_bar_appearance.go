@@ -77,6 +77,9 @@ func (b *FindBar) buildSurface() {
 	b.find.SetStyleName("sourceview.find.input")
 	b.find.SetPadding(4)
 	b.findScroll = gui.NewScrollView()
+	b.findScroll.SetDirection(gui.ScrollVertical)
+	b.findScroll.SetMainWeight(0)
+	b.findScroll.SetMaxSize(geometry.Size{Height: 200})
 	b.findScroll.SetChild(b.find)
 	add(b.findScroll)
 	textOption := func(text string) gui.Widget {
@@ -121,6 +124,9 @@ func (b *FindBar) buildSurface() {
 	b.replacement.SetStyleName("sourceview.find.input")
 	b.replacement.SetPadding(4)
 	b.replacementScroll = gui.NewScrollView()
+	b.replacementScroll.SetDirection(gui.ScrollVertical)
+	b.replacementScroll.SetMainWeight(0)
+	b.replacementScroll.SetMaxSize(geometry.Size{Height: 200})
 	b.replacementScroll.SetChild(b.replacement)
 	add(b.replacementScroll)
 	b.replace = action("replace", resource.Replace, b.replaceCurrent)
@@ -191,10 +197,11 @@ func (s *findSurface) Paint(p gui.Painter) {
 
 // Layout addresses ordinary visible children by identity.
 type findBarLayout struct {
-	bar         *FindBar
-	rowHeight   float32
-	statusWidth float32
-	optionSizes [4]geometry.Size
+	bar               *FindBar
+	rowHeight         float32
+	replacementHeight float32
+	statusWidth       float32
+	optionSizes       [4]geometry.Size
 }
 
 // Density changes precede WidgetBase's visible-child snapshot.
@@ -229,40 +236,50 @@ func (l *findBarLayout) Measure(children []layout.Child, c layout.Constraint) la
 	width := min(float32(512), c.Max.Width)
 	slots := l.slots(children)
 
-	// Read public content extents after framework style/measurement. This avoids
-	// estimating native line height from a font's point size.
-	fieldHeight := func(scroll *gui.ScrollView, field *gui.TextView) float32 {
-		slots[scroll].Measure(layout.Loose(geometry.Size{Width: width, Height: 200}))
-		height := field.ContentSize().Height
-		if count := field.Model().LineCount(); count > 5 {
-			height = (height-2*field.Padding())*5/float32(count) + 2*field.Padding()
-		}
-		return min(float32(200), height+2)
-	}
-	l.rowHeight = max(float32(28), fieldHeight(b.findScroll, b.find))
-	if b.replaceMode {
-		l.rowHeight = max(l.rowHeight, fieldHeight(b.replacementScroll, b.replacement))
-	}
-
 	if !b.reduced {
 		l.statusWidth = max(64, slots[b.status].Measure(layout.Unbounded()).Width)
 		if b.message != "" {
 			l.statusWidth = min(144, l.statusWidth)
 		}
 	}
+	optionsWidth := float32(0)
 	if !b.narrow {
 		for i, w := range []gui.Widget{b.matchCase, b.wholeWord, b.regex, b.selectionOnly} {
 			m := slots[w].Measure(layout.Unbounded())
-			l.optionSizes[i] = geometry.Size{Width: max(22, m.Width), Height: min(l.rowHeight, max(22, m.Height))}
+			l.optionSizes[i] = geometry.Size{Width: max(22, m.Width), Height: max(22, m.Height)}
+			optionsWidth += l.optionSizes[i].Width + 3
 		}
 	}
 	rows := float32(1)
 	if b.replaceMode {
 		rows = 2
 	}
-	height := 2*b.inset + 10 + rows*l.rowHeight + (rows-1)*4
+	chrome := 2*b.inset + 10 + (rows-1)*4
+	maximum := min(float32(202), max(0, (c.Max.Height-chrome)/rows))
+	// Measure at the same input widths used by Arrange. TextView and ScrollView
+	// own content measurement; no logical-line count or font estimate is needed.
+	fieldWidth := max(0, width-2*(b.inset+5)-21-24)
+	if !b.narrow {
+		fieldWidth = max(0, fieldWidth-48)
+	}
+	if !b.reduced {
+		fieldWidth = max(0, fieldWidth-l.statusWidth-6)
+	}
+	fieldHeight := func(scroll *gui.ScrollView, width float32) float32 {
+		m := slots[scroll].Measure(layout.Loose(geometry.Size{Width: max(0, width), Height: max(0, maximum-2)}))
+		return min(maximum, max(float32(28), m.Height+2))
+	}
+	l.rowHeight = fieldHeight(b.findScroll, fieldWidth-optionsWidth-2)
+	l.replacementHeight = 0
+	if b.replaceMode {
+		l.replacementHeight = fieldHeight(b.replacementScroll, fieldWidth-2)
+	}
+	height := chrome + l.rowHeight + l.replacementHeight
 	// Measure all visible descendants through the framework before arrangement.
 	for _, child := range children {
+		if child == slots[b.findScroll] || child == slots[b.replacementScroll] {
+			continue
+		}
 		child.Measure(layout.Loose(geometry.Size{Width: width, Height: height}))
 	}
 	return layout.Measured(c.Clamp(geometry.Size{Width: width, Height: height}))
@@ -318,6 +335,7 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	place(1, x+1, y+1, max(0, inputRight-x-2), h-2)
 	if b.replaceMode {
 		y += h + 4
+		h = l.replacementHeight
 		b.replacementRect = geometry.Rect(x, y, b.fieldRect.Width, h)
 		place(8, x+1, y+1, max(0, b.fieldRect.Width-2), h-2)
 		// Replace actions align with the leading edge of the count/action area.

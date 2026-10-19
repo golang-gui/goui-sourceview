@@ -8,8 +8,10 @@
 // shortcut, checks geometry/colors/focus/hit testing, switches one theme and
 // dispatches smaller/restored logical window size events. This exercises layout,
 // not native window-manager resizing. Assertions use independent palette constants and
-// allocated semantic bounds. Text entry uses CommitText. Closes automatically;
-// early close or failed assertion exits nonzero. No clipboard or system settings
+// allocated semantic bounds. Text entry uses CommitText. Multiline queries
+// grow independently of replacement, reach the 200-DIP
+// input cap and scroll, and return to one line with zero scroll range/offset.
+// Closes automatically; early close or failed assertion exits nonzero. No clipboard or system settings
 // change. Restart to reset. -inspect keeps the restored light/dark window open
 // after checks for manual resize/hover/keyboard inspection; close normally.
 // Native IME and remote desktop compositing are manual.
@@ -24,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	source "github.com/golang-gui/goui-sourceview"
@@ -257,8 +260,38 @@ func main() {
 			for _, bar := range bars {
 				check(named(bar, "Previous").Visible() && named(bar, "Match case").Visible(), "wide controls not restored")
 			}
+			for _, bar := range bars {
+				bar.SetReplaceMode(true)
+				win.SetFocusedWidget(named(bar, "Find"))
+				key(events.KeyA, primary)
+				must(win.CommitText("one\none\none"))
+			}
+		case 7:
+			for _, bar := range bars {
+				query, replacement := named(bar, "Find"), named(bar, "Replacement")
+				check(query.Rect().Height > replacement.Rect().Height, "multiline query stretched replacement")
+				check(bar.Rect().Height == query.Rect().Height+replacement.Rect().Height+34, fmt.Sprintf("independent row heights: bar=%v query=%v replacement=%v", bar.Rect(), query.Rect(), replacement.Rect()))
+				win.SetFocusedWidget(query)
+				key(events.KeyA, primary)
+				must(win.CommitText(strings.Repeat("one\n", 30)))
+			}
+		case 8:
+			for _, bar := range bars {
+				query := named(bar, "Find")
+				scroll := query.Parent().Parent().(*gui.ScrollView)
+				check(query.Rect().Height <= 200 && scroll.Snapshot().MaxScrollY > 0, "capped multiline query did not scroll")
+				win.SetFocusedWidget(query)
+				key(events.KeyA, primary)
+				must(win.CommitText("one"))
+			}
+		case 9:
+			for _, bar := range bars {
+				query := named(bar, "Find")
+				scroll := query.Parent().Parent().(*gui.ScrollView)
+				check(query.Rect().Height == named(bar, "Replacement").Rect().Height && scroll.Snapshot().MaxScrollY == 0 && scroll.ScrollY() == 0, "query shrink retained row height or scroll")
+			}
 			done = true
-			log.Print("PASS floating find geometry, light/dark native-input colors, independent style scopes, collapsed/expanded, narrow/restore, focus and hit testing")
+			log.Print("PASS floating find geometry, colors, scopes, narrow/restore, independent multiline rows, cap/shrink, focus and hit testing")
 			if *inspect {
 				timer.Stop()
 				scopes[1].SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: float32(*fontSize)}))
