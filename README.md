@@ -28,9 +28,9 @@ Modern Light — JSON
 
 <img src="doc/images/editor-light.png" alt="GOUI SourceView editing JSON in Modern Light">
 
-Modern Dark — HTML with find and replace
+Modern Dark — HTML
 
-<img src="doc/images/editor-dark.png" alt="GOUI SourceView editing HTML with the floating find-and-replace panel in Modern Dark">
+<img src="doc/images/editor-dark.png" alt="GOUI SourceView editing HTML in Modern Dark">
 
 Screenshots from the example running on Linux.
 

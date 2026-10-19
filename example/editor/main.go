@@ -93,6 +93,11 @@ func run() error {
 	defer chrome.Disconnect()
 
 	editor := source.NewSourceView()
+	bindings := editor.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	if err := editor.SetKeyBindings(bindings); err != nil {
+		return err
+	}
 	editor.SetID("editor")
 	editor.SetAcceptsTab(true)
 	scroll := gui.NewScrollView()
@@ -195,7 +200,7 @@ func run() error {
 		tools.AddChild(choice)
 	}
 	tools.AddChild(spacer())
-	hint := gui.NewLabel("Ctrl+Space: complete  ·  F3: next match")
+	hint := gui.NewLabel("F2: complete  ·  F3: next match")
 	hint.SetStyleName(modern.MutedText)
 	tools.AddChild(hint)
 

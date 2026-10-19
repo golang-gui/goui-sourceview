@@ -17,7 +17,7 @@
 独立发布验证使用仓库外快照和已跟踪的无 replace go.mod，并关闭 go.work；不能只用
 GOWORK=off 在原工作区声称排除了 replace。
 
-核心配置和回归验证已完成；示例、内嵌样本、README 截图在后续独立提交中同步。
+核心配置、回归验证、示例和展示更新均已完成，按功能与示例分开提交。
 
 ## 验证
 
@@ -33,6 +33,7 @@ GOWORK=off 在原工作区声称排除了 replace。
 | 同一新窗口，正式依赖、race | 无 replace 快照构建；software 1x/浅色、2x/深色 | 全部断言通过 |
 | 原窗口专项，本地依赖 | `shortcuts`、`lines`、`find`、`folding`、`languages`、`extensions` | software 1x，正常事件路径断言通过 |
 | 补全面板专项，本地依赖 | `go run ./tests/window/editor/completion -case json -auto` | software 1x，键盘、悬停、滚轮、点击、焦点与撤销断言通过 |
+| 示例截图，正式依赖 | `go run ./example/editor -theme light`，通过真实 X11 输入切换深色与 HTML | software 1x，Integrated 窗口；截图见下节 |
 | 差异与文档 | `git diff --check`、本地文档链接检查 | 通过 |
 
 窗口运行设置 `XMODIFIERS=@im=none`，分别指定 `GOUI_PLAT_PAINTER=software/opengl`、
@@ -47,3 +48,12 @@ GOWORK=off 在原工作区声称排除了 replace。
 未执行 Windows/macOS 原生窗口、实体键盘的系统保留键、原生 IME 或混合显示器 DPI 验证。
 正常事件派发能确认控件不再默认消费 Ctrl+Space，不能据此承诺系统输入法的具体切换行为。
 FindBar 输入区尺寸和垂直对齐不在此轮修改与验收范围内。
+
+## 示例与展示
+
+三个示例显式配置 F2，工具栏、Markdown 样本、嵌入 JSON 与双语示例说明同步更新。
+README 的亮/暗截图来自使用正式 v0.2.0 依赖构建的实际窗口；浅色展示 JSON，深色展示 HTML，
+对应标题和替代文本随截图更新。截图没有重绘或伪造界面。
+
+验证仅修改测试文档和示例的内存状态，不改真实剪贴板或系统设置；截图更新属于本次交付。
+专用桌面会话和示例进程在结束时关闭，不影响已有桌面。

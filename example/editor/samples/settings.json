@@ -22,7 +22,7 @@
     },
     "shortcuts": {
         "find": "Ctrl/Cmd+F",
-        "complete": "Ctrl+Space",
+        "complete": "F2",
         "moveLine": "Alt/Option+Up or Down"
     },
     "unicode": "Hello · 你好 · é · 👩‍💻"

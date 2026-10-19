@@ -2,7 +2,7 @@
 // desktop (Linux Integrated chrome needs a compositor). This example uses only
 // public SourceView and GOUI APIs. It edits an in-memory Markdown sample; no
 // files or clipboard are changed automatically. Try Enter on a list, backticks,
-// [ and @ completion, Ctrl+Space templates, bracket matching, Bold, comments,
+// [ and @ completion, F2 templates, bracket matching, Bold, comments,
 // Find/Replace and Undo. The syntax is a small illustrative subset. Restart to
 // reset; close the Integrated window to exit.
 package main
@@ -49,6 +49,9 @@ func main() {
 	must(err)
 	doc.SetLanguageDefinition(definition)
 	editor := source.NewSourceView()
+	bindings := editor.KeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	must(editor.SetKeyBindings(bindings))
 	editor.SetDocument(doc)
 	editor.SetAcceptsTab(true)
 	editor.SetWrapMode(source.WrapWordChar)

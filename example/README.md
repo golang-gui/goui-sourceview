@@ -34,6 +34,9 @@ If Linux cannot enable Integrated decoration, GOUI may fall back to native decor
 Windows PowerShell 先设置 `$env:CGO_ENABLED='0'`。
 Linux 不满足 Integrated 所需能力时，GOUI 可回退到原生装饰。
 
+Both editor examples explicitly bind F2 for completion; the control has no default manual-completion shortcut.
+两个编辑示例显式绑定 F2 触发补全；控件本身不预设手动补全快捷键。
+
 ## Editor
 
 `editor` embeds original JSON/XML/HTML/Markdown/TOML/YAML/Shell samples, so the binary can run from any
@@ -57,9 +60,9 @@ Restart resets the samples. Closing the main window exits. No DevServer is start
 - Use Find / Replace or platform shortcuts; try `editor` in JSON or `feature`
   in HTML. Replace one/all and Undo. Escape closes the floating panel.
   打开查找替换，在 JSON 搜索 `editor`、HTML 搜索 `feature`，尝试替换及撤销，Escape 关闭浮层。
-- Right-click for the editor menu. Ctrl+Space opens completion; type brackets,
+- Right-click for the editor menu. F2 opens completion; type brackets,
   quotes, or select text and type an opening bracket. Try line movement shortcuts.
-  右键打开菜单；Ctrl+Space 请求补全，输入括号/引号或包裹选区，尝试按快捷键移动整行。
+  右键打开菜单；F2 请求补全，输入括号/引号或包裹选区，尝试按快捷键移动整行。
 - The header button switches light/dark. `-theme system` follows system appearance
   until you choose a theme; settings connections end with the application.
   标题栏按钮切换亮暗；`-theme system` 在手动切换前跟随系统外观，订阅随应用结束释放。
@@ -114,7 +117,7 @@ Markdown subset, without a preview or embedded Go highlighting.
 
 `markdown` 示例完全使用公开接口。相邻子包提供应用自己的扫描器、样式键、词边界、
 反引号配对、列表续行和可取消补全。输入 `[` 选择链接后光标进入 URL，输入 `@`
-插入引用并在文末添加定义，Ctrl+Space 提供模板；Bold/Comment、查找和主题按钮可交互验证。
+插入引用并在文末添加定义，F2 提供模板；Bold/Comment、查找和主题按钮可交互验证。
 语法是演示子集，没有预览或围栏内 Go 高亮。所有修改只在内存，重启复位，关闭窗口退出。
 
 ## Folding and navigation / 折叠与导航

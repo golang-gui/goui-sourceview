@@ -27,9 +27,9 @@ Modern 浅色 — JSON
 
 <img src="images/editor-light.png" alt="GOUI SourceView 使用 Modern 浅色外观编辑 JSON">
 
-Modern 深色 — HTML 与查找替换
+Modern 深色 — HTML
 
-<img src="images/editor-dark.png" alt="GOUI SourceView 使用 Modern 深色外观编辑 HTML 并显示浮动查找替换面板">
+<img src="images/editor-dark.png" alt="GOUI SourceView 使用 Modern 深色外观编辑 HTML">
 
 截图来自 Linux 上实际运行的示例程序。
 

@@ -67,4 +67,4 @@ func Rules(dark bool) []style.Rule {
 	return out
 }
 
-const Sample = "# Markdown editor\n\nA small editor built with **custom language rules**.\n\n- [ ] Type a list item and press Enter\n- [x] Try `inline code`, [a link](https://github.com/golang-gui/goui)\n\n> A quote keeps its prefix on Enter.\n\n```go\nfunc main() { println(\"Hello, SourceView\") }\n```\n\n<!-- Brackets [here] do not participate in matching. -->\n\nType [ for a link, @ for a reference, or Ctrl+Space for templates.\n"
+const Sample = "# Markdown editor\n\nA small editor built with **custom language rules**.\n\n- [ ] Type a list item and press Enter\n- [x] Try `inline code`, [a link](https://github.com/golang-gui/goui)\n\n> A quote keeps its prefix on Enter.\n\n```go\nfunc main() { println(\"Hello, SourceView\") }\n```\n\n<!-- Brackets [here] do not participate in matching. -->\n\nType [ for a link, @ for a reference, or F2 for templates.\n"

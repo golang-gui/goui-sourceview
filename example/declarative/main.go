@@ -9,6 +9,7 @@ import (
 	"github.com/golang-gui/goui-sourceview/language"
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
 	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/theme/modern"
 	base "github.com/golang-gui/goui/ui"
 )
@@ -16,6 +17,8 @@ import (
 func main() {
 	document := source.NewDocument("{\n    \"editor\": \"GOUI SourceView\",\n    \"editable\": true\n}\n")
 	_ = document.SetLanguage(language.JSON)
+	bindings := source.DefaultKeyBindings()
+	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
 	if err := base.Run("org.golang-gui.SourceViewDeclarative", func(app base.App) base.RootView {
 		return base.Root().
 			StyleSheet(modern.FromSettings(app.Settings())).
@@ -28,7 +31,7 @@ func main() {
 						base.VBox(
 							base.HeaderBar(base.Label("Declarative SourceView")).Padding(8),
 							base.Overlay(
-								base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true)),
+								base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true).KeyBindings(bindings)),
 								base.OverlayItem(sourceui.FindBar("editor")).OnPosition(func(available, size geometry.Size, p *geometry.Point) {
 									p.X = max(0, available.Width-size.Width-8)
 								}),
