@@ -159,6 +159,11 @@ func (v *SourceView) updateGutter() {
 	if v.showLineNumbers {
 		v.gutter = float32(max(2, len(strconv.Itoa(v.document.model.LineCount()))))*max(v.spaceWidth, v.digitWidth) + 2*padding
 	}
+	v.foldColumn = 0
+	if v.foldingEnabled && v.document.definition.Folding() != nil {
+		v.foldColumn = max(16, min(24, v.lineHeight))
+		v.gutter += v.foldColumn
+	}
 	if old != v.gutter && v.wrap != WrapNone {
 		v.dropLayouts()
 		v.resetHeights()
@@ -336,7 +341,11 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		}
 		p.used = v.tick
 		v.setParagraphHeight(row, p.height)
-		v.contentWidth = max(v.contentWidth, p.width)
+		width := p.width
+		if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
+			width += 21
+		}
+		v.contentWidth = max(v.contentWidth, width)
 		return p
 	}
 	text := v.displayText(row)
@@ -367,6 +376,9 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	oldSize := v.ContentSize()
 	v.layouts[key] = p
 	v.setParagraphHeight(row, p.height)
+	if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
+		w += 21
+	}
 	v.contentWidth = max(v.contentWidth, w)
 	if v.ContentSize() != oldSize {
 		v.RequestLayout()
@@ -507,6 +519,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 			}
 		}
 		p.DrawTextLayout(origin, item.layout)
+		v.paintFoldBadge(p, row, item)
 		if v.projection != nil {
 			start := v.projection.Replacement().Start
 			end := start + len(v.projection.Text())
@@ -535,6 +548,10 @@ func (v *SourceView) Paint(p gui.Painter) {
 			if item == nil {
 				continue
 			}
+			v.paintFoldButton(p, row)
+			if !v.showLineNumbers {
+				continue
+			}
 			number := row + 1
 			if v.projection != nil {
 				number = v.document.model.LineAt(v.projection.ModelOffset(v.displayRange(row).Start, false)) + 1
@@ -553,7 +570,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 				item.numberText = numberText
 			}
 			w, _ := item.number.MeasureSize()
-			p.DrawTextLayout(geometry.Point{X: v.gutter - padding - w, Y: padding + v.paragraphTop(row) - v.offset.Y}, item.number)
+			p.DrawTextLayout(geometry.Point{X: v.gutter - v.foldColumn - padding - w, Y: padding + v.paragraphTop(row) - v.offset.Y}, item.number)
 		}
 		p.Restore()
 		p.DrawLine(geometry.Point{X: v.gutter - .5}, geometry.Point{X: v.gutter - .5, Y: bounds.Height}, 1, graphics.ColorOf(v.colors.Border))
@@ -730,6 +747,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	}
 	text, _ := m.Slice(r)
 	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: v.Selection(), Length: m.Len(), VisibleRange: r, VisibleText: text}
+	v.snapshotFolding(&info, first, last)
 	if v.projection != nil {
 		text := v.projection.Text()
 		limit := textedit.ClampOffset(text, min(len(text), 64*1024))

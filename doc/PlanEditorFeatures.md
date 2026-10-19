@@ -7,7 +7,7 @@
 ## 实施切片
 
 - [x] A1：可见段落映射与原生几何接入。
-- [ ] A2：折叠范围、后台分析、JSON/XML/HTML 规则、交互、样式、语义和薄 UI。
+- [x] A2：折叠范围、后台分析、JSON/XML/HTML 规则、交互、样式、语义和薄 UI。
 - [ ] B：编辑辅助与可选 GoToBar。
 - [ ] C1：XML/HTML 标签编辑、正式 Markdown。
 - [ ] C2：嵌入高亮/编辑和标签名称联动。
@@ -33,3 +33,20 @@
 2000 组固定随机样本与独立行枚举一致；假排版检查隐藏段落不占高度、命中返回真实位置、
 未变正文布局复用。Linux amd64 / Go 1.25.8，GOWORK=off 全仓测试通过。
 本切片尚未开放折叠，不计为折叠窗口验收；实际隐藏与 IME/快照在 A2 完成。
+
+### A2
+
+- 语言的 FoldingFunc、范围校验、JSON/XML/HTML 规则已落地；Document 单 worker 可取消并
+  丢弃过期结果，视图独立保留嵌套状态。侧栏/行末标记、菜单、快捷键、搜索揭示、删除边界、
+  只读及真实原文分段快照已接入。声明式只协调开关及信号，菜单文字补齐八语言。
+- 新增规则、非法范围、编辑锚点、共享文档、撤销隔离、旧结果/卸载丢弃及通知重入测试。
+  旧括号像素测试显式关闭折叠以保持其独立断言；补全定位期望纳入新侧栏宽度，没有删断言或放宽容差。
+- Linux amd64 / Go 1.25.8 / Pango：GOWORK=off 全仓及 race 通过；Windows amd64 /
+  macOS arm64 全仓 CGO_ENABLED=0 交叉构建通过。
+- 新 tests/window/editor/folding 在独立 Xvnc :140 / Xfwm4（合成开启）以 Software 1x、
+  Software 2x Dark、OpenGL 1x 通过；实际 imageResource 与 PixelScale 已记录。
+  Software 1x 的新窗口另以 -race 构建并运行通过。键盘/指针、隐藏删除、搜索、历史与共享视图均断言通过。
+- 原 tests/window/editor -auto 在同桌面 Software 1x 通过，覆盖原编辑、颜色缓存、重挂载、
+  reveal、视口锚点与指针。未执行真实物理 IME、混合 DPI 或 Windows/macOS 新窗口。
+  所有窗口仅使用内存样本，未改写真实剪贴板/设置，运行后自动关闭。
+- XML/HTML 首轮仅折叠确认配对；HTML 省略结束标签及通用容错 DOM 推断未包含。GOUI 无新增要求。

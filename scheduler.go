@@ -69,6 +69,7 @@ func (q *frameQueue) frame(_ time.Time) {
 		}
 		d.lastFrame = time.Now()
 		seen[d] = true
+		d.foldingStep()
 		if d.engine.Pending() && time.Now().Before(deadline) {
 			until := minTime(deadline, time.Now().Add(2*time.Millisecond))
 			d.engine.Advance(until)

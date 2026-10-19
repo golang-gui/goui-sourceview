@@ -25,7 +25,7 @@ func (v *SourceView) MoveWord(forward, extend bool) {
 		return
 	}
 	at := editor.WordBoundaryWith(v.document.model, v.Selection().Caret, forward, false, v.document.definition.IsWord)
-	v.moveTo(at, false, extend)
+	v.moveTo(v.foldNavigationTarget(at, forward), false, extend)
 }
 
 // DeleteWord deletes the selection, a whitespace run or one code word.
@@ -33,6 +33,9 @@ func (v *SourceView) MoveWord(forward, extend bool) {
 func (v *SourceView) DeleteWord(forward bool) error {
 	if err := v.editable(); err != nil {
 		return err
+	}
+	if v.unfoldDeleteBoundary(forward) {
+		return nil
 	}
 	if !forward {
 		if handled, err := v.deletePair(); handled {
@@ -50,6 +53,10 @@ func (v *SourceView) DeleteWord(forward bool) error {
 		}
 	}
 	if r.Start == r.End {
+		return nil
+	}
+	if s.Anchor == s.Caret && v.expandFoldRange(r) {
+		v.foldingSignal.Emit()
 		return nil
 	}
 	return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: r.Start, Caret: r.Start}, Edits: []textedit.Edit{{Range: r}}})

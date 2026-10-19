@@ -71,6 +71,7 @@ func TestBracketDecorationUsesQuietFillAndInsetBorder(t *testing.T) {
 		t.Run(s.Definition().Name, func(t *testing.T) {
 			v, ctx := colorFixture(t)
 			v.SetShowLineNumbers(false)
+			v.SetFoldingEnabled(false) // Isolate bracket decoration from the independent folding gutter.
 			v.SetScheme(s)
 			v.Arrange(geometry.Rect(0, 0, 400, 200))
 			focusBracketFixture(t, v)
@@ -105,6 +106,7 @@ func TestBracketDecorationUsesQuietFillAndInsetBorder(t *testing.T) {
 func TestBracketDecorationSuppressionAndLayering(t *testing.T) {
 	v, _ := colorFixture(t)
 	v.SetShowLineNumbers(false)
+	v.SetFoldingEnabled(false) // Isolate bracket decoration from the independent folding gutter.
 	v.Arrange(geometry.Rect(0, 0, 400, 200))
 	focusBracketFixture(t, v)
 	paint := func() *bracketPainter { p := &bracketPainter{}; v.Paint(p); return p }

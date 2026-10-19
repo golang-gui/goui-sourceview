@@ -11,6 +11,7 @@ func (v *SourceView) cancelPreedit() {
 		return
 	}
 	v.projection = nil
+	v.resumeFolding()
 	v.invalidateLayout()
 	if !v.resettingIM {
 		v.resettingIM = true
@@ -24,6 +25,7 @@ func (v *SourceView) preedit(text string, caret int) {
 	}
 	if text == "" {
 		v.projection = nil
+		v.resumeFolding()
 		v.invalidateLayout()
 		return
 	}
@@ -32,6 +34,7 @@ func (v *SourceView) preedit(text string, caret int) {
 	m := v.document.model
 	if v.projection == nil || v.projectionRevision != m.Revision() {
 		v.cancelPaste()
+		v.expandFoldRange(v.Selection().Range())
 		v.projection = textedit.NewProjection(m, v.Selection())
 		v.projectionRevision = m.Revision()
 		m.BreakUndoGroup()

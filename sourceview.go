@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
@@ -85,6 +86,12 @@ type SourceView struct {
 	heights                                     textedit.HeightIndex
 	visibleLines                                visibleLineMap
 	hiddenLines                                 []lineInterval
+	foldColumn                                  float32
+	foldingEnabled                              bool
+	folds                                       []foldEntry
+	foldRevision                                uint64
+	foldDefinition                              *language.Language
+	foldingSignal                               signal.Signal0
 	lineHeight, spaceWidth, gutter              float32
 	contentWidth                                float32
 	metricsReady                                bool
@@ -125,6 +132,7 @@ type SourceView struct {
 func NewSourceView() *SourceView {
 	d := NewDocument("")
 	v := &SourceView{document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
+	v.foldingEnabled = true
 	v.colors = scheme.Light().Definition()
 	v.automaticCompletion = true
 	v.SetFocusable(true)
@@ -171,6 +179,10 @@ func (v *SourceView) SetDocument(d *Document) {
 		v.document.release(v)
 	}
 	v.document = d
+	v.folds = nil
+	v.hiddenLines = nil
+	v.foldRevision = d.model.Revision()
+	v.foldDefinition = d.definition
 	v.pairs = nil
 	v.brackets = bracketState{}
 	v.selection = textedit.Selection{}
@@ -180,6 +192,9 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.observed = d.model.Revision()
 	if v.mounted {
 		d.acquire(v)
+		if v.Destroyed() || v.document != d || v.mountEpoch != state.mount {
+			return
+		}
 	}
 	v.currentMatch = nil
 	v.anchor = viewportAnchor{}
@@ -226,6 +241,13 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	defer v.searchState.Emit()
 	state := v.operationState()
 	s = v.clampSelection(s)
+	foldingChanged := false
+	if reveal {
+		foldingChanged = v.unfoldSelection(s)
+		if !state.valid(v) || v.Destroyed() {
+			return
+		}
+	}
 	if v.context != nil && v.projection == nil {
 		if s.Anchor == s.Caret {
 			s.Caret = v.snapOffset(s.Caret, true)
@@ -265,6 +287,9 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	}
 	if old != s && v.selectionEpoch == selectionEpoch {
 		v.selectionSignal.Emit(s)
+	}
+	if foldingChanged && !v.Destroyed() && v.document == state.document && v.mountEpoch == state.mount {
+		v.foldingSignal.Emit()
 	}
 }
 func (v *SourceView) ReadOnly() bool { return v.readOnly }
@@ -350,6 +375,8 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	if v.document != d || v.mountEpoch != epoch || !v.mounted {
 		return
 	}
+	hadFolds := len(v.folds) > 0
+	v.mapFolds(c)
 	v.mapPairs(c)
 	if c.Reset {
 		v.anchor.valid = false
@@ -380,7 +407,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		}
 		v.selectionRevision = c.Revision
 	}
-	if reset || c.Reset {
+	if reset || c.Reset || hadFolds {
 		v.invalidateLayout()
 	} else {
 		for _, s := range splices {
@@ -430,8 +457,15 @@ func (v *SourceView) mount() {
 		v.pendingAnchor = false
 		v.offset = geometry.Point{}
 	}
+	if v.foldRevision != v.document.model.Revision() || v.foldDefinition != v.document.definition {
+		v.clearFolds()
+	}
 	v.context = gui.App.Typography()
+	state := v.operationState()
 	v.document.acquire(v)
+	if !state.valid(v) || !v.mounted || v.Destroyed() {
+		return
+	}
 	attachFrame(v)
 	v.updateScheme()
 	v.invalidateLayout()

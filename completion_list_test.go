@@ -342,7 +342,7 @@ func TestCompletionUnicodePrefixAndWordAnchor(t *testing.T) {
 	}
 	c := CompletionContext{Range: textedit.Range{Start: 1, End: 5}}
 	position := v.completionPosition(c, caret)
-	if position != (geometry.Point{X: 4, Y: caret.Y + caret.Height + 2}) {
+	if position != (geometry.Point{X: v.gutter + 4, Y: caret.Y + caret.Height + 2}) {
 		t.Fatal("list text did not align with word start", position)
 	}
 	caret.Y += 20

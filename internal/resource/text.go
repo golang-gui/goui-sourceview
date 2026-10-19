@@ -95,3 +95,10 @@ var (
 )
 
 func Matches(count int) string { return fmt.Sprintf(matches(), count) }
+
+var (
+	Fold      = mlang.String(mlang.En("Fold"), mlang.ZhCN("折叠"), mlang.Ja("折りたたむ"), mlang.Ko("접기"), mlang.De("Einklappen"), mlang.Fr("Replier"), mlang.Ru("Свернуть"), mlang.Ar("طي"))
+	Unfold    = mlang.String(mlang.En("Unfold"), mlang.ZhCN("展开"), mlang.Ja("展開"), mlang.Ko("펼치기"), mlang.De("Ausklappen"), mlang.Fr("Déplier"), mlang.Ru("Развернуть"), mlang.Ar("توسيع"))
+	FoldAll   = mlang.String(mlang.En("Fold all"), mlang.ZhCN("全部折叠"), mlang.Ja("すべて折りたたむ"), mlang.Ko("모두 접기"), mlang.De("Alles einklappen"), mlang.Fr("Tout replier"), mlang.Ru("Свернуть всё"), mlang.Ar("طي الكل"))
+	UnfoldAll = mlang.String(mlang.En("Unfold all"), mlang.ZhCN("全部展开"), mlang.Ja("すべて展開"), mlang.Ko("모두 펼치기"), mlang.De("Alles ausklappen"), mlang.Fr("Tout déplier"), mlang.Ru("Развернуть всё"), mlang.Ar("توسيع الكل"))
+)

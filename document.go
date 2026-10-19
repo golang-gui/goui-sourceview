@@ -19,17 +19,22 @@ import (
 var nextDocumentID atomic.Uint64
 
 type Document struct {
-	id            uint64
-	model         *textedit.Model
-	language      language.ID
-	definition    *language.Language
-	languageEpoch uint64
-	engine        *highlight.Engine
-	connection    signal.Handle
-	views         map[*SourceView]struct{}
-	driver        gui.Root
-	lastFrame     time.Time
-	observed      uint64
+	id                           uint64
+	model                        *textedit.Model
+	language                     language.ID
+	definition                   *language.Language
+	languageEpoch                uint64
+	engine                       *highlight.Engine
+	connection                   signal.Handle
+	views                        map[*SourceView]struct{}
+	driver                       gui.Root
+	lastFrame                    time.Time
+	observed                     uint64
+	folding                      *foldingQueue
+	foldGeneration, foldRevision uint64
+	foldReady                    bool
+	foldRanges                   []language.FoldRange
+	foldDue                      time.Time
 }
 
 func NewDocument(text string) *Document { return NewDocumentWithModel(textedit.NewModel(text)) }
@@ -67,6 +72,7 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 		return
 	}
 	d.definition, d.language = l, l.ID()
+	d.requestFolding(true)
 	d.languageEpoch++
 	if d.engine != nil {
 		d.engine.SetDefinition(l)
@@ -79,6 +85,7 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 		if v.document != d || !v.mounted {
 			continue
 		}
+		v.clearFolds()
 		v.pairs, v.brackets = nil, bracketState{}
 		v.closeCompletion()
 		if v.document != d || !v.mounted {
@@ -104,6 +111,12 @@ func (d *Document) acquire(v *SourceView) {
 	v.selectionRevision = d.model.Revision()
 	v.selection = v.clampSelection(v.selection)
 	d.requestWork()
+	if d.foldReady && d.foldRevision == d.model.Revision() {
+		v.acceptFolds(d.foldRanges)
+	} else {
+		d.requestFolding(true)
+	}
+
 }
 func (d *Document) release(v *SourceView) {
 	if _, ok := d.views[v]; !ok {
@@ -111,6 +124,7 @@ func (d *Document) release(v *SourceView) {
 	}
 	delete(d.views, v)
 	if len(d.views) == 0 {
+		d.stopFolding()
 		d.connection.Disconnect()
 		d.connection = nil
 		d.engine = nil
@@ -140,6 +154,7 @@ func (d *Document) changed(c textedit.Change) {
 	if d.engine == nil {
 		return
 	}
+	d.requestFolding(false)
 	splices, reset := d.engine.Change(c)
 	d.observed = c.Revision
 	views := make([]*SourceView, 0, len(d.views))

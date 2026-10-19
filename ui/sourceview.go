@@ -25,6 +25,8 @@ type SourceViewView struct {
 	onError                        func(error)
 	autoPairs, automaticCompletion *bool
 	completionProvider             *source.CompletionProvider
+	foldingEnabled                 *bool
+	onFoldingChanged               func()
 }
 
 func SourceView() *SourceViewView                                        { v := &SourceViewView{}; v.Self = v; return v }
@@ -67,15 +69,25 @@ func (v *SourceViewView) CompletionProvider(provider *source.CompletionProvider)
 	return v
 }
 
+func (v *SourceViewView) FoldingEnabled(enabled bool) *SourceViewView {
+	v.foldingEnabled = &enabled
+	return v
+}
+func (v *SourceViewView) OnFoldingChanged(fn func()) *SourceViewView {
+	v.onFoldingChanged = fn
+	return v
+}
+
 type state struct {
-	document    *source.Document
-	indent      source.IndentOptions
-	wrap        source.WrapMode
-	lineNumbers bool
-	onChange    func(textedit.Change)
-	onSelection func(textedit.Selection)
-	onError     func(error)
-	handles     signal.Handles
+	document         *source.Document
+	indent           source.IndentOptions
+	wrap             source.WrapMode
+	lineNumbers      bool
+	onChange         func(textedit.Change)
+	onSelection      func(textedit.Selection)
+	onError          func(error)
+	handles          signal.Handles
+	onFoldingChanged func()
 }
 
 func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
@@ -83,6 +95,11 @@ func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 	s := &state{document: w.Document(), indent: w.IndentOptions(), wrap: w.WrapMode(), lineNumbers: w.ShowLineNumbers()}
 
 	s.handles = signal.Handles{
+		w.ConnectFoldingChanged(func() {
+			if s.onFoldingChanged != nil {
+				s.onFoldingChanged()
+			}
+		}),
 		w.ConnectChange(func(c textedit.Change) {
 			if s.onChange != nil {
 				s.onChange(c)
@@ -111,6 +128,11 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 		d = s.document
 	}
 	w.SetDocument(d)
+	enabled := true
+	if v.foldingEnabled != nil {
+		enabled = *v.foldingEnabled
+	}
+	w.SetFoldingEnabled(enabled)
 	w.SetReadOnly(v.readOnly)
 	w.SetAcceptsTab(v.acceptsTab)
 	autoPairs, automatic := true, true
@@ -150,6 +172,7 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	s.onChange = v.onChange
 	s.onSelection = v.onSelection
 	s.onError = v.onError
+	s.onFoldingChanged = v.onFoldingChanged
 }
 func (v *SourceViewView) Unmount(ctx base.BuildContext, widget gui.Widget) {
 	if s, ok := ctx.State().(*state); ok {

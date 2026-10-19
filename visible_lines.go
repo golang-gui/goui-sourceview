@@ -62,7 +62,20 @@ func (m *visibleLineMap) index(line int) (int, bool) {
 }
 
 func (v *SourceView) resetHeights() {
-	v.visibleLines.reset(v.displayCount(), v.hiddenLines)
+	hidden := v.hiddenLines
+	if v.projection != nil {
+		hidden = nil
+		first, last := v.projection.FirstLine(), v.projection.LastLine()
+		delta := v.projection.ParagraphCount() - (last - first + 1)
+		for _, h := range v.hiddenLines {
+			if h.end <= first {
+				hidden = append(hidden, h)
+			} else if h.start > last {
+				hidden = append(hidden, lineInterval{h.start + delta, h.end + delta})
+			}
+		}
+	}
+	v.visibleLines.reset(v.displayCount(), hidden)
 	v.heights.Reset(v.visibleLines.count, v.lineHeight)
 }
 func (v *SourceView) paragraphTop(row int) float32 {

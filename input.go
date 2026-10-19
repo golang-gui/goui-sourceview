@@ -35,6 +35,11 @@ func (v *SourceView) installInput() {
 		if !v.mounted {
 			return
 		}
+		if line, ok := v.foldHit(point); ok {
+			v.dragging = false
+			v.ToggleFold(line)
+			return
+		}
 		pos := v.hit(point)
 		s := v.Selection()
 		v.dragGutter = point.X < v.gutter
@@ -180,7 +185,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		ctx.StopPropagation()
 		return
 	}
-	if v.editingKey(event) {
+	if v.foldingKey(event) || v.editingKey(event) {
 		event.PreventDefault()
 		ctx.StopPropagation()
 		return
@@ -252,6 +257,9 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		case events.KeyBackspace, events.KeyDelete:
 			wasCompleting := v.completion != nil
 			run(func() error {
+				if v.unfoldDeleteBoundary(event.Key == events.KeyDelete) {
+					return nil
+				}
 				if event.Key == events.KeyBackspace {
 					if handled, err := v.deletePair(); handled {
 						return err
@@ -447,6 +455,9 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 				caret = r.Start + pos.Offset
 			}
 		}
+	}
+	if key == events.KeyArrowLeft || key == events.KeyArrowRight {
+		caret = v.foldNavigationTarget(caret, key == events.KeyArrowRight)
 	}
 	v.moveTo(caret, pos.Upstream, extend)
 	if vertical {

@@ -25,12 +25,16 @@ const (
 	commandDuplicateLinesDown
 	commandDeleteLines
 	commandSelectAll
+	commandFold
+	commandUnfold
+	commandFoldAll
+	commandUnfoldAll
 )
 
 var commandLabels = [...]mlang.Getter{
 	resource.Undo, resource.Redo, resource.Cut, resource.Copy, resource.Paste, resource.Delete,
 	resource.MoveLinesUp, resource.MoveLinesDown, resource.DuplicateLinesUp, resource.DuplicateLinesDown,
-	resource.DeleteLines, resource.SelectAll,
+	resource.DeleteLines, resource.SelectAll, resource.Fold, resource.Unfold, resource.FoldAll, resource.UnfoldAll,
 }
 
 type editMenu struct {
@@ -46,6 +50,8 @@ func (v *SourceView) canCommand(c editCommand) bool {
 	selected := v.Selection().Anchor != v.Selection().Caret
 	clipboard := gui.App != nil && gui.App.Clipboard() != nil
 	switch c {
+	case commandFold, commandUnfold, commandFoldAll, commandUnfoldAll:
+		return v.canFold() && len(v.folds) > 0
 	case commandUndo:
 		return !v.readOnly && v.document.model.CanUndo()
 	case commandRedo:
@@ -79,6 +85,14 @@ func (v *SourceView) runCommand(c editCommand) {
 		return
 	}
 	switch c {
+	case commandFold:
+		v.foldAtCaret(true)
+	case commandUnfold:
+		v.foldAtCaret(false)
+	case commandFoldAll:
+		v.FoldAll()
+	case commandUnfoldAll:
+		v.UnfoldAll()
 	case commandUndo:
 		v.Undo()
 	case commandRedo:
@@ -148,8 +162,8 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	}
 	items := gui.NewMenu()
 	m.items = make(map[editCommand]*gui.MenuItem)
-	for c := commandUndo; c <= commandSelectAll; c++ {
-		if c == commandCut || c == commandMoveLinesUp || c == commandSelectAll {
+	for c := commandUndo; c <= commandUnfoldAll; c++ {
+		if c == commandCut || c == commandMoveLinesUp || c == commandSelectAll || c == commandFold {
 			items.AppendSeparator()
 		}
 		item := items.Append(commandLabels[c](), func() {

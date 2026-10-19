@@ -103,6 +103,8 @@ func codeRules(d scheme.Definition) []style.Rule {
 	rules := []style.Rule{
 		style.Name("source-view").FontFamily("monospace").FontSize(12).BackgroundColor(d.Background).ForegroundColor(d.Foreground),
 		style.Name("source-view").Part("gutter").BackgroundColor(d.GutterBackground).ForegroundColor(d.GutterForeground),
+		style.Name("source-view").Part("fold-toggle").ForegroundColor(d.GutterForeground),
+		style.Name("source-view").Part("fold-placeholder").ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("current-line").BackgroundColor(d.CurrentLine),
 		// An explicit zero foreground prevents the root foreground fallback;
 		// SourceView treats zero alpha here as preserving syntax, not invisible text.
