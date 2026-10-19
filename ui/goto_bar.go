@@ -48,10 +48,10 @@ func (v *GoToBarView) Update(ctx base.BuildContext, widget gui.Widget) {
 	w, s := widget.(*source.GoToBar), ctx.State().(*findBarState)
 	s.onOpen, s.onError = v.onOpen, v.onError
 	ctx.AfterUpdate(func() {
-		target, _ := gui.FindWidget(w.Root(), v.targetID).(*source.SourceView)
-		w.SetTarget(target)
 		s.handles.Block()
 		defer s.handles.Unblock()
+		target, _ := gui.FindWidget(w.Root(), v.targetID).(*source.SourceView)
+		w.SetTarget(target)
 		if v.open != nil && w.Opened() != *v.open {
 			if *v.open {
 				if err := w.Open(); err != nil && s.onError != nil {

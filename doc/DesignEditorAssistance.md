@@ -45,3 +45,6 @@ Basic/Modern 提供 whitespace、indent-guide、ruler、occurrence 等颜色与�
 区分空白类型和位置；本项目先采用四种常用模式，不引入矩阵配置。
 [Monaco EditorOptions](https://microsoft.github.io/monaco-editor/typedoc/variables/editor_editor_api.editor.EditorOptions.html)
 提供空白、标尺和选区高亮；借鉴明确选项，布局仍以本项目原生几何为准。
+
+GoToBar 的声明式属性协调会屏蔽属性引起的通知，包括切换目标时的关闭；
+命令式调用保留实际打开/关闭通知，避免属性回写造成重建循环。
