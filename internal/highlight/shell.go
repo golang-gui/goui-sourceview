@@ -75,7 +75,12 @@ func shTop(p *shFrame) shMode {
 	}
 	return p.mode
 }
-func (s *shellState) push(mode shMode) { s.stack = &shFrame{parent: s.stack, mode: mode} }
+func (s *shellState) push(mode shMode) {
+	s.stack = &shFrame{parent: s.stack, mode: mode}
+	if mode == shCommand || mode == shBacktick {
+		s.wordPart = false
+	}
+}
 func (s *shellState) pop() {
 	if s.stack != nil {
 		s.stack = s.stack.parent
@@ -353,6 +358,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			continue
 		}
 		if s.escape {
+			s.wordPart = true
 			n := runeSize(input, i)
 			emit(&out, i, i+n, language.KindEscape)
 			s.escape = false
@@ -376,6 +382,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			if c == end {
 				emit(&out, i, i+1, language.KindString)
 				s.pop()
+				s.wordPart = true
 				i++
 				continue
 			}
@@ -393,6 +400,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			}
 		}
 		if c == '$' {
+			s.wordPart = true
 			finishWord(false)
 			switch {
 			case strings.HasPrefix(input[i:], "$(("):
@@ -424,6 +432,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			continue
 		}
 		if c == '`' {
+			s.wordPart = true
 			finishWord(false)
 			emit(&out, i, i+1, language.KindDelimiter)
 			if mode == shBacktick {
@@ -461,6 +470,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			finishWord(false)
 			emit(&out, i, i+2, language.KindDelimiter)
 			s.pop()
+			s.wordPart = true
 			i += 2
 			continue
 		}
@@ -468,6 +478,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			finishWord(false)
 			emit(&out, i, i+1, language.KindDelimiter)
 			s.pop()
+			s.wordPart = true
 			i++
 			continue
 		}
@@ -492,6 +503,7 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 					s.stack = &p
 				} else {
 					s.pop()
+					s.wordPart = true
 				}
 			}
 			continue
@@ -556,7 +568,9 @@ func scanShell(state State, input string, limit int, lineEnd bool) ([]Token, Sta
 			s.beginning = true
 		} else {
 			finishWord(false)
-			s.wordPart = false
+			if !s.escape {
+				s.wordPart = false
+			}
 			s.continued = s.escape
 			s.escape = false
 			s.comment = false

@@ -23,6 +23,8 @@ func appendToken(out *[]Token, start, end int, kind language.Kind) {
 // atom retains bounded spelling for literals and a streaming numeric recognizer.
 // Its byte length allows classification after arbitrarily many input fragments.
 type atom struct {
+	significant int
+	gap         bool
 	// After a bounded prefix, retain a possible date timezone, skipping only
 	// the still-unbounded fractional digits before it.
 	tail                                     string
@@ -36,6 +38,9 @@ type atom struct {
 
 func (a *atom) add(c byte) {
 	a.n++
+	if !space(c) {
+		a.significant = a.n
+	}
 	if len(a.text) < 128 {
 		a.text += string(c)
 	} else if a.tail != "" || !digit(c) {
@@ -46,6 +51,14 @@ func (a *atom) add(c byte) {
 		}
 	}
 	if a.bad {
+		return
+	}
+	if space(c) {
+		a.gap = true
+		return
+	}
+	if a.gap {
+		a.bad = true
 		return
 	}
 	if c == '_' {

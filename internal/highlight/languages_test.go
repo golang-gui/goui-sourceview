@@ -49,6 +49,13 @@ func TestConfigurationAndShellKinds(t *testing.T) {
 		{language.Shell, `echo "$HOME"`, "$HOME", language.KindVariable},
 		{language.Shell, `echo foo#bar # comment`, "bar", language.KindPlain},
 		{language.Shell, `echo foo#bar # comment`, "comment", language.KindComment},
+		{language.Shell, "echo \"$(# comment\npwd)\"", "comment", language.KindComment},
+		{language.Shell, "echo foo\\\n#suffix", "suffix", language.KindPlain},
+		{language.Shell, "echo \\\n#comment", "comment", language.KindComment},
+		{language.Shell, `echo $HOME#suffix`, "suffix", language.KindPlain},
+		{language.Shell, `echo ${HOME}#suffix`, "suffix", language.KindPlain},
+		{language.Shell, `echo "$(echo hi)"#suffix`, "suffix", language.KindPlain},
+		{language.Shell, `echo \a#suffix`, "suffix", language.KindPlain},
 		{language.Shell, `echo "text"#suffix`, "suffix", language.KindPlain},
 		{language.Shell, "cat <<EOF\nbody $USER\nEOF\necho done", "EOF\necho", language.KindMeta},
 		{language.Shell, "cat <<'EOF'\nbody $USER\nEOF", "$USER", language.KindString},
@@ -205,6 +212,9 @@ func TestLongConfigurationLiterals(t *testing.T) {
 		{language.TOML, "n = " + strings.Repeat("1", ChunkSize*2) + "__2", language.KindInvalid},
 		{language.TOML, "n = " + strings.Repeat("1", ChunkSize*2) + "e+", language.KindInvalid},
 		{language.YAML, "n: " + strings.Repeat("1", ChunkSize*2), language.KindNumber},
+		{language.YAML, "n: " + strings.Repeat("1", ChunkSize*2) + "  # comment", language.KindNumber},
+		{language.YAML, "n: true" + strings.Repeat(" ", ChunkSize) + "# comment", language.KindKeyword},
+		{language.YAML, "n: " + strings.Repeat("1", ChunkSize) + " 2", language.KindPlain},
 	} {
 		tokens, _ := scanAll(tc.id, tc.text, ChunkSize)
 		if got := kindAt(tokens, 5); got != tc.kind {

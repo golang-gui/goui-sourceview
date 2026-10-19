@@ -35,7 +35,7 @@ var yamlNumber = regexp.MustCompile(`^[+-]?(?:[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+|(?:
 
 func (a atom) yamlKind() language.Kind {
 	text := strings.TrimSpace(a.text)
-	if a.n <= 128 {
+	if a.significant <= 128 {
 		switch text {
 		case "true", "True", "TRUE", "false", "False", "FALSE", "null", "Null", "NULL", "~":
 			return language.KindKeyword
