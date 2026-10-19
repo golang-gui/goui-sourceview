@@ -9,23 +9,11 @@ The examples use Modern and request
 ## Setup / 环境准备
 
 Requires Go 1.24 or newer and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
-For this development snapshot, place a GOUI checkout containing `1ada17e` or a later
-version with the same APIs at `../goui`. The declared `goui v0.1.1` does not include
-the required batch editing, styling, registration and TextInput placeholder APIs yet. From this repository
-root, create a local workspace if one does not already exist:
+The module depends on GOUI v0.2.0; Go downloads it automatically. A separate GOUI
+checkout or local workspace is not required to build or run these examples.
 
-需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。当前开发快照需将包含 `1ada17e`
-或之后相同接口的 GOUI 检出放在相邻 `../goui`；`go.mod` 中的 `goui v0.1.1`
-尚不具备所需批量编辑、样式、注册和 TextInput 占位提示接口。在本仓库根目录为首次使用创建本地工作区：
-
-```sh
-go work init . ../goui
-```
-
-For an existing workspace, use `go work use . ../goui` instead. Keep the workspace
-local; a machine-specific `replace` is unnecessary.
-
-已有工作区时改用 `go work use . ../goui`。工作区仅供本地使用，无需机器专属 `replace`。
+需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块直接依赖 GOUI v0.2.0，由 Go
+自动下载；构建和运行示例无需另行检出 GOUI 或创建本地工作区。
 
 ## Run / 启动
 

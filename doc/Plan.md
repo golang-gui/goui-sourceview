@@ -5,6 +5,8 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
+当前依赖已切换到 GOUI v0.2.0，独立验证结果见第 14 节；早期各切片中的未发布依赖及失败描述保留为当时记录。
+
 ## 自定义语言与 Markdown（2026-10-19）
 
 - [x] 公开不可变语言/扫描契约、自定义样式键与独立词法角色，迁移六种内置语言。
@@ -12,7 +14,8 @@
 - [x] 可取消后台补全、空前缀触发、提供者候选控制、每项范围/光标与附加编辑，薄声明式绑定。
 - [x] 完全使用公开 API 的 Integrated / Modern Markdown 编辑器，纯逻辑及窗口验证。
 - [x] 本机 test/race/vet、Software 1×/2×、OpenGL 1×，Windows/macOS 示例交叉构建。
-- [ ] Windows/macOS 原生窗口、真实 IME/物理快捷键、混合 DPI；可获取 GOUI 依赖的独立构建。
+- [ ] Windows/macOS 原生窗口、真实 IME/物理快捷键、混合 DPI。
+- [x] 可获取 GOUI 依赖的独立构建：已接入 v0.2.0，结果见第 14 节。
 
 具体改动、过程中发现的缺陷、命令及适用条件见 [扩展验证](PlanLanguageExtensions.md)。
 
@@ -57,7 +60,7 @@ Windows/macOS 本轮仅交叉构建，未进行原生运行。真实 IME、系�
 - [x] 旧版复现、样式/缓存回归、三语言 × 三主题窗口像素与资源释放断言。
 - [x] 本机 test/race/vet；Linux Software 1x/2x、OpenGL 1x；Windows/macOS 原生包测试与窗口构建。
 - [ ] Windows/macOS 实际桌面、物理输入/IME、分数与混合 DPI。
-- [ ] 包含所需 GOUI API 的可获取版本及关闭工作区的独立构建。
+- [x] 包含所需 GOUI API 的可获取版本及关闭工作区的独立构建：GOUI v0.2.0，见第 14 节。
 
 范围、提交、命令与验证边界见 [代码选区验收](PlanSelection.md)。
 
@@ -70,7 +73,7 @@ Windows/macOS 本轮仅交叉构建，未进行原生运行。真实 IME、系�
 - [x] 两仓本机测试、相关 race；Linux Software 1x/2x、OpenGL 1x 与 18 pt 字体窗口验收。
 - [x] Windows/macOS 原生包测试、GOUI 受影响包测试与窗口程序构建。
 - [ ] Windows/macOS 桌面外观、真实 IME、分数/混合 DPI。
-- [ ] 依赖包含所需 GOUI API 的可获取发行版后通过关闭工作区的独立构建。
+- [x] 依赖包含所需 GOUI API 的可获取发行版后通过关闭工作区的独立构建：GOUI v0.2.0，见第 14 节。
 
 范围、提交、命令及结果见 [样式接入验收](PlanStyles.md)。
 
@@ -182,7 +185,7 @@ flowchart TD
 
 - [x] 按 GOUI 的 AGENTS 分别实现并验证 G1/G2/G3，记录实际接口及拆分提交，不混入源码领域依赖。
 - [x] 两仓本地 workspace 联调与 Windows/macOS 原生专项结果分别记录。
-- [ ] 发布包含通用扩展和当前修正的可获取版本，更新依赖并通过 GOWORK=off 独立验证。
+- [x] 发布包含通用扩展和当前修正的可获取版本，更新依赖并通过 GOWORK=off 独立验证：GOUI v0.2.0，见第 14 节。
 
 G 项没有完成前，相关 SourceView 功能可以开发或局部测试，但不能标记对应验收已通过。
 
@@ -224,7 +227,7 @@ G 项没有完成前，相关 SourceView 功能可以开发或局部测试，但
 
 ## 7. M4：完整首版集成
 
-- [ ] G1/G2/G3 实际版本接入并运行专项回归。
+- [x] G1/G2/G3 实际版本接入并运行本机回归：GOUI v0.2.0；未完成的原生矩阵按专题保留。
 - [ ] 行号、横向固定侧栏、折行、Tab、锚定与 reveal。
 - [x] 多行缩进/反缩进、换行缩进、查找替换及一次撤销。
 - [x] 亮暗、选区/搜索/当前行叠加、caret 与投影样式。
@@ -249,7 +252,7 @@ G 项没有完成前，相关 SourceView 功能可以开发或局部测试，但
 
 上面的勾选表示相关代码及已记录的验证已落地，不代表专题中的全部平台矩阵通过。
 IME 投影、G1/G2/G3 三后端实现及顶部锚点已有代码；它们各自尚未完成的原生矩阵保持未勾选。
-G1/G2/G3 尚未发布；独立依赖验证失败原因与后续门槛见 Implementation。
+G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失败仍保留在 Implementation，各平台尚未完成的原生验收不受此项影响。
 
 ## 10. 设计交付
 
@@ -288,3 +291,13 @@ G1/G2/G3 尚未发布；独立依赖验证失败原因与后续门槛见 Impleme
 - [x] Linux amd64 / Go 1.25.8：本仓库 `go test ./...` 工作区验证通过（GOUI `136e775`，SourceView 基线 `1cc09d7`）；GOUI `GOWORK=off go test ./...` 在独立 X11/Xvnc/Xfwm4 测试桌面通过。首次测试桌面进程退出导致 GOUI 无法连接显示，保持服务存活后重跑通过；未修改断言或 skip。
 - 独立验证 `GOWORK=off go test ./...` 仍因声明的 GOUI v0.1.1 缺少 `textedit.Model.ApplyBatch` / `BatchOptions` 构建失败；本次为文档和技能改动，未发布或升级依赖。
 - 本次未做跨平台窗口体验、IME 或技能工具的实际安装验收；GOUI 既有测试的窗口/图片副作用限定在测试桌面及原有输出路径，不代表新增示例的桌面行为已验收。
+
+## 14. GOUI v0.2.0 发布版依赖（2026-10-19）
+
+- [x] 从模块代理获取并校验 GOUI v0.2.0，模块来源为官方仓库的 `798a523a5e231ecfc163b8d375c797cd826d2f6a`。该版本包含批量编辑、Tab、剪贴板、样式注册及 TextInput Placeholder 等已使用接口；Go 1.24 要求、MIT 许可及其余选中依赖版本保持不变。
+- [x] go.mod / go.sum 直接声明并记录 v0.2.0，`GOWORK=off go mod verify` 通过，`GOWORK=off go mod tidy -diff` 无差异；不需要 replace 或相邻 GOUI 检出。
+- [x] 本机被忽略的 go.work 移除 `../goui`，仅保留本模块；普通和 `GOWORK=off` 的 `go list -m -json github.com/golang-gui/goui` 均选中模块缓存中的 v0.2.0，未使用本地替换。此次代理下载重试仅对单条命令设置 GOPROXY，未修改全局 Go 环境。
+- [x] 示例环境说明和应用开发 Skill 改为正常模块依赖；接入设计及本计划更新当前发布状态，早期按日期记录的依赖失败保持原样。
+- [x] Linux amd64 / Go 1.25.8 / Pango：`GOWORK=off go test ./...` 与普通 `go test ./...` 全仓通过，原 v0.1.1 缺少 ApplyBatch / BatchOptions 的独立构建阻塞已解除。
+- [x] `GOWORK=off CGO_ENABLED=0 go build ./...` 在 Linux amd64、Windows amd64、macOS arm64 三个目标通过，包含全部示例与窗口验证程序；技能格式和文档链接/锚点/围栏检查通过。
+- 本轮只修改 SourceView 的依赖与文档，没有修改 GOUI 或新增控件行为；Windows/macOS 仅交叉构建，未做新窗口、真实 IME、剪贴板或混合 DPI 操作验收，不将这些项目计为通过。

@@ -1,6 +1,6 @@
 # GOUI 接入与最小扩展设计
 
-> 实施状态：本轮已在相邻 GOUI 工作副本实现 G1/G2/G3；下文保留设计与验收门槛，实际签名、范围、验证和未发布状态见 [Implementation](Implementation.md)。
+> 实施状态：G1/G2/G3 及后续所需扩展已随 GOUI v0.2.0 发布，本模块直接声明该版本；下文保留设计与验收门槛，实际签名、范围和验证见 [Implementation](Implementation.md)。
 > 下文第 1–5 节保留初始提案的事实与拟新增契约；实施结果以当前公开接口及 Implementation 为准，样式注册见 [本轮验收](PlanStyles.md)。
 > 初始设计的历史基线：GOUI HEAD `4167bb79823efffbea43e00558260448959536b0`，2026-10-16；
 > 检查时工作树的 Plan / Roadmap 已有修改，源码结论来自所读取文件，不代替已发布版本承诺。

@@ -21,10 +21,9 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
 
 - 按 Version、Dir、Replace 核对公开契约；模块缓存只读。新项目先确认实际可获取且相互兼容
   的版本，不虚构 tag，不因技能或在线 main 较新而升级已有应用。
-- 当前开发快照的 GOUI v0.1.1 声明尚不足以独立构建：需要批量编辑、样式注册及
-  `gui.TextInput.SetPlaceholder` 等后续扩展。开发联调使用含 GOUI `1ada17e` 或具备相同
-  API 的后续提交的检出，配合本地 go.work；发布版本以所选模块的说明和实际构建为准。
-  不把本机工作区通过等同于依赖已发布，不提交机器专属 replace 或修改全局 Go 环境。
+- 当前版本直接依赖 GOUI v0.2.0，已包含批量编辑、样式注册和 TextInput 占位提示等
+  所需接口，正常接入不需要相邻 GOUI 检出或 go.work。只有同时修改两个模块时才按需
+  使用本地工作区；不提交机器专属 replace 或修改全局 Go 环境，交付前关闭工作区验证。
 
 按任务阅读参考，无需一次读取全部：
 

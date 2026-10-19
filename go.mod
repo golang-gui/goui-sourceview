@@ -2,7 +2,7 @@ module github.com/golang-gui/goui-sourceview
 
 go 1.24
 
-require github.com/golang-gui/goui v0.1.1
+require github.com/golang-gui/goui v0.2.0
 
 require (
 	github.com/ebitengine/purego v0.10.0 // indirect
