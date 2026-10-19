@@ -29,6 +29,8 @@ type Completion struct {
 // CompletionContext is an immutable, bounded snapshot, safe on a worker. It has
 // no live Model, Document or Widget. Offsets are UTF-8 bytes. NearbyText has at
 // most 32 KiB on either side; Before/After have at most 16 KiB of the current line.
+// Language/Definition describe the effective language at the caret, including
+// an explicit embedded language. DocumentID remains the outer document identity.
 type CompletionContext struct {
 	DocumentID, Revision         uint64
 	Language                     language.ID

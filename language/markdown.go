@@ -48,6 +48,18 @@ func newMarkdown(embedded map[string]*Language) (*Language, error) {
 	rules.Newline = markdownNewline
 	rules.Comments = Comments{Block: Pair{Open: "<!--", Close: "-->"}}
 	rules.AutoClosingPairs = []Pair{{Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "(", Close: ")", NotInString: true, NotInComment: true}, {Open: "`", Close: "`", NotInString: true, NotInComment: true}, {Open: "**", Close: "**", NotInString: true, NotInComment: true}}
+	rules.AutoClosingPairs = append(rules.AutoClosingPairs, Pair{Open: "```", Close: "```", NotInComment: true})
+	rules.AllowPair = func(c PairContext) bool {
+		if c.Selected {
+			return true
+		}
+		text := c.Before + c.Typed
+		if strings.HasSuffix(text, "```") {
+			trim := strings.TrimLeft(text, " ")
+			return len(text)-len(trim) <= 3 && trim == "```" && strings.TrimSpace(c.After) == ""
+		}
+		return true
+	}
 	rules.SurroundingPairs = rules.AutoClosingPairs
 	styles := []Kind{KindHeading, KindCode, KindEmphasis, KindLink, KindFence, KindMarker}
 	for _, l := range table {
@@ -100,31 +112,53 @@ func (t markdownTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	// Bounded current-line replay permits delimiter decisions and exact context
 	// at partial caret positions without mutating published states.
+
 	if s.overflow || len(s.prefix)+n > 64<<10 {
-		s.overflow = true
-		s.prefix = ""
-		kind := KindPlain
-		if s.base.fence != 0 {
-			kind = KindCode
+		tail := s.prefix + in.Text[:n]
+		if !s.overflow {
+			s.block.comment = s.base.comment
 		}
-		s.context = Context{String: s.base.fence != 0, Literal: s.base.fence != 0}
+		s.overflow = true
+		consumedMarker := 0
+		kind, class := KindPlain, Class(0)
+		if s.block.fence != 0 {
+			kind, class = KindCode, ClassString
+			s.block.language = nil
+			s.block.child = nil
+		} else {
+			wasComment := s.block.comment
+			for at := 0; at < len(tail); {
+				marker := "<!--"
+				if s.block.comment {
+					marker = "-->"
+				}
+				n := strings.Index(tail[at:], marker)
+				if n < 0 {
+					break
+				}
+				s.block.comment = !s.block.comment
+				at += n + len(marker)
+				consumedMarker = at
+			}
+			if wasComment || s.block.comment {
+				kind, class = KindComment, ClassComment
+			}
+		}
+		s.prefix = tail[max(consumedMarker, len(tail)-3):]
+		s.context = Context{String: s.block.fence != 0, Literal: s.block.fence != 0, Comment: s.block.comment}
 		result := Result{Consumed: n, State: s}
 		if n > 0 && kind != KindPlain {
-			result.Tokens = []Token{{Start: in.Offset, End: in.Offset + n, Kind: kind, Class: ClassString}}
+			result.Tokens = []Token{{Start: in.Offset, End: in.Offset + n, Kind: kind, Class: class}}
 		}
 		if in.LineEnd && n == len(in.Text) {
-			s.block = s.base
-			if s.block.fence != 0 {
-				s.block.language = nil
-				s.block.child = nil
-			}
 			s.base = mdBlock{}
-			s.context = Context{}
+			s.prefix = ""
 			s.overflow = false
 			result.State = s
 		}
 		return result, nil
 	}
+
 	s.prefix += in.Text[:n]
 	end := in.LineEnd && n == len(in.Text)
 	block, tokens, ctx, err := t.line(s.prefix, s.base, end, in.DocumentEnd)
@@ -365,6 +399,7 @@ func foldMarkdown(ctx context.Context, text string) ([]FoldRange, error) {
 	var headings []header
 	var out []FoldRange
 	fence, length, start := byte(0), 0, 0
+	comment := false
 	for row, line := range lines {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -377,6 +412,18 @@ func foldMarkdown(ctx context.Context, text string) ([]FoldRange, error) {
 				}
 				fence = 0
 			}
+			continue
+		}
+
+		if comment {
+			if strings.Contains(line, "-->") {
+				comment = false
+			}
+			continue
+		}
+		if strings.Contains(line, "<!--") {
+			after := line[strings.Index(line, "<!--")+4:]
+			comment = !strings.Contains(after, "-->")
 			continue
 		}
 		if c != 0 && !(c == '`' && strings.ContainsRune(rest, '`')) {
@@ -419,6 +466,14 @@ func foldMarkdown(ctx context.Context, text string) ([]FoldRange, error) {
 var markdownList = regexp.MustCompile(`^([ \t]*(?:> ?)*)([-+*]|[0-9]{1,9}[.)])( \[[ xX]\])?[ \t]+`)
 
 func markdownNewline(c NewlineContext) (NewlineEdit, bool) {
+	if c.Known && !c.Context.Comment {
+		char, width, _ := fencePrefix(c.Before)
+		if char != 0 && strings.HasPrefix(c.After, strings.Repeat(string(char), width)) {
+			text := "\n" + c.Indent + "\n" + c.Indent
+			return NewlineEdit{Text: text, Caret: 1 + len(c.Indent)}, true
+		}
+	}
+
 	if !c.Known || c.Context.String || c.Context.Comment {
 		return NewlineEdit{}, false
 	}

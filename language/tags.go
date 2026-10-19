@@ -12,7 +12,11 @@ type TagRules struct {
 	CaseSensitive                 bool
 	VoidElements, RawTextElements []string
 }
+
+// NameRange is a half-open UTF-8 byte range in the supplied markup text.
 type NameRange struct{ Start, End int }
+
+// TagMatch identifies the spelling of two confirmed matching element names.
 type TagMatch struct{ Opening, Closing NameRange }
 
 func XMLTags() *TagRules { return &TagRules{CaseSensitive: true} }

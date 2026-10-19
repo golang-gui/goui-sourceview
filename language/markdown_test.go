@@ -145,3 +145,67 @@ func TestTagPolicyConservativeMatching(t *testing.T) {
 		t.Fatal("HTML case mismatch")
 	}
 }
+
+func TestMarkdownCommentDoesNotCreateHeadingFolds(t *testing.T) {
+	got, err := foldMarkdown(context.Background(), "<!--\n# not a heading\ntext\n-->\n# real\nbody")
+	if err != nil || !reflect.DeepEqual(got, []FoldRange{{4, 5}}) {
+		t.Fatal(got, err)
+	}
+}
+func TestMarkdownLongCodeLineKeepsOuterFenceBoundary(t *testing.T) {
+	text := "```json\n" + strings.Repeat("x", 70<<10) + "\n# still code\n```\n# real"
+	tokens, _ := markdownTokens(t, text, 4096)
+	for _, tc := range []struct {
+		needle string
+		kind   Kind
+	}{{"# still code", KindCode}, {"# real", KindHeading}} {
+		at := strings.Index(text, tc.needle)
+		found := false
+		for _, tok := range tokens {
+			if tok.Start <= at && at < tok.End {
+				found = tok.Kind == tc.kind
+				break
+			}
+		}
+		if !found {
+			t.Fatal(tc)
+		}
+	}
+}
+
+func TestMarkdownLongCommentRetainsCrossLineState(t *testing.T) {
+	text := "<!--" + strings.Repeat("x", 70<<10) + "\n# still comment\n-->\n# real"
+	tokens, _ := markdownTokens(t, text, 4096)
+	for _, tc := range []struct {
+		needle string
+		kind   Kind
+	}{{"# still comment", KindComment}, {"# real", KindHeading}} {
+		at := strings.Index(text, tc.needle)
+		found := false
+		for _, tok := range tokens {
+			if tok.Start <= at && at < tok.End {
+				found = tok.Kind == tc.kind
+				break
+			}
+		}
+		if !found {
+			t.Fatal(tc)
+		}
+	}
+}
+
+func TestMarkdownOverflowDoesNotOverlapOpeningCommentMarker(t *testing.T) {
+	text := strings.Repeat("x", (64<<10)-4) + "<!-->\n# still comment\n-->\n# real"
+	tokens, _ := markdownTokens(t, text, 4096)
+	at := strings.Index(text, "# still comment")
+	found := false
+	for _, tok := range tokens {
+		if tok.Start <= at && at < tok.End {
+			found = tok.Kind == KindComment
+			break
+		}
+	}
+	if !found {
+		t.Fatal("overlapped the opening comment marker across overflow")
+	}
+}

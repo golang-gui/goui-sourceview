@@ -46,3 +46,49 @@ func TestEmbeddedEditingAndCompletion(t *testing.T) {
 		t.Fatal(v.document.model.Text(), err)
 	}
 }
+
+func TestMarkdownTypedFenceAndNewline(t *testing.T) {
+	v := NewSourceView()
+	v.document.SetLanguage(language.Markdown)
+	observe(t, v)
+	for range 3 {
+		v.document.engine.Advance(time.Time{})
+		r := v.Selection().Range()
+		handled, err := v.pairText(r, "`")
+		if !handled && err == nil {
+			err = v.replace(r, "`", false)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if v.document.model.Text() != "``````" || v.Selection().Caret != 3 {
+		t.Fatal(v.document.model.Text(), v.Selection())
+	}
+	v.document.engine.Advance(time.Time{})
+	if err := v.newline(); err != nil || v.document.model.Text() != "```\n\n```" || v.Selection().Caret != 4 {
+		t.Fatal(v.document.model.Text(), v.Selection(), err)
+	}
+}
+
+func TestLinkedTagEditNotRepeatedBySharedView(t *testing.T) {
+	v := NewSourceView()
+	doc := NewDocument("<a></a>")
+	doc.SetLanguage(language.XML)
+	v.SetDocument(doc)
+	observe(t, v)
+	other := NewSourceView()
+	other.SetDocument(doc)
+	observe(t, other)
+	revisions := 0
+	h := doc.Model().ConnectChange(func(textedit.Change) { revisions++ })
+	defer h.Disconnect()
+	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	handled, err := v.linkedTag(v.Selection().Range(), "b")
+	if !handled || err != nil || revisions != 1 || doc.Model().Text() != "<ab></ab>" {
+		t.Fatal(doc.Model().Text(), revisions, err)
+	}
+	if !other.Undo() || doc.Model().Text() != "<a></a>" {
+		t.Fatal("shared undo lost atomic names")
+	}
+}

@@ -19,6 +19,9 @@ func complete(ctx context.Context, c source.CompletionContext) ([]source.Complet
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if c.Lexical.Embedded != nil {
+		return source.DefaultCompletions(c), nil
+	}
 	if !c.ContextKnown || c.Lexical.Comment || c.Lexical.String {
 		return nil, nil
 	}

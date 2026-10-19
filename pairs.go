@@ -261,14 +261,18 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 	if s.Anchor != s.Caret || v.projection != nil {
 		return nil
 	}
-	if ranges := v.matchingTags(); len(ranges) > 0 {
-		return ranges
-	}
+
 	cache := v.brackets
 	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == s.Caret && cache.language == v.document.languageEpoch {
 		return cache.ranges
 	}
 	result := bracketState{document: v.document, revision: m.Revision(), caret: s.Caret, language: v.document.languageEpoch}
+	if ranges := v.matchingTags(); len(ranges) > 0 {
+		result.valid = true
+		result.ranges = ranges
+		v.brackets = result
+		return ranges
+	}
 	start, end := max(0, s.Caret-(64<<10)), min(m.Len(), s.Caret+(64<<10))
 	for !m.IsRuneBoundary(start) {
 		start++
