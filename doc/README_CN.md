@@ -31,6 +31,16 @@ Modern 深色 — HTML 与查找替换
 
 截图来自 Linux 上实际运行的示例程序。
 
+## 使用 AI 编写编辑器
+
+[SourceView 应用开发 Skill](../skills/goui-sourceview-app/SKILL.md) 帮助你的 AI 接入编辑器，
+并定制语法高亮、编辑规则和补全。只需告诉 AI：
+
+> 请按照 https://github.com/golang-gui/goui-sourceview/blob/main/skills/INSTALL.md 的说明，安装 SourceView 应用开发 Skill。
+
+AI 会按[安装说明](../skills/INSTALL.md)使用当前工具的原生技能机制完成安装。
+不支持 Skill 的工具可直接阅读开发指南。安装技能不会安装或升级应用的 Go 依赖。
+
 ## 体验示例
 
 需要 Go 1.24 或更新版本。先按[示例指南](../example/README.md) 准备开发环境，

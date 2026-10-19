@@ -32,6 +32,18 @@ Modern Dark — HTML with find and replace
 
 Screenshots from the example running on Linux.
 
+## Build with an AI coding assistant
+
+The [SourceView application development Skill](skills/goui-sourceview-app/SKILL.md)
+helps your AI integrate the editor and customize highlighting, editing rules, and completion.
+To install it, tell your AI:
+
+> Install the SourceView application development skill following https://github.com/golang-gui/goui-sourceview/blob/main/skills/INSTALL.md.
+
+The [installation guide](skills/INSTALL.md) uses your tool's native skill mechanism.
+Tools without Skill support can read the development guide directly. Installing the Skill does
+not install or upgrade your application's Go dependencies.
+
 ## Try the example
 
 Requires Go 1.24 or newer. Follow the [example guide](example/README.md) to prepare
