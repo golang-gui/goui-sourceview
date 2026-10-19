@@ -3,6 +3,7 @@ package editor
 import (
 	"fmt"
 	"github.com/golang-gui/goui/gui/textedit"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -91,27 +92,21 @@ func (s *Search) findCached(m *textedit.Model, start int, backward bool) (texted
 	if len(matches) == 0 {
 		return textedit.Range{}, false
 	}
-	var best []int
+
+	index := 0
 	if backward {
-		for _, idx := range matches {
-			if idx[1] <= start {
-				best = idx
-			}
-		}
-		if best == nil {
-			best = matches[len(matches)-1]
+		index = sort.Search(len(matches), func(i int) bool { return matches[i][1] > start }) - 1
+		if index < 0 {
+			index = len(matches) - 1
 		}
 	} else {
-		for _, idx := range matches {
-			if idx[0] >= start {
-				best = idx
-				break
-			}
-		}
-		if best == nil {
-			best = matches[0]
+		index = sort.Search(len(matches), func(i int) bool { return matches[i][0] >= start })
+		if index == len(matches) {
+			index = 0
 		}
 	}
+	best := matches[index]
+
 	return textedit.Range{Start: best[0], End: best[1]}, true
 }
 func (s *Search) Replacement(m *textedit.Model, r textedit.Range, replacement string) (string, error) {

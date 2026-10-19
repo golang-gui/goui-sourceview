@@ -2,6 +2,7 @@ package editor
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -67,11 +68,16 @@ func (s *Search) CountChunk(m *textedit.Model, start, budget, matchedEnd int) (n
 		next++
 	}
 	if s.cached() {
-		for _, idx := range s.matches(m) {
-			if idx[0] >= start && (idx[0] < next || next == m.Len() && idx[0] == next) {
-				count++
+
+		matches := s.matches(m)
+		begin := sort.Search(len(matches), func(i int) bool { return matches[i][0] >= start })
+		for _, idx := range matches[begin:] {
+			if idx[0] > next || idx[0] == next && next != m.Len() {
+				break
 			}
+			count++
 		}
+
 		return next, count, next
 	}
 	after = matchedEnd
@@ -264,7 +270,13 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 	}
 	if s.cached() {
 		var out []textedit.Range
-		for _, idx := range s.matches(m) {
+
+		matches := s.matches(m)
+		begin := sort.Search(len(matches), func(i int) bool { return matches[i][1] >= span.Start })
+		for _, idx := range matches[begin:] {
+			if idx[0] > span.End {
+				break
+			}
 			r := textedit.Range{Start: idx[0], End: idx[1]}
 			if r.End > span.Start && r.Start < span.End || r.Start == r.End && r.Start >= span.Start && r.Start <= span.End {
 				out = append(out, r)
@@ -273,6 +285,7 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 				}
 			}
 		}
+
 		return out
 	}
 	context := len(s.pattern) * utf8.UTFMax

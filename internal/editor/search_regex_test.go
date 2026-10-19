@@ -105,3 +105,21 @@ func TestMultilinePaintUsesCanonicalNonOverlap(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestCachedSearchIndexesBothDirectionsAndVisibleSpans(t *testing.T) {
+	m := textedit.NewModel("ab ab ab ")
+	s := Compile(Query{Text: `ab|$`, Regex: true})
+	for _, tc := range []struct {
+		start int
+		back  bool
+		want  textedit.Range
+	}{{4, true, textedit.Range{Start: 0, End: 2}}, {6, true, textedit.Range{Start: 3, End: 5}}, {3, false, textedit.Range{Start: 3, End: 5}}, {7, false, textedit.Range{Start: 9, End: 9}}, {10, false, textedit.Range{Start: 0, End: 2}}} {
+		r, ok := s.Find(m, tc.start, tc.back)
+		if !ok || r != tc.want {
+			t.Fatal(tc, r)
+		}
+	}
+	if got := s.InRange(m, textedit.Range{Start: 4, End: 7}, 10); !reflect.DeepEqual(got, []textedit.Range{{Start: 3, End: 5}, {Start: 6, End: 8}}) {
+		t.Fatal(got)
+	}
+}
