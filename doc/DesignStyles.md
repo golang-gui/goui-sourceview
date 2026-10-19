@@ -69,10 +69,10 @@ SetTarget 只建立编辑行为关联，不把另一个子树的外观隐式传�
 | sourceview.find | 面板背景、前景、边框、圆角、阴影 |
 | sourceview.find.input | 输入 UI 字体、前景与透明内容区 |
 | sourceview.find.input / frame | 输入框表面；Normal / Focused / Disabled 的边框 |
-| sourceview.find.input / selection、caret | 原生文本选区与插入点 |
+| sourceview.find.input / selection、caret、placeholder | 原生文本选区、插入点与占位提示前景 |
 | sourceview.find.action / focus | 操作按钮及独立键盘焦点 |
 | sourceview.find.option、sourceview.find.expand / button、button-checked、focus | 开关与展开按钮 |
-| sourceview.find.icon、option-text、status、hint、error | 显式命名的内容样式 |
+| sourceview.find.icon、option-text、status、error | 显式命名的内容样式 |
 
 Modern 的面板/输入/焦点分别取官方 menu / text-input / Focused；选项、错误与次要文字
 取当前主题值。UI 字号使用 Options.FontSize，圆角取官方 menu / text-input。

@@ -18,6 +18,7 @@ func findRules(base style.StyleSheet, c findColors, size, radius, inputRadius, f
 		style.Name("sourceview.find.input").State(style.Disabled).ForegroundColor(c.MutedForeground),
 		{Sel: style.Sel{Name: "sourceview.find.input", Part: "selection"}, Style: selection},
 		style.Name("sourceview.find.input").Part("caret").ForegroundColor(c.Foreground),
+		style.Name("sourceview.find.input").Part("placeholder").ForegroundColor(c.MutedForeground),
 		style.Name("sourceview.find.input").Part("frame").BackgroundColor(c.InputBackground).BorderColor(c.InputBorder).BorderWidth(1).Radius(inputRadius),
 		style.Name("sourceview.find.input").Part("frame").State(style.Focused).BorderColor(c.FocusBorder).BorderWidth(focusWidth),
 		style.Name("sourceview.find.input").Part("frame").State(style.Disabled).BorderColor(c.InputBorder).BorderWidth(1),
@@ -30,7 +31,6 @@ func findRules(base style.StyleSheet, c findColors, size, radius, inputRadius, f
 		style.Name("sourceview.find.option-text").FontFamily(family).FontSize(size * .92).ForegroundColor(c.Foreground),
 		style.Name("sourceview.find.option-text").State(style.Disabled).ForegroundColor(c.MutedForeground),
 		style.Name("sourceview.find.status").FontFamily(family).FontSize(size * .92).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.hint").FontFamily(family).FontSize(size).ForegroundColor(c.MutedForeground),
 		style.Name("sourceview.find.error").FontFamily(family).FontSize(size * .92).ForegroundColor(c.ErrorForeground),
 	}
 	for _, name := range []string{"sourceview.find.option", "sourceview.find.expand"} {

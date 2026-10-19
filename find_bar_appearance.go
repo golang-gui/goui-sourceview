@@ -43,15 +43,6 @@ func (b *FindBar) buildSurface() {
 		b.names[w] = getter
 		w.SetName(getter())
 	}
-	hint := func(getter mlang.Getter) *gui.Label {
-		l := gui.NewLabel(getter())
-		l.SetStyleName("sourceview.find.hint")
-		b.labels[l] = getter
-		add(l)
-		return l
-	}
-	b.findHint = hint(resource.Find)
-	b.replaceHint = hint(resource.Replace)
 	action := func(icon string, getter mlang.Getter, fn func()) *gui.Button {
 		w := gui.NewButton()
 		w.SetStyleName("sourceview.find.action")
@@ -80,6 +71,7 @@ func (b *FindBar) buildSurface() {
 	b.toggle = option(resource.ToggleReplace, b.toggleIcon, b.SetReplaceMode)
 	b.toggle.SetStyleName("sourceview.find.expand")
 	b.find = gui.NewTextInput()
+	b.find.SetPlaceholder(resource.Find())
 	name(b.find, resource.Find)
 	b.find.SetStyleName("sourceview.find.input")
 	b.find.SetPadding(4)
@@ -110,6 +102,7 @@ func (b *FindBar) buildSurface() {
 	b.next = action("next", resource.Next, func() { b.navigate(false) })
 	b.close = action("close", resource.Close, b.Close)
 	b.replacement = gui.NewTextInput()
+	b.replacement.SetPlaceholder(resource.Replace())
 	name(b.replacement, resource.Replacement)
 	b.replacement.SetStyleName("sourceview.find.input")
 	b.replacement.SetPadding(4)
@@ -119,8 +112,6 @@ func (b *FindBar) buildSurface() {
 	b.replacement.SetVisible(false)
 	b.replace.SetVisible(false)
 	b.replaceAll.SetVisible(false)
-	b.replaceHint.SetVisible(false)
-	b.replacement.ConnectText(func(text string) { b.replaceHint.SetVisible(b.replaceMode && text == "") })
 	b.find.ConnectFocused(func(bool) { b.content.RequestPaint() })
 	b.replacement.ConnectFocused(func(bool) { b.content.RequestPaint() })
 	b.updateAppearance()
@@ -171,8 +162,7 @@ func (s *findSurface) Paint(p gui.Painter) {
 	}
 }
 
-// Layout addresses ordinary visible children by identity. Placeholder labels
-// paint behind the native inputs and never intercept their pointer input.
+// Layout addresses ordinary visible children by identity.
 type findBarLayout struct {
 	bar         *FindBar
 	rowHeight   float32
@@ -239,7 +229,7 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 	b := l.bar
 	h := l.rowHeight
 	slots := l.slots(children)
-	widgets := []gui.Widget{b.toggle, b.find, b.matchCase, b.wholeWord, b.status, b.previous, b.next, b.close, b.replacement, b.replace, b.replaceAll, b.findHint, b.replaceHint}
+	widgets := []gui.Widget{b.toggle, b.find, b.matchCase, b.wholeWord, b.status, b.previous, b.next, b.close, b.replacement, b.replace, b.replaceAll}
 	edge := b.inset + 5
 	x, y, right := edge, edge, max(edge, r.Width-edge)
 	place := func(i int, x, y, w, h float32) {
@@ -275,12 +265,10 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 		place(3, inputRight+a.Width+4, y+(h-b.Height)/2, b.Width, b.Height)
 	}
 	place(1, x+1, y+1, max(0, inputRight-x-2), h-2)
-	place(11, x+5, y+5, max(0, inputRight-x-8), h-8)
 	if b.replaceMode {
 		y += h + 4
 		b.replacementRect = geometry.Rect(x, y, b.fieldRect.Width, h)
 		place(8, x+1, y+1, max(0, b.fieldRect.Width-2), h-2)
-		place(12, x+5, y+5, max(0, b.fieldRect.Width-8), h-8)
 		// Replace actions align with the leading edge of the count/action area.
 		if !b.narrow {
 			place(9, right+4, y+(h-22)/2, 22, 22)

@@ -26,7 +26,6 @@ type FindBar struct {
 	content                                    *findSurface
 	appearance                                 findAppearance
 	inset                                      float32
-	findHint, replaceHint                      *gui.Label
 	toggleIcon                                 *gui.Icon
 	narrow, reduced                            bool
 	fieldRect, replacementRect                 geometry.Rectangle
@@ -34,7 +33,6 @@ type FindBar struct {
 	previous, next, replace, replaceAll, close *gui.Button
 	matchCase, wholeWord, toggle               *widgets.CheckButton
 	status                                     *gui.Label
-	labels                                     map[*gui.Label]mlang.Getter
 	names                                      map[gui.Widget]mlang.Getter
 	keys                                       *gui.KeyEventController
 	lifetime, attached                         signal.Handles
@@ -54,7 +52,7 @@ type FindBar struct {
 }
 
 func NewFindBar() *FindBar {
-	b := &FindBar{labels: make(map[*gui.Label]mlang.Getter), names: make(map[gui.Widget]mlang.Getter)}
+	b := &FindBar{names: make(map[gui.Widget]mlang.Getter)}
 	b.SetLayoutManager(layout.NewFillLayout())
 	b.buildSurface()
 	b.find.ConnectText(func(text string) {
@@ -107,7 +105,6 @@ func (b *FindBar) SetReplaceMode(replace bool) {
 	b.replacement.SetVisible(replace)
 	b.replace.SetVisible(replace && !b.narrow)
 	b.replaceAll.SetVisible(replace && !b.narrow)
-	b.replaceHint.SetVisible(replace && b.replacement.Text() == "")
 	if b.toggleIcon != nil {
 		if replace {
 			b.toggleIcon.SetSource(findIcons["down"])
@@ -122,7 +119,6 @@ func (b *FindBar) Replacement() string { return b.replacement.Text() }
 func (b *FindBar) SetReplacement(text string) {
 	if !b.Destroyed() {
 		b.replacement.SetText(text)
-		b.replaceHint.SetVisible(b.replaceMode && b.replacement.Text() == "")
 	}
 }
 func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
@@ -272,8 +268,6 @@ func (b *FindBar) refresh() {
 	b.syncing = true
 	defer func() { b.syncing = false }()
 	v := b.liveTarget()
-	b.findHint.SetVisible(b.find.Text() == "")
-	b.replaceHint.SetVisible(b.replaceMode && b.replacement.Text() == "")
 	epoch := b.epoch
 	valid := func() bool { return !b.Destroyed() && b.epoch == epoch && b.liveTarget() == v }
 	active := v != nil && gui.IsEnabled(v)
@@ -301,7 +295,6 @@ func (b *FindBar) refresh() {
 	// A single-line field cannot faithfully edit a programmatic multiline query.
 	// Keep that query intact until the user explicitly changes the field.
 	b.find.SetText(q.Text)
-	b.findHint.SetVisible(b.find.Text() == "")
 	if !valid() {
 		return
 	}
@@ -358,9 +351,8 @@ func (b *FindBar) updateStatus() {
 	}
 }
 func (b *FindBar) updateLabels() {
-	for label, getter := range b.labels {
-		label.SetText(getter())
-	}
+	b.find.SetPlaceholder(resource.Find())
+	b.replacement.SetPlaceholder(resource.Replace())
 	for widget, getter := range b.names {
 		widget.SetName(getter())
 	}

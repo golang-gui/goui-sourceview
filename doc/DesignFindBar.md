@@ -56,6 +56,11 @@ FindBar 的外层保持普通 Widget 的 Visible；内部内容初始关闭。�
 ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦点和禁用语义。
 提示、输入/按钮名称和计数状态支持 GOUI 的八种界面语言，见 [界面语言](DesignLocalization.md)。
 
+查询和替换的占位提示使用 GOUI TextInput.SetPlaceholder，由输入框统一管理字体、基线、
+裁剪、空内容/IME 显隐及语义快照；FindBar 在创建和语言变化时设置翻译后的普通字符串。
+提示使用 sourceview.find.input 的 placeholder part。FindBar 不创建提示 Label，
+不维护第二套提示定位或显隐监听；修改提示不改变查询、替换文本、选区或历史。
+
 ## 浮层布局与配色
 
 - 自然宽度 448 DIP，阴影留白由当前样式计算；表面、圆角、边框和阴影来自注册规则。

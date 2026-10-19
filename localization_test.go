@@ -45,8 +45,14 @@ func TestFindBarTranslatedInputsAndHints(t *testing.T) {
 			t.Fatal(err)
 		}
 		bar := NewFindBar()
-		if bar.find.Name() != tc.find || bar.replacement.Name() != tc.replacement || bar.findHint.Text() != tc.find || bar.replaceHint.Text() != tc.replace {
-			t.Errorf("%s: names=%q/%q hints=%q/%q", tc.tag, bar.find.Name(), bar.replacement.Name(), bar.findHint.Text(), bar.replaceHint.Text())
+		if bar.find.Name() != tc.find || bar.replacement.Name() != tc.replacement || bar.find.Placeholder() != tc.find || bar.replacement.Placeholder() != tc.replace {
+			t.Errorf("%s: names=%q/%q hints=%q/%q", tc.tag, bar.find.Name(), bar.replacement.Name(), bar.find.Placeholder(), bar.replacement.Placeholder())
+		}
+		bar.find.SetText("query")
+		bar.SetReplacement("replacement")
+		bar.updateLabels()
+		if bar.find.Text() != "query" || bar.Replacement() != "replacement" {
+			t.Fatal("translating hints changed text values")
 		}
 	}
 }
