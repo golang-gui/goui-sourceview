@@ -40,3 +40,30 @@ func TestKind(t *testing.T) {
 		t.Fatal("kind contract")
 	}
 }
+
+func TestConfigurationAndShellDetection(t *testing.T) {
+	for _, tc := range []struct {
+		name, sample string
+		want         ID
+	}{
+		{"Cargo.TOML", "", TOML}, {"config.YAML", "", YAML}, {".ci.yml", "", YAML},
+		{"run.sh", "", Shell}, {"run.bash", "", Shell}, {"/home/user/.bashrc", "", Shell}, {".profile", "", Shell},
+		{"script", "#!/bin/sh\necho hi", Shell}, {"script", "#!/usr/bin/env bash\n", Shell}, {"script", "#!/usr/bin/env -S bash -eu\n", Shell},
+		{"x.json", "#!/bin/sh", JSON}, {"unknown", "#!/usr/bin/env python\n", Plain},
+		{"unknown", " #!/bin/sh", Plain}, {".env", "NAME=value", Plain}, {"unknown", "name: value", Plain},
+		{"unknown", string(make([]byte, 4096)) + "#!/bin/sh", Plain},
+	} {
+		if got := Guess(tc.name, []byte(tc.sample)); got != tc.want {
+			t.Errorf("%q: got %q want %q", tc.name, got, tc.want)
+		}
+	}
+	for _, id := range []ID{TOML, YAML, Shell} {
+		info, ok := Lookup(id)
+		if !ok || info.Name == "" || len(info.Extensions) == 0 {
+			t.Fatal(id, info, ok)
+		}
+	}
+	if !KindVariable.Valid() || KindVariable.String() != "variable" {
+		t.Fatal("variable style missing")
+	}
+}

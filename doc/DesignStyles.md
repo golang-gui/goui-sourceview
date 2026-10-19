@@ -107,3 +107,7 @@ detail / selected / selected-detail / match / selected-match / scroll-thumb 部�
 将 suggest 的表面、说明、匹配、选中分别命名，采用这些语义，不照搬其注册中心。
 [GtkSourceView 5 StyleScheme](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.StyleScheme.html)
 将源码配色作为编辑器资源；本实现保留代码 Scheme，与 GOUI 界面主题职责分离。
+
+
+Shell 变量使用 `language.KindVariable`，样式 part 为 `token-variable`，basic、modern
+及内置亮暗 Scheme 均提供默认前景；自定义 Scheme 未配置该分类时沿用普通前景。

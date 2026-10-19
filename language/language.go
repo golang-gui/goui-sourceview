@@ -15,6 +15,9 @@ const (
 	JSON  ID = "json"
 	XML   ID = "xml"
 	HTML  ID = "html"
+	TOML  ID = "toml"
+	YAML  ID = "yaml"
+	Shell ID = "shell"
 )
 
 // Kind is a lexical style category, not a validation or semantic diagnosis.
@@ -34,9 +37,10 @@ const (
 	KindComment
 	KindMeta
 	KindInvalid
+	KindVariable
 )
 
-var kindNames = [...]string{"plain", "property", "string", "escape", "number", "keyword", "delimiter", "tag", "attribute", "entity", "comment", "meta", "invalid"}
+var kindNames = [...]string{"plain", "property", "string", "escape", "number", "keyword", "delimiter", "tag", "attribute", "entity", "comment", "meta", "invalid", "variable"}
 
 // Valid reports whether k is a defined lexical kind.
 func (k Kind) Valid() bool { return int(k) < len(kindNames) }
@@ -61,6 +65,9 @@ var builtins = []Info{
 	{ID: JSON, Name: "JSON", Extensions: []string{".json"}, MIMETypes: []string{"application/json"}},
 	{ID: XML, Name: "XML", Extensions: []string{".xml", ".xhtml", ".svg", ".xsd", ".xsl"}, MIMETypes: []string{"application/xml", "text/xml", "image/svg+xml"}},
 	{ID: HTML, Name: "HTML", Extensions: []string{".html", ".htm"}, MIMETypes: []string{"text/html"}},
+	{ID: TOML, Name: "TOML", Extensions: []string{".toml"}, MIMETypes: []string{"application/toml"}},
+	{ID: YAML, Name: "YAML", Extensions: []string{".yaml", ".yml"}, MIMETypes: []string{"application/yaml"}},
+	{ID: Shell, Name: "Shell", Extensions: []string{".sh", ".bash"}, MIMETypes: []string{"application/x-sh", "application/x-shellscript"}},
 }
 
 // Lookup returns a detached description of a supported language.
@@ -86,7 +93,14 @@ func Guess(filename string, sample []byte) ID {
 			}
 		}
 	}
+	switch filepath.Base(filename) {
+	case ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".profile":
+		return Shell
+	}
 	sample = sample[:min(len(sample), 4096)]
+	if shellShebang(sample) {
+		return Shell
+	}
 	sample = bytes.TrimSpace(bytes.TrimPrefix(sample, []byte{0xef, 0xbb, 0xbf}))
 	lower := bytes.ToLower(sample)
 	if bytes.HasPrefix(sample, []byte("<?xml")) {
@@ -99,4 +113,28 @@ func Guess(filename string, sample []byte) ID {
 		return JSON
 	}
 	return Plain
+}
+
+// A shebang is recognized only at byte zero. No command is evaluated.
+func shellShebang(sample []byte) bool {
+	if !bytes.HasPrefix(sample, []byte("#!")) {
+		return false
+	}
+	line, _, _ := bytes.Cut(sample[2:], []byte("\n"))
+	fields := strings.Fields(string(line))
+	if len(fields) == 0 {
+		return false
+	}
+	interpreter := filepath.Base(fields[0])
+	if interpreter == "env" {
+		fields = fields[1:]
+		for len(fields) > 0 && (strings.HasPrefix(fields[0], "-") || strings.Contains(fields[0], "=")) {
+			fields = fields[1:]
+		}
+		if len(fields) == 0 {
+			return false
+		}
+		interpreter = filepath.Base(fields[0])
+	}
+	return interpreter == "sh" || interpreter == "bash"
 }

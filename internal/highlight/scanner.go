@@ -8,7 +8,8 @@ import (
 	"github.com/golang-gui/goui-sourceview/language"
 )
 
-// Token is a non-overlapping UTF-8 byte span relative to the logical line.
+// Token is a UTF-8 byte span. Engine spans are line-relative; Scan spans are
+// relative to its input and may revise an earlier range in the current line.
 type Token struct {
 	Start, End int
 	Kind       language.Kind
@@ -46,7 +47,8 @@ type frame struct {
 	depth  int
 }
 
-// State is an immutable snapshot. The persistent JSON stack is never mutated.
+// State is an immutable snapshot. Stacks, queues and delimiter spellings
+// referenced by an earlier snapshot are never mutated.
 type State struct {
 	mode     mode
 	back     mode
@@ -59,10 +61,19 @@ type State struct {
 	number   uint8
 	overflow int
 	script   uint8
+	toml     *tomlState
+	yaml     *yamlState
+	shell    *shellState
 }
 
 // Equal compares complete lexical context, not hashes or line numbers.
 func (s State) Equal(t State) bool {
+	if !equalTOML(s.toml, t.toml) || !equalYAML(s.yaml, t.yaml) || !equalShell(s.shell, t.shell) {
+		return false
+	}
+	s.toml, t.toml = nil, nil
+	s.yaml, t.yaml = nil, nil
+	s.shell, t.shell = nil, nil
 	a, b := s.stack, t.stack
 	s.stack, t.stack = nil, nil
 	if s != t {
@@ -161,7 +172,9 @@ func (s *State) close() {
 // Scan consumes at least limit bytes, possibly a few lookahead bytes needed
 // to finish a delimiter. input excludes LF, is valid UTF-8, and may contain up
 // to 32 lookahead bytes. lineEnd is true only at an actual line/document end.
-// Returned token positions are relative to input; callers add their line offset.
+// Returned positions are relative to input. A negative start revises an earlier
+// span of this logical line (for example, a key confirmed by a later colon).
+// Callers apply tokens in order using appendToken, adding their line offset.
 func Scan(id language.ID, state State, input string, limit int, lineEnd bool) ([]Token, State, int) {
 	if limit < 0 || limit > len(input) {
 		panic("highlight: invalid scan limit")
@@ -171,6 +184,14 @@ func Scan(id language.ID, state State, input string, limit int, lineEnd bool) ([
 	}
 	if id == language.JSON {
 		return scanJSON(state, input, limit, lineEnd)
+	}
+	switch id {
+	case language.TOML:
+		return scanTOML(state, input, limit, lineEnd)
+	case language.YAML:
+		return scanYAML(state, input, limit, lineEnd)
+	case language.Shell:
+		return scanShell(state, input, limit, lineEnd)
 	}
 	return scanMarkup(id, state, input, limit, lineEnd)
 }

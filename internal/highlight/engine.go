@@ -371,7 +371,11 @@ func (e *Engine) Advance(deadline time.Time) bool {
 				line.limited = true
 				break
 			}
-			emit(&line.tokens, w.at+token.Start, w.at+token.End, token.Kind)
+			if w.at+token.Start < 0 || token.End > n || token.Start >= token.End {
+				e.err = fmt.Errorf("highlight: invalid token at line %d", w.row)
+				break
+			}
+			appendToken(&line.tokens, w.at+token.Start, w.at+token.End, token.Kind)
 		}
 		e.payloadBytes += (len(line.tokens) - oldLen) * 24
 		line.version++

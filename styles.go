@@ -16,7 +16,7 @@ import (
 
 const sourceStyleID = "github.com/golang-gui/goui-sourceview"
 
-var tokenParts = []string{"plain", "property", "string", "escape", "number", "keyword", "delimiter", "tag", "attribute", "entity", "comment", "meta", "invalid"}
+var tokenParts = []string{"plain", "property", "string", "escape", "number", "keyword", "delimiter", "tag", "attribute", "entity", "comment", "meta", "invalid", "variable"}
 
 func nrgba(c color.Color) color.NRGBA {
 	if c == nil {

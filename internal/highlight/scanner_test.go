@@ -33,7 +33,7 @@ func scanAll(id language.ID, text string, chunk int) ([]Token, State) {
 				panic("scanner failed progress")
 			}
 			for _, tok := range tokens {
-				emit(&out, offset+at+tok.Start, offset+at+tok.End, tok.Kind)
+				appendToken(&out, offset+at+tok.Start, offset+at+tok.End, tok.Kind)
 			}
 			at += n
 			s = next

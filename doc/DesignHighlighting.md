@@ -1,11 +1,11 @@
 # 语言、高亮与增量分析设计
 
-> 状态：首版实现规格。首版采用自有纯 Go 状态扫描器，实际支持 JSON、XML、HTML。
+> 状态：首版实现规格。首版采用自有纯 Go 状态扫描器，实际支持 JSON、XML、HTML、TOML、YAML、Shell。
 > 算法不创建 GUI/原生资源；调度由已挂载视图驱动。
 
 ## 1. 对外语言接口与 token 模型
 
-`language` 包公开 ID、样式分类与只读元数据，内置 Plain、JSON、XML、HTML。
+`language` 包公开 ID、样式分类与只读元数据，内置 Plain、JSON、XML、HTML、TOML、YAML、Shell。
 初始通过 Document.SetLanguage 显式设置；可提供纯函数 Guess(filename, sample)，
 根据扩展名及有限前缀推测，结果不明确则 Plain。推测不能悄悄覆盖显式语言，
 也不自动读取文件、执行内容或下载语法。
@@ -25,6 +25,9 @@ const (
     JSON ID = "json"
     XML ID = "xml"
     HTML ID = "html"
+    TOML ID = "toml"
+    YAML ID = "yaml"
+    Shell ID = "shell"
 )
 type Kind uint8
 type Info struct {
@@ -43,7 +46,7 @@ Lookup 返回元数据的独立切片副本。Guess 最多检查 4 KiB：已知�
 
 内部 token 是 `[Start,End) + Kind`，位置相对逻辑行起点，Kind 包括：
 Plain、Property、String、Escape、Number、Keyword、Delimiter、Tag、Attribute、
-Entity、Comment、Meta、Invalid。分类是词法样式，不是 LSP semantic token。
+Entity、Comment、Meta、Invalid、Variable。分类是词法样式，不是 LSP semantic token。
 Kind 定义在 `language`，供扫描器和 `scheme` 使用，避免公开 API 引用 internal 包类型。
 Token 无颜色、字体、Widget 或 Model 引用；按 Start 排序、不重叠、端点是 rune 边界。
 相邻同类可合并；未记录部分表示 Plain，LF 不作为行内 token。
@@ -202,3 +205,72 @@ Token payload 首版 LRU 目标 16 MiB，超长行以片段缓存；
 同修订的 token 变化向视图发内部范围失效；不会发文本 Change 或改编辑历史。
 若词法实现违反推进/范围契约，停止该工作项、丢弃错误 token、报告一次可定位的分析失败，
 保留纯文本编辑；不每帧重复报错。
+
+## 9. TOML、YAML 与 Shell
+
+2026-10 扩展内置 `language.TOML`、`language.YAML`、`language.Shell`，不新增依赖或
+全局规则注册。沿用同一 Document、行身份、调度与 token 缓存；扫描分别在
+`internal/highlight/toml.go`、`yaml.go`、`shell.go`，不借用 XML 状态。
+
+### 9.1 规范及参考取舍
+
+词法依据 [TOML 1.1.0](https://toml.io/en/v1.1.0)、
+[YAML 1.2.2](https://yaml.org/spec/1.2.2/) 与
+[Bash 5.3 引用规则](https://www.gnu.org/software/bash/manual/html_node/Quoting.html)、
+[重定向规则](https://www.gnu.org/software/bash/manual/html_node/Redirections.html)。
+这些是语法依据，不代表控件执行配置或 Shell，也不承诺完整语法验证。
+
+参考源代码为 Lexilla `rel-5-4-5` 的
+[LexTOML](https://github.com/ScintillaOrg/lexilla/blob/rel-5-4-5/lexers/LexTOML.cxx)、
+[LexYAML](https://github.com/ScintillaOrg/lexilla/blob/rel-5-4-5/lexers/LexYAML.cxx)、
+[LexBash](https://github.com/ScintillaOrg/lexilla/blob/rel-5-4-5/lexers/LexBash.cxx)，
+Monaco `v0.55.1` 的
+[YAML](https://github.com/microsoft/monaco-editor/blob/v0.55.1/src/basic-languages/yaml/yaml.ts)、
+[Shell](https://github.com/microsoft/monaco-editor/blob/v0.55.1/src/basic-languages/shell/shell.ts)，
+以及 GtkSourceView `5.18.0` 的
+[sh.lang](https://gitlab.gnome.org/GNOME/gtksourceview/-/blob/5.18.0/data/language-specs/sh.lang)、
+[yaml.lang](https://gitlab.gnome.org/GNOME/gtksourceview/-/blob/5.18.0/data/language-specs/yaml.lang)。
+以上规则与本项目扫描器均属平台无关的词法层，不据此推断 GUI 后端表现。
+
+采用显式跨行状态、嵌套引用恢复和 string/comment 编辑上下文的思路；不引入原生依赖、
+XML 规则解释器或通用正则状态机。YAML 块文本按实际缩进退出，Shell 多个 heredoc
+按所属命令上下文排队，不以单条结束正则代替状态，也不照搬固定长度 delimiter 限制。
+
+### 9.2 分类与边界
+
+| 语言 | 分类与状态 |
+| --- | --- |
+| TOML | 裸键、带引号键、点分键和表名归 Property；表、数组、内联表结构归 Delimiter；四种字符串形式分别保留引号/多行状态；基本字符串转义含 1.1 的 `\e`、`\xHH`；布尔归 Keyword，数字归 Number，日期/时间归 Meta，`#` 注释归 Comment |
+| YAML | 普通映射键由随后有效冒号确认 Property；引号标量归 String；Core 布尔/null 归 Keyword，数字归 Number；`on/off/yes/no` 保留 Plain；锚点、别名、标签、指令和文档边界归 Meta；流式结构归 Delimiter |
+| YAML 块文本 | `|`、`>` 保存父缩进、可选缩进数字和首个非空内容行的缩进；支持 chomp 标记；空行不中断块；缩进不足的下一行恢复 YAML；序列中映射键的列参与父缩进计算 |
+| Shell | 保留字归 Keyword，变量/赋值名归新增 Variable；普通词保持 Plain；单引号、双引号、ANSI-C 引号分别处理反斜杠；命令/算术/参数替换及反引号使用持久上下文栈，结束后恢复外部引号 |
+| Shell heredoc | `<<`、`<<-` 读取去除引用后的 delimiter，任一引用抑制正文变量着色；`<<-` 只剥离前导 TAB；同一命令的多个文档按顺序读取，转义换行延后开始；结束行必须完全匹配；`<<<` 与算术左移不创建 heredoc |
+
+这是编辑期的容错词法 profile：不校验 TOML 数据类型/日期取值、YAML schema 或标签解析，
+不展开 YAML alias，不构造 Shell AST，不执行命令、不查 PATH。Shell heredoc 正文提供
+变量着色，但不递归解析正文中命令替换的完整 Shell 语法；Shell 的完整上下文敏感语法、
+YAML 复杂显式键的语义着色及配置校验不在本切片中。
+
+### 9.3 分片及状态所有权
+
+长键只有遇到冒号才能确认分类，heredoc 的结束行也只能在实际行尾确认。
+内部 `Scan` 允许返回起点为负的 token：位置仍相对本片段，但只能回溯当前逻辑行，
+终点不越过本次已消费输入。`appendToken` 撤回重叠的已发布范围再写入新分类；
+引擎检查范围并增加行 paint version，着色修正不触发文本修改、历史或重新排版。
+原有 JSON/XML/HTML 仍只需向前发布 token，调用方统一使用该合并操作。
+
+普通 literal 只保存有限的候选拼写与流式数字状态，另记起始长度；不累积整条 YAML 键。
+Shell delimiter 的拼写按不可变片段保存，结束后建立不可变片段序列，正文逐字节匹配；
+无固定 delimiter 截断，也不为判断结束行读取整条超长行。
+嵌套栈与 delimiter 可由同文档的行状态共享，扫描只复制当前状态及待处理队列，
+绝不修改旧行快照。`State.Equal` 比较完整值/栈/队列/拼写，不以地址或哈希充当语义相等。
+状态的所有者仍为 Document，引擎重建、编辑失效和文档销毁时由 Go 回收不再引用的数据；
+token 的 16 MiB 预算不包含状态引用的 delimiter 拼写，此类状态随输入大小增长。
+
+### 9.4 语言识别
+
+已知扩展名优先：`.toml`、`.yaml/.yml`、`.sh/.bash`。Shell 另识别
+`.bashrc/.bash_profile/.bash_login/.bash_logout/.profile`，以及位于 byte 0 的
+`sh`/`bash` shebang（含常用 `env`、`env -S` 写法）。最多读取调用方的 4 KiB 样本，
+不 I/O、不执行 shebang。未知文件不凭 `key=value` 或 `key: value` 猜 TOML/YAML，
+`.env` 不自动视为 Shell；显式 SetLanguage 不受 Guess 影响。
