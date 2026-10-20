@@ -79,3 +79,61 @@ GOUI [光标回归记录](../../goui/doc/PlanIncrementalTextLayout.md#光标定�
 MeasureSize，尚需确认并修正颜色失效路径。2× 跳转绘制也仍有延迟。
 本次修复不改变上面“通用分时排版未完成”的状态。窗口已关闭，
 未写剪贴板、系统设置或用户 JSON。
+
+## 已测段落换宽接入（2026-10-20）
+
+GOUI 通用实现依赖 `6676636` / `57163fd`，及其原生绑定、RTL 修正前置。
+SourceView 基线 `e0b1a6c`。设计见 [布局](DesignLayout.md)，后端与预算设计见
+相邻 GOUI [可视区排版](../../goui/doc/DesignViewportTextLayout.md)。
+
+已测 8 KiB 以上段落在窗口换宽时保留 TextLayout/Geometry，通过公开
+DeferTextLayout 分帧生成新宽索引。等待时沿用旧几何绘制、命中和选择，完成后
+更新 Geometry/高度与锚点。宽度请求取消旧任务，清理缓存前取消；文档 splice
+与初次词法稳定 ID 迁移取消绑定旧行号/旧键的回调。颜色不会丢弃保留的测量。
+
+本次验证也修正了接入阶段发现的重复同宽任务：完成回调捕获的 box 宽度不能
+被正文占用宽度覆盖。用户 JSON 在修正前初始化循环产生重复请求，未作为通过；
+修正后初始化收敛、连续换宽只发布最新结果。窗口用例对照完整原生几何并断言
+点击位置，不以日志或启动窗口代替验收。
+
+新增 `tests/window/editor/reflow`：默认 SourceView，`-textview` 为 TextView，
+`-file` 只读现有单段 JSON。Modern 集成窗口，真实 X11 窗口由 xdotool 依次
+调整 680/820/620/900 DIP，2× 使用对应物理尺寸；按钮与文本点击均正常派发
+Window.DispatchEvent。为显式固定文本原点，此用例关闭行号/折叠。
+
+Linux amd64／Go 1.25.8／X11／XFCE(xfwm4)／Pango 1.50.6／Cairo 1.16.0，
+32 KiB 原创长词的最终复测：
+
+| 控件 | 后端/缩放 | 请求/发布 | 待排版定时器回调数 | 最长 Advance | 最长 20 ms 定时器间隔 |
+| --- | --- | --- | --- | --- | --- |
+| TextView | Software 1× | 17/1 | 42 | 2.07 ms | 69.7 ms |
+| SourceView | Software 1× | 4/1 | 43 | 0.68 ms | 64.3 ms |
+| TextView | Software 2× | 17/1 | 40 | 0.81 ms | 127.0 ms |
+| SourceView | Software 2× | 4/1 | 40 | 1.02 ms | 144.7 ms |
+| TextView | OpenGL 1× | 17/1 | 45 | 0.78 ms | 36.9 ms |
+| SourceView | OpenGL 1× | 4/1 | 41 | 1.25 ms | 31.2 ms |
+
+全部通过待排版按钮响应、无同步 SetSize、过期宽度取消、最终原生行/cluster、
+可见墨迹、点击与编辑/销毁检查。Advance 不包含完成回调里的 Geometry 构造、
+布局及绘制，定时器间隔也不是 compositor 延迟或硬实时上限。
+
+用户 `/data/xuyang8/1.json`（157,862 字节）只读验证也通过两控件 Software 1×
+换宽、几何、墨迹、点击和编辑检查。SourceView 启用 JSON 高亮。最终记录：
+TextView 30 次请求/1 次发布、292 个待排版定时器回调，SourceView 为 4/1、
+107 个回调；最长推进约 4.15/4.18 ms，最长定时器间隔约 104/99 ms。该轮与
+全量测试并行，作为功能/响应性观察，不作为性能前后对照。未写回 JSON。
+
+严格的排版执行耗时对照在 GOUI `BenchmarkDeferredResize`：同环境、同字体、
+32 KiB、520→480 DIP、包含完整度量导出。原生同步约 1.848～1.881 s；保留测量
+约 78.3～79.1 ms（无事件循环等待），最长推进约 2.56～2.76 ms。不含首次分析、
+绘制或 GUI Geometry；不能将累计执行耗时当作最终文本呈现延迟。
+
+通过两仓全量 `go test ./...`、GOUI 目标 race、本仓 `go test -race ./...`；
+GOUI `./gui` 与本仓 `./...` 的 Windows amd64 / macOS arm64 无 CGO 交叉构建
+通过。这两端未原生运行，也尚无换宽分帧后端。`GOWORK=off go test ./...` 仍报
+`updates to go.mod needed`，保持用户 go.mod/replace 和 example/temp 原样。
+全量测试产生的历史图片不提交，新窗口均已关闭，无剪贴板/系统设置修改。
+
+首次完整分析、巨大单行/cluster、完整 Geometry 构造与高 DPI 绘制仍可能较慢。
+详细几何分页、新首屏提前发布、检查点/后缀复用、冷分析 continuation 和其他
+原生后端还未实现，不能称通用长段落排版或任意输入不阻塞已完成。
