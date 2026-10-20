@@ -30,6 +30,8 @@ type layoutKey struct {
 	row          int
 }
 type paragraph struct {
+	cancelReflow   func()
+	boxWidth       float32
 	layout, number typography.TextLayout
 	geometry       textedit.Geometry
 	text           string
@@ -57,6 +59,9 @@ func (v *SourceView) dropLayouts() {
 	old := v.layouts
 	v.layouts = make(map[layoutKey]*paragraph)
 	for _, p := range old {
+		if p.cancelReflow != nil {
+			p.cancelReflow()
+		}
 		p.layout.Destroy()
 		if p.number != nil {
 			p.number.Destroy()
@@ -213,8 +218,27 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		v.closeCompletion()
 	}
 	if v.viewport.Width != viewport.Width && v.wrap != WrapNone {
-		v.dropLayouts()
+		// Preserve measured paragraphs as a coherent display snapshot while
+		// supported native layouts reflow between frames.
+		v.layoutEpoch++
 		v.resetHeights()
+		for key, p := range v.layouts {
+			if p.cancelReflow != nil {
+				p.cancelReflow()
+				p.cancelReflow = nil
+			}
+			if p.boxWidth == max(1, viewport.Width-v.gutter-2*padding) {
+				continue
+			}
+			if _, ok := p.layout.(typography.ReflowLayout); len(p.text) >= 8192 && ok {
+				continue
+			}
+			delete(v.layouts, key)
+			p.layout.Destroy()
+			if p.number != nil {
+				p.number.Destroy()
+			}
+		}
 		v.contentWidth = 0
 	}
 	v.viewport = viewport
@@ -330,22 +354,61 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		fallback := layoutKey{revision: v.document.model.Revision(), row: row}
 		p = v.layouts[fallback]
 		if p != nil {
+			if p.cancelReflow != nil {
+				p.cancelReflow()
+				p.cancelReflow = nil
+			}
 			delete(v.layouts, fallback)
 			v.layouts[key] = p
 		}
 	}
 	v.tick++
 	if p != nil {
+		width := float32(1 << 20)
+		if v.wrap != WrapNone {
+			width = max(1, v.viewport.Width-v.gutter-2*padding)
+		}
+		if p.boxWidth != width && p.cancelReflow == nil {
+			item := p
+			cancel, scheduled := gui.DeferTextLayout(v, p.layout, width, 1<<24, func(err error) {
+				if v.Destroyed() || !v.mounted || v.layouts[key] != item {
+					return
+				}
+				item.cancelReflow = nil
+				if err != nil {
+					v.report(err)
+					return
+				}
+				if v.anchor.valid && v.anchorRevision == v.document.model.Revision() {
+					v.pendingAnchor = true
+				}
+				w, h := item.layout.MeasureSize()
+				lines, clusters := item.layout.MeasureMetrics()
+				item.geometry = textedit.NewGeometry(lines, clusters, len(item.text), v.lineHeight)
+				item.width, item.height, item.boxWidth = w, max(v.lineHeight, h), width
+				v.setParagraphHeight(row, item.height)
+				v.RequestLayout()
+				v.RequestPaint()
+			})
+			if scheduled {
+				p.cancelReflow = cancel
+			} else {
+				p.layout.SetSize(width, 1<<24)
+				w, h := p.layout.MeasureSize()
+				lines, clusters := p.layout.MeasureMetrics()
+				p.geometry, p.width, p.height, p.boxWidth = textedit.NewGeometry(lines, clusters, len(p.text), v.lineHeight), w, max(v.lineHeight, h), width
+			}
+		}
 		if (!p.styled || p.style != style) && !v.colorParagraph(key, p, style, tokens, focus) {
 			return nil
 		}
 		p.used = v.tick
 		v.setParagraphHeight(row, p.height)
-		width := p.width
+		contentWidth := p.width
 		if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
-			width += 33 // Reserve the maximum badge extent, independent of paint-only LF markers.
+			contentWidth += 33 // Reserve the maximum badge extent, independent of paint-only LF markers.
 		}
-		v.contentWidth = max(v.contentWidth, width)
+		v.contentWidth = max(v.contentWidth, contentWidth)
 		return p
 	}
 	text := v.displayText(row)
@@ -364,7 +427,7 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		native.Destroy()
 		return nil
 	}
-	p = &paragraph{layout: native, text: text, used: v.tick}
+	p = &paragraph{layout: native, text: text, used: v.tick, boxWidth: width}
 	if !v.colorParagraph(key, p, style, tokens, focus) {
 		native.Destroy() // Not cached yet: the local call still owns this object.
 		return nil
@@ -452,6 +515,9 @@ func (v *SourceView) pruneLayouts(keep layoutKey) {
 		p := v.layouts[oldest]
 		bytes -= len(p.text)
 		delete(v.layouts, oldest)
+		if p.cancelReflow != nil {
+			p.cancelReflow()
+		}
 		p.layout.Destroy()
 		if p.number != nil {
 			p.number.Destroy()

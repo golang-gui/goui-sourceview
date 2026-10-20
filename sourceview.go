@@ -387,6 +387,14 @@ func (v *SourceView) IMContext() gui.IMContext {
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
 	defer v.searchState.Emit()
 	epoch, d := v.mountEpoch, v.document
+	// A line splice can move cached stable IDs to different logical rows.
+	// Retain their measurements, but discard callbacks tied to the old mapping.
+	for _, p := range v.layouts {
+		if p.cancelReflow != nil {
+			p.cancelReflow()
+			p.cancelReflow = nil
+		}
+	}
 	v.observed = c.Revision
 	v.reveal = nil
 	v.closeCompletion()
