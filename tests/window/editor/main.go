@@ -28,6 +28,7 @@ import (
 	"image"
 	"image/color"
 	"log"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -120,10 +121,10 @@ func main() {
 				format.TextColor = s.Definition().SelectionForeground
 				fresh, err := observed.Context.NewTextLayout(probeText, format, 1<<20, 1<<24)
 				must(err)
-				got, err := original.Rasterize(1, nil)
+				got, err := original.Rasterize(1, rasterRegion(original, 1), nil)
 				must(err)
 				pixels := bytes.Clone(got.Pixels)
-				want, err := fresh.Rasterize(1, nil)
+				want, err := fresh.Rasterize(1, rasterRegion(fresh, 1), nil)
 				must(err)
 				check(got.Width == want.Width && got.Height == want.Height && got.Stride == want.Stride && bytes.Equal(pixels, want.Pixels), "active selection retained obsolete foreground")
 				fresh.Destroy()
@@ -283,4 +284,9 @@ func (p *paintProbe) Paint(painter gui.Painter) {
 	must(err)
 	log.Printf("actual image=%T PixelScale=%g", img, painter.PixelScale())
 	img.Destroy()
+}
+
+func rasterRegion(layout typography.TextLayout, scale float32) image.Rectangle {
+	w, h := layout.MeasureSize()
+	return image.Rect(0, 0, int(math.Ceil(float64(w*scale))), int(math.Ceil(float64(h*scale))))
 }

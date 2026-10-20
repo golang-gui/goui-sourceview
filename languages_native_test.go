@@ -54,12 +54,12 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer fresh.Destroy()
-				got, err := p.layout.Rasterize(1, nil)
+				got, err := p.layout.Rasterize(1, rasterRegion(p.layout, 1), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
 				pixels := bytes.Clone(got.Pixels)
-				want, err := fresh.Rasterize(1, nil)
+				want, err := fresh.Rasterize(1, rasterRegion(fresh, 1), nil)
 				if err != nil {
 					t.Fatal(err)
 				}

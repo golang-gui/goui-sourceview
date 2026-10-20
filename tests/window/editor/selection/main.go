@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
 	"image/color"
 	"image/png"
 	"log"
@@ -240,10 +241,10 @@ func main() {
 		for i, c := range wanted {
 			check(l.colors[i] == c, fmt.Sprintf("%s theme=%d byte=%d color=%v want=%v", s.id, caseIndex/3, i, l.colors[i], c))
 		}
-		got, err := l.Rasterize(1, nil)
+		got, err := l.Rasterize(1, rasterRegion(l, 1), nil)
 		must(err)
 		pixels := bytes.Clone(got.Pixels)
-		want, err := fresh.Rasterize(1, nil)
+		want, err := fresh.Rasterize(1, rasterRegion(fresh, 1), nil)
 		must(err)
 		check(got.Width == want.Width && got.Height == want.Height && got.Stride == want.Stride && bytes.Equal(pixels, want.Pixels), "native bitmap differs from independent syntax/selection spans")
 	}
@@ -394,4 +395,9 @@ func main() {
 func backgroundOf(v gui.Widget, part string) color.NRGBA {
 	c, _ := gui.ResolveWidgetStyle(v, "source-view", part, style.Normal).BackgroundColor()
 	return rgba(c)
+}
+
+func rasterRegion(layout typography.TextLayout, scale float32) image.Rectangle {
+	w, h := layout.MeasureSize()
+	return image.Rect(0, 0, int(math.Ceil(float64(w*scale))), int(math.Ceil(float64(h*scale))))
 }

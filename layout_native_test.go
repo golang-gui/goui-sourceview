@@ -2,7 +2,9 @@ package sourceview
 
 import (
 	"bytes"
+	"image"
 	"image/color"
+	"math"
 	"reflect"
 	"runtime"
 	"slices"
@@ -65,14 +67,14 @@ func TestNativeRecolorMatchesFreshLayout(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := p.layout.Rasterize(1, nil)
+		got, err := p.layout.Rasterize(1, rasterRegion(p.layout, 1), nil)
 		if err != nil {
 			fresh.Destroy()
 			t.Fatal(err)
 		}
-		// TextBitmap storage is borrowed; detach before a second rasterization.
+		// Keep an independent pixel expectation across later rasterizations.
 		pixels := bytes.Clone(got.Pixels)
-		want, err := fresh.Rasterize(1, nil)
+		want, err := fresh.Rasterize(1, rasterRegion(fresh, 1), nil)
 		if err != nil {
 			fresh.Destroy()
 			t.Fatal(err)
@@ -142,7 +144,7 @@ func TestNativeRecolorViewIsolation(t *testing.T) {
 		v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	}
 	peer := b.paragraph(0)
-	before, err := peer.layout.Rasterize(1, nil)
+	before, err := peer.layout.Rasterize(1, rasterRegion(peer.layout, 1), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,11 +154,16 @@ func TestNativeRecolorViewIsolation(t *testing.T) {
 	if b.paragraph(0) != peer {
 		t.Fatal("another view's recolor invalidated peer layout")
 	}
-	after, err := peer.layout.Rasterize(1, nil)
+	after, err := peer.layout.Rasterize(1, rasterRegion(peer.layout, 1), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if before.Width != after.Width || before.Height != after.Height || !bytes.Equal(pixels, after.Pixels) {
 		t.Fatal("recolor contaminated another view's native state")
 	}
+}
+
+func rasterRegion(layout typography.TextLayout, scale float32) image.Rectangle {
+	w, h := layout.MeasureSize()
+	return image.Rect(0, 0, int(math.Ceil(float64(w*scale))), int(math.Ceil(float64(h*scale))))
 }

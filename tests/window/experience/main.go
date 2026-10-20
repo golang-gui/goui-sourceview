@@ -14,8 +14,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"image"
 	"image/color"
 	"log"
+	"math"
 	"runtime"
 	"time"
 
@@ -135,10 +137,10 @@ func main() {
 			fresh, err := ctx.Context.NewTextLayout("alpha beta", f, 1<<20, 1<<24)
 			must(err)
 			fresh.SetTextColor(0, 5, colors.SelectionForeground)
-			got, err := original.Rasterize(1, nil)
+			got, err := original.Rasterize(1, rasterRegion(original, 1), nil)
 			must(err)
 			pixels := bytes.Clone(got.Pixels)
-			want, err := fresh.Rasterize(1, nil)
+			want, err := fresh.Rasterize(1, rasterRegion(fresh, 1), nil)
 			must(err)
 			check(got.Width == want.Width && got.Height == want.Height && got.Stride == want.Stride && bytes.Equal(pixels, want.Pixels), "partial selection foreground mismatch")
 			fresh.Destroy()
@@ -302,4 +304,9 @@ func main() {
 	must(timer.Start(250 * time.Millisecond))
 	app.Run()
 	check(completed, "experience verification aborted before completing all checks")
+}
+
+func rasterRegion(layout typography.TextLayout, scale float32) image.Rectangle {
+	w, h := layout.MeasureSize()
+	return image.Rect(0, 0, int(math.Ceil(float64(w*scale))), int(math.Ceil(float64(h*scale))))
 }
