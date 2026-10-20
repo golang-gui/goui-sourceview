@@ -51,3 +51,31 @@ Linux amd64／Go 1.25.8／Pango 1.50.6，通过：
 
 首次长段落排版仍同步，窗口响应目标未通过验收。Windows／macOS 原生运行、
 真实 IME／物理键鼠和混合 DPI 未执行。上述选区窗口用例不能替代长段落性能验证。
+
+## 点击定位回归联验（2026-10-20）
+
+GOUI `71b25c8` 修复 TextView／TextInput 的光标移动无条件请求尺寸布局：
+有效段落直接复用几何，通过既有滚动机制显示目标，缺失／失效时仍请求布局。
+本仓源码不需要适配新接口；保留现有 go.mod 和用户的 example/temp。
+本次 SourceView 代码基线为 `9827920`。
+
+- 两仓 `go test ./...`，GOUI `go test -race ./gui ./gui/textedit`、
+  SourceView `go test -race ./...` 通过；新增 GOUI 回归在修复前代码明确失败。
+- GOUI 原生窗口 `tests/window/gui/text_caret` 在 Linux amd64／X11／XFCE／
+  Pango 1.50.6／Software、Modern 1×／2× 下通过点击、导航和排版复用断言。
+- 本仓 `tests/window/editor/selection` 的 JSON／XML／HTML × Basic／Modern
+  Light／Modern Dark 九组正常事件与像素检查通过（Software 1×）。
+- 两仓受影响包及本仓全模块的 Windows amd64／macOS arm64 无 CGO 交叉构建
+  通过；不代表这两端原生运行验收。
+- `GOWORK=off go test ./...` 仍报 `updates to go.mod needed`；没有 tidy、
+  更改用户 replace 或把本地工作区通过写成独立发布通过。
+
+用户 157,862 字节单行 JSON 的本机只读诊断中，TextView 与 SourceView
+（JSON 高亮）的三次点击均无新增完整度量。TextView 的 32 KiB 单段回归从
+每次点击两次整段排版，改为不新增排版调用。采样边界、耗时和限制详见
+GOUI [光标回归记录](../../goui/doc/PlanIncrementalTextLayout.md#光标定位回归修复2026-10-20)。
+
+首次整段排版仍同步；SourceView 着色更新后观察到一次约 293 ms 的原生
+MeasureSize，尚需确认并修正颜色失效路径。2× 跳转绘制也仍有延迟。
+本次修复不改变上面“通用分时排版未完成”的状态。窗口已关闭，
+未写剪贴板、系统设置或用户 JSON。
