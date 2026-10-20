@@ -145,7 +145,7 @@ GOUI 的记录见相邻仓库 doc/PlanComponentStyles.md，本仓验收见 [浮�
 
 ## 7. 区域光栅化依赖（2026-10-20）
 
-GOUI `e5d5331` 提供本轮实现；已发布 v0.2.0 不含本轮 `TextLayout.Rasterize(scale, region, buf)` 契约及完整位图
+GOUI `ac0efb3` 及其前置提交提供本轮实现；已发布 v0.2.0 不含本轮 `TextLayout.Rasterize(scale, region, buf)` 契约及完整位图
 失败恢复修正。通用实现、三后端与调用迁移在 GOUI；本仓复用 DrawTextLayout，
 更新直接 Rasterize 的测试/窗口使用者，并修正长行可见摘录。发布依赖仍待 GOUI
 实际可获取的新版本，详见 [本轮验收](PlanTextRasterization.md)。
