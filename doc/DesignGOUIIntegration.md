@@ -141,3 +141,11 @@ StyleScope 与 GUI/widgets 使用者迁移在 GOUI `210732a`；Basic / Modern �
 普通 transform 和结构裁剪。后端算法、资源归属不变；控件须在自身分配内预留阴影空间。
 GOUI 的记录见相邻仓库 doc/PlanComponentStyles.md，本仓验收见 [浮层记录](PlanFindBarAppearance.md)。
 框架通用扩展先验证提交，再由本仓依赖；go.mod 仍不能用尚无这些 API 的发行版本完成独立构建。
+
+
+## 7. 区域光栅化依赖（2026-10-20）
+
+GOUI `e5d5331` 提供本轮实现；已发布 v0.2.0 不含本轮 `TextLayout.Rasterize(scale, region, buf)` 契约及完整位图
+失败恢复修正。通用实现、三后端与调用迁移在 GOUI；本仓复用 DrawTextLayout，
+更新直接 Rasterize 的测试/窗口使用者，并修正长行可见摘录。发布依赖仍待 GOUI
+实际可获取的新版本，详见 [本轮验收](PlanTextRasterization.md)。

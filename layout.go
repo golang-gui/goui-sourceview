@@ -740,12 +740,36 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 		return info
 	}
 	first, last := v.visibleRows()
+	firstDisplay := first
 	if v.projection != nil {
 		first = m.LineAt(v.projection.ModelOffset(v.displayRange(first).Start, false))
 		last = m.LineAt(v.projection.ModelOffset(v.displayRange(last).End, true))
 	}
 	r, _ := m.LineRange(first)
 	end, _ := m.LineRange(last)
+	if end.End-r.Start > 64*1024 {
+		// Snapshot reads cached geometry only: it must not shape text, recolor,
+		// emit callbacks or alter the viewport just to describe visible content.
+		p := v.layouts[layoutKey{revision: m.Revision(), row: firstDisplay}]
+		if row, ok := v.highlightRow(firstDisplay); ok && v.document.engine != nil {
+			if line := v.document.engine.Line(row); line != nil {
+				if stable := v.layouts[layoutKey{id: line.ID}]; stable != nil {
+					p = stable
+				}
+			}
+		}
+		if p != nil {
+			pos := p.geometry.Hit(geometry.Point{X: max(0, v.offset.X), Y: max(0, v.offset.Y-padding-v.paragraphTop(firstDisplay))})
+			anchor := v.displayRange(firstDisplay).Start + pos.Offset
+			if v.projection != nil {
+				anchor = v.projection.ModelOffset(anchor, pos.Upstream)
+			}
+			r.Start = max(r.Start, min(end.End, anchor)-1024)
+			for r.Start < end.End && !m.IsRuneBoundary(r.Start) {
+				r.Start++
+			}
+		}
+	}
 	r.End = min(end.End, r.Start+64*1024)
 	for r.End > r.Start && !m.IsRuneBoundary(r.End) {
 		r.End--

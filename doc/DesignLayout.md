@@ -255,6 +255,17 @@ Caret 闪烁使用挂载期、焦点期计时器，失焦/隐藏停止；每次�
 复杂文字或只画前 N 字节。超长行保留完整文本、选择和编辑，但单次排版延迟需要实测；
 极端单行不承诺与常规文件相同的延迟。
 
+文字位图由 GOUI Painter 按可见像素区域生成，不能为完整超长段落分配原生 surface，
+也不能先生成全文位图再裁剪。`Rasterize(scale, region, buf)` 的 region 位于原布局的
+光栅像素平面，返回尺寸和位置严格由 region 确定，不增加 TextBitmap.Origin。
+Painter 对整个布局原点只取整一次，分块光栅化后拼接为单张可见区域图片，避免块边缘
+合成接缝；SourceView 继续只调用正常 DrawTextLayout，不复制后端裁剪或字形处理。
+这些能力需要 GOUI v0.2.0 之后的区域光栅化接口；已发布 v0.2.0 不能编译本轮更新的
+直接 Rasterize 使用者。暂以未提交的双仓工作区联调，不修改发行版本号冒充已发布。
+通用契约及限制见相邻 GOUI [区域光栅化设计](../../goui/doc/DesignTextRasterization.md)，
+本仓场景及结果见 [长行验收](PlanTextRasterization.md)。区域光栅化不保证 shaping、
+语法着色或 Cluster 几何查询的耗时有界。
+
 先在第一轮布局原型验证 16 KiB、64 KiB、1 MiB 单行的输入/导航及原生内存。
 若首版常规 profile 也不达标，实施计划必须暂停相关交付并设计窗口化 shaping 等
 独立能力，不能通过静默截断内容、丢弃 Cluster 或随意放宽阈值掩盖问题。
@@ -268,7 +279,10 @@ Paint 只借用 Painter；不缓存它，不手工绘制其他 Widget 的子树�
 Role 使用可扩展的 `gui.Role("sourceview")`，TextEditingInfo 报告完整 Length、
 当前选区、只读状态和有界 VisibleRange/VisibleText；整份文档不重复写入 WidgetInfo.Text。
 可见原文摘录上限 64 KiB，向 rune 边界截断；其范围必须与文本逐 byte 对齐。
-超长行的可见摘录可围绕当前可见锚点取一个连续区间，不能拼接不连续片段冒充一个 Range。
+超长行的可见摘录使用已缓存段落几何定位视口左上文字，在其前方最多保留 1024 byte
+上下文，截取一个不超过 64 KiB 的连续区间，起止向合法 UTF-8 边界收敛。只读取缓存，
+不为 Snapshot 创建原生布局或改变选区、视口；缓存尚未就绪时保留行首降级。
+不能拼接不连续片段冒充一个 Range。
 
 Preedit 另外报告，不能混进 committed range。
 若在模型重入通知中尚未追平修订，按编辑专题暂不发布 TextEditing/Text，避免新旧状态混用。
