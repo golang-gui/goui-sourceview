@@ -149,16 +149,3 @@ GOUI `ac0efb3` 及其前置提交提供本轮实现；已发布 v0.2.0 不含本
 失败恢复修正。通用实现、三后端与调用迁移在 GOUI；本仓复用 DrawTextLayout，
 更新直接 Rasterize 的测试/窗口使用者，并修正长行可见摘录。发布依赖仍待 GOUI
 实际可获取的新版本，详见 [本轮验收](PlanTextRasterization.md)。
-
-## 8. 已测段落的分帧换宽（2026-10-20）
-
-本仓使用 GOUI `6676636` 的可选 `typography.ReflowLayout`，及 `57163fd` 的
-`gui.DeferTextLayout`、Root 共享预算和生命周期取消。RTL cluster 几何修正为
-`6b110f0`，原生 glyph 资源/绘制绑定为 `cf734bc`。这些能力尚不在 v0.2.0；
-继续用不提交的双仓工作区联调，不能用本机 replace 掩盖独立构建条件。
-
-当前 GOUI 仅在 Pango 提供该可选能力，要求 Pango 1.50+；未受理的格式或其他
-后端保持正确的同步路径，不向 SourceView 复制原生字体/字形实现。SourceView
-只持有取消函数、已发布 box 宽度、段落 Geometry 和领域着色；文本测量快照、
-glyph 页及 native 对象的所有权都由 GOUI TextLayout 管理。具体阶段限制见
-[布局设计](DesignLayout.md)与[实施记录](PlanIncrementalTextLayout.md)。

@@ -9,29 +9,21 @@
 跨窗口 bidi 嵌入、isolate、上下文塑形、连字和字素均须正确；不采用复杂文本
 退回同步整段的优化分支。共用基础设计见 GOUI 的
 [长段落增量排版](../../goui/doc/DesignIncrementalTextLayout.md)。
-换宽复用测量和显示页的具体规格见
-[可视区缓存与分步换宽](../../goui/doc/DesignViewportTextLayout.md)。
 这是相邻检出下的开发参考，不是已发布依赖所具备的能力。
 
-SourceView 继续独立管理语法、折叠投影和装饰。当前对已测量的 8 KiB 及以上
-段落保留 TextLayout，经 GOUI `gui.DeferTextLayout` 参与同 Root 分帧换宽。
-连续尺寸变化取消旧请求；等待时绘制、命中、选择与快照继续使用旧几何，
-新结果完成后统一刷新 Geometry、高度和滚动锚点，不在 Paint 强制补排。
+SourceView 将继续独立管理语法、折叠投影和装饰；准确的可恢复原生分析／测量
+应由 GOUI 提供。待底层验证后，才接入同 Root 帧预算、可视区需求、按宽度复用
+测量和增量折行。允许文字和着色延迟，Paint、命中与快照不能强制同步补齐整段。
+同步 SetSelection 的 cluster 校正也必须明确处理，不能藏入一个阻塞回退。
 
-段落缓存持有取消函数和当前已发布 box 宽度。卸载／销毁／淘汰先取消再释放。
-文档修改会使行号移动，取消旧行映射的回调并保留未修改行的测量；初次词法索引
-将 revision/row 缓存迁往稳定 ID 时也取消旧键回调。颜色不使已保留测量失效，
-不因后台词法结果更新而重新折行。
+当前已接入 `textedit.Geometry.LineAtY`／`SelectionLines`，选择、搜索、词出现
+及预编辑装饰只为可视行及相邻边界候选生成矩形。保留完整矩形高度，避免因
+提前裁剪而改变预编辑下划线位置；最终像素裁剪仍由 Painter 完成。
+短范围的配对装饰也受益于 Geometry 的逻辑行索引。
 
-当前仅 GOUI Pango 提供这项能力；其他后端及不受理的格式使用普通原生布局。
-原生 glyph 缓存覆盖可见区域及上下缓冲，但完整 cluster 元数据仍保留，Geometry
-仍在结果发布后一次构造。新宽度要等整段折行索引完成才发布，没有实现新首屏
-提前显示、详细几何分页或可恢复的首次分析；不能将此阶段写成通用分时排版完成。
-
-`textedit.Geometry.LineAtY`／`SelectionLines` 继续将选区、搜索、词出现和预编辑
-装饰限制在可视行及相邻边界；最终像素裁剪由 Painter 完成。首段加载与大段落
-Geometry 构造仍可能阻塞。同步 SetSelection 的 cluster 校正仍按当前显示几何
-完成。原型、依赖与验证见 [长段落实施记录](PlanIncrementalTextLayout.md)。
+这仅优化已取得的完整度量。paragraph 仍同步创建／测量原生布局，Geometry
+仍一次构造，首次长段落自动换行卡顿尚未修复。原型、依赖与验证见
+[长段落实施记录](PlanIncrementalTextLayout.md)。
 
 ## 1. Widget 与滚动组合
 
