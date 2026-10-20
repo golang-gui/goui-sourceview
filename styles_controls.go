@@ -48,16 +48,15 @@ func findRules(base style.StyleSheet, c findColors, size, radius, inputRadius, f
 	}
 	return rules
 }
-func completionRules(c completionColors, base style.StyleSheet, size float32) []style.Rule {
+func completionRules(c completionColors, base style.StyleSheet, size, radius float32, shadow style.Shadow) []style.Rule {
 	family, _ := base.Resolve(style.Sel{Name: "label"}).FontFamily()
 	return []style.Rule{
-		style.Name("sourceview.completion").BackgroundColor(c.Background).ForegroundColor(c.Foreground).BorderColor(c.Border).BorderWidth(1).Radius(0).FontFamily(family).FontSize(size),
+		style.Name("sourceview.completion").BackgroundColor(c.Background).ForegroundColor(c.Foreground).BorderColor(c.Border).BorderWidth(1).Radius(radius).Shadow(shadow).FontFamily(family).FontSize(size),
 		style.Name("sourceview.completion").Part("detail").ForegroundColor(c.DetailForeground).FontSize(size * .9),
 		style.Name("sourceview.completion").Part("selected").BackgroundColor(c.SelectedBackground).ForegroundColor(c.SelectedForeground),
 		style.Name("sourceview.completion").Part("selected-detail").ForegroundColor(c.SelectedDetailForeground),
 		style.Name("sourceview.completion").Part("match").ForegroundColor(c.MatchForeground),
 		style.Name("sourceview.completion").Part("selected-match").ForegroundColor(c.SelectedMatchForeground),
-		style.Name("sourceview.completion").Part("scroll-thumb").BackgroundColor(c.ScrollThumb),
 	}
 }
 

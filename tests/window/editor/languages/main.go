@@ -8,6 +8,8 @@
 // infer pixel acceptance from window startup. Physical IME/system shortcuts
 // remain manual. Logs actual typography/painter/scale. No clipboard, file or
 // settings changes; restart resets. Early close or failed assertion exits nonzero.
+// Each completion waits up to 8 seconds for an allocated viewport before
+// inspecting virtual rows; Show does not imply the first layout has completed.
 package main
 
 import (
@@ -94,6 +96,8 @@ func main() {
 		{language.JSON, "tr", "true"}, {language.XML, "<x xml:l", "<x xml:lang"}, {language.HTML, "<di", "<div"},
 	}
 	var steps []func()
+	var pendingViewport func() bool
+	var viewportDeadline time.Time
 	for _, tc := range fixtures {
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.text)
@@ -105,6 +109,14 @@ func main() {
 		steps = append(steps, func() {
 			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "missing completion for "+string(tc.id))
+			viewportDeadline = time.Now().Add(8 * time.Second)
+			pendingViewport = func() bool {
+				check(len(win.Popovers()) == 1, "completion closed before layout for "+string(tc.id))
+				info := completionInfo(win.Popovers()[0].Widget().Snapshot())
+				return info.Bounds.Width > 0 && info.Bounds.Height > 0
+			}
+		})
+		steps = append(steps, func() {
 			info := completionInfo(win.Popovers()[0].Widget().Snapshot())
 			found := -1
 			for i, row := range info.Children {
@@ -165,6 +177,13 @@ func main() {
 	at := 0
 	timer := app.NewTimer()
 	timer.ConnectTimeout(func() {
+		if pendingViewport != nil {
+			if !pendingViewport() {
+				check(time.Now().Before(viewportDeadline), "completion viewport was not allocated within 8 seconds")
+				return
+			}
+			pendingViewport = nil
+		}
 		if at < len(steps) {
 			steps[at]()
 			at++

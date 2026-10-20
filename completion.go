@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
+	"github.com/golang-gui/goui/platform"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -336,14 +338,39 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 		return nil
 	}
 	s := &completionSession{state: state, language: c.Language, range_: c.Range, prefix: c.Prefix, items: items}
-	s.popup = gui.NewPopover(v, nil)
 	s.list = newCompletionList(v, s)
 	s.panel = newCompletionPanel(s.list)
-	s.popup.SetWidget(s.panel)
-	s.popup.SetPosition(position)
-	s.popup.ConnectDismissRequest(v.closeCompletion)
+	position.X -= s.panel.inset() - completionInset
+	newPopup := func(transparent bool) gui.Popover {
+		p := gui.NewPopover(v, &gui.PopoverOptions{Transparent: transparent})
+		p.SetStyleName("sourceview.completion")
+		p.SetWidget(s.panel)
+		p.SetPosition(position)
+		p.ConnectDismissRequest(v.closeCompletion)
+		return p
+	}
+	s.popup = newPopup(true)
 	v.completion = s
-	if err := s.popup.Show(); err != nil {
+	err := s.popup.Show()
+	// Unsupported/unavailable alpha surfaces are a normal presentation fallback.
+	// Content errors and stale sessions must never trigger a second Show.
+	if err != nil && s.list.err == nil && (errors.Is(err, platform.ErrUnsupported) || errors.Is(err, platform.ErrUnavailable)) && v.completion == s && state.valid(v) && epoch == v.completionEpoch {
+		s.popup.SetWidget(nil)
+		s.popup.Destroy()
+		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch || !v.mounted || !v.Focused() || v.editable() != nil {
+			if v.completion == s {
+				v.closeCompletion()
+			}
+			return nil
+		}
+		s.popup = newPopup(false)
+		if retry := s.popup.Show(); retry != nil {
+			err = errors.Join(err, retry)
+		} else {
+			err = nil
+		}
+	}
+	if err != nil {
 		if v.completion == s {
 			v.closeCompletion()
 		}

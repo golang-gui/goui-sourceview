@@ -85,15 +85,19 @@ Basic 保留紧凑的 9.75 pt 输入与 4/2 DIP 圆角。操作图标使用专�
 
 ## 补全窗口
 
-独立原生 Popover 使用 `sourceview.completion`：根规则给出面板、边框、字体；
-detail / selected / selected-detail / match / selected-match / scroll-thumb 部件分别控制
-说明、选中、匹配和滚动提示。普通/选中匹配前景均来自 Modern 的对比度调整主题色。
+独立原生 Popover 使用 `sourceview.completion` StyleName：根规则给出背景、边框、圆角、阴影和字体，
+由宿主统一绘制外壳与预留阴影空间。Modern 跟随 menu 圆角和阴影，Basic 圆角为 4 DIP。
+detail / selected / selected-detail / match / selected-match 部件分别控制说明、选中和匹配。
+滚动条复用官方 scroll-view 的 trough/thumb 和 Normal/Hovered/Pressed 状态；
+旧的 sourceview.completion / scroll-thumb 装饰部件已移除，应用覆盖请改用 scroll-view / thumb。
+普通/选中匹配前景均来自 Modern 的对比度调整主题色。
 文字使用 UI 字体，说明字号为主体的 90%；名称列、原生 cluster 省略和语义完整文本不变。
 
 补全窗口通过所属 SourceView 显式解析样式，不能因为进入另一个原生 Root 而丢掉
 编辑器的局部 StyleScope。快照只保存普通颜色、字体和表面参数；原生布局仍由列表独占，
 外观变化、会话取消或卸载释放。运行中实际外观变化关闭旧会话，下次打开采用最新样式；悬停等未改变外观的样式通知保留会话。
-边框、滚动提示及阴影的显式 alpha 原样保留，不由缺省配色推导覆盖。
+边框及阴影的显式 alpha 原样保留，不由缺省配色推导覆盖。候选内容和 ScrollView 安排在圆角安全区域。
+透明表面不可用时重试不透明宿主，由 GOUI 应用矩形无外部阴影外观；字体、内容和输入契约一致。
 
 ## 验证与参照
 

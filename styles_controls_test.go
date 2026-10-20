@@ -1,14 +1,54 @@
 package sourceview
 
 import (
+	"image/color"
+	"testing"
+
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
-	"image/color"
-	"testing"
 )
+
+func TestCompletionShellRulesAndSafeContent(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		sheet  style.StyleSheet
+		radius float32
+		border float32
+	}{
+		{"basic", basic.Sheet(), 4, 1},
+		{"light", modern.Sheet(modern.Options{}), 8, 1},
+		{"dark", modern.Sheet(modern.Options{Dark: true}), 8, 1},
+		{"custom", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Radius(32).BorderWidth(2))...), 32, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l, _ := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
+			l.view.completion = nil
+			themedScope(l.view, tc.sheet)
+			l.readAppearance()
+			l.view.completion = l.session
+			if l.box.radius != tc.radius || l.box.width != tc.border || l.colors.Background.A != 255 {
+				t.Fatal("incomplete styled shell", l.box)
+			}
+			menu := boxOf(tc.sheet.Resolve(style.Sel{Name: "menu"}))
+			if l.box.shadow != menu.shadow {
+				t.Fatal("completion shadow diverged from the official menu")
+			}
+			arrangeCompletion(l)
+			p := l.session.panel
+			r := p.scroll.Rect()
+			// The content's leading corner must be inside the rounded border,
+			// independently of the implementation's padding formula.
+			dx, dy, radius := max(0, tc.radius-r.X), max(0, tc.radius-r.Y), tc.radius-l.box.width
+			if dx*dx+dy*dy > radius*radius {
+				t.Fatal("scroll content covered a rounded shell corner", r)
+			}
+		})
+	}
+}
 
 // The former scheme UI palette tests live here, where those colors are owned.
 func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
@@ -57,7 +97,7 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	rules := modern.Rules(modern.Options{Dark: true})
 	rules = append(rules,
 		style.Name("sourceview.completion").BorderColor(color.NRGBA{}).FontFamily("owner-font").FontSize(16),
-		style.Name("sourceview.completion").Part("scroll-thumb").BackgroundColor(color.NRGBA{R: 200, A: 80}),
+		style.Name("sourceview.completion").Shadow(style.Shadow{Color: color.NRGBA{R: 200, A: 80}}),
 		style.Name("sourceview.find").Shadow(style.Shadow{}),
 		style.Name("sourceview.find.option").Part("button-checked").BorderColor(color.NRGBA{R: 90, A: 80}),
 	)
@@ -68,7 +108,7 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	// is explicitly tied to the owner, before and after attachment to that root.
 	themedScope(l, basic.Sheet())
 	l.StyleChanged()
-	if l.font.Family != "owner-font" || l.font.Size != 16 || l.colors.Border.A != 0 || l.colors.ScrollThumb != (color.NRGBA{R: 200, A: 80}) {
+	if l.font.Family != "owner-font" || l.font.Size != 16 || l.colors.Border.A != 0 || l.box.shadow.Color.A != graphics.ColorOf(color.NRGBA{R: 200, A: 80}).A {
 		t.Fatal("popup lost its owner scope or decorative alpha")
 	}
 	b := NewFindBar()

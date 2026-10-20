@@ -8,7 +8,6 @@ type completionColors struct {
 	SelectedBackground, SelectedForeground   color.NRGBA
 	SelectedDetailForeground                 color.NRGBA
 	MatchForeground, SelectedMatchForeground color.NRGBA
-	ScrollThumb                              color.NRGBA
 }
 
 type findColors struct {

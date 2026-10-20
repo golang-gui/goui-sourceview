@@ -116,7 +116,7 @@ func (l *completionList) readAppearance() bool {
 	border, _ := root.BorderColor()
 	colors := completionColors{Background: background(root), Foreground: foreground(root), Border: nrgba(border), DetailForeground: foreground(resolve("detail")),
 		SelectedBackground: background(resolve("selected")), SelectedForeground: foreground(resolve("selected")), SelectedDetailForeground: foreground(resolve("selected-detail")),
-		MatchForeground: foreground(resolve("match")), SelectedMatchForeground: foreground(resolve("selected-match")), ScrollThumb: background(resolve("scroll-thumb"))}
+		MatchForeground: foreground(resolve("match")), SelectedMatchForeground: foreground(resolve("selected-match"))}
 	font, detail, box := styleFont(root), styleFont(resolve("detail")), boxOf(root)
 	if colors == l.colors && font == l.font && detail == l.secondaryFont && box == l.box {
 		return false

@@ -80,11 +80,8 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 			p := &completionPainter{}
 			l.session.panel.Paint(p)
 			l.Paint(p)
-			if len(l.rows) != 2 || len(p.text) != 4 || len(p.borders) != 1 {
-				t.Fatal("missing columns or outline", p)
-			}
-			if p.borders[0] != (paintShape{rect: geometry.Rect(.5, .5, 239, 67), width: 1, color: graphics.ColorOf(l.colors.Border)}) {
-				t.Fatal("panel border", p.borders)
+			if len(l.rows) != 2 || len(p.text) != 4 || len(p.borders) != 0 {
+				t.Fatal("missing columns or content redrew the popup shell", p)
 			}
 			// Mock glyphs are 10x20 DIP: 28-DIP rows. Drawing coordinates
 			// are content-local; the panel adds another 6 DIP on every side.
@@ -98,7 +95,7 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 				t.Fatalf("column geometry: got %+v", p.text)
 			}
 			c := l.colors
-			if p.fills[0].color != graphics.ColorOf(c.Background) || p.fills[1] != (paintShape{rect: geometry.Rect(0, 0, 228, 28), color: graphics.ColorOf(c.SelectedBackground)}) {
+			if len(p.fills) != 1 || p.fills[0] != (paintShape{rect: geometry.Rect(0, 0, 228, 28), color: graphics.ColorOf(c.SelectedBackground)}) {
 				t.Fatal("editor selection leaked into popup", p.fills)
 			}
 			for index, row := range l.rows {

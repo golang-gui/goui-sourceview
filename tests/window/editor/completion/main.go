@@ -1,17 +1,23 @@
 // Completion panel verification. Requires a desktop/window manager and native
 // fonts. Run: go run ./tests/window/editor/completion [-dark] [-case CASE]
 // [-auto]. CASE: json, html, xml, long, unicode, scroll, wrapped, edge.
+// -basic selects Basic instead of Modern. -expect-surface transparent/opaque
+// asserts the native surface mode; on X11 run opaque without a compositor to
+// verify the alpha-unavailable fallback. Otherwise leave the expectation unset.
 // Linux without an IME service: XMODIFIERS=@im=none. Initial state: an editable
 // sample with a completion popup. Inspect aligned name/detail columns, muted
 // smaller descriptions, prefix colors, a 1-DIP outline and ellipsis. Check
-// light/dark and 1x/2x. Scroll has 32 items and a position indicator; edge puts
+// light/dark and 1x/2x. Scroll has 32 items and a real draggable scrollbar; edge puts
 // the owner near the workarea corner, where the popup must remain on screen.
 // Up/Down, hover, wheel, Enter/Tab and clicking work without stealing editor
 // focus. -auto checks semantic row bounds, stable width while scrolling,
-// editor hover retention, keyboard/hover/wheel selection, inert padding,
+// editor hover retention, keyboard/hover selection, independent pixel/line
+// scrolling, thumb dragging to the last item, keyboard reveal, inert padding,
 // pointer acceptance and undo via
 // normal Window/Popover.DispatchEvent; READY means setup, not pixel acceptance.
 // Native IME and physical shortcut interception require separate verification.
+// Waits for an allocated viewport with an 8-second deadline before assertions;
+// native creation and the first paint need not complete at a fixed timer tick.
 // No clipboard, files or settings change; edge moves only this program's window.
 // Restart to reset. Close to exit; closing early with -auto is a failure.
 package main
@@ -34,6 +40,7 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
 
@@ -89,7 +96,10 @@ func main() {
 	dark := flag.Bool("dark", false, "dark code scheme")
 	scenario := flag.String("case", "json", "json/html/xml/long/unicode/scroll/wrapped/edge")
 	auto := flag.Bool("auto", false, "verify input and close automatically")
+	basicTheme := flag.Bool("basic", false, "use the official Basic sheet")
+	surface := flag.String("expect-surface", "", "assert transparent or opaque popup creation")
 	flag.Parse()
+	check(*surface == "" || *surface == "transparent" || *surface == "opaque", "invalid expected surface")
 	text, prefix, id := "{\n    \"value\": tr", "tr", language.JSON
 	switch *scenario {
 	case "json", "long", "scroll":
@@ -110,6 +120,9 @@ func main() {
 	app, err := gui.NewApplication("org.golang-gui.SourceViewCompletionPreview")
 	must(err)
 	app.SetStyleSheet(modern.Sheet(modern.Options{Dark: *dark}))
+	if *basicTheme {
+		app.SetStyleSheet(basic.Sheet())
+	}
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 700, Height: 340}})
 	must(err)
 	defer win.Destroy()
@@ -192,6 +205,10 @@ func main() {
 		}
 		popup = win.Popovers()[0]
 		check(popup != nil && win.Focused() && v.Focused() && probe.scale > 0, "native popup/focus/painter not ready")
+		check(!popup.Modal() && popup.StyleName() == "sourceview.completion", "completion changed keyboard policy or lost shell style")
+		if *surface != "" {
+			check(popup.Transparent() == (*surface == "transparent"), "unexpected transparent/opaque fallback")
+		}
 		info := candidates(popup)
 		if info.Bounds.Width <= 0 || info.Bounds.Height <= 0 {
 			check(time.Now().Before(deadline), "completion was shown without a laid-out viewport")
@@ -207,7 +224,7 @@ func main() {
 			info = candidates(popup)
 			check(info.VisibleStart > 0 && info.Bounds.Width == initialWidth, "scroll changed width or hid selection")
 		}
-		log.Printf("READY case=%s dark=%t typography=%s painter=%s scale=%g width=%g rows=%d first=%d", *scenario, *dark, app.Typography().Name(), probe.painter, probe.scale, initialWidth, len(info.Children), info.VisibleStart)
+		log.Printf("READY case=%s dark=%t basic=%t transparent=%t typography=%s painter=%s scale=%g width=%g rows=%d first=%d", *scenario, *dark, *basicTheme, popup.Transparent(), app.Typography().Name(), probe.painter, probe.scale, initialWidth, len(info.Children), info.VisibleStart)
 		if startAuto != nil {
 			startAuto()
 		}

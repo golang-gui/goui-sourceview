@@ -41,8 +41,7 @@ func modernRules(o modern.Options, base style.StyleSheet) []style.Rule {
 	focusWidth, _ := focus.BorderWidth()
 	rules = append(rules, findRules(base, f, o.FontSize, radius, inputRadius, focusWidth)...)
 	c := completionColors{Background: background(menu), Foreground: foreground(menu), DetailForeground: muted, Border: nrgba(menuBorder), SelectedBackground: selected,
-		SelectedForeground: foreground(menu), SelectedDetailForeground: muted, MatchForeground: accent, SelectedMatchForeground: accent,
-		ScrollThumb: background(base.Resolve(style.Sel{Name: "scroll-view", Part: "thumb"}))}
-	rules = append(rules, completionRules(c, base, o.FontSize)...)
+		SelectedForeground: foreground(menu), SelectedDetailForeground: muted, MatchForeground: accent, SelectedMatchForeground: accent}
+	rules = append(rules, completionRules(c, base, o.FontSize, radius, shadow)...)
 	return rules
 }
