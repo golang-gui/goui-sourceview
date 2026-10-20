@@ -530,7 +530,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 			end := start + len(v.projection.Text())
 			local := textedit.Range{Start: max(r.Start, start) - r.Start, End: min(r.End, end) - r.Start}
 			if local.End > local.Start {
-				for _, rect := range item.geometry.Selection(local) {
+				for _, rect := range v.visibleSelection(item, local, origin) {
 					y := origin.Y + rect.Y + rect.Height - 1
 					p.DrawLine(geometry.Point{X: origin.X + rect.X, Y: y}, geometry.Point{X: origin.X + rect.X + rect.Width, Y: y}, 1, graphics.ColorOf(v.colors.PreeditUnderline))
 				}
@@ -617,10 +617,20 @@ func (v *SourceView) paintRange(p gui.Painter, item *paragraph, line textedit.Ra
 	if end <= start {
 		return
 	}
-	for _, rect := range item.geometry.Selection(textedit.Range{Start: start, End: end}) {
+	for _, rect := range v.visibleSelection(item, textedit.Range{Start: start, End: end}, origin) {
 		p.FillRect(rect.Translate(origin), graphics.ColorOf(c))
 	}
 }
+
+func (v *SourceView) visibleSelection(item *paragraph, r textedit.Range, origin geometry.Point) []geometry.Rectangle {
+	if v.viewport.Height <= 0 {
+		return nil
+	}
+	first := item.geometry.LineAtY(-origin.Y)
+	end := item.geometry.LineAtY(v.viewport.Height-origin.Y) + 1
+	return item.geometry.SelectionLines(r, first, end)
+}
+
 func (v *SourceView) snapOffset(offset int, forward bool) int {
 	row := v.document.model.LineAt(offset)
 	r, _ := v.document.model.LineRange(row)

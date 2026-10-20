@@ -103,6 +103,8 @@ func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 	}
 	out := &bracketPainter{}
 	v.SetShowIndentGuides(false)
+	// Painting now culls ranges outside the arranged viewport.
+	v.LayoutVisible(geometry.Size{Width: 320, Height: 120}, geometry.Point{})
 	v.paintAssistanceBackground(out, 0, v.paragraph(0), geometry.Point{}, word)
 	if len(out.fills) != 1 || out.fills[0].rect.X != 90 || out.fills[0].rect.Width != 30 || v.Search().Text != "food" {
 		t.Fatal(out.fills, v.Search())
