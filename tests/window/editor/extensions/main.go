@@ -43,6 +43,18 @@ func check(ok bool, message string) {
 		log.Fatal(message)
 	}
 }
+func completionInfo(info gui.WidgetInfo) gui.WidgetInfo {
+	if info.Role == "completion-list" {
+		return info
+	}
+	for _, child := range info.Children {
+		if found := completionInfo(child); found.Role != "" {
+			return found
+		}
+	}
+	return gui.WidgetInfo{}
+}
+
 func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "Modern dark appearance")
@@ -97,7 +109,7 @@ func main() {
 			if len(win.Popovers()) == 0 {
 				return false
 			}
-			rows := win.Popovers()[0].Widget().Snapshot().Children
+			rows := completionInfo(win.Popovers()[0].Widget().Snapshot()).Children
 			if len(rows) == 0 {
 				return false
 			}

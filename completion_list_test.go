@@ -36,8 +36,12 @@ func completionFixture(t *testing.T, items []Completion) (*completionList, *shap
 	return l, ctx
 }
 func arrangeCompletion(l *completionList) {
-	m := l.Measure(layout.Unbounded())
-	l.Arrange(geometry.Rect(0, 0, m.Width, m.Height))
+	if l.session.panel == nil {
+		l.session.panel = newCompletionPanel(l)
+	}
+	p := l.session.panel
+	m := p.Measure(layout.Unbounded())
+	p.Arrange(geometry.Rect(0, 0, m.Width, m.Height))
 }
 
 type completionDraw struct {
@@ -74,6 +78,7 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 			l.view.completion = l.session
 			arrangeCompletion(l)
 			p := &completionPainter{}
+			l.session.panel.Paint(p)
 			l.Paint(p)
 			if len(l.rows) != 2 || len(p.text) != 4 || len(p.borders) != 1 {
 				t.Fatal("missing columns or outline", p)
@@ -81,18 +86,19 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 			if p.borders[0] != (paintShape{rect: geometry.Rect(.5, .5, 239, 67), width: 1, color: graphics.ColorOf(l.colors.Border)}) {
 				t.Fatal("panel border", p.borders)
 			}
-			// Mock glyphs are 10x20 DIP: 28-DIP rows, 12-DIP text inset, 6-DIP panel padding.
+			// Mock glyphs are 10x20 DIP: 28-DIP rows. Drawing coordinates
+			// are content-local; the panel adds another 6 DIP on every side.
 			want := []completionDraw{
-				{geometry.Point{X: 12, Y: 10}, "transform", geometry.Rect(12, 6, 90, 28)},
-				{geometry.Point{X: 188, Y: 10}, "JSON", geometry.Rect(118, 6, 110, 28)},
-				{geometry.Point{X: 12, Y: 38}, "true", geometry.Rect(12, 34, 90, 28)},
-				{geometry.Point{X: 148, Y: 38}, "document", geometry.Rect(118, 34, 110, 28)},
+				{geometry.Point{X: 6, Y: 4}, "transform", geometry.Rect(6, 0, 90, 28)},
+				{geometry.Point{X: 182, Y: 4}, "JSON", geometry.Rect(112, 0, 110, 28)},
+				{geometry.Point{X: 6, Y: 32}, "true", geometry.Rect(6, 28, 90, 28)},
+				{geometry.Point{X: 142, Y: 32}, "document", geometry.Rect(112, 28, 110, 28)},
 			}
 			if !slices.Equal(p.text, want) {
 				t.Fatalf("column geometry: got %+v", p.text)
 			}
 			c := l.colors
-			if p.fills[0].color != graphics.ColorOf(c.Background) || p.fills[1] != (paintShape{rect: geometry.Rect(6, 6, 228, 28), color: graphics.ColorOf(c.SelectedBackground)}) {
+			if p.fills[0].color != graphics.ColorOf(c.Background) || p.fills[1] != (paintShape{rect: geometry.Rect(0, 0, 228, 28), color: graphics.ColorOf(c.SelectedBackground)}) {
 				t.Fatal("editor selection leaked into popup", p.fills)
 			}
 			for index, row := range l.rows {
@@ -168,34 +174,74 @@ func TestCompletionWidthScrollingAndConstrainedHitAreas(t *testing.T) {
 		}
 		for slot, row := range info.Children {
 			r := row.Bounds
-			if got, ok := l.itemAt(geometry.Point{X: r.X + .5, Y: r.Y + .5}); !ok || got != l.first+slot {
+			if got, ok := l.itemAt(geometry.Point{X: r.X - info.Bounds.X + .5, Y: r.Y - info.Bounds.Y + .5}); !ok || got != l.first+slot {
 				t.Fatal("snapshot/click disagreement")
 			}
 			if row.Attributes["sourceview.completion.detail"] != items[l.first+slot].Detail {
 				t.Fatal("lost full detail")
 			}
 		}
-		for _, point := range []geometry.Point{{X: 0, Y: 7}, {X: 519, Y: 7}, {X: 20, Y: 0}, {X: 20, Y: 235}, {X: 510, Y: 20}} {
+		for _, point := range []geometry.Point{{X: -1, Y: 7}, {X: 519, Y: 7}, {X: 20, Y: -1}, {X: 20, Y: 224}, {X: 510, Y: 20}} {
 			if _, ok := l.itemAt(point); ok {
-				t.Fatal("padding or scroll indicator activated a row", point)
+				t.Fatal("outside viewport or scrollbar activated a row", point)
 			}
 		}
-		if p.fills[len(p.fills)-1].color != graphics.ColorOf(l.colors.ScrollThumb) {
-			t.Fatal("missing scroll indicator")
+		if l.session.panel.scroll.Snapshot().MaxScrollY != 56*28 {
+			t.Fatal("scroll extent did not include all candidates")
 		}
 	}
-	l.Arrange(geometry.Rect(0, 0, 150, 70))
+	l.session.panel.Arrange(geometry.Rect(0, 0, 150, 70))
 	l.Paint(&completionPainter{})
-	if l.visible != 2 || len(l.rows) != 2 || ctx.created-ctx.destroyed > 4 {
-		t.Fatal("short workarea realized clipped rows")
+	if l.visible != 3 || len(l.rows) != 3 || ctx.created-ctx.destroyed > 6 {
+		t.Fatal("short workarea lost partially visible rows")
 	}
-	if _, ok := l.itemAt(geometry.Point{X: 20, Y: 65}); ok {
-		t.Fatal("partial bottom row was interactive")
+	if index, ok := l.itemAt(geometry.Point{X: 20, Y: 57}); !ok || index != l.first+2 {
+		t.Fatal("visible fragment of bottom row was not interactive")
 	}
-	l.Arrange(geometry.Rect(0, 0, 10, 10))
+	if _, ok := l.itemAt(geometry.Point{X: 20, Y: 58}); ok {
+		t.Fatal("clipped bottom row was interactive")
+	}
+	l.session.panel.Arrange(geometry.Rect(0, 0, 10, 10))
 	l.Paint(&completionPainter{})
 	if len(l.Snapshot().Children) != 0 || len(l.rows) != 0 {
 		t.Fatal("tiny workarea exposed rows")
+	}
+}
+
+func TestCompletionPixelScrollingPreservesSelectionAndOverlappingLayouts(t *testing.T) {
+	items := make([]Completion, 32)
+	for i := range items {
+		items[i] = Completion{Label: "true", Detail: "JSON"}
+	}
+	l, ctx := completionFixture(t, items)
+	arrangeCompletion(l)
+	l.Paint(&completionPainter{})
+	created := ctx.created
+	retained := l.rows[1].label.native
+	l.session.panel.scroll.SetScrollY(7)
+	l.Paint(&completionPainter{})
+	if l.session.index != 0 || l.first != 0 || l.visible != 9 || ctx.created != created+2 || len(l.rows) != 9 {
+		t.Fatal("pixel scroll changed selection, rebuilt retained rows, or lost partial rows")
+	}
+	if l.rows[1].label.native != retained {
+		t.Fatal("overlapping row lost its layout")
+	}
+	info := l.Snapshot()
+	if info.Children[0].Bounds.Y != info.Bounds.Y || info.Children[0].Bounds.Height != 21 || info.Children[8].Bounds.Height != 7 {
+		t.Fatal("partial row bounds escaped the viewport", info.Children)
+	}
+	if index, ok := l.itemAt(geometry.Point{X: 1, Y: 223}); !ok || index != 8 {
+		t.Fatal("partial row hit did not include pixel offset")
+	}
+	l.session.panel.scroll.SetScrollY(28)
+	l.Paint(&completionPainter{})
+	if l.first != 1 || l.visible != 8 || ctx.created != created+2 || ctx.created-ctx.destroyed != 16 || l.rows[1].label.native != retained {
+		t.Fatal("scrolling a full row recreated layouts or retained offscreen resources")
+	}
+	l.session.index = 31
+	l.refresh()
+	if l.first != 24 || l.session.panel.scroll.ScrollY() != 24*28 {
+		t.Fatal("keyboard reveal did not reach the final candidate")
 	}
 }
 
@@ -253,6 +299,11 @@ func TestCompletionNativeResourcesStayBoundedWhileEliding(t *testing.T) {
 	}
 	if peak != 17 {
 		t.Fatal("test did not exercise a full row set plus an ellipsis probe", peak)
+	}
+	l.session.panel.scroll.SetScrollY(7)
+	l.Paint(&completionPainter{})
+	if l.visible != 9 || ctx.created-ctx.destroyed != 18 || peak != 19 {
+		t.Fatal("partial rows or ellipsis probes exceeded their independent bounds", peak, ctx.created, ctx.destroyed)
 	}
 }
 

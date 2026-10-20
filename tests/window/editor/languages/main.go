@@ -38,6 +38,18 @@ func check(ok bool, message string) {
 		log.Fatal(message)
 	}
 }
+func completionInfo(info gui.WidgetInfo) gui.WidgetInfo {
+	if info.Role == "completion-list" {
+		return info
+	}
+	for _, child := range info.Children {
+		if found := completionInfo(child); found.Role != "" {
+			return found
+		}
+	}
+	return gui.WidgetInfo{}
+}
+
 func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "Modern dark appearance")
@@ -93,7 +105,7 @@ func main() {
 		steps = append(steps, func() {
 			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "missing completion for "+string(tc.id))
-			info := win.Popovers()[0].Widget().Snapshot()
+			info := completionInfo(win.Popovers()[0].Widget().Snapshot())
 			found := -1
 			for i, row := range info.Children {
 				if row.Text == tc.want[len(tc.text)-len(completionPrefix(tc.id)):] {

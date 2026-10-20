@@ -65,6 +65,7 @@ type completionSession struct {
 	index    int
 	popup    gui.Popover
 	list     *completionList
+	panel    *completionPanel
 	shown    bool
 }
 
@@ -337,7 +338,8 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	s := &completionSession{state: state, language: c.Language, range_: c.Range, prefix: c.Prefix, items: items}
 	s.popup = gui.NewPopover(v, nil)
 	s.list = newCompletionList(v, s)
-	s.popup.SetWidget(s.list)
+	s.panel = newCompletionPanel(s.list)
+	s.popup.SetWidget(s.panel)
 	s.popup.SetPosition(position)
 	s.popup.ConnectDismissRequest(v.closeCompletion)
 	v.completion = s

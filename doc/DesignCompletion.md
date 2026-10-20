@@ -1,6 +1,6 @@
 # 补全设计
 
-本专题描述 `completion.go`、`completion_list.go` 与 `ui` 的当前实现。
+本专题描述 `completion.go`、`completion_panel.go`、`completion_list.go` 与 `ui` 的当前实现。
 补全是 SourceView 的语言和交互能力；GOUI 提供普通 Popover、事件、排版和绘制，
 不反向依赖本模块，也不在 TextView 中添加源码特例。
 
@@ -60,7 +60,8 @@ view.SetCompletionProvider(provider)
 使用不获取原生焦点的普通非模态 Popover；键盘和 IME 保留在编辑器，继续经过
 Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后仍需要正常键入前缀。
 
-- 上下键循环切换，Enter/Tab 确认当前候选；鼠标移动选择、点击确认、滚轮浏览。
+- 上下键循环切换并请求选中项滚入视口，Enter/Tab 确认当前候选；鼠标移动选择、点击确认。
+  滚轮和滚动条仅浏览视口，不改变选中项或提交文本；键盘随后从原选中项继续导航。
 - Escape 只关闭本次补全，不改正文；下一次正常 Tab 的规则不因此变更。
 - Backspace 更新候选；其他导航、指针定位、选区变化和外部修改关闭旧会话。
 - 切文档/语言、只读、禁用、预编辑、失焦、卸载、字体/配色改变和视口滚动使会话失效。
@@ -88,10 +89,13 @@ Ctrl+Space 不再由控件默认处理，以便系统输入法正常使用；应
   Unicode 大小写转换可能改变 UTF-8 byte 长度，着色范围映射回原始名称；省略号不算匹配内容。
 - 候选名称尽量与正在补全的词首对齐，面板顶部距离 caret 底部 2 DIP。
   词首在另一折行或已横向隐藏时使用 caret；最终滑移/约束仍由普通 Popover 处理。
-- 默认至多八行。受工作区高度限制时仅暴露完整行；可容纳完整行时，保证选中行可见。
-  超出可见数量时，右侧预留 8 DIP 区域绘制 3 DIP 的滚动位置提示。
-  提示只作装饰，浏览仍由上下键/滚轮完成，不发布拖动动作。
-- 鼠标移入候选行更新选中态；边框、留白和滚动提示区域不接受候选。
+- 面板拥有有限视口和留白，内部使用 GOUI ScrollView 承载自绘的 Scrollable 候选内容。
+  ScrollView 负责像素/行滚动量、偏移钳制、裁剪、滚动条拖动及轨道点击；行滚动单位使用实际候选行高。
+  不截取 DeltaY 的正负号模拟上下键，也不自行绘制装饰滚动条。
+- 默认视口至多八行高，工作区约束可以进一步缩小。像素滚动允许首尾部分行露出，
+  可见片段按偏移直接计算，绘制和命中包括滚动偏移；语义行边界裁到实际可见部分。
+  上下键通过 ScrollIntoViewRequester 请求行的内容坐标，滚动状态只有 ScrollView 一份。
+- 鼠标移入候选行更新选中态；边框、面板留白和滚动条区域不接受候选。
   快照的行边界与点击计算使用同一几何，发布 VisibleStart/VisibleEnd，以及完整
   `sourceview.completion.detail` 字符串属性；视觉省略不截断语义内容或插入文本。
 
@@ -112,8 +116,9 @@ Ctrl+Space 不再由控件默认处理，以便系统输入法正常使用；应
 附加编辑至多 128 项，每项文本最多 64 KiB，与主文本合计最多 1 MiB。
 提供者自己产生的数据和运行时间由应用负责；后台函数必须响应取消，不能访问 GUI。
 
-列表静置时至多拥有十六个原生文本布局，按可见片段释放并重建；单个测量/省略过程逐一
-释放探针，构建期间最多十七个布局。构建事务暂持未发布资源，防止原生回调取消或卸载时
+八行高视口在像素偏移下至多与九行相交，静置时至多拥有十八个原生文本布局。
+离开视口的行释放，仍可见且列宽未变的行保留布局；改变选择只更新相关文字颜色。
+单个测量/省略过程逐一释放探针，构建期间最多十九个布局。构建事务暂持未发布资源，防止原生回调取消或卸载时
 释放正在使用的探针；创建、度量、着色后均检查会话和代次。递归测量/绘制不会再次构建。
 失败回滚本次资源，已显示会话关闭并报告一次；关闭、创建失败和卸载都释放。
 同一选中状态的重复绘制不重复设置文字颜色，选中变化只更新相关可见行，不创建布局。
@@ -133,6 +138,10 @@ Ctrl+Space 不再由控件默认处理，以便系统输入法正常使用；应
 - [Scintilla 5 Autocompletion](https://www.scintilla.org/ScintillaDoc.html#Autocompletion)
   由宿主触发候选，候选选择与实际插入有独立步骤。采用可替换的候选来源，
   通过 GOUI 模型提交命令，省略消息和通知协议。
+- 2026-10-20 核对 [VS Code 1.105.0 SuggestWidget](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/suggest/browser/suggestWidget.ts#L207)
+  使用通用列表处理滚动。采用滚动与候选选择分离的职责；本项目的统一行高、有界候选和原生分段文本
+  继续自绘，通过公开 Scrollable 契约复用 GOUI ScrollView，不同时迁移到通用 ListView。
+  这是维护范围的取舍，不承诺比 ListView 更快或更省内存。验证见 [滚动改进记录](PlanCompletionScrolling.md)。
 - [VS Code 1.105.0 SuggestController](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/contrib/suggest/browser/suggestController.ts#L247)
   防护选择过程中的取消，并在失焦时取消模型。采用重入后核验；采用独立的 Range/Caret/AdditionalEdits 与取消，尚不建设 snippet、异步 resolve 和语言服务基础。
 - [GtkSourceView 5.22.1 CompletionCell](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.CompletionCell.html)

@@ -60,6 +60,18 @@ type trackedApp struct {
 
 func (a trackedApp) Typography() typography.Context { return a.context }
 
+func completionInfo(info gui.WidgetInfo) gui.WidgetInfo {
+	if info.Role == "completion-list" {
+		return info
+	}
+	for _, child := range info.Children {
+		if found := completionInfo(child); found.Role != "" {
+			return found
+		}
+	}
+	return gui.WidgetInfo{}
+}
+
 func main() {
 	runtime.LockOSThread()
 	app, err := gui.NewApplication("org.golang-gui.SourceViewExperience")
@@ -195,7 +207,7 @@ func main() {
 		},
 		func() {
 			popup = win.Popovers()[0]
-			info := popup.Widget().Snapshot()
+			info := completionInfo(popup.Widget().Snapshot())
 			check(info.Role == gui.Role("completion-list") && len(info.Children) > 0 && info.Children[0].Text == "true", "JSON completion proposal missing")
 			key(events.KeyEnter, 0)
 			check(d.Model().Text() == "true" && v.Selection().Caret == 4 && len(win.Popovers()) == 0, "completion acceptance failed")
@@ -242,7 +254,7 @@ func main() {
 		},
 		func() {
 			popup = win.Popovers()[0]
-			info := popup.Widget().Snapshot()
+			info := completionInfo(popup.Widget().Snapshot())
 			check(len(info.Children) > 0 && info.Children[0].Text == "div", "HTML proposal missing")
 			r := info.Children[0].Bounds
 			p := geometry.Point{X: r.X + r.Width/2, Y: r.Y + r.Height/2}
