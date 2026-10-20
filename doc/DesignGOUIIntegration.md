@@ -149,3 +149,15 @@ GOUI `ac0efb3` 及其前置提交提供本轮实现；已发布 v0.2.0 不含本
 失败恢复修正。通用实现、三后端与调用迁移在 GOUI；本仓复用 DrawTextLayout，
 更新直接 Rasterize 的测试/窗口使用者，并修正长行可见摘录。发布依赖仍待 GOUI
 实际可获取的新版本，详见 [本轮验收](PlanTextRasterization.md)。
+
+## 8. 文本片段缓存与布局边界（2026-10-20）
+
+Reflow、后端增量重排及 SourceView 接入已撤回，不再将它们作为依赖条件。
+TextLayout 继续提供同步排版／度量／渲染，上层复制普通度量值，组合文本范围
+形成片段，自行负责可视区、估计、缓存、失效和事件循环调度。
+
+拟复用 GOUI gui/textedit 中经原型验证的片段与索引运算；具体公共 API 尚未确定，
+不把设计类型当作可调用接口。原生资源继续归各控件持有，共享 GUI 预算确需
+helper 时放 gui，不放 typography，也不加入 SourceView 特例。
+设计见 [布局第 11 节](DesignLayout.md#11-片段缓存接入规格待实现)及相邻 GOUI
+[通用片段设计](../../goui/doc/DesignIncrementalTextLayout.md)。
