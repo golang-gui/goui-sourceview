@@ -42,6 +42,7 @@ func modernRules(o modern.Options, base style.StyleSheet) []style.Rule {
 	rules = append(rules, findRules(base, f, o.FontSize, radius, inputRadius, focusWidth)...)
 	c := completionColors{Background: background(menu), Foreground: foreground(menu), DetailForeground: muted, Border: nrgba(menuBorder), SelectedBackground: selected,
 		SelectedForeground: foreground(menu), SelectedDetailForeground: muted, MatchForeground: accent, SelectedMatchForeground: accent}
-	rules = append(rules, completionRules(c, base, o.FontSize, radius, shadow)...)
+	selectedRadius, _ := base.Resolve(style.Sel{Name: "menu-item"}).Radius()
+	rules = append(rules, completionRules(c, base, o.FontSize, radius, selectedRadius, shadow)...)
 	return rules
 }

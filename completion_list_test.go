@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -13,6 +14,8 @@ import (
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
+	"github.com/golang-gui/goui/style"
+	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
 
@@ -51,9 +54,15 @@ type completionDraw struct {
 }
 type completionPainter struct {
 	bracketPainter
-	clip  geometry.Rectangle
-	stack []geometry.Rectangle
-	text  []completionDraw
+	clip    geometry.Rectangle
+	stack   []geometry.Rectangle
+	text    []completionDraw
+	rounded []completionRound
+}
+type completionRound struct {
+	rect   geometry.Rectangle
+	radius float32
+	color  graphics.Color
 }
 
 func (p *completionPainter) Save() { p.stack = append(p.stack, p.clip) }
@@ -62,6 +71,9 @@ func (p *completionPainter) Restore() {
 	p.stack = p.stack[:len(p.stack)-1]
 }
 func (p *completionPainter) SetClipRect(r geometry.Rectangle) { p.clip = r }
+func (p *completionPainter) FillRoundRect(r geometry.Rectangle, radius float32, b graphics.Brush) {
+	p.rounded = append(p.rounded, completionRound{r, radius, b.(graphics.Color)})
+}
 func (p *completionPainter) DrawTextLayout(at geometry.Point, l typography.TextLayout) {
 	p.text = append(p.text, completionDraw{at, l.Text(), p.clip})
 }
@@ -95,8 +107,8 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 				t.Fatalf("column geometry: got %+v", p.text)
 			}
 			c := l.colors
-			if len(p.fills) != 1 || p.fills[0] != (paintShape{rect: geometry.Rect(0, 0, 228, 28), color: graphics.ColorOf(c.SelectedBackground)}) {
-				t.Fatal("editor selection leaked into popup", p.fills)
+			if len(p.fills) != 0 || len(p.rounded) != 1 || p.rounded[0] != (completionRound{geometry.Rect(2, 1, 224, 26), 4, graphics.ColorOf(c.SelectedBackground)}) {
+				t.Fatal("selection lost its inset, radius or popup palette", p.fills, p.rounded)
 			}
 			for index, row := range l.rows {
 				label, detail := row.label.native.(*shapedLayout), row.detail.native.(*shapedLayout)
@@ -138,6 +150,80 @@ func TestCompletionPanelColumnsPaletteAndColorCaching(t *testing.T) {
 				t.Fatal("selection did not restore match colors")
 			}
 		})
+	}
+}
+
+func TestCompletionSelectionUsesStyledRadius(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		sheet  style.StyleSheet
+		radius float32
+	}{
+		{"basic", basic.Sheet(), 2},
+		{"modern-light", modern.Sheet(modern.Options{}), 4},
+		{"modern-dark", modern.Sheet(modern.Options{Dark: true}), 4},
+		{"square-override", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(0))...), 0},
+		{"independent-override", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Radius(32), style.Name("sourceview.completion").Part("selected").Radius(9))...), 9},
+		{"clamped-override", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(1000))...), 13},
+		{"negative-override", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(-1))...), 0},
+		{"nan-override", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(float32(math.NaN())))...), 0},
+		{"infinite-override", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(float32(math.Inf(1))))...), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			l, _ := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
+			l.view.completion = nil
+			themedScope(l.view, tc.sheet)
+			l.readAppearance()
+			l.view.completion = l.session
+			arrangeCompletion(l)
+			p := &completionPainter{}
+			l.Paint(p)
+			// One 28-DIP row; custom shell padding is outside this content.
+			r := geometry.Rect(2, 1, l.viewport.Width-4, 26)
+			c := graphics.ColorOf(l.colors.SelectedBackground)
+			if tc.radius == 0 {
+				if len(p.rounded) != 0 || len(p.fills) != 1 || p.fills[0] != (paintShape{rect: r, color: c}) {
+					t.Fatal("explicit square selection was not respected", p.fills, p.rounded)
+				}
+			} else if len(p.fills) != 0 || len(p.rounded) != 1 || p.rounded[0] != (completionRound{r, tc.radius, c}) {
+				t.Fatal("selection did not use its independent style radius", p.fills, p.rounded)
+			}
+		})
+	}
+}
+
+func TestCompletionSelectionPaintKeepsWholeScrolledRow(t *testing.T) {
+	items := make([]Completion, 32)
+	for i := range items {
+		items[i] = Completion{Label: "true", Detail: "JSON"}
+	}
+	l, _ := completionFixture(t, items)
+	arrangeCompletion(l)
+	l.session.panel.scroll.SetScrollY(7)
+	for _, tc := range []struct {
+		index int
+		y     float32
+		hitY  float32
+	}{
+		{0, -6, 0}, {8, 218, 223},
+	} {
+		l.session.index = tc.index
+		p := &completionPainter{}
+		l.Paint(p)
+		want := completionRound{geometry.Rect(2, tc.y, l.viewport.Width-4, 26), 2, graphics.ColorOf(l.colors.SelectedBackground)}
+		if len(p.fills) != 0 || len(p.rounded) != 1 || p.rounded[0] != want {
+			t.Fatal("partial selection was reshaped at the viewport edge", p.fills, p.rounded)
+		}
+		if index, ok := l.itemAt(geometry.Point{Y: tc.hitY}); !ok || index != tc.index {
+			t.Fatal("visual inset shrank the row hit area", index, ok)
+		}
+	}
+	l.session.index = 0
+	l.LayoutVisible(geometry.Size{Width: 5, Height: 28}, geometry.Point{})
+	p := &completionPainter{}
+	l.Paint(p)
+	if len(p.rounded) != 1 || p.rounded[0].rect != geometry.Rect(2, 1, 1, 26) || p.rounded[0].radius != .5 {
+		t.Fatal("narrow viewport did not clamp selection geometry", p.rounded)
 	}
 }
 

@@ -45,6 +45,7 @@ type completionList struct {
 	colors                         completionColors
 	font, secondaryFont            typography.FontInfo
 	box                            styleBox
+	selectedRadius                 float32
 }
 type completionRow struct {
 	label, detail    *completionText
@@ -113,18 +114,25 @@ func (l *completionList) readAppearance() bool {
 		return gui.ResolveWidgetStyle(l.view, "sourceview.completion", part, style.Normal)
 	}
 	root := resolve("")
+	selected := resolve("selected")
+	selectedRadius, _ := selected.Radius()
+	if math.IsNaN(float64(selectedRadius)) || math.IsInf(float64(selectedRadius), 0) {
+		selectedRadius = 0
+	}
+	selectedRadius = max(0, selectedRadius)
 	border, _ := root.BorderColor()
 	colors := completionColors{Background: background(root), Foreground: foreground(root), Border: nrgba(border), DetailForeground: foreground(resolve("detail")),
-		SelectedBackground: background(resolve("selected")), SelectedForeground: foreground(resolve("selected")), SelectedDetailForeground: foreground(resolve("selected-detail")),
+		SelectedBackground: background(selected), SelectedForeground: foreground(selected), SelectedDetailForeground: foreground(resolve("selected-detail")),
 		MatchForeground: foreground(resolve("match")), SelectedMatchForeground: foreground(resolve("selected-match"))}
 	font, detail, box := styleFont(root), styleFont(resolve("detail")), boxOf(root)
-	if colors == l.colors && font == l.font && detail == l.secondaryFont && box == l.box {
+	if colors == l.colors && font == l.font && detail == l.secondaryFont && box == l.box && selectedRadius == l.selectedRadius {
 		return false
 	}
 	l.release()
 	l.measured = false
 	l.layoutReady = false
 	l.colors, l.font, l.secondaryFont, l.box = colors, font, detail, box
+	l.selectedRadius = selectedRadius
 	l.RequestLayout()
 	l.RequestPaint()
 	return true
@@ -458,7 +466,17 @@ func (l *completionList) Paint(p gui.Painter) {
 		}
 		r := l.rowRect(slot)
 		if row.selected {
-			p.FillRect(r, graphics.ColorOf(colors.SelectedBackground))
+			// Round the full row before ScrollView clips it. A partially visible
+			// row must not acquire a new rounded edge at the viewport boundary.
+			fill := geometry.Rect(r.X+2, r.Y+1, max(0, r.Width-4), max(0, r.Height-2))
+			if fill.Width > 0 && fill.Height > 0 {
+				radius := min(l.selectedRadius, min(fill.Width, fill.Height)/2)
+				if radius == 0 {
+					p.FillRect(fill, graphics.ColorOf(colors.SelectedBackground))
+				} else {
+					p.FillRoundRect(fill, radius, graphics.ColorOf(colors.SelectedBackground))
+				}
+			}
 		}
 		baseline := r.Y + (l.rowHeight-l.ascent-l.descent)/2 + l.ascent
 		for column, text := range []*completionText{row.label, row.detail} {

@@ -166,3 +166,19 @@ func TestUnchangedStyleNotificationsKeepCompletion(t *testing.T) {
 		t.Fatal("UI-only theme change retained the old completion popup")
 	}
 }
+
+func TestCompletionSelectionRadiusChangeClosesOldSession(t *testing.T) {
+	l, ctx := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
+	owner := themedScope(l.view, modern.Sheet(modern.Options{}))
+	l.readAppearance()
+	arrangeCompletion(l)
+	l.Paint(&completionPainter{})
+	created := ctx.created
+	closed := 0
+	l.session.popup = closingPopup{onClose: func() { closed++ }}
+	owner.SetStyleSheet(style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(0))...))
+	l.view.StyleChanged()
+	if l.view.completion != nil || closed != 1 || ctx.destroyed != created {
+		t.Fatal("selection-radius-only change retained a stale popup or native resources")
+	}
+}

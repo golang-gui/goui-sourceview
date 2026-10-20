@@ -88,6 +88,10 @@ Basic 保留紧凑的 9.75 pt 输入与 4/2 DIP 圆角。操作图标使用专�
 独立原生 Popover 使用 `sourceview.completion` StyleName：根规则给出背景、边框、圆角、阴影和字体，
 由宿主统一绘制外壳与预留阴影空间。Modern 跟随 menu 圆角和阴影，Basic 圆角为 4 DIP。
 detail / selected / selected-detail / match / selected-match 部件分别控制说明、选中和匹配。
+selected 同时控制选中背景的独立 Radius：Basic 为 2 DIP，Modern 跟随官方 menu-item（当前 4 DIP）；
+追加 `style.Name("sourceview.completion").Part("selected").Radius(...)` 可覆盖，0 显式使用直角。
+圆角不继承外壳的大小；背景左右留 2 DIP、上下留 1 DIP，完整行命中区域和文字位置保持不变。
+滚动时裁剪完整圆角背景，半径按实际背景尺寸钳制；负值及非有限值按 0 处理。
 滚动条复用官方 scroll-view 的 trough/thumb 和 Normal/Hovered/Pressed 状态；
 旧的 sourceview.completion / scroll-thumb 装饰部件已移除，应用覆盖请改用 scroll-view / thumb。
 普通/选中匹配前景均来自 Modern 的对比度调整主题色。

@@ -7,6 +7,8 @@
 // Linux without an IME service: XMODIFIERS=@im=none. Initial state: an editable
 // sample with a completion popup. Inspect aligned name/detail columns, muted
 // smaller descriptions, prefix colors, a 1-DIP outline and ellipsis. Check
+// the independently rounded selected background (Modern 4 DIP, Basic 2 DIP),
+// its 2-DIP horizontal / 1-DIP vertical inset and clipped partially visible rows.
 // light/dark and 1x/2x. Scroll has 32 items and a real draggable scrollbar; edge puts
 // the owner near the workarea corner, where the popup must remain on screen.
 // Up/Down, hover, wheel, Enter/Tab and clicking work without stealing editor
@@ -304,7 +306,8 @@ func main() {
 					check(selected(info) >= 0 && info.Children[selected(info)].Text == expected, "scrolling changed keyboard selection or reveal")
 				}
 				target := info.Children[1]
-				point = geometry.Point{X: target.Bounds.X + target.Bounds.Width/2, Y: target.Bounds.Y + target.Bounds.Height/2}
+				// The visual selection inset must not shrink the full row hit area.
+				point = geometry.Point{X: target.Bounds.X + .5, Y: target.Bounds.Y + .5}
 				check(v.Focused() && win.FocusedWidget() == v, "popup stole editor focus")
 				for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
 					must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: point}))

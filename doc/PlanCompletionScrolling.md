@@ -80,3 +80,28 @@ Pango、缩放及透明模式写入日志，运行带 race。语言集成首次�
 
 未执行 Windows/macOS 原生桌面、物理 IME、系统快捷键拦截及运行中跨屏缩放验收。
 尚未作耗时或内存基准，布局身份与计数断言只证明重叠资源复用，不等于总体性能提升结论。
+
+## 选中背景圆角补齐
+
+2026-10-20，基线 3bcc514，本地 GOUI 87787c6，正式依赖仍为 v0.2.0。
+上一轮只处理外壳，选中行仍使用 FillRect。本次按 [补全设计](DesignCompletion.md) 补齐
+selected part 的独立 Radius、2/1 DIP 横纵留白、完整行绘制后裁剪，以及半径变化的样式失效。
+未修改 GOUI、公共 API、文字排版、命中或语义边界，既有本地 go.mod 配置保留且不提交。
+
+- 先添加回归断言，再修改生产代码。旧实现的选中形状、部分行和圆角样式失效用例失败，
+  日志为 `/tmp/sourceview-completion-selection-before.log`；修正后同组用例通过。
+- 包测试覆盖 Basic 2 DIP、Modern 亮暗 4 DIP、独立覆盖、显式 0、过大/负值/非有限半径、
+  1 DIP 窄背景、上下部分行完整几何和装饰留白内的行命中，保留原文字/颜色/资源断言。
+- 本地 `go test ./...`、`go test -race ./...`、`go vet ./...` 通过。
+  无 replace/go.work 的源码副本使用正式 v0.2.0 执行对应 `GOWORK=off` 三项检查，也均通过。
+- 正式依赖 `CGO_ENABLED=0 go build ./...` 的 Windows amd64、macOS arm64 交叉构建通过，
+  这两个平台的原生桌面未运行。
+- 正式依赖单独构建 `-race` 窗口专项；Linux amd64 / Go 1.25.8 / Pango /
+  Xvnc :148（2560×1800）/ Xfwm4 合成开启，scroll 场景通过 Modern 软件绘制 1x 亮暗、
+  2x 深色、Basic 1x 及实际 OpenGL 1x 深色。原有滚轮、拖动、Reveal、焦点和撤销断言保留，
+  指针确认改在行左上 .5 DIP 处，证明背景留白不缩小整行可点击区域。
+- 人工检查 Modern 软件绘制 1x 亮暗实际桌面截图，确认选中行圆角与上下留白；
+  截图为 `/tmp/sourceview-completion-selection-{light|dark}.png`，没有采用跨平台像素金图。
+  最终日志统一使用 `/tmp/sourceview-completion-selection-` 前缀，产物均在仓库外。
+- 专项窗口及本轮独立桌面 :148 的 Xfwm4/Xvnc 已释放，原有桌面未修改；
+  未访问剪贴板或修改系统设置。本轮未重复无合成器回退及其他语言场景，未测物理 IME 或系统快捷键。
