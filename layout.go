@@ -28,7 +28,13 @@ type viewportAnchor struct {
 type layoutKey struct {
 	id, revision uint64
 	row          int
+	width        float32
 }
+
+func (k layoutKey) sameText(other layoutKey) bool {
+	return k.id == other.id && k.revision == other.revision && k.row == other.row
+}
+
 type paragraph struct {
 	layout, number typography.TextLayout
 	geometry       textedit.Geometry
@@ -166,7 +172,7 @@ func (v *SourceView) updateGutter() {
 		v.gutter += v.foldColumn
 	}
 	if old != v.gutter && v.wrap != WrapNone {
-		v.dropLayouts()
+		v.layoutEpoch++
 		v.resetHeights()
 	}
 }
@@ -214,7 +220,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		v.closeCompletion()
 	}
 	if v.viewport.Width != viewport.Width && v.wrap != WrapNone {
-		v.dropLayouts()
+		v.layoutEpoch++
 		v.resetHeights()
 		v.contentWidth = 0
 	}
@@ -279,6 +285,27 @@ func (v *SourceView) visibleRows() (int, int) {
 	return v.visibleLines.line(first), v.visibleLines.line(min(v.visibleLines.count-1, max(first, last)+1))
 }
 
+// Width is part of measurement identity. Keep native resources and their
+// immutable metrics together so returning to a recent width needs no shaping.
+// Font, tabs, wrapping mode, projection and Context changes still drop layouts.
+func (v *SourceView) paragraphWidth() float32 {
+	if v.wrap == WrapNone {
+		return 1 << 20
+	}
+	return max(1, v.viewport.Width-v.gutter-2*padding)
+}
+
+// This lookup is also used by Snapshot: it neither shapes nor updates tokens.
+func (v *SourceView) paragraphKey(row int) layoutKey {
+	key := layoutKey{revision: v.document.model.Revision(), row: row, width: v.paragraphWidth()}
+	if tokenRow, ok := v.highlightRow(row); ok && v.document.engine != nil {
+		if line := v.document.engine.Line(tokenRow); line != nil {
+			key = layoutKey{id: line.ID, width: key.width}
+		}
+	}
+	return key
+}
+
 func (v *SourceView) paragraph(row int) *paragraph {
 	if v.context == nil || row < 0 || row >= v.displayCount() {
 		return nil
@@ -291,14 +318,9 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		return nil
 	}
 	r := v.displayRange(row)
-	key := layoutKey{revision: v.document.model.Revision(), row: row}
+	key := v.paragraphKey(row)
 	e := v.document.engine
 	tokenRow, hasTokens := v.highlightRow(row)
-	if hasTokens && e != nil {
-		if line := e.Line(tokenRow); line != nil {
-			key = layoutKey{id: line.ID}
-		}
-	}
 	var version uint64
 	valid := false
 	if hasTokens && e != nil {
@@ -324,15 +346,18 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	if valid {
 		tokens, _, _ = e.Tokens(tokenRow)
 	}
+	state, epoch := v.operationState(), v.layoutEpoch
 	p := v.layouts[key]
+	adopted := false
 	if p == nil && key.id != 0 {
 		// Initial lexical indexing supplies stable IDs after a plain first
 		// frame. The revision/row entry already has exactly this text.
-		fallback := layoutKey{revision: v.document.model.Revision(), row: row}
+		fallback := layoutKey{revision: v.document.model.Revision(), row: row, width: key.width}
 		p = v.layouts[fallback]
 		if p != nil {
 			delete(v.layouts, fallback)
 			v.layouts[key] = p
+			adopted = true
 		}
 	}
 	v.tick++
@@ -347,16 +372,19 @@ func (v *SourceView) paragraph(row int) *paragraph {
 			width += 33 // Reserve the maximum badge extent, independent of paint-only LF markers.
 		}
 		v.contentWidth = max(v.contentWidth, width)
+		if adopted {
+			// Several provisional widths can acquire one stable identity after
+			// indexing. Apply the same bound when adopting, not only on creation.
+			v.pruneLayouts(key)
+			if !state.valid(v) || epoch != v.layoutEpoch || v.layouts[key] != p {
+				return nil
+			}
+		}
 		return p
 	}
 	text := v.displayText(row)
-	width := float32(1 << 20)
-	if v.wrap != WrapNone {
-		width = max(1, v.viewport.Width-v.gutter-2*padding)
-	}
 	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
-	state, epoch := v.operationState(), v.layoutEpoch
-	native, err := v.context.NewTextLayout(text, format, width, 1<<24)
+	native, err := v.context.NewTextLayout(text, format, key.width, 1<<24)
 	if err != nil {
 		v.report(err)
 		return nil
@@ -393,6 +421,9 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		v.RequestLayout()
 	}
 	v.pruneLayouts(key)
+	if !state.valid(v) || epoch != v.layoutEpoch || v.layouts[key] != p {
+		return nil
+	}
 	return p
 }
 
@@ -442,14 +473,27 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 	return true
 }
 func (v *SourceView) pruneLayouts(keep layoutKey) {
+	// Two measured widths per text identity bound the extra native working
+	// set during continuous resizing. The existing whole-view budgets apply
+	// across all widths, rather than separately to every width.
+	widths := 0
+	for key := range v.layouts {
+		if key.sameText(keep) {
+			widths++
+		}
+	}
 	bytes := 0
 	for _, p := range v.layouts {
 		bytes += len(p.text)
 	}
-	for len(v.layouts) > maxLayouts || bytes > 8*1024*1024 && len(v.layouts) > 1 {
+	epoch := v.layoutEpoch
+	for widths > 2 || len(v.layouts) > maxLayouts || bytes > 8*1024*1024 && len(v.layouts) > 1 {
 		var oldest layoutKey
 		var found bool
 		for key, p := range v.layouts {
+			if widths > 2 && !key.sameText(keep) {
+				continue
+			}
 			if key != keep && (!found || p.used < v.layouts[oldest].used) {
 				oldest = key
 				found = true
@@ -459,11 +503,17 @@ func (v *SourceView) pruneLayouts(keep layoutKey) {
 			return
 		}
 		p := v.layouts[oldest]
+		if oldest.sameText(keep) {
+			widths--
+		}
 		bytes -= len(p.text)
 		delete(v.layouts, oldest)
 		p.layout.Destroy()
 		if p.number != nil {
 			p.number.Destroy()
+		}
+		if epoch != v.layoutEpoch || v.Destroyed() {
+			return
 		}
 	}
 }
@@ -769,13 +819,10 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	if end.End-r.Start > 64*1024 {
 		// Snapshot reads cached geometry only: it must not shape text, recolor,
 		// emit callbacks or alter the viewport just to describe visible content.
-		p := v.layouts[layoutKey{revision: m.Revision(), row: firstDisplay}]
-		if row, ok := v.highlightRow(firstDisplay); ok && v.document.engine != nil {
-			if line := v.document.engine.Line(row); line != nil {
-				if stable := v.layouts[layoutKey{id: line.ID}]; stable != nil {
-					p = stable
-				}
-			}
+		key := v.paragraphKey(firstDisplay)
+		p := v.layouts[key]
+		if p == nil && key.id != 0 {
+			p = v.layouts[layoutKey{revision: m.Revision(), row: firstDisplay, width: key.width}]
 		}
 		if p != nil {
 			pos := p.geometry.Hit(geometry.Point{X: max(0, v.offset.X), Y: max(0, v.offset.Y-padding-v.paragraphTop(firstDisplay))})
