@@ -273,6 +273,67 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 		v.brackets = result
 		return ranges
 	}
+	context, known := v.lexicalContext(s.Caret)
+	definition := v.document.definition
+	if known && context.Embedded != nil {
+		definition = context.Embedded
+	}
+	rules := definition.Editing()
+	candidates := v.bracketCandidates(s.Caret, rules.Brackets)
+	if len(candidates) == 0 {
+		// No neighboring sequence can become a match. Do not demand lexical
+		// payload for an entire search window (possibly far offscreen) just to
+		// establish that ordinary text has no bracket at this caret.
+		if known {
+			result.valid = true
+			v.brackets = result
+		}
+		return nil
+	}
+	if v.document.definition.Tokenizer() != nil {
+		// First validate only the adjacent candidate's logical line. A '<'
+		// inside an XML declaration (or '[' in a string) must not reload all
+		// evicted payload in the 128-KiB search window one paint at a time.
+		e := v.document.engine
+		if e == nil {
+			return nil
+		}
+		row := m.LineAt(s.Caret)
+		tokens, _, ready := e.Tokens(row)
+		if !ready {
+			e.Ensure(row)
+			v.document.requestWork()
+			return nil
+		}
+		line, _ := m.LineRange(row)
+		structural := false
+		for _, candidate := range candidates {
+			at := candidate.Start - line.Start
+			for _, token := range tokens {
+				if token.End <= at {
+					continue
+				}
+				if token.Start > at || token.Class&language.ClassDelimiter == 0 {
+					break
+				}
+				at = token.End
+				if at >= candidate.End-line.Start {
+					structural = true
+					break
+				}
+			}
+			if structural {
+				break
+			}
+		}
+		if !structural {
+			if known {
+				result.valid = true
+				v.brackets = result
+			}
+			return nil
+		}
+	}
 	start, end := max(0, s.Caret-(64<<10)), min(m.Len(), s.Caret+(64<<10))
 	for !m.IsRuneBoundary(start) {
 		start++
@@ -317,7 +378,6 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 		at, end, pair int
 		open          bool
 	}
-	rules := v.definitionAt(v.Selection().Caret).Editing()
 	var delimiters []delimiter
 	for i := 0; i < len(text); {
 		best := delimiter{}
@@ -393,4 +453,35 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 	result.valid = true
 	v.brackets = result
 	return result.ranges
+}
+
+func (v *SourceView) bracketCandidates(caret int, pairs []language.Pair) []textedit.Range {
+	longest := 0
+	for _, p := range pairs {
+		longest = max(longest, len(p.Open), len(p.Close))
+	}
+	if longest == 0 {
+		return nil
+	}
+	m := v.document.model
+	start, end := max(0, caret-longest), min(m.Len(), caret+longest)
+	for !m.IsRuneBoundary(start) {
+		start--
+	}
+	for !m.IsRuneBoundary(end) {
+		end++
+	}
+	text, _ := m.Slice(textedit.Range{Start: start, End: end})
+	local := caret - start
+	var candidates []textedit.Range
+	for _, p := range pairs {
+		for _, sequence := range []string{p.Open, p.Close} {
+			for at := max(0, local-len(sequence)); at <= local && at+len(sequence) <= len(text); at++ {
+				if strings.HasPrefix(text[at:], sequence) {
+					candidates = append(candidates, textedit.Range{Start: start + at, End: start + at + len(sequence)})
+				}
+			}
+		}
+	}
+	return candidates
 }
