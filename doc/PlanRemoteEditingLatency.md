@@ -49,20 +49,29 @@ TextView 窗口；尚未完成实际输入、屏幕缩放和呈现行为验收�
 - GOUI `go test -race ./gui ./gui/textedit ./platform/typography/coretext`。
 - SourceView `go test -race . -run 'TestNativeParagraphHistory|TestParagraphHistory|Test.*Color|Test.*Bracket|Test.*TagMatch' -count=1`。
 
-全仓失败已在修改前后分别重现，失败测试名称集合一致，保留原断言：
+CoreText 临时存储优化前后，全仓失败名称集合一致。随后独立修正下面的覆盖计数，
+未删除断言或扩大 skip：
 
 - GOUI `go test ./...`：`platform/test.TestWindowInteractionCapabilities`；没有输入
   上下文时 resize 返回 `ErrUnavailable`，测试期待 `ErrUnsupported`。
 - SourceView `go test ./...`：`TestExplicitContextFragmentProbe` 的 longRLO、
   longLRO、longRLI、unicode，及 `TestBoundedFragmentProbeMatchesSimpleParagraphs`
   的 word、json；独立窗口纵向累加没有与 CoreText 完整段落坐标一致。
-- 同一全仓命令的 `TestNativeFragmentsSurviveLayoutRelease/override`：RLO 目标
-  覆盖计算得 6 而期望 3，原生簇范围包含相邻控制符；需要独立核对范围断言。
+- 同一全仓命令最初还在 `TestNativeFragmentsSurviveLayoutRelease/override` 失败：
+  RLO 目标覆盖计算得 6 而期望 3。独立原生查询确认三个目标簇为 X、Y、Z+PDF；
+  最后一个合法簇占 4 bytes。测试现按簇与 XYZ 目标的交集累加，仍独立要求全部
+  3 bytes 被覆盖，且每个交叉簇均为 RTL；不将控制符计入可见目标字节。
+  修正后的定向普通/race 测试在 Mac 与 Linux 均通过，Mac 全仓仅余上述两种 probe
+  及其子用例失败。
 
 前两种分段 probe 本来就不是启用的控件路径；新的完整输入缓存回归在 CoreText
 通过。但 probe 失败仍是全仓失败，没有以增大 skip、容差或删除断言制造通过。
 日志按 baseline、scratch-all、scratch-tests、scratch-bench、scratch-race 保留在
 仓库外，不提交源码树中的测试图片、profile 或大文件。
+
+启动诊断窗口在没有执行桌面编辑的情况下已按所属 PID 终止，没有正常关闭的
+`verified` 记录，明确不计入通过操作；用户原文件及转移文件哈希仍相同。本次创建
+的 Windows RDP 客户端已断开，原有 Mac SSH 会话及远端已有工作区保留。
 
 ## 桌面连接阻塞
 

@@ -76,11 +76,14 @@ func TestNativeFragmentsSurviveLayoutRelease(t *testing.T) {
 				_, cs := f.Metrics()
 				covered := 0
 				for _, c := range cs {
-					if c.Start >= offset && c.Start < offset+3 {
+					if c.Start < offset+3 && offset < c.Start+c.Length {
 						if c.Direction != typography.TextRightToLeft {
 							t.Fatal("RLO context lost in snapshot")
 						}
-						covered += c.Length
+						// CoreText may keep the following PDF in Z's native
+						// cluster. Count only the independently known XYZ bytes,
+						// while checking the direction of every overlapping run.
+						covered += min(c.Start+c.Length, offset+3) - max(c.Start, offset)
 					}
 				}
 				if covered != 3 {
