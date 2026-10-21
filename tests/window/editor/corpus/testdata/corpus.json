@@ -1,0 +1,42 @@
+[
+  {
+    "file": "war-and-peace.txt",
+    "url": "https://www.gutenberg.org/files/2600/2600-0.txt",
+    "sha256": "e4bcf9042609b62c7de72a6f1b311f54c412943a9d641b7efcf79a464b5f31c8",
+    "bytes": 3359405,
+    "lines": 66032,
+    "longest_line_bytes": 84
+  },
+  {
+    "file": "github-api.json",
+    "url": "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json",
+    "sha256": "3177ad6a86ca04c57a9bef3fc24e28a339efb8eb040c6f950af3d3ed2fee7fa3",
+    "bytes": 13502446,
+    "lines": 357042,
+    "longest_line_bytes": 16907
+  },
+  {
+    "file": "opengl.xml",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/OpenGL-Registry/main/xml/gl.xml",
+    "sha256": "b9ca2cfa5c676e901c20d34af3407f1687cde0f1336a5ff7a8974d04c7494ad3",
+    "bytes": 2774722,
+    "lines": 47772,
+    "longest_line_bytes": 427
+  },
+  {
+    "file": "war-and-peace.html",
+    "url": "https://www.gutenberg.org/files/2600/2600-h/2600-h.htm",
+    "sha256": "68fe0f65e6fe4f26c37bf304ed560b04b1bc0a4b605509128d88ce582ee13001",
+    "bytes": 4039247,
+    "lines": 77450,
+    "longest_line_bytes": 139
+  },
+  {
+    "file": "rust-releases.md",
+    "url": "https://raw.githubusercontent.com/rust-lang/rust/main/RELEASES.md",
+    "sha256": "0311ba85c08f659f13bb22aff0dc3837c6c291008529ebd9e5efc9c75b5f321f",
+    "bytes": 931116,
+    "lines": 16412,
+    "longest_line_bytes": 744
+  }
+]

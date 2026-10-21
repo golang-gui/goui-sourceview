@@ -106,7 +106,8 @@ func run() (result error) {
 	app, err := gui.NewApplication("org.golang-gui.SourceViewLargeFiles")
 	must(err)
 	ctx := &observedTypography{Context: app.Typography(), lines: make(map[string]*observedLine)}
-	gui.App = observedApplication{Application: app, context: ctx}
+	sourceTimerTicks := 0
+	gui.App = observedApplication{Application: app, context: ctx, timerTicks: &sourceTimerTicks}
 	app.SetStyleSheet(modern.Sheet(modern.Options{}))
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 1000, Height: 620}})
 	must(err)
@@ -114,6 +115,7 @@ func run() (result error) {
 	must(win.SetTitle(fmt.Sprintf("SourceView large files — %s / %d MiB", id, *mib)))
 	doc := source.NewDocument("")
 	v := source.NewSourceView()
+	v.ConnectError(func(err error) { panic(err) })
 	v.SetDocument(doc)
 	v.SetAcceptsTab(true)
 	v.SetAutomaticCompletion(false)
@@ -229,7 +231,6 @@ func run() (result error) {
 				return true
 			}
 		}
-		v.RequestPaint()
 		return false
 	}
 	var steps []step
@@ -240,7 +241,6 @@ func run() (result error) {
 		meta, _ := view.Snapshot().Attributes["goui.sourceview"].(map[string]any)
 		pending, _ := meta["layoutPending"].(bool)
 		if pending || frames < changedFrame+2 {
-			view.RequestPaint()
 			return false
 		}
 		return true
@@ -438,6 +438,7 @@ func run() (result error) {
 		v.SetReadOnly(false)
 	})
 	second := source.NewSourceView()
+	second.ConnectError(func(err error) { panic(err) })
 	second.SetDocument(doc)
 	second.SetReadOnly(true)
 	otherScroll := gui.NewScrollView()
@@ -505,6 +506,7 @@ func run() (result error) {
 	})
 	index := 0
 	started := time.Now()
+	var lastWait time.Time
 	timer := app.NewTimer()
 	defer timer.Stop()
 	complete := false
@@ -515,6 +517,15 @@ func run() (result error) {
 		}
 		before := len(failures)
 		if !steps[index].run() {
+			if time.Since(started) > 5*time.Second && time.Since(lastWait) > 5*time.Second {
+				info := v.Snapshot()
+				var visibleRange any
+				if info.TextEditing != nil {
+					visibleRange = info.TextEditing.VisibleRange
+				}
+				log.Printf("WAIT step=%q layout=%v range=%+v caret=%d native_markers=%d frames=%d source_timer_ticks=%d", currentStep, info.Attributes["goui.sourceview"], visibleRange, v.Selection().Caret, len(ctx.lines), frames, sourceTimerTicks)
+				lastWait = time.Now()
+			}
 			return
 		}
 		if len(failures) == before {
@@ -540,10 +551,17 @@ func run() (result error) {
 
 type observedApplication struct {
 	gui.Application
-	context typography.Context
+	context    typography.Context
+	timerTicks *int
 }
 
 func (a observedApplication) Typography() typography.Context { return a.context }
+
+func (a observedApplication) NewTimer() *gui.Timer {
+	timer := a.Application.NewTimer()
+	timer.ConnectTimeout(func() { *a.timerTicks++ })
+	return timer
+}
 
 type observedLine struct {
 	typography.TextLayout
