@@ -44,6 +44,7 @@ type paragraph struct {
 	style          paragraphStyle
 	styled         bool
 	used           uint64
+	row            int
 	numberText     string
 }
 
@@ -61,6 +62,8 @@ type paragraphStyle struct {
 
 func (v *SourceView) dropLayouts() {
 	v.layoutEpoch++
+	v.layoutPending = false
+	v.layoutFailures = nil
 	old := v.layouts
 	v.layouts = make(map[layoutKey]*paragraph)
 	for _, p := range old {
@@ -173,7 +176,6 @@ func (v *SourceView) updateGutter() {
 	}
 	if old != v.gutter && v.wrap != WrapNone {
 		v.layoutEpoch++
-		v.resetHeights()
 	}
 }
 func (v *SourceView) Measure(c layout.Constraint) layout.Measurement {
@@ -221,7 +223,9 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 	}
 	if v.viewport.Width != viewport.Width && v.wrap != WrapNone {
 		v.layoutEpoch++
-		v.resetHeights()
+		// Keep prior heights as estimates until current-width paragraphs are
+		// ready. Collapsing every long paragraph to one line would hide the
+		// scrollbar, create an intermediate width, then immediately show it.
 		v.contentWidth = 0
 	}
 	v.viewport = viewport
@@ -241,7 +245,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		first, last := v.visibleRows()
 		complete := true
 		for row := first; row <= last; row = v.nextDisplayRow(row) {
-			if v.paragraph(row) == nil {
+			if v.viewportParagraph(row) == nil {
 				complete = false
 			}
 			if !state.valid(v) || epoch != v.layoutEpoch || v.Destroyed() {
@@ -263,11 +267,11 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 			return
 		}
 	} else if v.pendingAnchor && v.projection == nil && v.anchor.valid {
-		v.pendingAnchor = false
 		at := v.clampOffset(v.anchor.offset)
 		row := v.document.model.LineAt(at)
 		r, _ := v.document.model.LineRange(row)
-		if p := v.paragraph(row); p != nil {
+		if p := v.viewportParagraph(row); p != nil {
+			v.pendingAnchor = false
 			rect := p.geometry.Caret(textedit.Position{Offset: at - r.Start})
 			y := max(0, min(padding+v.paragraphTop(row)+rect.Y+v.anchor.inset, max(0, v.ContentSize().Height-viewport.Height)))
 			v.offset = geometry.Point{X: v.anchor.x, Y: y}
@@ -277,6 +281,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		v.captureAnchor()
 	}
 	v.updateIMCaret()
+	v.pruneLayouts(layoutKey{})
 }
 func (v *SourceView) visibleRows() (int, int) {
 	v.ensureHeights()
@@ -306,7 +311,25 @@ func (v *SourceView) paragraphKey(row int) layoutKey {
 	return key
 }
 
-func (v *SourceView) paragraph(row int) *paragraph {
+// Explicit editing operations still request exact cluster geometry. Viewport
+// layout/paint can instead enqueue a missing result for the next frame.
+func (v *SourceView) paragraph(row int) *paragraph { return v.resolveParagraph(row, true) }
+
+func (v *SourceView) viewportParagraph(row int) *paragraph {
+	return v.resolveParagraph(row, !v.frameLayout)
+}
+
+// A read-only lookup must not shape, recolor, adopt identities or update heights.
+func (v *SourceView) cachedParagraph(row int) *paragraph {
+	key := v.paragraphKey(row)
+	p := v.layouts[key]
+	if p == nil && key.id != 0 {
+		p = v.layouts[layoutKey{revision: v.document.model.Revision(), row: row, width: key.width}]
+	}
+	return p
+}
+
+func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	if v.context == nil || row < 0 || row >= v.displayCount() {
 		return nil
 	}
@@ -362,10 +385,15 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	}
 	v.tick++
 	if p != nil {
-		if (!p.styled || p.style != style) && !v.colorParagraph(key, p, style, tokens, focus) {
-			return nil
+		if !p.styled || p.style != style {
+			if !measure {
+				v.requestLayoutWork()
+			} else if !v.colorParagraph(key, p, style, tokens, focus) {
+				return nil
+			}
 		}
 		p.used = v.tick
+		p.row = row
 		v.setParagraphHeight(row, p.height)
 		width := p.width
 		if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
@@ -382,10 +410,25 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		}
 		return p
 	}
+	if !measure {
+		if _, failed := v.layoutFailures[key]; failed {
+			return nil
+		}
+		v.requestLayoutWork()
+		return nil
+	}
 	text := v.displayText(row)
 	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
 	native, err := v.context.NewTextLayout(text, format, key.width, 1<<24)
 	if err != nil {
+		// A failed automatic request must not retry/report on every frame.
+		// Bound failures like retained resources; new input identities can retry.
+		if v.frameLayout && state.valid(v) && epoch == v.layoutEpoch {
+			if v.layoutFailures == nil || len(v.layoutFailures) >= maxLayouts {
+				v.layoutFailures = make(map[layoutKey]struct{})
+			}
+			v.layoutFailures[key] = struct{}{}
+		}
 		v.report(err)
 		return nil
 	}
@@ -393,7 +436,8 @@ func (v *SourceView) paragraph(row int) *paragraph {
 		native.Destroy()
 		return nil
 	}
-	p = &paragraph{layout: native, text: text, used: v.tick}
+	delete(v.layoutFailures, key)
+	p = &paragraph{layout: native, text: text, used: v.tick, row: row}
 	if !v.colorParagraph(key, p, style, tokens, focus) {
 		native.Destroy() // Not cached yet: the local call still owns this object.
 		return nil
@@ -487,11 +531,36 @@ func (v *SourceView) pruneLayouts(keep layoutKey) {
 		bytes += len(p.text)
 	}
 	epoch := v.layoutEpoch
+	first, last := v.visibleRows()
+	width := v.paragraphWidth()
+	revealFirst, revealLast, anchor := -1, -1, -1
+	if request := v.reveal; request != nil && request.valid(v) {
+		row := v.displayLine(v.displayCaret())
+		revealFirst = v.paragraphAt(max(0, v.paragraphTop(row)-v.viewport.Height))
+		revealLast = v.neighboringRow(row, 1)
+	}
+	if v.pendingAnchor && v.anchor.valid && v.projection == nil {
+		anchor = v.document.model.LineAt(v.clampOffset(v.anchor.offset))
+	}
+	pinned := func(key layoutKey, p *paragraph) bool {
+		if key.width != width || p.row < 0 || p.row >= v.displayCount() {
+			return false
+		}
+		expected := v.paragraphKey(p.row)
+		if key != expected && (key.id != 0 || key.revision != v.document.model.Revision() || key.row != p.row) {
+			return false // Old revisions/line identities must not be pinned by a reused row number.
+		}
+		_, shown := v.visibleLines.index(p.row)
+		return shown && (p.row >= first && p.row <= last || p.row >= revealFirst && p.row <= revealLast || p.row == anchor)
+	}
 	for widths > 2 || len(v.layouts) > maxLayouts || bytes > 8*1024*1024 && len(v.layouts) > 1 {
 		var oldest layoutKey
 		var found bool
 		for key, p := range v.layouts {
 			if widths > 2 && !key.sameText(keep) {
+				continue
+			}
+			if pinned(key, p) {
 				continue
 			}
 			if key != keep && (!found || p.used < v.layouts[oldest].used) {
@@ -536,7 +605,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		brackets = v.matchingBrackets()
 	}
 	for row := first; row <= last; row = v.nextDisplayRow(row) {
-		item := v.paragraph(row)
+		item := v.viewportParagraph(row)
 		if item == nil {
 			continue
 		}
@@ -597,7 +666,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		}
 	}
 	if activeFocus(v) && v.caretOn && gui.IsEnabled(v) {
-		if r, ok := v.caretRect(); ok {
+		if r, ok := v.cachedCaretRect(); ok {
 			p.FillRect(r, graphics.ColorOf(v.colors.Caret))
 			v.im.SetCaretRect(r)
 		}
@@ -608,7 +677,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		p.SetClipRect(geometry.Rect(0, 0, v.gutter, bounds.Height))
 		p.FillRect(geometry.Rect(0, 0, v.gutter, bounds.Height), graphics.ColorOf(v.colors.GutterBackground))
 		for row := first; row <= last; row = v.nextDisplayRow(row) {
-			item := v.paragraph(row)
+			item := v.viewportParagraph(row)
 			if item == nil {
 				continue
 			}
@@ -709,8 +778,22 @@ func (v *SourceView) caretRect() (geometry.Rectangle, bool) {
 	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
 	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
 }
+
+// Paint and IME updates must not shape an offscreen caret during scrolling.
+// Explicit menu, completion and navigation requests use caretRect instead.
+func (v *SourceView) cachedCaretRect() (geometry.Rectangle, bool) {
+	caret := v.displayCaret()
+	row := v.displayLine(caret)
+	p := v.cachedParagraph(row)
+	if p == nil {
+		return geometry.Rectangle{}, false
+	}
+	r := v.displayRange(row)
+	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
+	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
+}
 func (v *SourceView) updateIMCaret() {
-	if r, ok := v.caretRect(); ok {
+	if r, ok := v.cachedCaretRect(); ok {
 		v.im.SetCaretRect(r)
 	}
 }
@@ -738,7 +821,11 @@ func (v *SourceView) resolveReveal(measured bool) {
 		v.reveal = nil
 		return
 	}
-	rect, ok := v.caretRect()
+	row := v.displayLine(v.displayCaret())
+	if v.viewportParagraph(row) == nil {
+		return
+	}
+	rect, ok := v.cachedCaretRect()
 	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
 		return
 	}
@@ -768,16 +855,15 @@ func (v *SourceView) resolveReveal(measured bool) {
 	// growth can push the caret below the viewport again. Actual paragraph
 	// heights are at least lineHeight; an estimated viewport before the target
 	// therefore covers the rows needed when revealing its bottom edge.
-	row := v.displayLine(v.displayCaret())
 	first := v.paragraphAt(max(0, v.paragraphTop(row)-v.viewport.Height))
 	epoch := v.layoutEpoch
 	for at, end := first, v.neighboringRow(row, 1); at <= min(end, v.displayCount()-1); at = v.nextDisplayRow(at) {
-		p := v.paragraph(at)
+		p := v.viewportParagraph(at)
 		if v.reveal != request || !request.valid(v) || epoch != v.layoutEpoch || v.Destroyed() || p == nil {
 			return
 		}
 	}
-	rect, ok = v.caretRect()
+	rect, ok = v.cachedCaretRect()
 	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
 		return
 	}
@@ -803,7 +889,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	info := v.WidgetBase.Snapshot()
 	info.Role = gui.Role("sourceview")
 	info.Text = ""
-	info.SetAttribute("goui.sourceview", map[string]any{"language": string(v.document.Language()), "revision": v.document.model.Revision(), "wrap": int(v.wrap), "lineNumbers": v.showLineNumbers})
+	info.SetAttribute("goui.sourceview", map[string]any{"language": string(v.document.Language()), "revision": v.document.model.Revision(), "wrap": int(v.wrap), "lineNumbers": v.showLineNumbers, "layoutPending": v.layoutPending})
 	m := v.document.model
 	if v.mounted && v.observed != m.Revision() {
 		return info
@@ -819,11 +905,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	if end.End-r.Start > 64*1024 {
 		// Snapshot reads cached geometry only: it must not shape text, recolor,
 		// emit callbacks or alter the viewport just to describe visible content.
-		key := v.paragraphKey(firstDisplay)
-		p := v.layouts[key]
-		if p == nil && key.id != 0 {
-			p = v.layouts[layoutKey{revision: m.Revision(), row: firstDisplay, width: key.width}]
-		}
+		p := v.cachedParagraph(firstDisplay)
 		if p != nil {
 			pos := p.geometry.Hit(geometry.Point{X: max(0, v.offset.X), Y: max(0, v.offset.Y-padding-v.paragraphTop(firstDisplay))})
 			anchor := v.displayRange(firstDisplay).Start + pos.Offset
@@ -858,7 +940,7 @@ func (v *SourceView) captureAnchor() {
 	}
 	row := v.paragraphAt(max(0, v.offset.Y-padding))
 	r := v.displayRange(row)
-	p := v.paragraph(row)
+	p := v.viewportParagraph(row)
 	if p == nil {
 		return
 	}

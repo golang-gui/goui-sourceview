@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"slices"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/scheme"
@@ -11,7 +12,8 @@ import (
 type frameQueue struct {
 	root   gui.Root
 	handle signal.Handle
-	views  map[*SourceView]struct{}
+	views  []*SourceView
+	next   int
 }
 
 var queues = make(map[gui.Root]*frameQueue)
@@ -20,18 +22,24 @@ func attachFrame(v *SourceView) {
 	root := v.Root()
 	q := queues[root]
 	if q == nil {
-		q = &frameQueue{root: root, views: make(map[*SourceView]struct{})}
+		q = &frameQueue{root: root}
 		queues[root] = q
 		q.handle = root.ConnectFrame(q.frame)
 	}
-	q.views[v] = struct{}{}
+	if !slices.Contains(q.views, v) {
+		q.views = append(q.views, v)
+	}
+	v.frameLayout = true
 }
 func detachFrame(v *SourceView) {
+	v.frameLayout, v.layoutPending = false, false
 	q := queues[v.Root()]
 	if q == nil {
 		return
 	}
-	delete(q.views, v)
+	if i := slices.Index(q.views, v); i >= 0 {
+		q.views = slices.Delete(q.views, i, i+1)
+	}
 	if len(q.views) == 0 {
 		q.handle.Disconnect()
 		delete(queues, v.Root())
@@ -40,8 +48,19 @@ func detachFrame(v *SourceView) {
 func (q *frameQueue) frame(_ time.Time) {
 	deadline := time.Now().Add(4 * time.Millisecond)
 	seen := make(map[*Document]bool)
-	for v := range q.views {
-		if !v.mounted || !visible(v) {
+	views := slices.Clone(q.views)
+	if len(views) == 0 {
+		return
+	}
+	start := q.next % len(views)
+	q.next = (start + 1) % len(views)
+	for i := range views {
+		v := views[(start+i)%len(views)]
+		if !v.mounted || v.Root() != q.root || !visible(v) {
+			continue
+		}
+		v.layoutStep(minTime(deadline, time.Now().Add(2*time.Millisecond)))
+		if !v.mounted || v.Root() != q.root || v.Destroyed() {
 			continue
 		}
 		if activeFocus(v) && v.blink != nil && !v.blink.Active() {

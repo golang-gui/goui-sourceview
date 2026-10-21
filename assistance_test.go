@@ -114,6 +114,34 @@ func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 		t.Fatal("partial word highlighted")
 	}
 }
+
+func TestOccurrenceWordDoesNotMeasureOffscreenSelection(t *testing.T) {
+	for _, tc := range []struct {
+		text       string
+		start, end int
+		want       string
+	}{
+		{"foo food foo", 0, 3, "foo"},
+		{"foo food foo", 4, 7, ""},
+		{"中 foo 文", 4, 7, "foo"},
+		{"中foo文", 3, 6, ""},
+	} {
+		v := NewSourceView()
+		v.SetFoldingEnabled(false)
+		v.document.model.SetText(tc.text)
+		observe(t, v)
+		ctx := &shapedContext{}
+		v.context = ctx
+		v.SetSelection(textedit.Selection{Anchor: tc.start, Caret: tc.end})
+		v.dropLayouts() // The selection's paragraph was evicted after scrolling.
+		before := ctx.created
+		got := v.occurrenceWord()
+		v.dropLayouts()
+		if got != tc.want || ctx.created != before || ctx.created != ctx.destroyed {
+			t.Fatalf("%q: word=%q, native calls=%d, resources=%d/%d", tc.text, got, ctx.created-before, ctx.created, ctx.destroyed)
+		}
+	}
+}
 func TestGoToOffsetUsesOneBasedRuneColumns(t *testing.T) {
 	m := textedit.NewModel("")
 	m.SetText("abc\n中e\u0301x\n")

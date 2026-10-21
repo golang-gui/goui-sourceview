@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -147,6 +148,53 @@ func TestNativeRecentWidthsWithScrollView(t *testing.T) {
 	scroll.Arrange(geometry.Rect(0, 0, 220, 240))
 	if *ctx != before {
 		t.Fatal("ScrollView width restoration remeasured the paragraph", before, *ctx)
+	}
+}
+
+func TestDeferredResizeKeepsMeasuredHeightAsEstimate(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	native, err := nativeContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer native.Destroy()
+	ctx := &widthCacheNativeContext{Context: native}
+	v := NewSourceView()
+	v.context = ctx
+	defer v.dropLayouts()
+	v.SetShowLineNumbers(false)
+	v.SetWrapMode(WrapWordChar)
+	v.Document().Model().SetText(strings.Repeat("one two three four five ", 300))
+	observe(t, v)
+	v.Document().engine.Advance(time.Time{})
+	v.frameLayout = true
+	scroll := gui.NewScrollView()
+	scroll.SetChild(v)
+	settle := func(width float32) {
+		for range 8 {
+			scroll.Arrange(geometry.Rect(0, 0, width, 240))
+			v.layoutStep(time.Time{})
+		}
+		if v.layoutPending {
+			t.Fatal("layout did not settle")
+		}
+	}
+	settle(220)
+	before := ctx.created
+	oldHeight := v.ContentSize().Height
+	scroll.Arrange(geometry.Rect(0, 0, 310, 240))
+	if v.ContentSize().Height != oldHeight {
+		t.Fatal("width change collapsed the prior height estimate")
+	}
+	settle(310)
+	if ctx.created != before+1 {
+		t.Fatal("deferred resize measured an unnecessary scrollbar width", before, ctx.created)
+	}
+	before = ctx.created
+	settle(220)
+	if ctx.created != before {
+		t.Fatal("deferred restore evicted the recent useful width")
 	}
 }
 

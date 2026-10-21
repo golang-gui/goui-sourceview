@@ -104,7 +104,9 @@ type SourceView struct {
 	metricsReady                                                                      bool
 	font                                                                              typography.FontInfo
 	layouts                                                                           map[layoutKey]*paragraph
+	layoutFailures                                                                    map[layoutKey]struct{}
 	layoutEpoch                                                                       uint64
+	frameLayout, layoutPending                                                        bool
 	tick                                                                              uint64
 	blink                                                                             *gui.Timer
 	blinkHandle                                                                       signal.Handle

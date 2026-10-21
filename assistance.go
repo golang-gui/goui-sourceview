@@ -176,7 +176,10 @@ func (v *SourceView) occurrenceWord() string {
 	}
 	m := v.document.model
 	if r.Start > 0 {
-		at := v.adjacent(r.Start, false)
+		at := max(0, r.Start-utf8.UTFMax)
+		for !m.IsRuneBoundary(at) {
+			at++
+		}
 		previous, _ := m.Slice(textedit.Range{Start: at, End: r.Start})
 		c, _ := utf8.DecodeLastRuneInString(previous)
 		if word(c) {
@@ -184,7 +187,10 @@ func (v *SourceView) occurrenceWord() string {
 		}
 	}
 	if r.End < m.Len() {
-		at := v.adjacent(r.End, true)
+		at := min(m.Len(), r.End+utf8.UTFMax)
+		for !m.IsRuneBoundary(at) {
+			at--
+		}
 		after, _ := m.Slice(textedit.Range{Start: r.End, End: at})
 		c, _ := utf8.DecodeRuneInString(after)
 		if word(c) {

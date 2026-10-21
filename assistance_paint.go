@@ -74,6 +74,9 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 }
 
 func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, origin geometry.Point) {
+	if v.whitespace == WhitespaceNone && !v.showLineEndings {
+		return
+	}
 	c := graphics.ColorOf(v.partColor("whitespace", tint(v.colors.GutterForeground, 125)))
 	trailing := len(strings.TrimRight(p.text, " \t"))
 	line := v.displayRange(row)

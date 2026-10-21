@@ -234,6 +234,17 @@ func run() (result error) {
 	}
 	var steps []step
 	var failures []string
+	frames, changedFrame := 0, 0
+	win.ConnectFrame(func(time.Time) { frames++ })
+	layoutReady := func(view *source.SourceView) bool {
+		meta, _ := view.Snapshot().Attributes["goui.sourceview"].(map[string]any)
+		pending, _ := meta["layoutPending"].(bool)
+		if pending || frames < changedFrame+2 {
+			view.RequestPaint()
+			return false
+		}
+		return true
+	}
 	// Display assertions do not mutate the model. Keep their failure status
 	// while allowing independent remaining scenarios to run.
 	recordDisplay := func(name string, fn func()) {
@@ -248,6 +259,15 @@ func run() (result error) {
 	}
 	add := func(name string, fn func()) { steps = append(steps, step{name, func() bool { fn(); return true }}) }
 	wait := func(name string, fn func() bool) { steps = append(steps, step{name, fn}) }
+	afterLayout := func(name string, view *source.SourceView, fn func()) {
+		wait(name, func() bool {
+			if !layoutReady(view) {
+				return false
+			}
+			fn()
+			return true
+		})
+	}
 	add("read file and mount", func() {
 		start := time.Now()
 		bytes, err := os.ReadFile(data.path)
@@ -270,7 +290,13 @@ func run() (result error) {
 	for slot, marker := range markers {
 		at := data.positions[slot]
 		add("reveal "+marker, func() { v.SetSelection(textedit.Selection{Anchor: at, Caret: at}); v.RevealSelection() })
-		wait("visible and syntax "+marker, func() bool { assertVisible(v, at, marker); return assertSyntax(marker) })
+		wait("visible and syntax "+marker, func() bool {
+			if !layoutReady(v) {
+				return false
+			}
+			assertVisible(v, at, marker)
+			return assertSyntax(marker)
+		})
 		insert := "中文 é 👩‍💻 "
 		add("type "+marker, func() {
 			must(win.CommitText(insert))
@@ -283,7 +309,7 @@ func run() (result error) {
 		add("undo delete "+marker, func() { undo(); assertContent() })
 	}
 	add("document end key", func() { edge(true); check(v.Selection().Caret == len(original), "end shortcut") })
-	add("end visible", func() {
+	afterLayout("end visible", v, func() {
 		assertVisible(v, len(original), "")
 		check(scroll.ScrollY() > 0, "end did not scroll")
 		edge(false)
@@ -422,7 +448,7 @@ func run() (result error) {
 		second.SetSelection(textedit.Selection{Anchor: data.positions[2], Caret: data.positions[2]})
 		second.RevealSelection()
 	})
-	add("new shared tail visible", func() {
+	afterLayout("new shared tail visible", second, func() {
 		recordDisplay("new shared tail", func() { assertVisible(second, data.positions[2], markers[2]) })
 	})
 	add("shared view edit", func() {
@@ -432,7 +458,7 @@ func run() (result error) {
 		assertContent(expectedEdit{mid, mid, "共享"})
 		check(second.Selection().Caret == data.positions[2]+len("共享"), "shared selection mapping")
 	})
-	add("shared snapshot", func() {
+	afterLayout("shared snapshot", second, func() {
 		recordDisplay("shared tail after edit", func() { assertVisible(second, data.positions[2]+len("共享"), markers[2]) })
 		undo()
 		assertContent()
@@ -447,7 +473,7 @@ func run() (result error) {
 		win.SetFocusedWidget(v)
 		v.RevealSelection()
 	})
-	add("remounted selection", func() {
+	afterLayout("remounted selection", v, func() {
 		check(v.Selection().Caret == mid, "remount lost selection")
 		recordDisplay("remounted middle", func() { assertVisible(v, mid, markers[1]) })
 	})
@@ -456,7 +482,7 @@ func run() (result error) {
 		topBeforeWrap = v.Snapshot().TextEditing.VisibleRange.Start
 		v.SetWrapMode(source.WrapWordChar)
 	})
-	add("wrapped content", func() {
+	afterLayout("wrapped content", v, func() {
 		check(v.Selection().Caret == mid, "wrap changed selection")
 		recordDisplay("wrapped top anchor", func() {
 			check(v.Snapshot().TextEditing.VisibleRange.Start == topBeforeWrap, "wrap lost top logical line anchor")
@@ -464,14 +490,14 @@ func run() (result error) {
 		assertContent()
 		app.SetStyleSheet(modern.Sheet(modern.Options{Dark: true}))
 	})
-	add("dark content and restore wrap", func() {
+	afterLayout("dark content and restore wrap", v, func() {
 		recordDisplay("theme top anchor", func() {
 			check(v.Snapshot().TextEditing.VisibleRange.Start == topBeforeWrap, "theme lost top logical line anchor")
 		})
 		assertContent()
 		v.SetWrapMode(source.WrapNone)
 	})
-	add("final restored content", func() {
+	afterLayout("final restored content", v, func() {
 		recordDisplay("restored top anchor", func() {
 			check(v.Snapshot().TextEditing.VisibleRange.Start == topBeforeWrap, "restoring wrap lost top logical line anchor")
 		})
@@ -495,6 +521,7 @@ func run() (result error) {
 			log.Printf("PASS step=%q elapsed=%s", currentStep, time.Since(started))
 		}
 		index++
+		changedFrame = frames
 		started = time.Now()
 		if index == len(steps) {
 			complete = true

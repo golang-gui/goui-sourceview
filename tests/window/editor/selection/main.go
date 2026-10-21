@@ -192,6 +192,8 @@ func main() {
 	box.AddChild(other)
 	win.SetWidget(box)
 	must(win.Show())
+	frames, changedFrame := 0, 0
+	win.ConnectFrame(func(time.Time) { frames++ })
 	primary, _ := gui.ModPrimary.Resolve()
 	key := func(k events.Key, mods events.Modifiers) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
@@ -280,7 +282,20 @@ func main() {
 	}
 	timer := app.NewTimer()
 	defer timer.Stop()
+	deadline := time.Now().Add(60 * time.Second)
 	timer.ConnectTimeout(func() {
+		check(time.Now().Before(deadline), fmt.Sprintf("selection verification timeout at case=%d stage=%d", caseIndex, stage))
+		// Viewport colors are prepared between frames. Wait for their published
+		// result, including a paint that can first discover the changed style;
+		// keep all native identity, color and pixel assertions below unchanged.
+		if stage != 0 {
+			meta, _ := v.Snapshot().Attributes["goui.sourceview"].(map[string]any)
+			pending, _ := meta["layoutPending"].(bool)
+			if pending || frames < changedFrame+2 {
+				must(win.RequestPaint())
+				return
+			}
+		}
 		s := current()
 		text := s.text()
 		switch stage {
@@ -384,6 +399,7 @@ func main() {
 				return
 			}
 		}
+		changedFrame = frames
 		stage++
 	})
 	must(timer.Start(140 * time.Millisecond))
