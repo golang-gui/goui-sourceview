@@ -265,7 +265,11 @@ func (v *SourceView) mapFolds(c textedit.Change) {
 	}
 	v.folds = out
 	v.foldRevision = c.Revision
-	v.refreshFoldGeometry()
+	// Candidate changes alone do not change paragraph visibility. The change
+	// observer splices ordinary row heights and preserves unchanged layouts.
+	if len(v.hiddenLines) > 0 || len(v.foldedLines()) > 0 {
+		v.refreshFoldGeometry()
+	}
 }
 func (v *SourceView) expandFoldRange(r textedit.Range) bool {
 	changed := false

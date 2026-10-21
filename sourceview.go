@@ -395,7 +395,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	if v.document != d || v.mountEpoch != epoch || !v.mounted {
 		return
 	}
-	hadFolds := len(v.folds) > 0
+	hadHiddenRows := len(v.hiddenLines) > 0
 	v.mapFolds(c)
 	v.mapPairs(c)
 	v.mapSearchRange(c)
@@ -428,12 +428,15 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		}
 		v.selectionRevision = c.Revision
 	}
-	if reset || c.Reset || hadFolds {
+	if reset || c.Reset || hadHiddenRows {
 		v.invalidateLayout()
 	} else {
 		for _, s := range splices {
 			v.heights.Splice(s.Index, s.Removed, s.Added, v.lineHeight)
 		}
+		// With no collapsed ranges, logical/display rows still correspond
+		// directly. Update their count without throwing away spliced heights.
+		v.visibleLines.reset(v.displayCount(), nil)
 		v.contentWidth = 0
 		// Stable line IDs retain layouts of untouched suffixes; changed paragraphs
 		// receive new IDs and are evicted by the bounded view-local cache.
