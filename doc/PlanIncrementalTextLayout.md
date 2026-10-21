@@ -9,7 +9,9 @@
 - [x] GOUI 的几何索引和可视行选区查询；本仓选择／搜索／出现词／预编辑绘制接入。
 - [x] 长段落全选仅产生可视行矩形的包内回归。
 - [x] Git 回退 Reflow 接入，修订两仓片段测量及布局设计。
-- [ ] 普通值片段缓存、有限测量、边界上下文正确性原型。
+- [x] 普通值 Fragment 与按需详细几何分页接入。
+- [x] 有限送测实验，长词／JSON 的完整行及 cluster 对照。
+- [ ] 正式片段测量的上下文衔接、范围缓存及可视区布局。
 - [ ] 事件循环分步推进、可视区发布、增量布局、取消与生命周期。
 - [ ] 未完成排版期间仍可拖滚动条、操作其他控件的真实窗口验收。
 
@@ -89,7 +91,7 @@ example/temp。GOUI 对应回退到 `dab0170`，仅额外保留独立 RTL 起点
 
 TextLayout 不参与视口、缓存、帧预算或任务管理。本仓未来保存范围＋度量副本，
 复用 GOUI 纯数据片段运算，自行负责语法和源码控件呈现。
-具体设计见 [布局第 11 节](DesignLayout.md#11-片段缓存接入规格待实现)；本轮没有
+具体设计见 [布局第 11 节](DesignLayout.md#11-片段缓存接入规格实施中)；本轮没有
 实现该设计，也不将独立截取片段的复杂文本准确性写成已解决。
 
 Linux amd64，本地工作区 SourceView `72e240d`／GOUI `dab0170`：两仓
@@ -100,3 +102,73 @@ GOUI `GOWORK=off go test -race ./gui ./gui/textedit ./platform/typography/pango`
 本仓 `GOWORK=off go test ./...` 仍报 `updates to go.mod needed`；未 tidy。
 已有测试可能重生成原有图片，未纳入提交。没有新增长段落窗口验收或性能结论，
 同步长段落测量仍待新片段方案实现。
+
+## 普通值片段接入与有限送测实验（2026-10-21）
+
+基线 SourceView `24edd50`／GOUI `9c39d01`，本轮依赖新增且尚未发布的
+gui/textedit.NewFragment 和 Fragment.Geometry。保留用户 go.mod／replace 和
+example/temp，使用不提交的本地 go.work；没有更新到不可获取的版本。
+GOUI `42c9b42` 提供值设施与分页，`22f3e4d` 接入 TextView／TextInput；
+本仓 `5f9a81d` 接入 SourceView 并提供原生快照回归。
+
+SourceView 将原生行／cluster 复制为独立片段，再使用按需几何页，避免创建
+完整段落的全部详细停靠索引。每页 32 显示行，每个 Geometry 最多 4 页；
+基础度量仍完整保留。不改变字体、颜色、原生绘制、文本编辑及输入路径。
+首次和换宽仍同步原生测量，本轮未接入有限片段渲染或事件循环测量调度。
+
+### 实验范围
+
+`layout_fragment_probe_test.go` 仅为测试内实验，不在正式控件路径启用：
+
+- 每次候选输入最多 512／2048 字节，保留未完成末行，下次从其起点继续。
+- 每步正常创建／测量／导出度量／复制 Fragment／释放原生布局，片段只保留值。
+- 8 KiB 长词和重复 JSON 在两种窗口大小下，与完整原生布局的行范围、尺寸、
+  基线、cluster 范围、方向和坐标逐项一致，没有放宽误差。
+- 独立防误用回归：前缀 RLO 距 XYZ 超过 4 KiB，完整布局为 RTL，直接截取 XYZ
+  后窗口却为 LTR。保存普通值不会补出缺失上下文。没有开启仅普通代码快、
+  复杂文本同步整段的正式分支。
+
+因此确认“减少一次送测量有效”，尚未证明通用片段边界正确。不能将实验完整循环
+称为 GUI 分帧；普通值缓存与几何分页不等于已经修复首次加载／拖宽冻结。
+
+### 单步测量实测
+
+Linux amd64／Go 1.25.8／Xeon Gold 5318Y／Pango 1.50.6／Cairo 1.16.0，
+DejaVu Sans 12 pt，宽 520 DIP、WrapWordChar、32,768 个 a。字体预热及样本构造
+不计时，无桌面窗口；其他项目验证完成后单独运行三次：
+
+```bash
+go test . -run '^$' -bench '^BenchmarkBoundedFragmentProbe' -benchtime=1x -count=3
+```
+
+| 路径 | 累计执行耗时（三次） | 最长单步（三次） |
+| --- | --- | --- |
+| 整段 | 1725.3 / 1729.8 / 1719.9 ms | 同左 |
+| 512 字节候选 | 133.9 / 114.5 / 115.6 ms | 3.550 / 2.805 / 2.706 ms |
+| 2048 字节候选 | 190.2 / 190.3 / 191.9 ms | 12.71 / 12.86 / 12.77 ms |
+
+512 字节路径首步为 2.600 / 1.823 / 1.819 ms。单步包含创建、测量、导出、复制及
+销毁；不包含事件循环等待和绘制，不是 UI 延迟保证。候选窗口间重测尾部，
+因此累计工作量也与整段不同。通用上下文、换宽复用、增量编辑、估算高度、
+帧预算和正式窗口响应仍待实现。
+
+### 验证
+
+两仓全仓测试、GOUI gui／textedit 和 SourceView 全仓 race、GOUI textedit vet
+通过。SourceView 原生片段回归还覆盖布局销毁后的快照存活、JSON／Unicode／
+RLO／isolate 的逐行几何及方向。Windows amd64／macOS arm64 无 CGO 交叉构建通过。
+GOUI text_caret 在 X11／XFCE、Software、Modern 集成窗口 1×／2× 通过；
+SourceView selection 的 JSON／XML／HTML × 三主题九组事件及像素通过。
+窗口均自动关闭，没有剪贴板、系统设置或用户文件写入。未执行原生 Win／mac、
+IME／物理输入／混合 DPI 验收。
+
+失败／缺口保留：
+
+- SourceView `GOWORK=off go test ./...` 仍报 updates to go.mod needed，未 tidy。
+- `go vet ./...` 在未修改的用户 example/temp/main.go:58 报 unreachable code；
+  对正式包、internal、ui、正式示例及 tests/window 的定向 vet 通过，未修改该例程。
+- GOUI 首次全仓 cmd/svgpng 曾段错误；之后三次定向及两次全仓通过，根因未确定，
+  未归为已证实的既有失败。详见 GOUI 同专题记录。
+- 本轮没有对用户 JSON 文件、MB／GB 输入或完整可视区测量路径作性能验收。
+
+后端保持原样；新代码仅是上层值设施、详细几何工作集、控件接入及有界送测实验。
