@@ -43,6 +43,7 @@ type paragraph struct {
 	width, height  float32
 	style          paragraphStyle
 	styled         bool
+	replaced       bool
 	foreground     color.NRGBA
 	colors         []paragraphColor
 	used           uint64
@@ -339,6 +340,26 @@ func (v *SourceView) cachedParagraph(row int) *paragraph {
 	return p
 }
 
+// Keep live row ownership current and identify resources whose input was
+// replaced. Only those resources may be transferred to a new text identity;
+// equal text in two live rows must never share a mutable native layout.
+func (v *SourceView) mapParagraphs(splices []highlight.Splice) {
+	for _, p := range v.layouts {
+		if p.replaced {
+			continue
+		}
+		for _, s := range splices {
+			if p.row >= s.Index && p.row < s.Index+s.Removed {
+				p.replaced = true
+				break
+			}
+			if p.row >= s.Index+s.Removed {
+				p.row += s.Added - s.Removed
+			}
+		}
+	}
+}
+
 func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	if v.context == nil || row < 0 || row >= v.displayCount() {
 		return nil
@@ -393,6 +414,22 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 			adopted = true
 		}
 	}
+	var text string
+	if p == nil && measure {
+		text = v.displayText(row)
+		var previous layoutKey
+		for old, candidate := range v.layouts {
+			if candidate.replaced && old.width == key.width && candidate.text == text && (p == nil || candidate.used > p.used) {
+				previous, p = old, candidate
+			}
+		}
+		if p != nil {
+			delete(v.layouts, previous)
+			v.layouts[key] = p
+			p.replaced, p.styled = false, false
+			adopted = true
+		}
+	}
 	v.tick++
 	if p != nil {
 		if !p.styled || p.style != style {
@@ -427,7 +464,6 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		v.requestLayoutWork()
 		return nil
 	}
-	text := v.displayText(row)
 	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
 	native, err := v.context.NewTextLayout(text, format, key.width, 1<<24)
 	if err != nil {
