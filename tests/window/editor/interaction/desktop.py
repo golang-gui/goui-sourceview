@@ -13,6 +13,8 @@ equality on normal Alt+F4 close are independently checked. The launching process
 must also require exit code zero and the application's `verified` log record.
 Failed operations are never counted as passes. --bulk-bytes explicitly tests a
 larger paste; some X11 selection owners require unsupported INCR transfers.
+--middle-edit restricts the run to middle-of-document edits/history and skips
+resizing; it still uses the real scrollbar, text click, keyboard and clipboard.
 """
 import argparse
 import ctypes as C
@@ -163,6 +165,7 @@ def main():
     parser.add_argument("--scale", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=30)
     parser.add_argument("--bulk-bytes", type=int, default=0)
+    parser.add_argument("--middle-edit", action="store_true")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[4]
     output = args.output.resolve()
@@ -182,7 +185,8 @@ def main():
     resize_failures = []
 
     def record(value):
-        value.update(file=Path(args.file).name, kind=args.kind, scale=args.scale)
+        value.update(file=Path(args.file).name, kind=args.kind, scale=args.scale,
+                     scope="middle-edit" if args.middle_edit else "full")
         log.write(json.dumps(value) + "\n")
         log.flush()
         print(json.dumps(value), flush=True)
@@ -260,7 +264,7 @@ def main():
         assert d.geometry()[2:] == (1100*args.scale, 760*args.scale), "unexpected initial window geometry"
         assert ready["length"] == len(original)
         capture("initial")
-        for location in ("head", "middle", "tail"):
+        for location in (("middle",) if args.middle_edit else ("head", "middle", "tail")):
             if location == "head":
                 key("head-navigation", "Control_L", "Home", predicate=lambda s: s["caret"] == 0)
             elif location == "tail":
@@ -329,9 +333,10 @@ def main():
         capture("edited-restored")
         # Actual integrated-chrome drags. Native WM resize grabs may consume
         # keyboard events, so keyboard echo is not a valid probe during a drag.
-        for name, dx, dy in (("width-narrow", -240, 0), ("width-restore", 240, 0),
-                             ("height-shorter", 0, -160), ("height-restore", 0, 160),
-                             ("corner-narrow", -180, -120), ("corner-restore", 180, 120)):
+        drags = (("width-narrow", -240, 0), ("width-restore", 240, 0),
+                 ("height-shorter", 0, -160), ("height-restore", 0, 160),
+                 ("corner-narrow", -180, -120), ("corner-restore", 180, 120))
+        for name, dx, dy in (() if args.middle_edit else drags):
             if not resize(d, wait_status, record, name, dx*args.scale, dy*args.scale):
                 resize_failures.append(name)
         capture("resized-restored")

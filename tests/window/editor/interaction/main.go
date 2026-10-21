@@ -21,6 +21,9 @@
 // be restored. Window focus/geometry and the pointer change. Do not use while
 // someone is interacting with the same desktop. Closing/restarting resets.
 // Other platforms may run this window manually; desktop.py is X11-only.
+// Optional -cpu-profile /outside/repo/run.pprof requires a new output path and
+// logs native calls exceeding 3 ms. Profiling runs are diagnostic observations,
+// excluded from end-to-end before/after statistics because profiling adds work.
 package main
 
 import (
@@ -31,6 +34,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 	"unicode/utf8"
 
@@ -120,7 +124,15 @@ func (p *paintObserver) Paint(painter gui.Painter) {
 func main() {
 	file := flag.String("file", "", "UTF-8 file; never overwritten")
 	kind := flag.String("kind", "source", "source or text")
+	profile := flag.String("cpu-profile", "", "optional CPU profile outside the repository; enables native-call diagnostics")
 	flag.Parse()
+	if *profile != "" {
+		out, err := os.OpenFile(*profile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		must(err)
+		defer out.Close()
+		must(pprof.StartCPUProfile(out))
+		defer pprof.StopCPUProfile()
+	}
 	data, err := os.ReadFile(*file)
 	must(err)
 	if !utf8.Valid(data) {
@@ -129,6 +141,9 @@ func main() {
 	original := textedit.Normalize(string(data))
 	app, err := gui.NewApplication("org.golanggui.SourceViewInteraction")
 	must(err)
+	if *profile != "" {
+		gui.App = profileApp{Application: app, context: profileContext{app.Typography()}}
+	}
 	app.SetStyleSheet(modern.Sheet(modern.Options{}))
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 1100, Height: 760}, Chrome: gui.WindowChromeIntegrated})
 	must(err)
