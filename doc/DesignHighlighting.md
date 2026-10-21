@@ -1,12 +1,12 @@
 # 语言、高亮与增量分析设计
 
-> 状态：首版实现规格。首版采用自有纯 Go 状态扫描器，实际支持 JSON、XML、HTML、TOML、YAML、Shell。
+> 状态：实现规格。采用自有纯 Go 状态扫描器，支持 JSON、XML、HTML、TOML、YAML、Shell、Markdown。
 > 算法不创建 GUI/原生资源；调度由已挂载视图驱动。
 
 ## 1. 对外语言接口与 token 模型
 
 `language` 包公开不可变语言定义、Token/State/Tokenizer 和编辑规则，内置
-Plain、JSON、XML、HTML、TOML、YAML、Shell；任意定义直接传给 Document，
+Plain、JSON、XML、HTML、TOML、YAML、Shell、Markdown；任意定义直接传给 Document，
 不使用全局注册。完整接口、样式/语义分离和扫描校验见 [扩展契约](DesignLanguageExtensions.md)。
 
 Document.SetLanguage(id) 是内置便利入口；SetLanguageDefinition(l) 按对象身份绑定。
@@ -35,15 +35,25 @@ State.Equal 必须精确比较影响后续扫描的所有信息；hash 仅用于
 
 - 每次非空扫描必须推进输入；暂缓消费只允许保留有限未决分隔符，驱动补足预读后必须推进。
 - 从 Model.Slice 读取片段，末端不是 rune 边界时最多退回 3 byte 后重试，不复制整条超长行。
-- 默认每个驱动帧执行约 2 ms 扫描工作，片段间检查时钟；这是初始调度参数，非已达性能承诺。
+- 每个 Root 复用一个 GUI Timer，每 8 ms 最多推进约 2 ms 纯分析，片段间检查时钟；
+  错过的周期由 GOUI 丢弃，不追赶。该软预算不包含单次不可中断操作的超时承诺。
 - 任何单个扫描循环也不能无限遍历整行。切换语言/修订后使未完成片段失效，禁止新旧文本拼接。
 - 未完成行只保留可安全展示的同修订前缀 token；未知后缀为 Plain，不能补一个猜测出状态。
-- Plain 模式无需扫描全文；语法失败不改变文本、历史、选区或输入能力。
+- Plain 只建立逻辑行元数据，不执行 tokenizer；语法失败不改变文本、历史、选区或输入能力。
 
 元数据 lineStore 的子树累计包含 byte 数量。偏移／行号查询跳过整个块时使用累计值，
 只在最终命中的至多 128 行块内扫描；不在树的每个分支重复扫描整块。一次扫描片段
 只计算一次逻辑行的模型起点，token 和 ReplaceFrom 的 UTF-8 校验复用该值；保留全部
 边界断言与跨行状态，不借性能优化省略语法校验。对照见 [真实文档验证](PlanCorpusLayout.md)。
+
+分析与绘制分开：不为屏外每个 chunk 请求整窗 Paint。元数据就绪或可见段落的 token
+版本／有效性改变时，才请求相应视图绘制；未变的可见 token 继续使用已有排版与颜色。
+原生正文准备仍走 Root 的帧回调。Timer 回调不测量字体、不创建或修改 TextLayout，
+不启动测量线程。Document 沿用单个驱动 Root，多个文档按轮转顺序分享时间片。
+
+Timer 属于现有 frameQueue，首次挂载创建；无待办时停止，最后视图卸载时 Stop 并断开
+连接，过期回调核对当前挂载／Root。不可启动 Timer 的宿主保留原帧推进路径，不丢工作。
+折叠仍沿用现有纯快照 worker，快照创建自身尚不可中断；没有新增公共调度接口。
 
 持久 JSON 上下文避免每行复制整个嵌套栈。首版嵌套上下文预算为 1024 层；
 超过时保留基本字符串/数字/分隔符分类并记录分析降级，不把合法深嵌套直接标成语法错误。

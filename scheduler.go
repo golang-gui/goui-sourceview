@@ -10,10 +10,13 @@ import (
 )
 
 type frameQueue struct {
-	root   gui.Root
-	handle signal.Handle
-	views  []*SourceView
-	next   int
+	root           gui.Root
+	handle         signal.Handle
+	views          []*SourceView
+	next           int
+	analysisNext   int
+	analysisTimer  *gui.Timer
+	analysisHandle signal.Handle
 }
 
 var queues = make(map[gui.Root]*frameQueue)
@@ -25,6 +28,12 @@ func attachFrame(v *SourceView) {
 		q = &frameQueue{root: root}
 		queues[root] = q
 		q.handle = root.ConnectFrame(q.frame)
+		q.analysisTimer = gui.App.NewTimer()
+		q.analysisHandle = q.analysisTimer.ConnectTimeout(func() {
+			if !q.advanceAnalysis(time.Now().Add(2 * time.Millisecond)) {
+				q.analysisTimer.Stop()
+			}
+		})
 	}
 	if !slices.Contains(q.views, v) {
 		q.views = append(q.views, v)
@@ -41,6 +50,10 @@ func detachFrame(v *SourceView) {
 		q.views = slices.Delete(q.views, i, i+1)
 	}
 	if len(q.views) == 0 {
+		if q.analysisTimer != nil {
+			q.analysisTimer.Stop()
+			q.analysisHandle.Disconnect()
+		}
 		q.handle.Disconnect()
 		delete(queues, v.Root())
 	}
@@ -88,6 +101,12 @@ func (q *frameQueue) frame(_ time.Time) {
 		}
 		d.lastFrame = time.Now()
 		seen[d] = true
+		if q.analysisTimer != nil {
+			if d.analysisPending() {
+				q.requestAnalysis()
+			}
+			continue
+		}
 		d.foldingStep()
 		if d.engine.Pending() && time.Now().Before(deadline) {
 			until := minTime(deadline, time.Now().Add(2*time.Millisecond))

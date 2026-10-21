@@ -147,6 +147,10 @@ func (d *Document) release(v *SourceView) {
 }
 func (d *Document) requestWork() {
 	if d.driver != nil {
+		if q := queues[d.driver]; q != nil && q.analysisTimer != nil {
+			q.requestAnalysis()
+			return
+		}
 		_ = d.driver.RequestPaint()
 	}
 }
