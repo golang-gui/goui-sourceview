@@ -9,6 +9,11 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 )
 
+type tagMatchState struct {
+	bracketState
+	definition *language.Language
+}
+
 func (v *SourceView) definitionAt(at int) *language.Language {
 	if ctx, ok := v.lexicalContext(at); ok && ctx.Embedded != nil {
 		return ctx.Embedded
@@ -71,15 +76,26 @@ func (v *SourceView) tagText() (string, *language.TagRules, int) {
 	return text, rules, r.Start
 }
 func (v *SourceView) matchingTags() []textedit.Range {
+	definition := v.definitionAt(v.Selection().Caret)
+	cache := v.tagMatches
+	m := v.document.model
+	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == v.Selection().Caret && cache.language == v.document.languageEpoch && cache.definition == definition {
+		return cache.ranges
+	}
 	text, rules, base := v.tagText()
 	if rules == nil {
 		return nil
 	}
+	result := tagMatchState{bracketState: bracketState{document: v.document, revision: m.Revision(), caret: v.Selection().Caret, language: v.document.languageEpoch, valid: true}, definition: definition}
 	match, ok := rules.Match(text, v.Selection().Caret-base)
-	if !ok {
-		return nil
+	if ok {
+		result.ranges = []textedit.Range{{Start: base + match.Opening.Start, End: base + match.Opening.End}, {Start: base + match.Closing.Start, End: base + match.Closing.End}}
 	}
-	return []textedit.Range{{Start: base + match.Opening.Start, End: base + match.Opening.End}, {Start: base + match.Closing.Start, End: base + match.Closing.End}}
+	// A negative markup result is independent of the bracket scanner's lexical
+	// readiness. Keep it while that scanner waits, rather than parsing the whole
+	// document again on each paint/analysis retry.
+	v.tagMatches = result
+	return result.ranges
 }
 func (v *SourceView) closeTag(r textedit.Range, typed string) (bool, error) {
 	if !v.autoPairs || typed != ">" || r.Start != r.End {

@@ -53,6 +53,7 @@ type SourceView struct {
 	boundKeys        []boundKey
 	keyBindingsEpoch uint64
 	linkedTags       bool
+	tagMatches       tagMatchState
 	pendingPaste     *pasteRequest
 	compositionSeen  bool
 	gui.WidgetBase
@@ -205,6 +206,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.foldDefinition = d.definition
 	v.pairs = nil
 	v.brackets = bracketState{}
+	v.tagMatches = tagMatchState{}
 	v.selection = textedit.Selection{}
 	v.upstream = false
 	v.selectionEpoch++
@@ -532,6 +534,7 @@ func (v *SourceView) unmount() {
 	v.dragging = false
 	v.pairs = nil
 	v.brackets = bracketState{}
+	v.tagMatches = tagMatchState{}
 	if v.blink != nil {
 		v.blink.Stop()
 		v.blinkHandle.Disconnect()
