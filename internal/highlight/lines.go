@@ -138,9 +138,7 @@ func (s *lineStore) offset(index int) int {
 			}
 			return result
 		}
-		for _, l := range n.block {
-			result += l.Bytes
-		}
+		result += n.bytes - byteCount(n.left) - byteCount(n.right)
 		index -= len(n.block)
 		n = n.right
 	}
@@ -159,6 +157,13 @@ func (s *lineStore) lineAt(pos int) int {
 		}
 		pos -= byteCount(n.left)
 		index += count(n.left)
+		blockBytes := n.bytes - byteCount(n.left) - byteCount(n.right)
+		if pos >= blockBytes {
+			pos -= blockBytes
+			index += len(n.block)
+			n = n.right
+			continue
+		}
 		for _, l := range n.block {
 			if pos < l.Bytes {
 				return index

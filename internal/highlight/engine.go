@@ -365,8 +365,9 @@ func (e *Engine) Advance(deadline time.Time) bool {
 		if line.LF {
 			length--
 		}
-		absolute := e.lines.offset(w.row) + w.at
-		end := e.lines.offset(w.row) + length
+		lineStart := e.lines.offset(w.row)
+		absolute := lineStart + w.at
+		end := lineStart + length
 		text, err := e.read(absolute, min(end, absolute+ChunkSize+32))
 		if err != nil {
 			e.err = err
@@ -389,7 +390,7 @@ func (e *Engine) Advance(deadline time.Time) bool {
 		oldLen := len(line.tokens)
 		if result.ReplaceFrom != nil {
 			start := *result.ReplaceFrom
-			if !e.model.IsRuneBoundary(e.lines.offset(w.row) + start) {
+			if !e.model.IsRuneBoundary(lineStart + start) {
 				e.err = fmt.Errorf("highlight: replacement splits UTF-8 at line %d", w.row)
 				break
 			}
@@ -403,7 +404,7 @@ func (e *Engine) Advance(deadline time.Time) bool {
 			}
 		}
 		for _, token := range result.Tokens {
-			if !e.model.IsRuneBoundary(e.lines.offset(w.row)+token.Start) || !e.model.IsRuneBoundary(e.lines.offset(w.row)+token.End) {
+			if !e.model.IsRuneBoundary(lineStart+token.Start) || !e.model.IsRuneBoundary(lineStart+token.End) {
 				e.err = fmt.Errorf("highlight: token splits UTF-8 at line %d", w.row)
 				break
 			}
