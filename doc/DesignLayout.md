@@ -426,3 +426,22 @@ LayoutVisible 只登记最新视口／偏移及工作范围，帧回调逐个准
   将普通主题的 selectionForeground 设为 null，高对比度主题可给出具体色；本项目用现有 NRGBA alpha 表达可选覆盖。
 - [GtkSourceView 5 Style Scheme](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/style-reference.html)
   分别定义 selection 与 selection-unfocused；沿用活动/非活动背景区分，未增加新的模式体系。
+
+### 11.5 上下文携带实验的边界
+
+测试原型在每个有限候选前注入零宽方向标记和仍活动的显式 embedding／override／
+isolate 控制符；导出时显式移除注入前缀的 byte offset，不删除模型中的控制字符。
+注入前缀也计入 512／2048 字节送测上限。前缀占宽、与正文合成 cluster 或单独成行时
+拒绝映射，不强行裁剪。FSI 和深度溢出尚未实现，只在实验中明确拒绝，不用于控件。
+
+Pango 1.50.6 下，长 RLO／LRO／RLI 和混合 Unicode 样本的完整行及 cluster 可与整段
+一致，但长中性序列、数字和跨窗口括号仍产生不同坐标或方向。反例已成为独立回归，
+不能据前几类成功样本将该实验接入正式路径。原有无上下文 RLO 反例仍保留。
+方向属性来自已有 x/text v0.22.0（Unicode 15.0 表）；不据此声称与三个原生后端的
+Unicode 版本或所有行为一致。扫描段落基础方向的实验也未实现 GUI 分时扫描。
+
+依据 [Unicode UAX #9 rev.52 的 W／N／N0 规则](https://www.unicode.org/reports/tr9/tr9-52.html#Resolving_Neutral_Types)
+和[Pango 的段落上下文契约](https://docs.gtk.org/Pango/func.shape_full.html)，活动控制符只是
+显式状态的一部分。后续上层方案须处理隐式方向、括号依赖及上下文塑形，准备工作本身
+也要分步；不能仅增加固定重叠、反复扩大窗口或同步整段回退来掩盖反例。本节记录
+实验限制，不是新增 typography 能力或完整 bidi 支持的承诺。

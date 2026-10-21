@@ -24,22 +24,42 @@ type boundedFragmentProbe struct {
 }
 
 func probeBoundedFragments(ctx typography.Context, text string, format typography.TextFormat, width float32, limit int) (boundedFragmentProbe, error) {
+	return probeBoundedFragmentsWithPrefix(ctx, text, format, width, limit, nil)
+}
+
+func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format typography.TextFormat, width float32, limit int, prefixAt func(int) (string, error)) (boundedFragmentProbe, error) {
 	var result boundedFragmentProbe
 	for start := 0; start < len(text); {
-		end := min(len(text), start+limit)
+		began := time.Now()
+		prefix := ""
+		if prefixAt != nil {
+			var err error
+			prefix, err = prefixAt(start)
+			if err != nil {
+				return result, err
+			}
+		}
+		if len(prefix) >= limit {
+			return result, fmt.Errorf("probe: context consumes input limit")
+		}
+		end := min(len(text), start+limit-len(prefix))
 		for end > start && end < len(text) && !utf8.RuneStart(text[end]) {
 			end--
 		}
 		if end == start {
 			return result, fmt.Errorf("probe: input limit cannot contain next rune")
 		}
-		began := time.Now()
-		native, err := ctx.NewTextLayout(text[start:end], format, width, 1<<24)
+		native, err := ctx.NewTextLayout(prefix+text[start:end], format, width, 1<<24)
 		if err != nil {
 			return result, err
 		}
 		w, h := native.MeasureSize()
 		lines, clusters := native.MeasureMetrics()
+		lines, clusters, err = removeProbePrefix(lines, clusters, len(prefix))
+		if err != nil {
+			native.Destroy()
+			return result, err
+		}
 		fragment, err := textedit.NewFragment(textedit.Range{Start: start, End: end}, geometry.Size{Width: w, Height: h}, lines, clusters)
 		native.Destroy()
 		if err != nil {
@@ -58,7 +78,7 @@ func probeBoundedFragments(ctx typography.Context, text string, format typograph
 			return result, fmt.Errorf("probe: no progress")
 		}
 		result.pieces = append(result.pieces, fragment)
-		result.maxInput = max(result.maxInput, end-start)
+		result.maxInput = max(result.maxInput, len(prefix)+end-start)
 		elapsed := time.Since(began)
 		if len(result.pieces) == 1 {
 			result.first = elapsed
