@@ -32,6 +32,7 @@ type layoutKey struct {
 type paragraph struct {
 	layout, number typography.TextLayout
 	geometry       textedit.Geometry
+	fragment       textedit.Fragment
 	text           string
 	width, height  float32
 	style          paragraphStyle
@@ -371,7 +372,15 @@ func (v *SourceView) paragraph(row int) *paragraph {
 	}
 	w, h := native.MeasureSize()
 	lines, clusters := native.MeasureMetrics()
-	g := textedit.NewGeometry(lines, clusters, len(text), v.lineHeight)
+	var g textedit.Geometry
+	fragment, fragmentErr := textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
+	if fragmentErr == nil {
+		g = fragment.Geometry(v.lineHeight)
+	} else {
+		// Preserve Geometry's general semantics for nonpartitioning metrics.
+		g = textedit.NewGeometry(lines, clusters, len(text), v.lineHeight)
+	}
+	p.fragment = fragment
 	p.geometry, p.width, p.height = g, w, max(v.lineHeight, h)
 	oldSize := v.ContentSize()
 	v.layouts[key] = p

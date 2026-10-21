@@ -156,8 +156,9 @@ Reflow、后端增量重排及 SourceView 接入已撤回，不再将它们作�
 TextLayout 继续提供同步排版／度量／渲染，上层复制普通度量值，组合文本范围
 形成片段，自行负责可视区、估计、缓存、失效和事件循环调度。
 
-拟复用 GOUI gui/textedit 中经原型验证的片段与索引运算；具体公共 API 尚未确定，
-不把设计类型当作可调用接口。原生资源继续归各控件持有，共享 GUI 预算确需
+2026-10-21 已接入 GOUI gui/textedit 的 NewFragment、Fragment.Geometry：复制
+普通值快照，按需建立详细几何页。该 API 尚未发布；范围测量和 GUI 帧调度未接入。
+原生资源继续归各控件持有，共享 GUI 预算确需
 helper 时放 gui，不放 typography，也不加入 SourceView 特例。
-设计见 [布局第 11 节](DesignLayout.md#11-片段缓存接入规格待实现)及相邻 GOUI
+设计见 [布局第 11 节](DesignLayout.md#11-片段缓存接入规格实施中)及相邻 GOUI
 [通用片段设计](../../goui/doc/DesignIncrementalTextLayout.md)。
