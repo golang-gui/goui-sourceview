@@ -43,9 +43,19 @@ type paragraph struct {
 	width, height  float32
 	style          paragraphStyle
 	styled         bool
+	foreground     color.NRGBA
+	colors         []paragraphColor
 	used           uint64
 	row            int
 	numberText     string
+}
+
+// Non-default effective foreground ranges, after token and selection overlays.
+// Retaining their values avoids invalidating native shaping when analysis
+// revisions change but the actual colors do not.
+type paragraphColor struct {
+	start, end int
+	color      color.NRGBA
 }
 
 // Paint-only state is deliberately separate from the native layout's text,
@@ -437,7 +447,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		return nil
 	}
 	delete(v.layoutFailures, key)
-	p = &paragraph{layout: native, text: text, used: v.tick, row: row}
+	p = &paragraph{layout: native, text: text, used: v.tick, row: row, foreground: v.colors.Foreground}
 	if !v.colorParagraph(key, p, style, tokens, focus) {
 		native.Destroy() // Not cached yet: the local call still owns this object.
 		return nil
@@ -480,32 +490,23 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 	if !valid() {
 		return false
 	}
-	// Complete replacement clears obsolete tokens and the previous selection.
-	// Full-range overwrite also bounds the backend's stored color ranges.
-	if len(p.text) > 0 {
-		p.layout.SetTextColor(0, len(p.text), v.colors.Foreground)
-		if !valid() {
-			return false
+	colors := v.paragraphColors(len(p.text), style, tokens)
+	if p.foreground != v.colors.Foreground || !slices.Equal(p.colors, colors) {
+		// Complete replacement clears obsolete tokens/selection and bounds
+		// backend attributes. A fresh layout already has TextFormat's base.
+		if len(p.text) > 0 && (p.foreground != v.colors.Foreground || len(p.colors) > 0) {
+			p.layout.SetTextColor(0, len(p.text), v.colors.Foreground)
+			if !valid() {
+				return false
+			}
 		}
-	}
-	for _, token := range tokens {
-		if token.Start < 0 || token.End > len(p.text) || token.End <= token.Start {
-			continue
+		for _, c := range colors {
+			p.layout.SetTextColor(c.start, c.end-c.start, c.color)
+			if !valid() {
+				return false
+			}
 		}
-		c, ok := v.colors.Tokens[token.Kind]
-		if !ok {
-			c = v.colors.Foreground
-		}
-		p.layout.SetTextColor(token.Start, token.End-token.Start, c)
-		if !valid() {
-			return false
-		}
-	}
-	if v.colors.SelectionForeground.A == 255 && style.focused && style.selection.End > style.selection.Start {
-		p.layout.SetTextColor(style.selection.Start, style.selection.End-style.selection.Start, v.colors.SelectionForeground)
-		if !valid() {
-			return false
-		}
+		p.foreground, p.colors = v.colors.Foreground, colors
 	}
 	if p.number != nil && (!p.styled || p.style.scheme != style.scheme) {
 		p.number.SetTextColor(0, len(p.numberText), v.colors.GutterForeground)
@@ -515,6 +516,48 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 	}
 	p.style, p.styled = style, true
 	return true
+}
+
+func (v *SourceView) paragraphColors(length int, style paragraphStyle, tokens []highlight.Token) []paragraphColor {
+	var out []paragraphColor
+	appendRange := func(start, end int, c color.NRGBA) {
+		if start >= end || c == v.colors.Foreground {
+			return
+		}
+		if n := len(out); n > 0 && out[n-1].end == start && out[n-1].color == c {
+			out[n-1].end = end
+		} else {
+			out = append(out, paragraphColor{start, end, c})
+		}
+	}
+	sel := textedit.Range{}
+	if v.colors.SelectionForeground.A == 255 && style.focused {
+		sel = style.selection
+	}
+	appendSelected := func(start, end int, c color.NRGBA) {
+		if sel.Start < end && sel.End > start {
+			appendRange(start, min(end, sel.Start), c)
+			appendRange(max(start, sel.Start), min(end, sel.End), v.colors.SelectionForeground)
+			appendRange(max(start, sel.End), end, c)
+		} else {
+			appendRange(start, end, c)
+		}
+	}
+	at := 0
+	for _, token := range tokens {
+		if token.Start < at || token.End > length || token.End <= token.Start {
+			continue
+		}
+		appendSelected(at, token.Start, v.colors.Foreground)
+		c, ok := v.colors.Tokens[token.Kind]
+		if !ok {
+			c = v.colors.Foreground
+		}
+		appendSelected(token.Start, token.End, c)
+		at = token.End
+	}
+	appendSelected(at, length, v.colors.Foreground)
+	return out
 }
 func (v *SourceView) pruneLayouts(keep layoutKey) {
 	// Two measured widths per text identity bound the extra native working
