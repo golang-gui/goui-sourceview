@@ -396,7 +396,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		return
 	}
 	hadHiddenRows := len(v.hiddenLines) > 0
-	v.mapFolds(c)
+	v.mapFolds(c, splices)
 	v.mapPairs(c)
 	v.mapSearchRange(c)
 	if c.Reset {

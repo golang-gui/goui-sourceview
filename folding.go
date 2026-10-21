@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -231,7 +232,7 @@ func (v *SourceView) clearFolds() {
 	v.foldDefinition = v.document.definition
 	v.refreshFoldGeometry()
 }
-func (v *SourceView) mapFolds(c textedit.Change) {
+func (v *SourceView) mapFolds(c textedit.Change, splices []highlight.Splice) {
 	if c.Reset {
 		v.clearFolds()
 		return
@@ -243,21 +244,32 @@ func (v *SourceView) mapFolds(c textedit.Change) {
 	if v.foldRevision >= c.Revision {
 		return
 	}
+	// Splices describe the same sequential edits in the old line index. An
+	// untouched fold only needs the line-count delta of edits before it, not
+	// two document position queries for every candidate on every keystroke.
+	incremental := v.foldRevision+1 == c.Revision && len(splices) == len(c.Edits)
 	out := v.folds[:0]
 	for _, r := range v.folds {
 		valid := true
-		for _, e := range c.Edits {
+		for i, e := range c.Edits {
 			before := e.Range.Start == r.start && e.Range.Start == e.Range.End && strings.HasSuffix(e.Text, "\n")
 			if !before && e.Range.Start <= r.end && e.Range.End >= r.start {
 				valid = false
 				break
 			}
+			if incremental && e.Range.Start <= r.start {
+				delta := splices[i].Added - splices[i].Removed
+				r.StartLine += delta
+				r.EndLine += delta
+			}
 			r.start = textedit.MapOffset(r.start, e)
 			r.end = textedit.MapOffset(r.end, e)
 		}
 		if valid {
-			r.StartLine = v.document.model.LineAt(r.start)
-			r.EndLine = v.document.model.LineAt(r.end)
+			if !incremental {
+				r.StartLine = v.document.model.LineAt(r.start)
+				r.EndLine = v.document.model.LineAt(r.end)
+			}
 			if r.EndLine > r.StartLine {
 				out = append(out, r)
 			}
