@@ -104,7 +104,7 @@ class Desktop:
             return None
         _, seq, rev, caret, anchor, length, width, height, pending = struct.unpack("<B H I I I I H H B", b)
         return dict(seq=seq, revision=rev, caret=caret, anchor=anchor, length=length,
-                    width=width, height=height, pending=bool(pending))
+                    width=width, height=height, pending=bool(pending & 1))
 
     def code(self, key):
         result = self.x.XKeysymToKeycode(self.d, self.x.XStringToKeysym(key.encode()))

@@ -13,14 +13,25 @@
 // The final paint observer displays passive diagnostic bits: input sequence,
 // revision, selection, byte length, viewport and SourceView layout-pending flag.
 // These describe a completed widget traversal, not text-color completion or
-// presentation to a physical monitor. The external observer samples X11 pixels.
+// presentation to a physical monitor. External observers sample desktop pixels.
 // No timer requests painting. Input observation never consumes or edits events.
 // Closing checks that the original bytes were restored (undo the test edits);
 // failure panics. The input file is never modified. desktop.py temporarily owns
 // CLIPBOARD and restores its prior UTF-8 text, if available; rich formats cannot
 // be restored. Window focus/geometry and the pointer change. Do not use while
 // someone is interacting with the same desktop. Closing/restarting resets.
-// Other platforms may run this window manually; desktop.py is X11-only.
+// desktop.py is X11-only. For VNC/RDP, start with -remote -run-id N (1..127)
+// in the interactive session and use remote.py with the same ID. Inspect the
+// screenshot before specifying its client bounds and desktop geometry version;
+// unique IDs reject cached frames from earlier windows. remote.py uses normal
+// pointer/key input, never the clipboard, and checks middle edits and optional
+// native edge/corner dragging. It restores the in-memory text and closes the
+// window; additionally require the process exit code 0 and its verified record.
+// GUI input capture and model change timestamps precede the final widget Paint
+// observer. IME commits may have no KeyDown: change-to-Paint excludes delivery
+// and earlier change handlers. Neither metric includes native presentation.
+// Remote wall times include input transport and screenshot latency; they are
+// not UI freeze measurements. The 10 ms GUI timer separately reports gaps.
 // Optional -cpu-profile /outside/repo/run.pprof requires a new output path and
 // logs native calls exceeding 3 ms. Profiling runs are diagnostic observations,
 // excluded from end-to-end before/after statistics because profiling adds work.
@@ -64,15 +75,20 @@ type observer struct {
 }
 
 func (o *observer) HandleEvent(ctx gui.EventContext) {
+	at := time.Now().UnixNano()
 	input := false
+	var detail any
 	switch e := ctx.Event().(type) {
 	case events.KeyEvent:
 		input = e.EventType == events.KeyDown && e.Key != events.KeyControl && e.Key != events.KeyShift && e.Key != events.KeyAlt && e.Key != events.KeySuper
+		detail = map[string]any{"key": e.Key, "modifiers": e.Modifiers}
 	case events.PointerEvent:
 		input = e.EventType == events.PointerDown
+		detail = map[string]any{"position": e.Position, "button": e.Button}
 	}
 	if input {
 		o.sequence++
+		emit(map[string]any{"event": "input", "at_ns": at, "sequence": o.sequence, "detail": detail})
 		o.paint() // Echo ignored keys too, without handling their default action.
 	}
 }
@@ -84,6 +100,7 @@ type paintObserver struct {
 	model      *textedit.Model
 	last       [24]byte
 	frameStart time.Time
+	runID      byte
 }
 
 func (p *paintObserver) Measure(c layout.Constraint) layout.Measurement {
@@ -94,6 +111,7 @@ func (p *paintObserver) Paint(painter gui.Painter) {
 	info := p.editor.Snapshot()
 	var b [24]byte
 	b[0] = 0xa7
+	b[23] = p.runID << 1
 	binary.LittleEndian.PutUint16(b[1:], p.input.sequence)
 	binary.LittleEndian.PutUint32(b[3:], uint32(p.model.Revision()))
 	if editing := info.TextEditing; editing != nil {
@@ -104,7 +122,7 @@ func (p *paintObserver) Paint(painter gui.Painter) {
 	binary.LittleEndian.PutUint16(b[19:], uint16(p.editor.Rect().Width))
 	binary.LittleEndian.PutUint16(b[21:], uint16(p.editor.Rect().Height))
 	if meta, ok := info.Attributes["goui.sourceview"].(map[string]any); ok && meta["layoutPending"] == true {
-		b[23] = 1
+		b[23] |= 1
 	}
 	painter.FillRect(geometry.Rect(0, 0, p.Rect().Width, 16), graphics.RGB(255, 255, 255))
 	painter.FillRect(geometry.Rect(0, 0, 6, 16), graphics.RGB(255, 0, 255))
@@ -125,7 +143,12 @@ func main() {
 	file := flag.String("file", "", "UTF-8 file; never overwritten")
 	kind := flag.String("kind", "source", "source or text")
 	profile := flag.String("cpu-profile", "", "optional CPU profile outside the repository; enables native-call diagnostics")
+	remote := flag.Bool("remote", false, "reserve space for native window controls and place the observer below them")
+	runID := flag.Uint("run-id", 0, "passive marker instance ID (0..127); rejects stale remote frames")
 	flag.Parse()
+	if *runID > 127 {
+		panic("-run-id must be between 0 and 127")
+	}
 	if *profile != "" {
 		out, err := os.OpenFile(*profile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		must(err)
@@ -151,6 +174,9 @@ func main() {
 	// The editor application owns its minimum viewport. Deriving a native
 	// minimum from unbounded TextView content would produce a giant window.
 	win.SetMinSize(geometry.Size{Width: 640, Height: 360})
+	if *remote {
+		must(win.SetPosition(nil, geometry.Point{X: 80, Y: 60}))
+	}
 	must(win.SetTitle(fmt.Sprintf("SourceView interaction %s %s", *kind, filepath.Base(*file))))
 	var editor gui.Widget
 	var model *textedit.Model
@@ -175,16 +201,24 @@ func main() {
 	default:
 		panic("-kind must be source or text")
 	}
+	changeObserver := model.ConnectChange(func(change textedit.Change) {
+		emit(map[string]any{"event": "change", "at_ns": time.Now().UnixNano(), "revision": change.Revision, "bytes": model.Len()})
+	})
+	defer changeObserver.Disconnect()
 	scroll := gui.NewScrollView()
 	scroll.SetChild(editor)
 	scroll.SetMainWeight(1)
 	input := &observer{EventControllerBase: gui.NewEventControllerBase(gui.PhaseCapture), paint: func() { must(win.RequestPaint()) }}
-	probe := &paintObserver{input: input, editor: editor, model: model}
+	probe := &paintObserver{input: input, editor: editor, model: model, runID: byte(*runID)}
 	box := gui.NewLinearBox(layout.DirectionVertical)
 	box.SetCrossAlign(layout.CrossStretch)
 	spacer := gui.NewLinearBox(layout.DirectionVertical)
 	spacer.SetMinSize(geometry.Size{Height: 16})
 	spacer.SetMaxSize(geometry.Size{Height: 16})
+	if *remote {
+		spacer.SetMinSize(geometry.Size{Height: 48})
+		spacer.SetMaxSize(geometry.Size{Height: 48})
+	}
 	box.AddChild(spacer)
 	box.AddChild(scroll)
 	// A top-anchored overlay paints last without moving while the WM resizes
@@ -192,6 +226,11 @@ func main() {
 	overlay := gui.NewOverlay()
 	overlay.SetChild(box)
 	overlay.AddOverlay(probe)
+	if *remote {
+		overlay.ConnectOverlayPosition(probe, func(_, _ geometry.Size, position *geometry.Point) {
+			*position = geometry.Point{X: 100, Y: 24}
+		})
+	}
 	overlay.AddEventController(input)
 	win.ConnectFrame(func(time.Time) { probe.frameStart = time.Now() })
 	win.ConnectCloseRequest(func(allow *bool) {

@@ -76,6 +76,47 @@ xdotool、xclip；实际桌面截图依赖 Pillow。输入文件只读。测试�
 格式，不应与人在同一桌面同时操作。失败立即停止该批，不把后续环境错误算作
 控件性能结果。脚本具有有限等待，启动者另加进程超时以应对原生调用卡死。
 
+### macOS / Windows 桌面观察
+
+`remote.py` 使用 remote-computer-use 的普通 VNC/RDP 键鼠输入与截图，Pillow
+在观察机器解码截图，不向窗口添加编辑命令或自动化协议。窗口程序在交互会话中
+以 `-remote -run-id N` 启动；指定 Software、1x，`N` 为每轮不同的 1..127。
+先检查截图，再向脚本提供所观察的客户区位置、尺寸与连接 geometry version。
+被动标记包含相同 N，防止上一窗口已关闭但远端仍缓存旧帧时误发输入。
+
+```bash
+# 在远端交互会话启动，标准输出与进程退出码由启动者保存。
+./source-interaction -remote -run-id 12 -kind text -file /outside/repo/1.json
+# 在观察机器执行；坐标仅为示意，必须使用实测值。
+python3 tests/window/editor/interaction/remote.py \
+  --conn windows --platform windows --bounds 80,60,1100,760 \
+  --geometry-version 1 --run-id 12 --file /identical/local/copy/1.json \
+  --output /outside/repo/remote-result --resize
+```
+
+该脚本覆盖滚动条中部跳转、点击、单字符输入、退格、输入短词、选词替换、
+撤销重做、恢复原文和 Delete；可选六次实际原生边缘/角部拖动。每次操作检查
+字节数、修订、选区和就绪状态，最后正常关闭，由窗口逐字节比较全文。它不涉及
+Linux 脚本的头尾编辑和大段粘贴，不能互相替代覆盖范围。XML/HTML 可加
+`--line-end`，通过 End / Cmd+Right 移到当前未折行逻辑行尾，并独立断言该位置，
+以测普通插入；若在标签名内输入，合法的标签联动会修改两处，不能套用单处预期。
+
+VNC/RDP `visible_ms` 包含输入传输、远端编码、捕获及轮询，不能称为 GUI
+连续阻塞时间。窗口另记录输入 capture、模型 change 与末尾 Widget.Paint 时间。
+同一台机器内输入到该 Paint 的区间包含实际处理与排版，但不包含此前平台输入
+排队、native Present、合成和物理显示。IME 提交可能没有 KeyDown，只能另报
+change 到 Paint，不能伪称完整输入延迟。change 观察器在控件既有处理器之后
+连接，因此该区间还排除了之前同步 change 处理；两种口径不能混合比较。
+
+GUI 10 ms Timer 的 gap 另行保存，说明哪些阶段事件投递延后；不以某次 gap
+替代整轮卡顿结论。窗口拖动要求截图中出现至少两次中间尺寸；即使最终尺寸、
+文本和关闭校验通过，中间尺寸未观察到仍标失败。远程画面延迟可能妨碍此观测，
+须连同本机 Paint 尺寸时间序列记录，不能降低断言掩盖结果。
+
+脚本只改焦点、指针、窗口几何和内存文本，不占剪贴板；持键/按钮在 finally
+释放。不可与其他桌面操作同时运行，进程退出 0 和 `verified` 均由启动者检查。
+实际两端记录及尚未通过的项目见 [远端验证记录](PlanRemoteEditingLatency.md)。
+
 针对单行文档的中部编辑，可以给 `desktop.py` 增加 `--middle-edit`，仍通过真实
 滚动条跳转、正文点击、键盘与剪贴板执行修改和撤销，并在正常关闭时校验全文。
 它跳过首尾编辑和缩放，记录中的 `scope` 区分 `middle-edit` 与 `full`。
