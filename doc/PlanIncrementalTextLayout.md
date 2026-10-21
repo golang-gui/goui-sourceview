@@ -11,6 +11,8 @@
 - [x] Git 回退 Reflow 接入，修订两仓片段测量及布局设计。
 - [x] 普通值 Fragment 与按需详细几何分页接入。
 - [x] 有限送测实验，长词／JSON 的完整行及 cluster 对照。
+- [x] 最近有效宽度的完整布局复用、资源界限及正常窗口输入验证。
+- [x] 显式 bidi 上下文携带实验与隐式上下文反例。
 - [ ] 正式片段测量的上下文衔接、范围缓存及可视区布局。
 - [ ] 事件循环分步推进、可视区发布、增量布局、取消与生命周期。
 - [ ] 未完成排版期间仍可拖滚动条、操作其他控件的真实窗口验收。
@@ -172,3 +174,93 @@ IME／物理输入／混合 DPI 验收。
 - 本轮没有对用户 JSON 文件、MB／GB 输入或完整可视区测量路径作性能验收。
 
 后端保持原样；新代码仅是上层值设施、详细几何工作集、控件接入及有界送测实验。
+
+## 最近宽度缓存与上下文实验（2026-10-21）
+
+基线 SourceView `cf3c544`／GOUI `a618df5`。本轮只修改 SourceView，没有修改 GOUI、
+typography 接口、用户 go.mod／本地 replace 或 example/temp。继续使用本地 go.work。
+控件缓存与窗口回归在 `8f09aa6`，上下文实验及其设计边界在 `e0a56f1`，分别提交。
+
+### 已实现的控件优化
+
+段落以实际正文宽度区分完整原生布局、Fragment 和 Geometry，恢复缓存中的宽度时
+直接复用，而非调用 SetSize 重排。每个文本缓存身份最多两个宽度，所有身份／宽度
+共同遵守 128 项与输入字节总和 8 MiB 的原有界限；当前访问的单条大段落仍可超限。
+冷启动的 revision/row 项转为稳定 LineID 时重新执行该身份的宽度淘汰，未转接的
+临时项也计入全视图界限。该缓存不计作原生内存测量。
+
+高度变化不重新测量；字体、Tab、Wrap 模式、文档重置及生命周期仍释放旧资源。
+局部编辑重映射后缀行号，两个宽度继续复用未改 LineID。颜色变化按需重着色；
+Snapshot 只查询当前宽度，不从另一个宽度读取坐标，也不为快照补排文本。
+淘汰资源回调切换文档时终止旧操作，不能返回已销毁的段落。
+
+新增逻辑回归覆盖宽度命中、连续缩放界限、失效、颜色、快照、冷索引、编辑后缀和
+销毁重入。原生回归覆盖 ScrollView、复杂文字完整行／cluster／caret 和恢复前后像素。
+相同 `TestNativeRecentWidthsWithScrollView` 在仓库外独立检出的旧提交 cf3c544 上
+明确失败：恢复宽度新增一次布局、MeasureSize、MeasureMetrics 和颜色调用。
+修改后通过，没有删除旧断言或改变 Unicode 容差。
+
+### 同环境对照
+
+Linux amd64／Go 1.25.8／Xeon Gold 5318Y／Pango 1.50.6／Cairo 1.16.0，
+SourceView 默认 monospace 12 pt，8,192 个 a，WrapWordChar，无侧栏；视口宽度在
+520／480 DIP 间切换（正文 508／468 DIP）。两种宽度的初次测量和字体预热不计时；
+包括 LayoutVisible、锚点／高度更新，不包括绘制、窗口、事件循环等待。
+旧代码和新代码运行相同 benchmark，各三次，每次六次切换，分别执行以避免竞争：
+
+```bash
+go test . -run '^$' -bench '^BenchmarkNativeRecentWidths$' -benchtime=6x -count=3
+```
+
+| 路径 | 每次切换（三次） | 新建原生布局／导出度量 |
+| --- | --- | --- |
+| 旧提交 cf3c544 | 95.520 / 94.988 / 95.165 ms | 各 1 次 |
+| 最近宽度缓存 | 1.488 / 1.594 / 1.456 µs | 均 0 次 |
+
+旧路径每次 Go 分配约 2.38 MB，新路径 128 B；不包括原生分配器，不能当作进程内存。
+结果仅说明恢复最近宽度的缓存命中，不能推广为新宽度、首次首屏或端到端 UI 延迟。
+
+### 上下文实验与仍未解决的目标
+
+有限候选携带段落方向及活动 LRE／RLE／LRO／RLO／LRI／RLI，注入前缀也计入
+送测字节上限，移除前缀时保留真实控制符并拒绝跨 cluster 的不安全映射。
+Pango 1.50.6 下，长 RLO／LRO／RLI、混合 Unicode 在 512／2048 字节输入中与
+整段原生行和 cluster 逐项一致。原有独立截取丢失 RLO 的回归保持不变。
+
+新增反例说明活动控制符不足：跨窗口长中性序列、数字串和括号的坐标／方向仍不同。
+FSI 和深度溢出不在实验支持范围；基础方向扫描也未分步。相关实现只在 *_test.go，
+没有把它接入正式控件，没有用复杂文本同步整段路径冒充通用有界方案。
+
+**新宽度和首次原生测量仍同步，会阻塞 UI；通用片段测量和分时发布未完成。**
+后续须在上层解决隐式 bidi、括号及 shaping 上下文，再推进按帧有界工作。
+本轮没有改变 TextView／TextInput，也没有恢复 Reflow 或增加后台测量。
+
+### 验证
+
+Linux amd64／Go 1.25.8／Pango 1.50.6，通过：
+
+- `go test ./...`、`go test -race ./...`。
+- `go vet . ./internal/... ./language ./scheme ./ui ./example/editor ./example/declarative ./example/markdown/... ./tests/window/...`。
+- `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...` 与
+  `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`，仅为交叉构建。
+- `XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software GOUI_PLAT_SCALE=1 go run ./tests/window/editor/resize_cache`
+  及 scale=2：X11／XFCE／xfwm4，Modern 集成窗口，通过正常 PointerDown/Up
+  按钮切换编辑区宽度、恢复及点击光标，窗口和所持布局均自动释放。
+  两端缩放的编辑区宽度均为 632→512→632 DIP；原生布局／度量导出计数为
+  2→3→3，恢复和随后 byte 3 点击没有新增工作。首个多余布局是初始滚动条收敛，
+  已按界限淘汰。Painter 正常的每帧 MeasureSize 查询继续单独记录，不能把它们
+  与几何失效／重建混为一谈；包内 LayoutVisible 缓存命中另断言尺寸查询也不增加。
+- `XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software GOUI_PLAT_SCALE=1 go run ./tests/window/editor/selection`：
+  JSON／XML／HTML × Basic／Modern Light／Modern Dark 九组通过，包括选区、颜色、
+  焦点、菜单和像素。全部窗口自动关闭，没有文件、剪贴板或系统设置修改。
+
+失败／未执行分别保留：
+
+- `GOWORK=off go test ./...` 仍报 updates to go.mod needed，未运行 tidy，
+  没有用本地工作区通过替代发行依赖验证。
+- `go vet ./...` 仍在未修改的用户 example/temp/main.go:58:2 报 unreachable code；
+  上述正式包定向 vet 通过，没有改动或删除该例程。
+- 原生 Windows／macOS、物理输入／IME、混合 DPI、本轮 MB／GB 输入及用户 JSON
+  场景未执行。宽度命中窗口用例不作为“未完成排版仍可操作窗口”的验收通过。
+
+本轮没有改动 GOUI，因此没有新增 GOUI 提交或把此前的 GOUI 验证写成本轮重新执行。
