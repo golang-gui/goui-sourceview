@@ -212,3 +212,82 @@ SourceView 单段落改变高度不需改变换行宽度，表现较好；改变
 - `GOWORK=off go test ./...`：仍失败于 `updates to go.mod needed`，未修改用户的
   go.mod/replace，也未用 tidy 掩盖独立依赖问题。
 - 本轮不改生产代码，没有重复前轮 race 全套；原有验证记录不替代本轮桌面失败。
+
+## 修正后的结果
+
+以下为同一 Linux/Pango/Software/1x 环境、同一输入和正常桌面输入路径的后续修正。
+SourceView 已按功能提交 `b631fce`、`6d80b4a`、`ea3b079`、`fd29b5a`、`33ac118`；
+GOUI 已提交 `f9cc538`、`e1e0110`、`c051d82`、`b50da4f`。诊断程序 `fb577de`
+提供中部编辑子集及可选分析器，性能统计均关闭分析器。上述基线失败保留，不再
+将“只增加验证程序”或“未修改生产实现”视为当前状态。
+
+### 已落实的修正
+
+- GOUI TextView 的大文本自然尺寸查询采用已有高度估计，实际分配后的视区准备
+  才确定换行宽度。仅改变高度不再切换至包含滚动条的外层宽度并重测正文。
+- 同一逻辑段落内编辑保留此前折行高度估计，避免先缩成一行、隐藏滚动条，再因
+  恢复滚动条切换宽度而二次重排。实际新尺寸仍由完整原生测量校正。
+- TextView 保留最多四份近期被替换的大段落完整排版，附加源文本预算 1 MiB；
+  只在全文及换行宽度完全一致时转移资源所有权。SourceView 在原有 128 项、8 MiB
+  源文本缓存预算内采用同样的精确输入匹配。撤销、重做、退格恢复原文可以复用；
+  不截断双向上下文，不推算替代原生坐标。模型、字体、样式和生命周期变化仍失效。
+- Pango 导出簇坐标时减少逐簇重复查询当前行、字形 run 和无用 ink bounds，仍逐簇
+  读取原生 logical bounds。完整混合脚本、RTL 控制符及占位符几何与旧实现一致。
+- SourceView 从编辑增量映射未交叉的折叠范围，避免逐个调用 LineAt；相同的最终
+  前景色范围不重复修改原生布局。标记匹配缓存无匹配结论；括号候选先检查自身行
+  的词法类型，避免 XML 声明等非结构候选驱动大范围重分析及视区反复失效。
+
+具体策略、键、预算、失效条件见 DesignLayout、DesignFolding、DesignMarkup、
+DesignPairs 与 GOUI 的 DesignTextEditing、DesignTypography；这里记录验收结果。
+
+### 端到端复测
+
+每组独立启动三次并在正常关闭时逐字节恢复全文，单位 ms，`中位数 / 最大值`。
+
+| 场景 | 修正前 | 修正后 | 验收边界 |
+| --- | ---: | ---: | --- |
+| TextView，54 MB JSON | 120 s 未进入编辑 | 输入 56 / 84，退格及 Delete 60 / 101 | 三轮完整 57 项、六种尺寸拖动、全文校验通过 |
+| TextView，128 KB 单段落，仅改高 | 579 / 1052 | 62 / 84 | 松手至就绪；六次拖动均有中间帧 |
+| SourceView，XML，中部滚动至非 pending | 36500～37240 | 262～325 | 三轮完整 57 项通过；不将原 pending 等待描述为连续冻结 |
+| SourceView，128 KB 单段落，输入 | 345 / 390 | 302 / 326 | 全新内容仍有同步原生测量 |
+| SourceView，同上，退格及 Delete | 361 / 380 | 64 / 80 | 可命中完整旧输入的场景 |
+| SourceView，同上，撤销及重做 | 362 / 657 | 65 / 151 | 同宽完整测量缓存；不是近似重排 |
+
+以上对应仓库外记录 `optimized-text-github-api-4x.json-*`、
+`optimized-text-paragraph-128k.txt-*`、`final-lexical-source-opengl.xml-*`、
+`final-history-source-paragraph-128k.txt-*`。TextView 的单段落宽度及角部拖动仍未
+满足“松手前至少两帧”的响应要求；高度修正不代表宽度重排已解决。
+
+另按用户实际单行 JSON 验证 TextView：157,862 bytes、157,830 runes、一个逻辑行，
+SHA-256 `7baa22a894b415fdc3425c94f8a541d0ded8f77965541c46af3c95a3364c798b`。
+通过真实滚动条跳到中部并点击（约字节 77,601），三轮各完成 16 条中部编辑记录，
+每轮脚本及窗口退出码均为 0，全文校验通过。输入文件只读，未保存修改。
+
+| 操作 | 修正前 | 修正后 |
+| --- | ---: | ---: |
+| 全新字符输入 | 994 / 1030 | 548 / 592 |
+| Backspace | 合并 Delete：1007 / 1060 | 60 / 77 |
+| Delete | 同上 | 61 / 74 |
+| 全新选词替换 | 993 / 1018 | 558 / 561 |
+| Undo | 合并 Redo：1411 / 1437 | 60 / 73 |
+| Redo | 同上 | 58 / 63 |
+
+记录为 `user-json-middle-text-before-*`、`user-json-middle-text-history-*`。
+其中独立的分析器实验确认此前输入会做两轮完整尺寸及簇坐标测量，撤销可达三轮；
+修正后全新输入只需一轮，但该轮依然可能约 550 ms。**全新长段落内容和新宽度的
+同步原生换行仍未解决**，不能以命中历史缓存的 60 ms 宣称全部编辑流畅。
+一轮 `user-json-text-after` 受并行既有窗口测试抢焦点影响而中断，无正常关闭全文
+校验，明确不计入通过轮次。
+
+### 当前验证状态
+
+- 两仓工作区 `go test ./...` 通过；GOUI `gui`、`gui/textedit`、Pango 和 SourceView
+  对应逻辑与原生回归测试通过 race。无新增用例在 init 中启动窗口。
+- GOUI 关闭工作区 `GOWORK=off go test ./...` 通过；SourceView 独立命令仍失败于
+  `updates to go.mod needed`，未修改用户的本地 replace。
+- 两仓相关 Windows amd64 / macOS arm64 目标编译通过，不等于远端桌面通过。
+- SourceView 选区窗口在 Software 1x、2x 上验证 JSON/XML/HTML 与 Basic、Modern
+  亮暗模式，共 18 种组合通过。它不替代真实系统输入的编辑延迟测试。
+- 曾有一次单独启动原生回归程序在执行断言前发生 segmentation fault；随后相同
+  命令、整套测试及 race 通过，尚不能归因，不写作已修复。
+- 以上数据均为 Linux 结果，远端 CoreText/DirectWrite 验证另行记录。
