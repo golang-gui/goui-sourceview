@@ -5,7 +5,57 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-当前依赖已切换到 GOUI v0.2.0，独立验证结果见第 14 节；早期各切片中的未发布依赖及失败描述保留为当时记录。
+当前依赖已切换到 GOUI v0.3.0，正在准备 v0.1.0 发布。早期各切片中的未发布
+依赖及失败描述保留为当时记录，当前验证结果以发布记录为准。
+
+## v0.1.0 发布准备（2026-10-23）
+
+- [x] go.mod 更新到已发布的 GOUI v0.3.0，移除本机 replace；保留忽略的 go.work
+  供双仓开发。干净源码 tidy 同步 cgo v0.1.1、nanovgo v0.0.9，并正确分类
+  直接使用的 x/text；同步 go.sum 及示例指南，不修改相邻 GOUI 仓库。
+- [x] 增加 [发布流程](Release.md)，按 Go 库及源码示例交付；本次不分发示例二进制，
+  签名、公证、手工附件与附件校验文件不适用。
+- [x] 初步干净源码验证：Go 1.25.8 / Linux amd64 / Pango，GOWORK=off，
+  全包非缓存测试 415 项通过、零失败/跳过；vet 零诊断，三目标全仓构建通过。
+- [x] 同源快照 `GOWORK=off CGO_ENABLED=1 go test -race ./... -count=1`
+  通过；模块 verify / tidy -diff 通过。没有把未跟踪 example/temp 纳入验证或提交。
+- [x] Linux Ubuntu 22.04.5 / Xvnc :85 / Xfwm4 合成开启 / Pango / Software：
+  150% 的 frame、experience、extensions、find_appearance、keybindings、folding、
+  languages、markup 窗口自动断言通过。completion scroll 在
+  1/1.25/1.5/1.75/2 倍的 Modern 亮暗十组通过；1.5 倍另重复六次通过。
+  修正了首帧前取样的测试时序，旧入口三次均明确失败，未修改生产弹窗或扩大容差，
+  详见 [补全记录](PlanCompletionScrolling.md)。
+- [x] 正式 editor 示例由正常桌面输入检查 Linux 软件绘制 1.5 倍及 macOS 默认
+  缩放：编辑、补全、查找、右键菜单及窗口调宽高。Mac 另验证真实复制/删除/粘贴、
+  撤销/重做、亮暗切换；查找 editor 均显示两个匹配。Mac Integrated 日志确认为
+  mode=1、enabled=true、controls=2，示例退出码 0；不分发此验证用二进制。
+- [x] Mac completion scroll 和 experience 在桌面 Terminal 启动，均返回 0；
+  日志确认 CoreText / OpenGL、scale=1。前者覆盖补全宽度、滚轮、拖动、Reveal、
+  留白、焦点与撤销；后者覆盖双/三击、局部选区颜色、菜单、JSON/HTML 补全、
+  过期异步结果、配对及原子历史。上述生产路径通过不抵消下面的实验测试失败。
+- [ ] macOS 15.7.7 / arm64 / CoreText 原生根包测试退出 1：259 项通过、
+  8 个测试及子项失败，集中在 `TestExplicitContextFragmentProbe` 的四个子项和
+  `TestBoundedFragmentProbeMatchesSimpleParagraphs` 的两个子项及各自父测试。
+  失败与 [原有记录](PlanRemoteEditingLatency.md#验证命令与未通过项) 一致：
+  独立输入片段的纵向坐标/基线或双向几何不等于完整段落。两种实验仅存在于
+  `*_test.go`，正式控件未启用，未移除断言、扩大 skip 或改变预期来制造通过。
+- [ ] Windows 10 19045 / amd64 原生测试未执行：下载尺寸和 SHA256 一致，
+  权限含 ReadAndExecute，但两种正常启动方式均被 Defender Exploit Guard
+  事件 1121 拦截，规则 ID 为 C1DB55AB-C21A-4637-BB3F-A12568109D35。
+  保留系统安全策略，停止重复启动；三目标交叉构建不算 Windows 原生运行通过。
+- [ ] 许可证尚未确定；已询问维护者是否沿用 GOUI 的 MIT 及版权署名。
+  上述既有实验失败与 Windows 验证缺口是否接受用于本次发布，也已单独询问。
+  未获得答复前不推送 v0.1.0 标签或创建正式 Release。
+- [ ] annotated tag、Draft、公开 Release、Go proxy 和消费方验证；公开后更新
+  中英文 README 安装指引并提交收尾记录。
+- 日志、干净源码、截图、验证程序与双语发布说明草稿保存在
+  `/tmp/goui-sourceview-release-v0.1.0-punsevvv`；Mac 专用目录为
+  `/private/tmp/sourceview-v010.VebMVy`。Mac 真实复制验证将剪贴板文本改为 true，
+  未保留原内容；其余窗口自动测试不访问真实剪贴板。编辑只改内存，未写用户文件、
+  修改系统缩放/安全设置或修改相邻 GOUI。真实 IME、混合 DPI 和全部后端组合未验收。
+  本轮示例、窗口专项、Mac 专用 Terminal、独立 X11 / Xfwm4 和传输 HTTP 均已关闭，
+  保留原有远端连接。依赖及验证程序提交后，干净 git archive 再次执行 415 项测试、
+  vet、模块校验、tidy -diff 与三目标构建均通过，窗口修正未带来新增包测试失败。
 
 ## 编辑器统一外框（2026-10-22）
 
