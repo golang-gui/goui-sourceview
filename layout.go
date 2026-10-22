@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"image/color"
+	"math"
 	"slices"
 	"strconv"
 
@@ -204,7 +205,46 @@ func (v *SourceView) Measure(c layout.Constraint) layout.Measurement {
 	if v.MaxSize().Height > 0 {
 		size.Height = min(size.Height, v.MaxSize().Height)
 	}
-	return layout.Measured(c.Clamp(size))
+	size = c.Clamp(size)
+	v.estimateWrappedHeight(max(1, size.Width-v.gutter-2*padding))
+	return layout.Measured(size)
+}
+
+// Estimate only the initial scrolling extent from a bounded native sample.
+// This prevents measuring an entire long paragraph once without a scrollbar
+// and again after the scrollbar appears. Sample geometry is never exposed to
+// editing or painting: full-context paragraph metrics replace the estimate.
+func (v *SourceView) estimateWrappedHeight(width float32) {
+	if v.heightEstimated || v.context == nil || v.wrap == WrapNone || v.projection != nil || v.document.model.LineCount() != 1 ||
+		v.document.model.Len() <= 4096 || v.heights.Total() != v.lineHeight {
+		return
+	}
+	end := min(512, v.document.model.Len())
+	for !v.document.model.IsRuneBoundary(end) {
+		end--
+	}
+	text, err := v.document.model.Slice(textedit.Range{End: end})
+	if err != nil {
+		return
+	}
+	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
+	state, epoch := v.operationState(), v.layoutEpoch
+	sample, err := v.context.NewTextLayout(text, format, width, 1<<24)
+	if err != nil {
+		return // An optional estimate must not report a second layout failure.
+	}
+	w, h := sample.MeasureSize()
+	sample.Destroy()
+	if !state.valid(v) || epoch != v.layoutEpoch || v.Destroyed() {
+		return
+	}
+	ratio := float32(v.document.model.Len()) / float32(end)
+	height := h * ratio
+	if h <= v.lineHeight {
+		height = float32(math.Ceil(float64(w*ratio/width))) * v.lineHeight
+	}
+	v.setParagraphHeight(0, max(v.lineHeight, height))
+	v.heightEstimated = true
 }
 func (v *SourceView) Arrange(rect geometry.Rectangle) {
 	v.WidgetBase.Arrange(rect)

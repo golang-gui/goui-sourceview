@@ -62,6 +62,7 @@ func (m *visibleLineMap) index(line int) (int, bool) {
 }
 
 func (v *SourceView) resetHeights() {
+	v.heightEstimated = false
 	hidden := v.hiddenLines
 	if v.projection != nil {
 		hidden = nil

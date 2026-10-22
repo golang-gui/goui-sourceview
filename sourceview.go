@@ -89,6 +89,7 @@ type SourceView struct {
 	viewport                                                                          geometry.Size
 	offset                                                                            geometry.Point
 	heights                                                                           textedit.HeightIndex
+	heightEstimated                                                                   bool
 	visibleLines                                                                      visibleLineMap
 	hiddenLines                                                                       []lineInterval
 	whitespace                                                                        WhitespaceMode
@@ -435,7 +436,14 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		v.invalidateLayout()
 	} else {
 		for _, s := range splices {
-			v.heights.Splice(s.Index, s.Removed, s.Added, v.lineHeight)
+			estimate := v.lineHeight
+			if s.Removed == 1 && s.Added == 1 {
+				// A local edit invalidates geometry, not the previous scrolling
+				// estimate. Keeping it avoids hiding the scrollbar and laying
+				// out the replacement at an unnecessary intermediate width.
+				estimate = v.heights.Top(s.Index+1) - v.heights.Top(s.Index)
+			}
+			v.heights.Splice(s.Index, s.Removed, s.Added, estimate)
 		}
 		// With no collapsed ranges, logical/display rows still correspond
 		// directly. Update their count without throwing away spliced heights.
