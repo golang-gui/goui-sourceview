@@ -37,6 +37,10 @@ func (k layoutKey) sameText(other layoutKey) bool {
 }
 
 type paragraph struct {
+	released       bool
+	shape          *textedit.ShapedText
+	wrapped        *textedit.WrappedText
+	glyphColors    []textedit.GlyphColor
 	layout, number typography.TextLayout
 	geometry       textedit.Geometry
 	fragment       textedit.Fragment
@@ -79,7 +83,7 @@ func (v *SourceView) dropLayouts() {
 	old := v.layouts
 	v.layouts = make(map[layoutKey]*paragraph)
 	for _, p := range old {
-		p.layout.Destroy()
+		p.releaseLayout()
 		if p.number != nil {
 			p.number.Destroy()
 		}
@@ -505,7 +509,27 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		return nil
 	}
 	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
-	native, err := v.context.NewTextLayout(text, format, key.width, 1<<24)
+	var shape *textedit.ShapedText
+	if len(text) >= 32768 && v.wrap != typography.WrapNone {
+		for _, previous := range v.layouts {
+			if previous.shape != nil && previous.text == text {
+				shape = previous.shape.Retain()
+				break
+			}
+		}
+		if shape == nil {
+			if ctx, ok := v.context.(typography.GlyphContext); ok {
+				shape, _ = textedit.NewShapedText(ctx, text, format)
+			}
+		}
+	}
+	var native typography.TextLayout
+	var err error
+	if shape != nil {
+		native = shape.Layout()
+	} else {
+		native, err = v.context.NewTextLayout(text, format, key.width, 1<<24)
+	}
 	if err != nil {
 		// A failed automatic request must not retry/report on every frame.
 		// Bound failures like retained resources; new input identities can retry.
@@ -519,19 +543,37 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		return nil
 	}
 	if !state.valid(v) || epoch != v.layoutEpoch {
-		native.Destroy()
+		if shape != nil {
+			shape.Release()
+		} else {
+			native.Destroy()
+		}
 		return nil
 	}
 	delete(v.layoutFailures, key)
-	p = &paragraph{layout: native, text: text, used: v.tick, row: row, foreground: v.colors.Foreground}
+	p = &paragraph{shape: shape, layout: native, text: text, used: v.tick, row: row, foreground: v.colors.Foreground}
 	if !v.colorParagraph(key, p, style, tokens, focus) {
-		native.Destroy() // Not cached yet: the local call still owns this object.
+		p.releaseLayout() // Not cached yet: the local call still owns this object.
 		return nil
 	}
-	w, h := native.MeasureSize()
-	lines, clusters := native.MeasureMetrics()
+	var w, h float32
+	var lines []typography.TextLine
+	var clusters []typography.TextCluster
+	if shape == nil {
+		w, h = native.MeasureSize()
+		lines, clusters = native.MeasureMetrics()
+	}
 	var g textedit.Geometry
-	fragment, fragmentErr := textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
+	var fragment textedit.Fragment
+	var fragmentErr error
+	if shape != nil {
+		p.wrapped = shape.Wrap(key.width, format.TabWidth, v.lineHeight, v.wrap == typography.WrapWordChar)
+		fragment = p.wrapped.Fragment()
+		size := fragment.Size()
+		w, h = size.Width, size.Height
+	} else {
+		fragment, fragmentErr = textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
+	}
 	if fragmentErr == nil {
 		g = fragment.Geometry(v.lineHeight)
 	} else {
@@ -567,7 +609,13 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 		return false
 	}
 	colors := v.paragraphColors(len(p.text), style, tokens)
-	if p.foreground != v.colors.Foreground || !slices.Equal(p.colors, colors) {
+	if p.shape != nil {
+		p.glyphColors = p.glyphColors[:0]
+		for _, c := range colors {
+			p.glyphColors = append(p.glyphColors, textedit.GlyphColor{Range: textedit.Range{Start: c.start, End: c.end}, Color: c.color})
+		}
+		p.foreground, p.colors = v.colors.Foreground, colors
+	} else if p.foreground != v.colors.Foreground || !slices.Equal(p.colors, colors) {
 		// Complete replacement clears obsolete tokens/selection and bounds
 		// backend attributes. A fresh layout already has TextFormat's base.
 		if len(p.text) > 0 && (p.foreground != v.colors.Foreground || len(p.colors) > 0) {
@@ -696,7 +744,7 @@ func (v *SourceView) pruneLayouts(keep layoutKey) {
 		}
 		bytes -= len(p.text)
 		delete(v.layouts, oldest)
-		p.layout.Destroy()
+		p.releaseLayout()
 		if p.number != nil {
 			p.number.Destroy()
 		}
@@ -769,7 +817,11 @@ func (v *SourceView) Paint(p gui.Painter) {
 				p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))
 			}
 		}
-		p.DrawTextLayout(origin, item.layout)
+		if item.wrapped != nil {
+			item.wrapped.Paint(p, origin, geometry.Rect(v.gutter, padding, max(0, v.viewport.Width-v.gutter), max(0, v.viewport.Height-2*padding)), v.colors.Foreground, item.glyphColors)
+		} else {
+			p.DrawTextLayout(origin, item.layout)
+		}
 		v.paintWhitespace(p, row, item, origin)
 		v.paintFoldBadge(p, row, item)
 		if v.projection != nil {
@@ -1069,4 +1121,17 @@ func (v *SourceView) captureAnchor() {
 	edge := p.geometry.LineEdge(index, false)
 	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: v.offset.Y - padding - v.paragraphTop(row) - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
 	v.anchorRevision = v.document.model.Revision()
+}
+
+func (p *paragraph) releaseLayout() {
+	if p.released {
+		return
+	}
+	p.released = true
+	shape, native := p.shape, p.layout
+	if shape != nil {
+		shape.Release()
+	} else if native != nil {
+		native.Destroy()
+	}
 }
