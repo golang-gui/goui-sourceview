@@ -18,8 +18,8 @@
 // pointer acceptance and undo via
 // normal Window/Popover.DispatchEvent; READY means setup, not pixel acceptance.
 // Native IME and physical shortcut interception require separate verification.
-// Waits for an allocated viewport with an 8-second deadline before assertions;
-// native creation and the first paint need not complete at a fixed timer tick.
+// 在 8 秒期限内等待弹窗完成首帧，再保存实际分配；原生 SizeEvent 可能把请求的
+// DIP 尺寸按物理像素取整，首帧前的临时几何不能作为宽度稳定性的基准。
 // No clipboard, files or settings change; edge moves only this program's window.
 // Restart to reset. Close to exit; closing early with -auto is a failure.
 package main
@@ -189,6 +189,8 @@ func main() {
 	}
 	primary, _ := gui.ModPrimary.Resolve()
 	var popup gui.Popover
+	var observed gui.Popover
+	popupFrames := 0
 	var initialWidth float32
 	complete := false
 	var startAuto func()
@@ -208,6 +210,17 @@ func main() {
 		}
 		popup = win.Popovers()[0]
 		check(popup != nil && win.Focused() && v.Focused() && probe.scale > 0, "native popup/focus/painter not ready")
+		if observed != popup {
+			observed, popupFrames = popup, 0
+			popup.ConnectFrame(func(time.Time) { popupFrames++ })
+			must(popup.RequestPaint())
+			return
+		}
+		// ConnectFrame 在绘制之前通知；下一个定时器回调再读取已完成帧的几何。
+		if popupFrames == 0 {
+			check(time.Now().Before(deadline), "completion did not paint its viewport")
+			return
+		}
 		check(!popup.Modal() && popup.StyleName() == "sourceview.completion", "completion changed keyboard policy or lost shell style")
 		if *surface != "" {
 			check(popup.Transparent() == (*surface == "transparent"), "unexpected transparent/opaque fallback")

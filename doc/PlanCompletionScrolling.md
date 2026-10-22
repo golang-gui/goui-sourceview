@@ -1,5 +1,21 @@
 # 补全弹窗滚动与外观调整
 
+## v0.1.0 发布复验（2026-10-23）
+
+依赖 GOUI v0.3.0，Linux amd64 / Go 1.25.8 / Pango / 独立 Xvnc :85、
+Xfwm4 合成开启。此前记录的 150% `panel width changed after paint` 是窗口
+验证提前取样：测试只要求快照尺寸大于零，此时可能仍是请求尺寸；原生尺寸事件
+和首帧完成后才是按物理像素取整的实际分配。旧入口重复三次均记录
+`initial=363 current=363.33334` 并失败。
+
+验证程序现通过公开 Root.ConnectFrame / RequestPaint 等待弹窗实际绘制一帧，
+下一次定时器回调再保存初始尺寸，仍受原有 8 秒期限约束。不改 SourceView、
+Popover 或滚动逻辑，不增加尺寸容差，后续稳定宽度、像素/行滚轮、滚动条拖动、
+键盘 Reveal、留白、指针确认、焦点和撤销的原断言全部保留。
+修正后 Software 1.5 倍 scroll 场景连续六次通过；更完整的发布验证见 Plan。
+
+## 初始滚动与外观实现
+
 2026-10-20，SourceView 基线 5d5f3e3，本地 GOUI b58948f，正式依赖 v0.2.0。
 设计见 [补全设计](DesignCompletion.md)。本轮保留用户已有的 go.mod 本地 replace，不提交该配置。
 
