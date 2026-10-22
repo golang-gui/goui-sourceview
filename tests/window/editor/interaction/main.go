@@ -20,6 +20,8 @@
 // CLIPBOARD and restores its prior UTF-8 text, if available; rich formats cannot
 // be restored. Window focus/geometry and the pointer change. Do not use while
 // someone is interacting with the same desktop. Closing/restarting resets.
+// desktop.py --rtl-insertion additionally checks a known RTL middle insertion
+// using visual Right with the same exact byte/caret and whole-text assertions.
 // desktop.py is X11-only. For VNC/RDP, start with -remote -run-id N (1..127)
 // in the interactive session and use remote.py with the same ID. Inspect the
 // screenshot before specifying its client bounds and desktop geometry version;

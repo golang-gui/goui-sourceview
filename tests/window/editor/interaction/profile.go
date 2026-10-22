@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"time"
 
+	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -64,5 +66,36 @@ func (l profileLayout) Rasterize(scale float32, region image.Rectangle, buf []by
 	start := time.Now()
 	b, err := l.TextLayout.Rasterize(scale, region, buf)
 	nativeSample(start, "raster", len(l.Text()))
+	return b, err
+}
+
+// Preserve the optional native capability while observing it. Unsupported
+// backends return an error so the control keeps its ordinary accurate path.
+func (c profileContext) NewGlyphLayout(text string, format typography.TextFormat) (typography.GlyphLayout, error) {
+	ctx, ok := c.Context.(typography.GlyphContext)
+	if !ok {
+		return nil, fmt.Errorf("glyph layout unsupported by %s", c.Context.Name())
+	}
+	start := time.Now()
+	l, err := ctx.NewGlyphLayout(text, format)
+	nativeSample(start, "create-glyphs", len(text))
+	if err != nil {
+		return nil, err
+	}
+	return profileGlyphLayout{GlyphLayout: l}, nil
+}
+
+type profileGlyphLayout struct{ typography.GlyphLayout }
+
+func (l profileGlyphLayout) GlyphMetrics() (typography.GlyphMetrics, error) {
+	start := time.Now()
+	m, err := l.GlyphLayout.GlyphMetrics()
+	nativeSample(start, "glyph-metrics", len(l.Text()))
+	return m, err
+}
+func (l profileGlyphLayout) RasterizeGlyphs(start, length int, foreground color.Color, offset geometry.Point, scale float32, region image.Rectangle, buf []byte) (typography.TextBitmap, error) {
+	now := time.Now()
+	b, err := l.GlyphLayout.RasterizeGlyphs(start, length, foreground, offset, scale, region, buf)
+	nativeSample(now, "glyph-raster", length)
 	return b, err
 }

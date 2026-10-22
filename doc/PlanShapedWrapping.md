@@ -43,6 +43,10 @@ GOUI 前置包含新的 `typography.GlyphContext/GlyphLayout/GlyphMetrics`、
 interaction 编译通过，未做本批原生桌面复测。`GOWORK=off go test ./...` 仍失败：
 `updates to go.mod needed`。已有本地 go.mod 改动及 `example/temp` 未纳入本次修改／提交。
 
+诊断包装器显式转发可选 GlyphContext／GlyphLayout，防止启用 profiling 后悄悄
+回到旧路径。最终二进制启用 `-cpu-profile` 的真实中部编辑和宽度切换通过、全文
+恢复通过，并收到 `glyph-metrics` 诊断事件；这次运行排除在性能表之外。
+
 首个完整塑形与索引仍有同步工作，新文本编辑仍可能超过 100 ms；原生后端未提供
 字形来源、或含强制分隔符的段落保持原路径。尚未完成冷索引分批发布、局部编辑后缀
 收敛、超大单字素及单行零 advance 几何的工作量上限，不能据本批结果宣称 UI 已完全不卡。

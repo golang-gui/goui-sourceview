@@ -18,6 +18,10 @@ resizing; it still uses the real scrollbar, text click, keyboard and clipboard.
 --width-cycles N additionally uses the window manager's normal Alt+F10 to
 maximize/restore N times. This checks reuse of exact recent widths, separately
 from dragging through many new widths; it does not relax the drag assertions.
+--rtl-insertion requires --middle-edit and a fixture whose clicked insertion
+point is inside a known RTL override/run. It uses visual Right to return over
+the inserted ASCII character, with the same exact byte/caret assertions. The
+default Left expectation is for an LTR insertion and is unchanged.
 """
 import argparse
 import ctypes as C
@@ -173,8 +177,11 @@ def main():
     parser.add_argument("--timeout", type=float, default=30)
     parser.add_argument("--bulk-bytes", type=int, default=0)
     parser.add_argument("--middle-edit", action="store_true")
+    parser.add_argument("--rtl-insertion", action="store_true")
     parser.add_argument("--width-cycles", type=int, default=0)
     args = parser.parse_args()
+    if args.rtl_insertion and not args.middle_edit:
+        parser.error("--rtl-insertion requires --middle-edit and a known RTL insertion fixture")
     repo = Path(__file__).resolve().parents[4]
     output = args.output.resolve()
     assert not output.is_relative_to(repo), "output must be outside the repository"
@@ -301,7 +308,10 @@ def main():
             expected = base
             clipboard_set(b"x")
             edit(location+"-paste-character", lambda: d.key("Control_L", "v"), insert=b"x")
-            key(location+"-left", "Left", predicate=lambda s: s["caret"] == at)
+            if args.rtl_insertion:
+                key(location+"-right-over-rtl-insertion", "Right", predicate=lambda s: s["caret"] == at)
+            else:
+                key(location+"-left", "Left", predicate=lambda s: s["caret"] == at)
             before = wait_status()
             key(location+"-delete-character", "Delete", predicate=lambda s: s["length"] == len(base) and s["caret"] == at and s["revision"] > before["revision"])
             expected = base
