@@ -505,3 +505,32 @@ Snapshot 的 `goui.sourceview.layoutPending` 描述尚有视口准备任务；�
 Root 帧事件；不引入其消息 API、全文件预排或多线程测量。与 Monaco 的行身份及测量
 复用取舍见第 3、10 节和 GOUI 的 TextEditing 设计。实测与输入来源见
 [真实文档验证记录](PlanCorpusLayout.md)。
+
+## 13. 独立 advance 索引与原生工作边界（2026-10-22）
+
+后续宽度缓存分为已塑形测量、折点／行组、详细编辑几何和绘制资源。字体和实际
+上下文未变时，换宽保留前者；仅新建换行迭代，逐个确认当前锚点和视口的显示行。
+局部编辑从受影响的塑形／方向上下文边界失效，后缀只有在内容及入口状态均收敛后
+才能复用。估计及二分只用于选候选，不能成为最终 caret／选择坐标。
+
+GOUI 新增 `textedit.WrapMeasurements`／`WrapIterator` 的普通值索引，支持前缀
+advance、Unicode 字素／换行机会、独立迭代与新行 Tab 原点。这是供本控件接入的
+基础算法，**当前 SourceView 尚未使用它替代原生整段折行**。完整度量的构建仍是
+前置，不能把快速重算折点的算法基准解释成首屏或真实输入耗时。
+
+GOUI 的 Pango／DirectWrite 批量度量导出已直接用于原来的布局路径；Pango 的区域
+栅格化只遍历 ink 与 region 相交的原生行。这些改动不改变控件语义、模型或线程；
+仍保留原生完整 shaping／bidi，CoreText 当前已有 run 批量导出，无须为统一而改写。
+有限范围塑形的 Pango／CoreText 验证仍为实验，尚无三后端公共范围布局契约；不复制该原生
+实现到本模块，不引入 GOUI 私有依赖，也不重新引入 typography Reflow／调度。
+
+详细算法、原生事实与参考版本见
+[GOUI 文本片段设计](../../goui/doc/DesignIncrementalTextLayout.md#14-度量索引与换行分离2026-10-22)。
+有限工作单元、事件循环推进和完整 Unicode 正确性继续是验收目标；当前冷的超长单行
+仍可能阻塞，不能将这一批度量／渲染改进宣称为通用分帧排版已经完成。
+
+
+普通边界的视觉导航按 GOUI Geometry 的 float32 表示误差处理，不复制其内部
+停靠点算法。本轮原生回归覆盖三后端和大坐标不换行文本，真实 Shift+Left／删除
+仍走正常事件。与同 byte 的舍入边缘不同，bidi／软折行 affinity 必须保留。
+本轮结果与剩余缺口见 [测量优化验证](PlanMeasuredTextLayout.md)。
