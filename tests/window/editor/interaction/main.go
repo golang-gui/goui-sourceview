@@ -11,7 +11,7 @@
 // Exercise insertion, Backspace/Delete, selected replacement/deletion, paste,
 // undo/redo at head/middle/tail, then drag the actual window edges/corner.
 // The final paint observer displays passive diagnostic bits: input sequence,
-// revision, selection, byte length, viewport and SourceView layout-pending flag.
+// revision, selection, byte length, viewport and each editor's layout-pending flag.
 // These describe a completed widget traversal, not text-color completion or
 // presentation to a physical monitor. External observers sample desktop pixels.
 // No timer requests painting. Input observation never consumes or edits events.
@@ -124,6 +124,9 @@ func (p *paintObserver) Paint(painter gui.Painter) {
 	binary.LittleEndian.PutUint16(b[19:], uint16(p.editor.Rect().Width))
 	binary.LittleEndian.PutUint16(b[21:], uint16(p.editor.Rect().Height))
 	if meta, ok := info.Attributes["goui.sourceview"].(map[string]any); ok && meta["layoutPending"] == true {
+		b[23] |= 1
+	}
+	if meta, ok := info.Attributes["goui.text"].(map[string]any); ok && meta["layoutPending"] == true {
 		b[23] |= 1
 	}
 	painter.FillRect(geometry.Rect(0, 0, p.Rect().Width, 16), graphics.RGB(255, 255, 255))
