@@ -15,6 +15,9 @@ Failed operations are never counted as passes. --bulk-bytes explicitly tests a
 larger paste; some X11 selection owners require unsupported INCR transfers.
 --middle-edit restricts the run to middle-of-document edits/history and skips
 resizing; it still uses the real scrollbar, text click, keyboard and clipboard.
+--width-cycles N additionally uses the window manager's normal Alt+F10 to
+maximize/restore N times. This checks reuse of exact recent widths, separately
+from dragging through many new widths; it does not relax the drag assertions.
 """
 import argparse
 import ctypes as C
@@ -88,23 +91,27 @@ class Desktop:
 
     def status(self):
         x, y, w, h = self.geometry()
-        # Top-anchored, last-painted overlay; unchanged during native resize.
-        data, _ = self.pixels(x + 5*self.scale, y+13*self.scale, 590*self.scale, 1)
-        def pixel(pos):
-            at = pos * 4
-            return tuple(data[at:at+3])  # BGRX
-        if pixel(2*self.scale) != (255, 0, 255):
-            return None  # occluded, resizing, or not yet presented
-        b = bytearray(24)
-        for i in range(192):
-            blue, green, red = pixel((9+i*3)*self.scale)
-            if red < 32 and green < 100 and blue > 160:
-                b[i//8] |= 1 << (i % 8)
-        if b[0] != 0xa7:
-            return None
-        _, seq, rev, caret, anchor, length, width, height, pending = struct.unpack("<B H I I I I H H B", b)
-        return dict(seq=seq, revision=rev, caret=caret, anchor=anchor, length=length,
-                    width=width, height=height, pending=bool(pending & 1))
+        # Integrated chrome has a 5-DIP resize inset in normal state, and
+        # none when maximized. Both are actual observer origins; still require
+        # the same magenta sentinel and complete marker header before decoding.
+        for inset in (5, 0):
+            data, _ = self.pixels(x + inset*self.scale, y+13*self.scale, 590*self.scale, 1)
+            def pixel(pos):
+                at = pos * 4
+                return tuple(data[at:at+3])  # BGRX
+            if pixel(2*self.scale) != (255, 0, 255):
+                continue
+            b = bytearray(24)
+            for i in range(192):
+                blue, green, red = pixel((9+i*3)*self.scale)
+                if red < 32 and green < 100 and blue > 160:
+                    b[i//8] |= 1 << (i % 8)
+            if b[0] != 0xa7:
+                continue
+            _, seq, rev, caret, anchor, length, width, height, pending = struct.unpack("<B H I I I I H H B", b)
+            return dict(seq=seq, revision=rev, caret=caret, anchor=anchor, length=length,
+                        width=width, height=height, pending=bool(pending & 1))
+        return None  # occluded, changing state, or not yet presented
 
     def code(self, key):
         result = self.x.XKeysymToKeycode(self.d, self.x.XStringToKeysym(key.encode()))
@@ -166,6 +173,7 @@ def main():
     parser.add_argument("--timeout", type=float, default=30)
     parser.add_argument("--bulk-bytes", type=int, default=0)
     parser.add_argument("--middle-edit", action="store_true")
+    parser.add_argument("--width-cycles", type=int, default=0)
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[4]
     output = args.output.resolve()
@@ -340,6 +348,16 @@ def main():
             if not resize(d, wait_status, record, name, dx*args.scale, dy*args.scale):
                 resize_failures.append(name)
         capture("resized-restored")
+        for cycle in range(args.width_cycles):
+            original_geometry = d.geometry()[2:]
+            before = wait_status()
+            maximized = measure(f"width-cycle-{cycle+1}-maximize", lambda: d.key("Alt_L", "F10"),
+                                lambda s: s["width"] > before["width"] and s["height"] > before["height"], sequence=0)
+            restored = measure(f"width-cycle-{cycle+1}-restore", lambda: d.key("Alt_L", "F10"),
+                               lambda s: s["width"] == before["width"] and s["height"] == before["height"], sequence=0)
+            assert d.geometry()[2:] == original_geometry, "maximize/restore did not restore native dimensions"
+            for s in (maximized, restored):
+                assert (s["caret"], s["anchor"], s["length"]) == (before["caret"], before["anchor"], before["length"]), "maximize/restore changed text or selection"
         # The window's close handler compares the complete model to the input,
         # outside latency observations. Whole-document clipboard copying is a
         # separate platform capability; it is not needed to read model bytes.

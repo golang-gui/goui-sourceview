@@ -53,3 +53,6 @@ SourceView `GOWORK=off go test ./...` 仍返回 `updates to go.mod needed`；未
 窗口、焦点、指针和本机 UTF-8 剪贴板曾随测试变化；所有测试窗口已退出，输入文件
 未改变，Windows 自建启动任务已删除，用户既有远端连接保留。产物在仓库外临时目录；
 `example/temp` 和其他用户未跟踪工作未纳入提交。
+
+后续批次的初始估计、局部编辑高度保留及独立 X11／近期宽度验证见
+[分配验证](PlanTextLayoutAllocation.md)，继续保留完整原生折行和拖动响应的未完成项。
