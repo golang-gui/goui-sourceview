@@ -101,6 +101,7 @@ func run() error {
 	editor.SetID("editor")
 	editor.SetAcceptsTab(true)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(editor)
 	viewport := gui.NewOverlay()
 	viewport.SetChild(scroll)

@@ -92,6 +92,7 @@ func main() {
 	toolbar.AddChild(darkButton)
 	toolbar.AddChild(gui.NewLabel("Bracket matching · " + *scenario))
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetMainWeight(1)
 	scroll.SetChild(v)
 	probe := &scaleProbe{}

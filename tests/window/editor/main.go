@@ -68,6 +68,7 @@ func main() {
 	second.SetDocument(document)
 	second.SetReadOnly(true)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(editor)
 	scroll.SetMainWeight(1)
 	before, after := gui.NewButton(), gui.NewButton()
@@ -179,6 +180,7 @@ func main() {
 			scroll.SetChild(editor)
 			// Bind a second native view briefly; unloading it must not stop the first.
 			otherScroll := gui.NewScrollView()
+			otherScroll.SetStyleName("source-view")
 			otherScroll.SetChild(second)
 			box.AddChild(otherScroll)
 			box.RemoveChild(otherScroll)

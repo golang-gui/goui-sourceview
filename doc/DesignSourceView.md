@@ -33,7 +33,7 @@ GOUI 不反向依赖本模块。
 1. SourceView 独立实现 Widget、输入行为和排版缓存，复用 GOUI 的框架设施。
 2. 复用 `gui/textedit.Model` 作为首版文本及历史基础，优先复用 Projection、Geometry、HeightIndex；不复制 Piece Tree 或私有编辑器。
 3. 以 Document 组合模型、语言和共享分析；选区、预编辑、视口、查找、配色及原生布局属于每个视图。
-4. SourceView 是实现 `Scrollable` 的叶子控件。外部组合 GOUI ScrollView 提供滚动条；行号与正文由同一控件呈现。
+4. SourceView 是实现 `Scrollable` 的叶子控件。外部组合 GOUI ScrollView 提供滚动条；宿主显式使用 `source-view` 样式，统一绘制包含滚动条的外框；行号与正文由同一控件呈现。
 5. 首版语言使用自行编写的纯 Go、有状态、可分段扫描器。暂不引入原生编辑器、WebView、Tree-sitter、完整 Monarch 或 TextMate 运行时。
 6. 首版在 GUI 线程按预算推进分析；先不引入后台 goroutine、模型快照协议或多线程排版。
 7. 首版 token 样式只改变前景色。字号、字重和斜体等按 token 改变度量的能力后续单独设计。

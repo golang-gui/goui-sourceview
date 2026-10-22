@@ -73,6 +73,7 @@ func main() {
 	box.AddChild(gui.NewLabel("Folding · JSON/XML/HTML · shared document, independent views"))
 	for _, editor := range []*source.SourceView{v, other} {
 		scroll := gui.NewScrollView()
+		scroll.SetStyleName("source-view")
 		scroll.SetChild(editor)
 		scroll.SetMainWeight(1)
 		box.AddChild(scroll)

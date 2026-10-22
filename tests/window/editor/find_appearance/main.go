@@ -96,6 +96,7 @@ func main() {
 		v.SetDocument(source.NewDocument("one one\n\neditor content\n"))
 
 		scroll := gui.NewScrollView()
+		scroll.SetStyleName("source-view")
 		scroll.SetChild(v)
 		overlay := gui.NewOverlay()
 		overlay.SetChild(scroll)

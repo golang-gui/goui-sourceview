@@ -25,6 +25,7 @@ func modernRules(o modern.Options, base style.StyleSheet) []style.Rule {
 	d.InactiveSelectionBackground = d.SelectionBackground
 	d.InactiveSelectionBackground.A = 32
 	rules := codeRules(d)
+	rules = append(rules, editorScrollRules(base)...)
 	menu := base.Resolve(style.Sel{Name: "menu"})
 	input := base.Resolve(style.Sel{Name: "text-input"})
 	border, _ := input.BorderColor()

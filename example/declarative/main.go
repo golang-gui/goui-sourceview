@@ -31,7 +31,7 @@ func main() {
 						base.VBox(
 							base.HeaderBar(base.Label("Declarative SourceView")).Padding(8),
 							base.Overlay(
-								base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true).KeyBindings(bindings)),
+								base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true).KeyBindings(bindings)).Style("source-view"),
 								base.OverlayItem(sourceui.FindBar("editor")).OnPosition(func(available, size geometry.Size, p *geometry.Point) {
 									p.X = max(0, available.Width-size.Width-8)
 								}),

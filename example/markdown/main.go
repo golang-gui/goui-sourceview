@@ -57,6 +57,7 @@ func main() {
 	editor.SetWrapMode(source.WrapWordChar)
 	editor.SetCompletionProvider(markdown.Provider())
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(editor)
 	viewport := gui.NewOverlay()
 	viewport.SetChild(scroll)

@@ -117,6 +117,7 @@ func main() {
 	v.SetAutomaticCompletion(false)
 	v.SetWrapMode(source.WrapWordChar)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	scroll.SetMainWeight(1)
 	button := gui.NewButton()

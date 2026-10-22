@@ -99,6 +99,7 @@ func main() {
 	d := v.Document()
 	d.Model().SetText("alpha beta\n")
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	win.SetWidget(scroll)
 	must(win.Show())

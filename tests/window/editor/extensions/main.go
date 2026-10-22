@@ -77,6 +77,7 @@ func main() {
 	v.SetDocument(doc)
 	v.SetAcceptsTab(true)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	scroll.SetMainWeight(1)
 	box := gui.NewLinearBox(layout.DirectionVertical)

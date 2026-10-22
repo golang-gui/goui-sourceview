@@ -50,6 +50,7 @@ func main() {
 	box.SetCrossAlign(layout.CrossStretch)
 	for _, v := range []*source.SourceView{a, b} {
 		scroll := gui.NewScrollView()
+		scroll.SetStyleName("source-view")
 		scroll.SetChild(v)
 		scroll.SetMainWeight(1)
 		box.AddChild(scroll)

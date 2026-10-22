@@ -170,3 +170,36 @@ func TestCustomStyleKeyFollowsDefinitionAndDocument(t *testing.T) {
 		t.Fatal("retained previous definition style")
 	}
 }
+
+func TestEditorFrameAndScrollBarThemeParts(t *testing.T) {
+	for _, sheet := range []style.StyleSheet{basic.Sheet(), modern.Sheet(modern.Options{}), modern.Sheet(modern.Options{Dark: true})} {
+		for _, state := range []style.State{style.Normal, style.Focused, style.FocusVisible, style.Disabled} {
+			frame := sheet.Resolve(style.Sel{Name: "source-view", Part: "frame", State: state})
+			want := sheet.Resolve(style.Sel{Name: "text-view", Part: "frame", State: state})
+			if !reflect.DeepEqual(frame, want) {
+				t.Fatalf("editor frame differs from official theme: state=%v", state)
+			}
+			if width, _ := frame.BorderWidth(); width <= 0 {
+				t.Fatalf("missing editor frame in state %v", state)
+			}
+		}
+		for _, part := range []string{"trough", "thumb"} {
+			for _, state := range []style.State{style.Normal, style.Hovered, style.Pressed} {
+				got := sheet.Resolve(style.Sel{Name: "source-view", Part: part, State: state})
+				want := sheet.Resolve(style.Sel{Name: "scroll-view", Part: part, State: state})
+				gotRadius, _ := got.Radius()
+				wantRadius, _ := want.Radius()
+				if background(got) != background(want) || gotRadius != wantRadius {
+					t.Fatalf("scrollbar theme mismatch: part=%s state=%v", part, state)
+				}
+				if width, _ := got.BorderWidth(); width != 0 {
+					t.Fatal("editor frame leaked into scrollbar")
+				}
+			}
+		}
+		body := sheet.Resolve(style.Sel{Name: "source-view"})
+		if width, _ := body.BorderWidth(); width != 0 {
+			t.Fatal("code body must not draw a second frame")
+		}
+	}
+}

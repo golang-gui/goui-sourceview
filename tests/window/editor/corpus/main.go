@@ -167,6 +167,7 @@ func main() {
 	v.ConnectError(func(err error) { panic(err) })
 	must(v.Document().SetLanguage(id))
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	widthButton := gui.NewButton()
 	widthButton.SetChild(gui.NewLabel("Resize width"))

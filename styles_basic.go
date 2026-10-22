@@ -14,6 +14,7 @@ func rgb(v uint32) color.NRGBA {
 }
 func basicRules(base style.StyleSheet) []style.Rule {
 	rules := codeRules(scheme.Light().Definition())
+	rules = append(rules, editorScrollRules(base)...)
 	c := completionColors{
 		Background: rgb(0xf8fafc), Foreground: rgb(0x24292f), DetailForeground: rgb(0x626d7a), Border: rgb(0xb9c3cf),
 		SelectedBackground: rgb(0xe3edf9), SelectedForeground: rgb(0x172b44), SelectedDetailForeground: rgb(0x4e627b),

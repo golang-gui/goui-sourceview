@@ -49,7 +49,7 @@ func main() {
                     base.HeaderBar(base.Label("Source editor")).Padding(8),
                     base.Overlay(
                         base.ScrollView(sourceui.SourceView().ID("editor").
-                            Document(document).AcceptsTab(true)),
+                            Document(document).AcceptsTab(true)).Style("source-view"),
                         base.OverlayItem(sourceui.FindBar("editor")).
                             OnPosition(func(available, size geometry.Size, p *geometry.Point) {
                                 p.X = max(0, available.Width-size.Width-8)
@@ -69,7 +69,8 @@ Integrated 采用 GOUI 的平台支持与降级规则。自定义窗口装饰不
 
 ## 命令式组合
 
-创建 `source.NewSourceView()` 并 SetDocument；将它放入 `gui.NewScrollView()`。
+创建 `source.NewSourceView()` 并 SetDocument；将它放入 `gui.NewScrollView()`，
+宿主显式 `SetStyleName("source-view")`，让正文与滚动条位于同一外框内。
 需要查找栏时，创建 `source.NewFindBar()`、SetTarget(editor)，将滚动区域作为 Overlay 的
 普通内容，查找栏通过 AddOverlay 放在其上。按需设置 ConnectOverlayPosition。
 两者挂载到同一 Root 后才能调用 `bar.Open(false)` / `bar.Open(true)` 并处理返回错误。

@@ -182,6 +182,7 @@ func main() {
 	v.SetFoldingEnabled(false) // Isolate selection pixels at the documented 6-DIP content origin.
 	v.SetReadOnly(true)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	scroll.SetMainWeight(1)
 	other := gui.NewButton()

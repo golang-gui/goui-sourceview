@@ -31,6 +31,28 @@ Basic 采用内置 Light 的代码颜色；Modern 根据 Dark 选择语法颜色
 `scheme.Definition` 只维护代码颜色，不再包含 Find / Completion UI 调色板。
 UI 的界面字体、焦点、圆角和阴影不由代码 Scheme 控制。
 
+## 滚动编辑区域外框
+
+SourceView 仍是正文叶子控件，外部 ScrollView 拥有包含滚动条的统一外框：
+
+```go
+scroll := gui.NewScrollView()
+scroll.SetStyleName("source-view")
+scroll.SetChild(sourceview.NewSourceView())
+// 声明式：ui.ScrollView(sourceui.SourceView()).Style("source-view")
+```
+
+Basic / Modern 注册分别从官方 `text-view/frame` 复制 frame 的各状态，
+从 `scroll-view/trough`、`scroll-view/thumb` 复制滚动条外观。代码正文仍无
+外框，原有 `border` part 只控制侧栏分隔等代码装饰，不替代 `frame`。
+FindBar 和补全弹窗保留独立容器及样式。显式 Scheme 只改变正文，外框保持
+当前 GUI 主题；需要共同自定义时，调用方也为宿主的 `frame` part 提供规则。
+
+ScrollView 在所有焦点/禁用状态间预留稳定圆角安全内区，聚焦只改变外观，
+不改变正文宽度或换行。主题变化沿既有 StyleChanged 重新计算；框架机制见
+[GOUI 外框设计](../../goui/doc/DesignScrollFrame.md)。该机制需要 GOUI 本次
+尚未发布的变更，单独依赖 v0.2.0 不具备此组合效果；本地使用双仓工作区。
+
 选区默认保留 token 前景；SelectionForeground.A==0 表示不覆盖，255 表示活动选区
 统一前景，其他 alpha 返回错误。Basic/Modern 的 selection part 显式写入零值前景，
 阻断根前景的 part 回退。应用追加 `.Part("selection").ForegroundColor(...)` 可开启覆盖，

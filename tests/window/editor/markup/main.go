@@ -50,6 +50,7 @@ func main() {
 	v.SetShowLineEndings(true)
 	must(v.SetRulers([]int{40, 80}))
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)

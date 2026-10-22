@@ -17,6 +17,27 @@ import (
 
 const sourceStyleID = "github.com/golang-gui/goui-sourceview"
 
+// The ScrollView host owns the outer frame. Copy the official theme's parts
+// explicitly; the code body and its syntax colors remain independent.
+func editorScrollRules(base style.StyleSheet) []style.Rule {
+	var rules []style.Rule
+	for _, part := range []string{"frame", "trough", "thumb"} {
+		name := "scroll-view"
+		if part == "frame" {
+			name = "text-view"
+		}
+		for _, state := range []style.State{style.Normal, style.Focused, style.FocusVisible, style.Disabled, style.Hovered, style.Pressed} {
+			rule := style.Rule{Sel: style.Sel{Name: "source-view", Part: part, State: state},
+				Style: base.Resolve(style.Sel{Name: name, Part: part, State: state})}
+			if part != "frame" {
+				rule = rule.BorderWidth(0)
+			}
+			rules = append(rules, rule)
+		}
+	}
+	return rules
+}
+
 var tokenKinds = []language.Kind{language.KindHeading, language.KindCode, language.KindEmphasis, language.KindLink, language.KindFence, language.KindMarker, language.KindPlain, language.KindProperty, language.KindString, language.KindEscape, language.KindNumber, language.KindKeyword, language.KindDelimiter, language.KindTag, language.KindAttribute, language.KindEntity, language.KindComment, language.KindMeta, language.KindInvalid, language.KindVariable}
 var tokenParts = func() map[language.Kind]string {
 	m := make(map[language.Kind]string)

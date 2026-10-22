@@ -93,6 +93,7 @@ func main() {
 	v := source.NewSourceView()
 	v.SetDocument(source.NewDocument("one ONE stone one\nlast"))
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)

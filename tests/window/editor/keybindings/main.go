@@ -61,6 +61,7 @@ func main() {
 		return []source.Completion{{Label: "true"}}, nil
 	}})
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)
@@ -76,6 +77,7 @@ func main() {
 	box.SetCrossAlign(layout.CrossStretch)
 	box.AddChild(overlay)
 	mirror := gui.NewScrollView()
+	mirror.SetStyleName("source-view")
 	mirror.SetChild(other)
 	mirror.SetMainWeight(1)
 	box.AddChild(mirror)

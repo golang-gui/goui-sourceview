@@ -211,6 +211,7 @@ func main() {
 	})
 	defer changeObserver.Disconnect()
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(editor)
 	scroll.SetMainWeight(1)
 	input := &observer{EventControllerBase: gui.NewEventControllerBase(gui.PhaseCapture), paint: func() { must(win.RequestPaint()) }}

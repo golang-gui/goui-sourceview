@@ -240,8 +240,8 @@ func main() {
 		}
 		return base.Window("main").Title("Optional SourceView find / replace").Size(760, 500).Content(
 			base.VBox(
-				base.Overlay(base.ScrollView(sourceui.SourceView().ID("a").Document(doc)), base.OverlayItem(find).OnPosition(func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })).MainWeight(1),
-				base.ScrollView(sourceui.SourceView().ID("b").Document(other)).MainWeight(1),
+				base.Overlay(base.ScrollView(sourceui.SourceView().ID("a").Document(doc)).Style("source-view"), base.OverlayItem(find).OnPosition(func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })).MainWeight(1),
+				base.ScrollView(sourceui.SourceView().ID("b").Document(other)).Style("source-view").MainWeight(1),
 				newProbe(),
 			).CrossAlign(layout.CrossStretch))
 	}))

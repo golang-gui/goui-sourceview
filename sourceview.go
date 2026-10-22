@@ -47,7 +47,8 @@ type searchMatch struct {
 }
 
 // SourceView is an independent editable leaf. Put it in gui.ScrollView to add
-// scrollbars. Construction owns no model/settings/root subscriptions.
+// scrollbars; set that host's StyleName to "source-view" for a shared outer
+// frame. Construction owns no model/settings/root subscriptions.
 type SourceView struct {
 	keyBindings      KeyBindings
 	boundKeys        []boundKey

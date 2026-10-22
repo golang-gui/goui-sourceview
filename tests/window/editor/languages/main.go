@@ -69,6 +69,7 @@ func main() {
 	must(v.SetKeyBindings(bindings))
 	v.SetAutomaticCompletion(false)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	scroll.SetMainWeight(1)
 	box := gui.NewLinearBox(layout.DirectionVertical)

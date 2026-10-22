@@ -120,6 +120,7 @@ func run() (result error) {
 	v.SetAcceptsTab(true)
 	v.SetAutomaticCompletion(false)
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetMainWeight(1)
@@ -442,6 +443,7 @@ func run() (result error) {
 	second.SetDocument(doc)
 	second.SetReadOnly(true)
 	otherScroll := gui.NewScrollView()
+	otherScroll.SetStyleName("source-view")
 	otherScroll.SetMainWeight(1)
 	otherScroll.SetChild(second)
 	add("mount second view", func() {

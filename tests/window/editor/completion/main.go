@@ -165,6 +165,7 @@ func main() {
 	caret := len(text)
 	v.SetSelection(textedit.Selection{Anchor: caret, Caret: caret})
 	scroll := gui.NewScrollView()
+	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
 	scroll.SetMainWeight(1)
 	box := gui.NewLinearBox(layout.DirectionVertical)

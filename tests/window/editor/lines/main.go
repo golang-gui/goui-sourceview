@@ -81,6 +81,7 @@ func main() {
 	columns.SetMainWeight(1)
 	for _, v := range []*source.SourceView{a, b} {
 		scroll := gui.NewScrollView()
+		scroll.SetStyleName("source-view")
 		scroll.SetMainWeight(1)
 		scroll.SetChild(v)
 		columns.AddChild(scroll)
