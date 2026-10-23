@@ -1,12 +1,41 @@
 # SourceView 开发与验收计划
 
-> 已有可运行的初始实现与双仓联调；尚未完成全平台原生验收及发布。
+> v0.1.0 已发布；实际验收范围及仍未覆盖的平台组合见下方发布记录。
 > 实际代码、命令、结果与限制见 [Implementation](Implementation.md)。
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-当前依赖已切换到 GOUI v0.3.0，正在准备 v0.1.0 发布。早期各切片中的未发布
+当前依赖为 GOUI v0.3.0，已发布 v0.1.0。早期各切片中的未发布
 依赖及失败描述保留为当时记录，当前验证结果以发布记录为准。
+
+## v0.1.0 正式发布（2026-10-23）
+
+- [x] 候选 `fcacbe5e27030494aed0b33d06e9e460c665d36e` 已在 origin/main，
+  annotated tag 的远端 peeled SHA 与其一致；未移动既有标签。LICENSE 与 GOUI
+  的 MIT 及版权署名逐字节一致。依赖与发布说明已提交，未纳入用户 example/temp。
+- [x] 从候选 git archive 再次关闭 workspace 验证，Go 1.25.8 / GOUI v0.3.0：
+  Linux 全仓非缓存测试 416 项通过、零失败/跳过，vet 零诊断，模块 verify、
+  tidy -diff 及 Linux amd64 / Windows amd64 / macOS arm64 无 cgo 全仓构建通过。
+  全部 Go / module 文件与完成 race、两端原生测试的源码快照逐字节一致。
+- [x] Mac / CoreText、Windows / DirectWrite 原生根包各 268 项通过、零失败/跳过。
+  Mac 原有八项、Windows 原有两项（均含父测试）已修复，未以豁免或修改容差发布。
+  片段只保留普通测量值和放置坐标，严格原生比较、源范围、输入预算及原有的
+  隐式上下文反例均保留。实际控件没有启用这些有界输入实验。
+- [x] 桌面输入、窗口专项及副作用见准备记录。Windows 所需 ASR 规则在授权后
+  临时停用，finally 恢复且最终再次核对全部 16 条规则一致；实时防护始终开启。
+  本轮独立 X11 / Xfwm4、窗口、专用 Terminal 和传输 HTTP 均已关闭，保留用户会话。
+- [x] Draft 的标签、标题、中英文说明和无手工附件范围核对通过；
+  [v0.1.0 Release](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.1.0)
+  已正式公开、非预发布、Latest。只发布 Go 库与源码示例，不提供二进制 Demo，
+  公证及手工附件校验不适用，不创建空 SHA256SUMS。
+- [x] 仓库外 GOWORK=off / proxy.golang.org 解析到 v0.1.0 及正确候选 SHA；
+  无 replace 的消费模块实际下载、tidy、verify、构造 Document / SourceView、
+  配置 JSON 语言并运行通过，根包、language、scheme、ui 与 Modern 集成的三目标
+  编译通过。消费方解析的 GOUI 为 v0.3.0，下载的 LICENSE 与原件一致。
+- [x] 中英文 README 在公开验证后加入 v0.1.0 安装命令；随文档收尾提交，
+  标签继续固定在冻结候选。完整日志与双语发布说明归档位置见下节。
+- 仍未完整验证真实 IME、混合 DPI 和全部绘制后端/缩放组合；复杂超长段落首次
+  原生排版仍可能阻塞。不将测试内原型通过或三目标构建当作这些能力已全面验收。
 
 ## v0.1.0 发布准备（2026-10-23）
 
@@ -59,8 +88,8 @@
   编辑、Tab 确认补全、真实复制/删除/粘贴、撤销/重做、查找、右键菜单及主题。
   补全 scroll 和 experience 自动断言均返回 0，日志确认 DirectWrite / Direct2D。
   桌面验证及后续原生复测后均恢复防护，无永久排除项。
-- [ ] annotated tag、Draft、公开 Release、Go proxy 和消费方验证；公开后更新
-  中英文 README 安装指引并提交收尾记录。
+- [x] annotated tag、Draft、公开 Release、Go proxy 和消费方验证，以及中英文
+  README 安装指引均已完成，结果见上方正式发布记录。
 - 日志、干净源码、截图、验证程序与双语发布说明草稿保存在
   `/tmp/goui-sourceview-release-v0.1.0-punsevvv`；Mac 专用目录为
   `/private/tmp/sourceview-v010.VebMVy`。Mac、Windows 真实复制验证将剪贴板文本改为
@@ -68,7 +97,7 @@
   文件、修改系统缩放或修改相邻 GOUI。临时安全配置变化已恢复，真实 IME、混合 DPI
   和全部后端组合未验收。
   本轮示例、窗口专项、Mac 专用 Terminal、独立 X11 / Xfwm4 和传输 HTTP 均已关闭，
-  保留原有远端连接。依赖及验证程序提交后，干净 git archive 再次执行 415 项测试、
+  保留原有远端连接。此前依赖及窗口验证程序提交后，干净 git archive 再次执行 415 项测试、
   vet、模块校验、tidy -diff 与三目标构建均通过，窗口修正未带来新增包测试失败。
 
 ## 编辑器统一外框（2026-10-22）

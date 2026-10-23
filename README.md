@@ -10,6 +10,14 @@ light/dark appearances. It supports both imperative and declarative integration.
 
 The project is under active development.
 
+## Installation
+
+Requires Go 1.24 or newer. GOUI v0.3.0 is downloaded automatically.
+
+```sh
+go get github.com/golang-gui/goui-sourceview@v0.1.0
+```
+
 ## Features
 
 - **Syntax highlighting** for JSON, XML, HTML, Markdown, TOML, YAML and Shell.

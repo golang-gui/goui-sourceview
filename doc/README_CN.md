@@ -9,6 +9,14 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 
 项目正在开发中。
 
+## 安装
+
+需要 Go 1.24 或更新版本，GOUI v0.3.0 由 Go 自动下载。
+
+```sh
+go get github.com/golang-gui/goui-sourceview@v0.1.0
+```
+
 ## 主要能力
 
 - **语法高亮：** 支持 JSON、XML、HTML、Markdown、TOML、YAML、Shell。
