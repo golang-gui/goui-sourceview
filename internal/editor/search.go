@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -57,6 +58,7 @@ func Compile(q Query) *Search {
 	}
 	return s
 }
+
 func (s *Search) Empty() bool { return s == nil || s.err != nil || len(s.pattern) == 0 }
 
 // CountChunk counts non-overlapping match starts in one source chunk, reading a
@@ -97,6 +99,7 @@ func (s *Search) CountChunk(m *textedit.Model, start, budget, matchedEnd int) (n
 	})
 	return next, count, after
 }
+
 func fold(r rune) rune {
 	lowest := r
 	for next := unicode.SimpleFold(r); next != r; next = unicode.SimpleFold(next) {
@@ -106,6 +109,7 @@ func fold(r rune) rune {
 	}
 	return lowest
 }
+
 func word(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r)
 }
@@ -209,7 +213,9 @@ func (s *Search) scan(m *textedit.Model, span textedit.Range, visit func(textedi
 	}
 	return nil
 }
+
 func runeAt(text string, at int) rune { r, _ := utf8.DecodeRuneInString(text[at:]); return r }
+
 func runeAtModel(m *textedit.Model, at int) rune {
 	end := min(m.Len(), at+utf8.UTFMax)
 	for end < m.Len() && !m.IsRuneBoundary(end) {
@@ -312,6 +318,7 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 	})
 	return matches
 }
+
 func (s *Search) Matches(m *textedit.Model, r textedit.Range) bool {
 	if s.Empty() {
 		return false
@@ -364,6 +371,154 @@ func (s *Search) ReplaceAll(m *textedit.Model, selection textedit.Selection, rep
 	}
 	if budget {
 		return Plan{}, ErrOperationLimit
+	}
+	p.After = mapSelection(selection, p.Edits)
+	return p, nil
+}
+
+func (s *Search) Err() error {
+	if s == nil {
+		return nil
+	}
+	return s.err
+}
+
+func (s *Search) SetRange(r *textedit.Range) {
+	s.scope = nil
+	if r != nil {
+		copy := *r
+		s.scope = &copy
+	}
+	s.cachedModel = nil
+	s.cachedText = ""
+	s.cachedMatches = nil
+}
+
+func (s *Search) cached() bool {
+	return s != nil && (s.query.Regex || strings.ContainsRune(s.query.Text, '\n'))
+}
+
+// matches caches one canonical non-overlapping source sequence per query/model
+// revision/scope. Regex anchors keep full-document context even with a scope.
+// Captures and original text remain private and never escape to GUI callbacks.
+func (s *Search) matches(m *textedit.Model) [][]int {
+	if s.Empty() {
+		return nil
+	}
+	if s.cachedModel == m && s.cachedRevision == m.Revision() {
+		return s.cachedMatches
+	}
+	s.cachedModel = m
+	s.cachedRevision = m.Revision()
+	s.cachedMatches = nil
+	s.cachedText = ""
+	if s.query.Regex {
+		s.cachedText = m.Text()
+		for _, idx := range s.regex.FindAllStringSubmatchIndex(s.cachedText, -1) {
+			if s.scope != nil && (idx[0] < s.scope.Start || idx[1] > s.scope.End) {
+				continue
+			}
+			if s.query.WholeWord && !wholeMatch(s.cachedText, idx[0], idx[1]) {
+				continue
+			}
+			s.cachedMatches = append(s.cachedMatches, idx)
+		}
+	} else {
+		after := 0
+		s.scan(m, textedit.Range{End: m.Len()}, func(r textedit.Range) bool {
+			if r.Start >= after {
+				s.cachedMatches = append(s.cachedMatches, []int{r.Start, r.End})
+				after = r.End
+			}
+			return true
+		})
+	}
+	return s.cachedMatches
+}
+
+func wholeMatch(text string, a, b int) bool {
+	first, last := false, false
+	if a < b {
+		r, _ := utf8.DecodeRuneInString(text[a:b])
+		first = word(r)
+		r, _ = utf8.DecodeLastRuneInString(text[a:b])
+		last = word(r)
+	}
+	if a > 0 {
+		r, _ := utf8.DecodeLastRuneInString(text[:a])
+		if word(r) == first {
+			return false
+		}
+	}
+	if b < len(text) {
+		r, _ := utf8.DecodeRuneInString(text[b:])
+		if word(r) == last {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Search) findCached(m *textedit.Model, start int, backward bool) (textedit.Range, bool) {
+	matches := s.matches(m)
+	if len(matches) == 0 {
+		return textedit.Range{}, false
+	}
+
+	index := 0
+	if backward {
+		index = sort.Search(len(matches), func(i int) bool { return matches[i][1] > start }) - 1
+		if index < 0 {
+			index = len(matches) - 1
+		}
+	} else {
+		index = sort.Search(len(matches), func(i int) bool { return matches[i][0] >= start })
+		if index == len(matches) {
+			index = 0
+		}
+	}
+	best := matches[index]
+
+	return textedit.Range{Start: best[0], End: best[1]}, true
+}
+
+func (s *Search) Replacement(m *textedit.Model, r textedit.Range, replacement string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	replacement = textedit.Normalize(replacement)
+	if !s.query.Regex {
+		return replacement, nil
+	}
+	for _, idx := range s.matches(m) {
+		if idx[0] == r.Start && idx[1] == r.End {
+			expanded := s.regex.ExpandString(nil, replacement, s.cachedText, idx)
+			if len(expanded) > 32<<20 {
+				return "", ErrOperationLimit
+			}
+			return string(expanded), nil
+		}
+	}
+	return "", fmt.Errorf("sourceview: search match changed")
+}
+
+func (s *Search) replaceCached(m *textedit.Model, selection textedit.Selection, replacement string) (Plan, error) {
+	p := Plan{Before: selection, After: selection}
+	total := 0
+	replacement = textedit.Normalize(replacement)
+	for _, idx := range s.matches(m) {
+		if len(p.Edits) >= 100000 {
+			return Plan{}, ErrOperationLimit
+		}
+		text := replacement
+		if s.query.Regex {
+			text = string(s.regex.ExpandString(nil, replacement, s.cachedText, idx))
+		}
+		if len(text) > 32*1024*1024-total {
+			return Plan{}, ErrOperationLimit
+		}
+		total += len(text)
+		p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: idx[0], End: idx[1]}, Text: text})
 	}
 	p.After = mapSelection(selection, p.Edits)
 	return p, nil

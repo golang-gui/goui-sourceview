@@ -247,3 +247,189 @@ func (v *SourceView) DeleteLines() error {
 	}
 	return v.applyPlan(p)
 }
+
+func (v *SourceView) Copy() error {
+	if v.Selection().Anchor == v.Selection().Caret {
+		return nil
+	}
+	if !v.mounted || gui.App == nil {
+		return ErrNotMounted
+	}
+	text, err := v.document.model.Slice(v.Selection().Range())
+	if err != nil {
+		return err
+	}
+	clipboard := gui.App.Clipboard()
+	if clipboard == nil {
+		return ErrClipboardUnavailable
+	}
+	return clipboard.SetText(text)
+}
+
+func (v *SourceView) Cut() error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	s, d, revision, epoch := v.Selection(), v.document, v.document.model.Revision(), v.selectionEpoch
+	if s.Anchor == s.Caret {
+		return nil
+	}
+	if err := v.Copy(); err != nil {
+		return err
+	}
+	if v.document != d || d.model.Revision() != revision || v.selectionEpoch != epoch || !v.mounted {
+		return nil
+	}
+	return v.ReplaceSelection("")
+}
+
+// Paste accepts an asynchronous request. Delayed failures are reported through
+// ConnectError. A changed document, selection or mount cancels the request.
+func (v *SourceView) Paste() error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	if !v.mounted || gui.App == nil {
+		return ErrNotMounted
+	}
+	state := v.operationState()
+	v.cancelPreedit()
+	if !state.valid(v) {
+		return ErrOperationChanged
+	}
+	if err := v.editable(); err != nil {
+		return err
+	}
+	clipboard := gui.App.Clipboard()
+	if clipboard == nil {
+		return ErrClipboardUnavailable
+	}
+
+	v.cancelPaste()
+	request := &pasteRequest{view: v, document: v.document, revision: v.document.model.Revision(), mount: v.mountEpoch, selection: v.selectionEpoch, id: v.pasteEpoch}
+	v.pendingPaste = request
+	clipboard.RequestText(request.complete)
+	return nil
+}
+
+// The platform may retain a callback while a remote owner is unresponsive.
+// Cancelling clears widget/document references even before that callback runs.
+type pasteRequest struct {
+	view                           *SourceView
+	document                       *Document
+	revision, mount, selection, id uint64
+}
+
+func (v *SourceView) cancelPaste() {
+	v.pasteEpoch++
+	if pending := v.pendingPaste; pending != nil {
+		pending.view = nil
+		pending.document = nil
+		v.pendingPaste = nil
+	}
+}
+
+func (r *pasteRequest) complete(text string, err error) {
+	v, d := r.view, r.document
+	r.view = nil
+	r.document = nil
+	if v == nil {
+		return
+	}
+	if v.pendingPaste != r {
+		return
+	}
+	v.pendingPaste = nil
+	if !v.mounted || v.mountEpoch != r.mount || v.pasteEpoch != r.id || v.document != d || d.model.Revision() != r.revision || v.selectionEpoch != r.selection || v.editable() != nil {
+		return
+	}
+	if err != nil {
+		v.report(err)
+		return
+	}
+	if text == "" {
+		return
+	}
+	v.report(v.ReplaceSelection(text))
+}
+
+// ToggleLineComment uses the language's line marker. Empty configuration is a
+// normal no-op. A selection ending at the next line start excludes that line.
+func (v *SourceView) ToggleLineComment() error {
+	marker := v.definitionAt(v.Selection().Caret).Editing().Comments.Line
+	if marker == "" {
+		return nil
+	}
+	m := v.document.model
+	s := v.Selection()
+	first, last, err := editor.SelectedLines(m, s)
+	if err != nil {
+		return err
+	}
+	var edits []textedit.Edit
+	all := true
+	for row := first; row <= last; row++ {
+		r, _ := m.LineRange(row)
+		indent := editor.LeadingIndent(m, r.End)
+		at := r.Start + len(indent)
+		if at == r.End {
+			continue
+		}
+		end := min(r.End, at+len(marker)+1)
+		for !m.IsRuneBoundary(end) {
+			end--
+		}
+		prefix, _ := m.Slice(textedit.Range{Start: at, End: end})
+		e := textedit.Edit{Range: textedit.Range{Start: at, End: at}, Text: marker + " "}
+		if strings.HasPrefix(prefix, marker) {
+			e.Range.End += len(marker)
+			if strings.HasPrefix(prefix[len(marker):], " ") {
+				e.Range.End++
+			}
+		} else {
+			all = false
+		}
+		edits = append(edits, e)
+	}
+	for i := range edits {
+		if all {
+			edits[i].Text = ""
+		} else {
+			edits[i].Range.End = edits[i].Range.Start
+		}
+	}
+	after := textedit.Selection{Anchor: editor.MapPosition(s.Anchor, edits), Caret: editor.MapPosition(s.Caret, edits)}
+	return v.ApplyEdits(v.document, m.Revision(), edits, after)
+}
+
+// ToggleBlockComment wraps the selection or removes its exact configured
+// wrapper. Content is literal; this does not parse or nest block comments.
+func (v *SourceView) ToggleBlockComment() error {
+	p := v.definitionAt(v.Selection().Caret).Editing().Comments.Block
+	if p.Open == "" || p.Close == "" {
+		return nil
+	}
+	m := v.document.model
+	s := v.Selection()
+	r := s.Range()
+	if r.End-r.Start > 32<<20 {
+		return ErrOperationLimit
+	}
+	text, err := m.Slice(r)
+	if err != nil {
+		return err
+	}
+	after := s
+	if len(text) >= len(p.Open)+len(p.Close) && strings.HasPrefix(text, p.Open) && strings.HasSuffix(text, p.Close) {
+		text = text[len(p.Open) : len(text)-len(p.Close)]
+		after = textedit.Selection{Anchor: r.Start, Caret: r.Start + len(text)}
+		if s.Anchor > s.Caret {
+			after.Anchor, after.Caret = after.Caret, after.Anchor
+		}
+	} else {
+		text = p.Open + text + p.Close
+		after.Anchor += len(p.Open)
+		after.Caret += len(p.Open)
+	}
+	return v.ApplyEdits(v.document, m.Revision(), []textedit.Edit{{Range: r, Text: text}}, after)
+}

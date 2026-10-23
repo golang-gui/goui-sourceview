@@ -1,6 +1,7 @@
 # 补全设计
 
-本专题描述 `completion.go`、`completion_panel.go`、`completion_list.go` 与 `ui` 的当前实现。
+本专题描述 `completion.go`、`completion_list.go` 与 `ui` 的当前实现。
+会话及提供器队列集中在 `completion.go`，列表、面板及 ScrollView 组合集中在 `completion_list.go`。
 补全是 SourceView 的语言和交互能力；GOUI 提供普通 Popover、事件、排版和绘制，
 不反向依赖本模块，也不在 TextView 中添加源码特例。
 

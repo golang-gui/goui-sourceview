@@ -40,6 +40,7 @@ func attachFrame(v *SourceView) {
 	}
 	v.frameLayout = true
 }
+
 func detachFrame(v *SourceView) {
 	v.frameLayout, v.layoutPending = false, false
 	q := queues[v.Root()]
@@ -58,6 +59,7 @@ func detachFrame(v *SourceView) {
 		delete(queues, v.Root())
 	}
 }
+
 func (q *frameQueue) frame(_ time.Time) {
 	deadline := time.Now().Add(4 * time.Millisecond)
 	seen := make(map[*Document]bool)
@@ -123,6 +125,7 @@ func (q *frameQueue) frame(_ time.Time) {
 		}
 	}
 }
+
 func minTime(a, b time.Time) time.Time {
 	if a.Before(b) {
 		return a
@@ -136,6 +139,7 @@ func (v *SourceView) currentScheme() (*scheme.Scheme, error) {
 	}
 	return v.styledScheme()
 }
+
 func (v *SourceView) updateScheme() {
 	s, err := v.currentScheme()
 	if err != nil {
@@ -159,4 +163,166 @@ func (v *SourceView) updateScheme() {
 	v.appliedScheme = s
 	v.colors = s.Definition()
 	v.RequestPaint()
+}
+
+func (q *frameQueue) requestAnalysis() {
+	if q.analysisTimer.Active() {
+		return
+	}
+	if err := q.analysisTimer.Start(8 * time.Millisecond); err != nil {
+		// A stopped application cannot start another timer. Keep the existing
+		// frame path available for a host whose timer is unavailable.
+		q.analysisHandle.Disconnect()
+		q.analysisTimer = nil
+		_ = q.root.RequestPaint()
+	}
+}
+
+func (d *Document) analysisPending() bool {
+	if d.engine != nil && d.engine.Pending() {
+		return true
+	}
+	if gui.App != nil && !d.foldReady && d.definition.Folding() != nil {
+		for v := range d.views {
+			if v.foldingEnabled {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Pure analysis uses ordinary GUI event-loop turns, without forcing a window
+// repaint for every offscreen chunk. Native viewport layout stays on frames.
+func (q *frameQueue) advanceAnalysis(deadline time.Time) bool {
+	views := slices.Clone(q.views)
+	if len(views) == 0 {
+		return false
+	}
+	start := q.analysisNext % len(views)
+	q.analysisNext = (start + 1) % len(views)
+	seen := make(map[*Document]bool)
+	pending := false
+	for i := range views {
+		v := views[(start+i)%len(views)]
+		if !v.mounted || v.Destroyed() || v.Root() != q.root || !visible(v) {
+			continue
+		}
+		d := v.document
+		if seen[d] || d.engine == nil || d.driver != q.root {
+			continue
+		}
+		seen[d] = true
+		d.lastFrame = time.Now()
+		d.foldingStep()
+		e := d.engine
+		ready := e.Ready()
+		if e.Pending() && (deadline.IsZero() || time.Now().Before(deadline)) {
+			e.Advance(deadline)
+			for view := range d.views {
+				if view.mounted && view.document == d && visible(view) && (ready != e.Ready() || view.analysisPaintNeeded()) {
+					view.RequestPaint()
+				}
+			}
+			if err := e.Err(); err != nil {
+				v.report(err)
+			}
+		}
+		pending = pending || d.analysisPending()
+	}
+	return pending
+}
+
+func (v *SourceView) analysisPaintNeeded() bool {
+	if v.viewport.Height <= 0 {
+		return false
+	}
+	first, last := v.visibleRows()
+	for row := first; row <= last; row = v.nextDisplayRow(row) {
+		p := v.cachedParagraph(row)
+		if p == nil {
+			return true
+		}
+		if tokenRow, ok := v.highlightRow(row); ok {
+			_, version, valid := v.document.engine.Tokens(tokenRow)
+			if !p.styled || p.style.tokenVersion != version || p.style.tokenValid != valid {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (v *SourceView) requestLayoutWork() {
+	if v.layoutPending {
+		return
+	}
+	v.layoutPending = true
+	if root := v.Root(); root != nil {
+		_ = root.RequestPaint()
+	}
+}
+
+// Prepare the latest viewport on the GUI thread between event dispatches. A
+// native paragraph call is still indivisible: the deadline bounds the batch,
+// not a single paragraph. No independent substring shaping is used here.
+func (v *SourceView) layoutStep(deadline time.Time) {
+	if !v.layoutPending || !v.mounted || v.context == nil || !visible(v) || v.viewport.Height <= 0 {
+		return
+	}
+	v.layoutPending = false
+	state, epoch := v.operationState(), v.layoutEpoch
+	valid := func() bool {
+		return state.valid(v) && v.mounted && visible(v) && !v.Destroyed() && epoch == v.layoutEpoch
+	}
+	prepare := func(row int) bool {
+		if _, failed := v.layoutFailures[v.paragraphKey(row)]; failed {
+			return valid()
+		}
+		if !deadline.IsZero() && !time.Now().Before(deadline) {
+			v.requestLayoutWork()
+			return false
+		}
+		v.paragraph(row)
+		return valid()
+	}
+	defer func() {
+		if valid() {
+			v.RequestLayout()
+			v.RequestPaint()
+		}
+	}()
+	// First refine the text position retained across a width change. Other
+	// viewport work uses the latest demand rather than a queue of old widths.
+	if v.pendingAnchor && v.anchor.valid && v.projection == nil && v.anchorRevision == v.document.model.Revision() {
+		if !prepare(v.document.model.LineAt(v.clampOffset(v.anchor.offset))) {
+			return
+		}
+	}
+	if request := v.reveal; request != nil && request.valid(v) {
+		row := v.displayLine(v.displayCaret())
+		if !prepare(row) {
+			return
+		}
+		first := v.paragraphAt(max(0, v.paragraphTop(row)-v.viewport.Height))
+		last := min(v.displayCount()-1, v.neighboringRow(row, 1))
+		for row := first; row <= last; row = v.nextDisplayRow(row) {
+			if !prepare(row) {
+				return
+			}
+		}
+	}
+	for range 2 {
+		first, last := v.visibleRows()
+		for row := first; row <= last; row = v.nextDisplayRow(row) {
+			if !prepare(row) {
+				return
+			}
+		}
+		nextFirst, nextLast := v.visibleRows()
+		if nextFirst >= first && nextLast <= last {
+			return
+		}
+	}
+	v.requestLayoutWork()
 }

@@ -3,10 +3,10 @@
 > 状态：首版实现规格。独立 SourceView 叶子控件复用 typography 与文本几何，
 > 不使用 TextView 的布局或私有缓存。原生 Tab 配置依赖 [G2](DesignGOUIIntegration.md)。
 
-实现入口：`layout.go` 管理测量、估计与视口布局；`layout_cache.go` 管理段落身份、
-原生布局、度量快照、着色和淘汰；`layout_navigation.go` 管理命中、光标、reveal 与
-顶部锚点；`paint.go` 消费布局结果绘制正文和装饰。帧间工作仍由 `layout_work.go`
-及 `scheduler.go` 调度，语义快照在 `sourceview.go`。这些文件属于同一个包，
+实现入口：`layout.go` 管理测量、估计、可见行映射、命中、光标和滚动定位；
+`layout_cache.go` 管理段落身份、原生布局、度量快照、着色和淘汰；
+`paint.go` 消费布局结果绘制正文和装饰。帧间工作集中在 `scheduler.go`，
+语义快照在 `sourceview.go`。这些文件属于同一个包，
 缓存、线程亲和和完整段落测量的现有边界不因文件整理而改变。
 
 ## 长段落片段布局目标（2026-10-20 修订）

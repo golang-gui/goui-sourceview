@@ -12,13 +12,16 @@ import (
 )
 
 const ChunkSize = 16 * 1024
+
 const tokenBudget = 16 * 1024 * 1024
+
 const maxLineTokens = tokenBudget / 40
 
 type interval struct{ start, end int }
 
 // Splice describes logical-line replacement, before subsequent edits in a Change.
 type Splice struct{ Index, Removed, Added int }
+
 type work struct {
 	row, at       int
 	state, oldOut language.State
@@ -51,6 +54,7 @@ func New(model *textedit.Model, id language.ID) *Engine {
 	l, _ := language.Builtin(id)
 	return NewWithLanguage(model, l)
 }
+
 func NewWithLanguage(model *textedit.Model, l *language.Language) *Engine {
 	id := l.ID()
 	e := &Engine{model: model, id: id, syntax: l}
@@ -61,6 +65,7 @@ func NewWithLanguage(model *textedit.Model, l *language.Language) *Engine {
 // SetLanguage invalidates lexical results while retaining unchanged text-line
 // identities. The dirty interval keeps old results hidden until reanalyzed.
 func (e *Engine) SetLanguage(id language.ID) { l, _ := language.Builtin(id); e.SetDefinition(l) }
+
 func (e *Engine) SetDefinition(l *language.Language) {
 	id := l.ID()
 	if e.syntax == l {
@@ -99,23 +104,32 @@ func (e *Engine) Reset(id language.ID) {
 	e.payloadBytes = 0
 	e.err = nil
 }
+
 func (e *Engine) newLine(bytes int, lf bool) *Line {
 	e.nextID++
 	return &Line{ID: e.nextID, Bytes: bytes, LF: lf}
 }
-func (e *Engine) Revision() uint64  { return e.revision }
-func (e *Engine) Ready() bool       { return !e.building && e.revision == e.model.Revision() }
-func (e *Engine) Pending() bool     { return e.err == nil && (e.building || e.next >= 0) }
-func (e *Engine) Err() error        { return e.err }
+
+func (e *Engine) Revision() uint64 { return e.revision }
+
+func (e *Engine) Ready() bool { return !e.building && e.revision == e.model.Revision() }
+
+func (e *Engine) Pending() bool { return e.err == nil && (e.building || e.next >= 0) }
+
+func (e *Engine) Err() error { return e.err }
+
 func (e *Engine) ScannedLines() int { return e.scanned }
+
 func (e *Engine) Line(row int) *Line {
 	if !e.Ready() {
 		return nil
 	}
 	return e.lines.at(row)
 }
+
 func (e *Engine) Offset(row int) int { return e.lines.offset(row) }
-func (e *Engine) LineCount() int     { return count(e.lines.root) }
+
+func (e *Engine) LineCount() int { return count(e.lines.root) }
 
 func (e *Engine) discard(line *Line) {
 	if element := e.elements[line]; element != nil {
@@ -128,6 +142,7 @@ func (e *Engine) discard(line *Line) {
 	line.limited = false
 	line.version++
 }
+
 func (e *Engine) touch(line *Line) {
 	if element := e.elements[line]; element != nil {
 		e.lru.MoveToFront(element)
@@ -135,6 +150,7 @@ func (e *Engine) touch(line *Line) {
 		e.elements[line] = e.lru.PushFront(line)
 	}
 }
+
 func (e *Engine) trim() {
 	for e.payloadBytes > tokenBudget && e.lru.Len() > 1 {
 		element := e.lru.Back()
@@ -180,6 +196,7 @@ func (e *Engine) Ensure(row int) {
 		e.next = row
 	}
 }
+
 func (e *Engine) cancelWork() {
 	if e.work != nil {
 		if l := e.lines.at(e.work.row); l != nil {
@@ -188,6 +205,7 @@ func (e *Engine) cancelWork() {
 		e.work = nil
 	}
 }
+
 func (e *Engine) addDirty(start, end int) {
 	if start >= end {
 		return
@@ -204,6 +222,7 @@ func (e *Engine) addDirty(start, end int) {
 	}
 	e.dirty = out
 }
+
 func (e *Engine) cleanRow(row int) {
 	out := e.dirty[:0]
 	for _, d := range e.dirty {
@@ -220,6 +239,7 @@ func (e *Engine) cleanRow(row int) {
 	}
 	e.dirty = out
 }
+
 func (e *Engine) firstDirty() int {
 	if len(e.dirty) == 0 {
 		return -1
@@ -298,6 +318,7 @@ func (e *Engine) read(start, end int) (string, error) {
 	}
 	return e.model.Slice(textedit.Range{Start: start, End: end})
 }
+
 func (e *Engine) buildStep() error {
 	if e.buildAt < e.model.Len() {
 		text, err := e.read(e.buildAt, min(e.model.Len(), e.buildAt+ChunkSize))
@@ -456,4 +477,74 @@ func TokenText(text string, tokens []Token) string {
 		parts = append(parts, t.Kind.String()+":"+text[t.Start:t.End])
 	}
 	return strings.Join(parts, "|")
+}
+
+type Context = language.Context
+
+// ContextAt never forces unbounded analysis or guesses unresolved predecessors.
+func (e *Engine) ContextAt(at int) (Context, bool) {
+	if e.err != nil {
+		return Context{}, false
+	}
+	row := e.model.LineAt(at)
+	r, _ := e.model.LineRange(row)
+	if at-r.Start > 16<<10 {
+		return Context{}, false
+	}
+	tokenizer := e.syntax.Tokenizer()
+	if tokenizer == nil {
+		return Context{}, true
+	}
+	state := tokenizer.InitialState()
+	if row > 0 {
+		if !e.Ready() || e.next >= 0 && row-1 >= e.next {
+			return Context{}, false
+		}
+		previous := e.Line(row - 1)
+		if previous == nil || !previous.complete {
+			return Context{}, false
+		}
+		state = previous.out
+	}
+	end := min(r.End, at+32)
+	for !e.model.IsRuneBoundary(end) {
+		end--
+	}
+	prefix, err := e.model.Slice(textedit.Range{Start: r.Start, End: end})
+	if err != nil {
+		return Context{}, false
+	}
+	in := language.Input{Text: prefix, Limit: at - r.Start}
+	result, err := tokenizer.Scan(in, state)
+	if err != nil || language.ValidateResult(in, result) != nil || result.Consumed != in.Limit {
+		return Context{}, false
+	}
+	return result.State.Context(), true
+}
+
+type Token = language.Token
+
+func appendStyled(out *[]Token, t Token) {
+	for len(*out) > 0 && (*out)[len(*out)-1].End > t.Start {
+		last := &(*out)[len(*out)-1]
+		if last.Start < t.Start {
+			last.End = t.Start
+			break
+		}
+		*out = (*out)[:len(*out)-1]
+	}
+	if t.Start >= t.End {
+		return
+	}
+	if t.Kind == language.KindPlain && t.Class == 0 {
+		return
+	}
+	if len(*out) > 0 {
+		last := &(*out)[len(*out)-1]
+		if last.End == t.Start && last.Kind == t.Kind && last.Class == t.Class {
+			last.End = t.End
+			return
+		}
+	}
+	*out = append(*out, t)
 }

@@ -66,15 +66,19 @@ FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 
 | 文件 | 职责 |
 | --- | --- |
-| `sourceview.go`、`sourceview_lifecycle.go` | 控件状态、配置、选区与语义快照；挂载、卸载、模型变化与光标计时器 |
+| `sourceview.go` | 控件状态、配置、选区、语义快照、挂载、卸载及模型变化 |
 | `document.go` | 文档、语言定义及共享分析状态 |
-| `commands.go`、`clipboard.go`、`search.go` | 编辑命令与历史；剪贴板与迟到回调；查找替换、范围与高亮显隐 |
+| `commands.go`、`search.go` | 编辑命令、历史、剪贴板与注释切换；查找替换、范围与高亮显隐 |
 | `input.go`、`key_bindings.go` | 指针与键盘输入；快捷键配置、匹配及命令分发 |
-| `layout.go`、`layout_cache.go`、`layout_navigation.go`、`paint.go` | 视口布局；段落缓存与着色；命中、光标及滚动定位；正文和装饰绘制 |
-| `styles*.go` | Basic/Modern 注册、有效样式与控件配色；样式变化处理 |
+| `layout.go`、`layout_cache.go`、`paint.go` | 视口布局、可见行映射、命中及滚动定位；段落缓存与着色；正文和装饰绘制 |
+| `scheduler.go` | 帧回调、分析计时器及可见区域排版工作 |
+| `styles.go` | Basic/Modern 注册、有效样式、控件配色及样式变化处理 |
 
 补全、折叠、语言编辑辅助及 FindBar/GoToBar 仍按已有领域组织。
-可独立解释的小控件保留自己的文件，不按行数强行合并。
+同一领域的队列、绘制辅助或小控件合入所属功能文件；独立类型不要求独立文件。
+补全保留会话和列表两个实现文件，面板与滚动组合在列表文件内；
+FindBar 保留行为和外观两个文件；折叠及普通编辑辅助各自集中维护。
+`ui/bars.go` 合并查找和定位的薄绑定，不改变声明式生命周期。
 SourceView 的字段按文档与挂载、选区、原生资源、外观、布局、编辑辅助、
 输入、搜索和补全分组；分组不引入额外状态对象，也不改变资源所有者。
 

@@ -101,8 +101,10 @@ func (b *FindBar) SetTarget(v *SourceView) {
 	b.refresh()
 }
 
-func (b *FindBar) Opened() bool      { return b.open }
+func (b *FindBar) Opened() bool { return b.open }
+
 func (b *FindBar) ReplaceMode() bool { return b.replaceMode }
+
 func (b *FindBar) SetReplaceMode(replace bool) {
 	if b.Destroyed() || b.replaceMode == replace {
 		return
@@ -123,13 +125,16 @@ func (b *FindBar) SetReplaceMode(replace bool) {
 	b.RequestLayout()
 	b.refresh()
 }
+
 func (b *FindBar) Replacement() string { return b.replacement.Model().Text() }
+
 func (b *FindBar) SetReplacement(text string) {
 	if !b.Destroyed() {
 		setFindText(b.replacement, text)
 		b.RequestLayout()
 	}
 }
+
 func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
 	return b.openSignal.Connect(func(open bool) {
 		if !b.Destroyed() && b.open == open {
@@ -137,6 +142,7 @@ func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
 		}
 	})
 }
+
 func (b *FindBar) ConnectError(fn func(error)) signal.Handle {
 	return b.errorSignal.Connect(func(err error) {
 		if !b.Destroyed() {
@@ -239,6 +245,7 @@ func (b *FindBar) liveTarget() *SourceView {
 	}
 	return v
 }
+
 func (b *FindBar) mount() {
 	b.mounted = true
 	b.epoch++
@@ -247,6 +254,7 @@ func (b *FindBar) mount() {
 	b.language = mlang.ConnectChanged(b.updateLabels)
 	b.updateLabels()
 }
+
 func (b *FindBar) unmount() {
 	b.mounted = false
 	b.epoch++
@@ -261,6 +269,7 @@ func (b *FindBar) unmount() {
 	}
 	b.count.document = nil
 }
+
 func (b *FindBar) connect() {
 	if b.target == nil || b.target.Destroyed() {
 		return
@@ -271,6 +280,7 @@ func (b *FindBar) connect() {
 	}
 	b.attach()
 }
+
 func (b *FindBar) attach() {
 	if len(b.attached) != 0 || b.liveTarget() == nil {
 		return
@@ -282,6 +292,7 @@ func (b *FindBar) attach() {
 	}
 	b.refresh()
 }
+
 func (b *FindBar) detach() {
 	v := b.target
 	attached := len(b.attached) != 0
@@ -295,6 +306,7 @@ func (b *FindBar) detach() {
 		_ = v.SetSearchRange(nil)
 	}
 }
+
 func (b *FindBar) disconnect() {
 	b.lifetime.Disconnect()
 	b.lifetime = nil
@@ -366,6 +378,7 @@ func (b *FindBar) refresh() {
 	}
 	b.updateStatus()
 }
+
 func (b *FindBar) countStep() {
 	v := b.liveTarget()
 	if !b.open || !visible(b) || v == nil || b.count.done || !b.count.available {
@@ -380,6 +393,7 @@ func (b *FindBar) countStep() {
 		b.RequestPaint()
 	}
 }
+
 func (b *FindBar) updateStatus() {
 	text := b.message
 	if text == "" && b.count.query.Text != "" {
@@ -408,6 +422,7 @@ func (b *FindBar) updateStatus() {
 		b.content.RequestPaint()
 	}
 }
+
 func (b *FindBar) updateLabels() {
 	b.find.SetPlaceholder(resource.Find())
 	b.replacement.SetPlaceholder(resource.Replace())
@@ -416,11 +431,13 @@ func (b *FindBar) updateLabels() {
 	}
 	b.refresh()
 }
+
 func (b *FindBar) navigate(backward bool) {
 	if v := b.liveTarget(); v != nil && gui.IsEnabled(v) {
 		v.FindNext(backward)
 	}
 }
+
 func (b *FindBar) fail(err error) {
 	if err == nil || b.Destroyed() {
 		return
@@ -429,6 +446,7 @@ func (b *FindBar) fail(err error) {
 	b.updateStatus()
 	b.errorSignal.Emit(err)
 }
+
 func (b *FindBar) replaceCurrent() {
 	v := b.liveTarget()
 	if v == nil || v.editable() != nil {
@@ -447,6 +465,7 @@ func (b *FindBar) replaceCurrent() {
 		v.FindNext(false)
 	}
 }
+
 func (b *FindBar) replaceEverywhere() {
 	v := b.liveTarget()
 	if v == nil || v.editable() != nil {
@@ -458,6 +477,7 @@ func (b *FindBar) replaceEverywhere() {
 		b.fail(err)
 	}
 }
+
 func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 	v := b.liveTarget()
 	if v == nil || !gui.IsEnabled(b) || !gui.IsEnabled(v) || !visible(b) {
@@ -488,6 +508,7 @@ func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 		ctx.StopPropagation()
 	}
 }
+
 func (b *FindBar) Snapshot() gui.WidgetInfo {
 	info := b.WidgetBase.Snapshot()
 	info.Role = gui.Role("sourceview-find-bar")
@@ -508,4 +529,46 @@ func setFindText(field *gui.TextView, text string) {
 	if !field.Model().EqualText(text) {
 		field.Model().SetText(text)
 	}
+}
+
+// Capture the range before navigating. A result selection never becomes the
+// next search scope, and an empty selection is not an interactive scope.
+func (b *FindBar) setSelectionOnly(checked bool) {
+	if b.syncing {
+		return
+	}
+	v := b.liveTarget()
+	if v == nil {
+		return
+	}
+	selection := v.Selection().Range()
+	if checked && selection.Start == selection.End {
+		b.refresh()
+		return
+	}
+	state, epoch, query := v.operationState(), b.epoch, v.Search()
+	v.cancelPreedit()
+	if !state.valid(v) || b.epoch != epoch || b.liveTarget() != v || v.Search() != query {
+		return
+	}
+	var scope *textedit.Range
+	if checked {
+		scope = &selection
+	}
+	if err := v.SetSearchRange(scope); err != nil {
+		b.fail(err)
+		return
+	}
+	// Search-state subscribers may close/retarget the bar or replace the
+	// document/query/selection. Do not navigate their replacement state.
+	if !state.valid(v) || b.epoch != epoch || b.liveTarget() != v || v.Search() != query {
+		return
+	}
+	actual, limited := v.SearchRange()
+	if limited != checked || checked && actual != selection {
+		return
+	}
+	v.findFrom(selection.Start, false)
+	b.refresh()
+	b.countStep()
 }

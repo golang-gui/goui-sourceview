@@ -123,6 +123,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 // Builtin returns an immutable built-in definition. Custom definitions are
 // passed directly to a document; no registration or name matching is needed.
 func Builtin(id ID) (*Language, bool) { l, ok := builtinLanguages()[id]; return l, ok }
+
 func defaultEditing() EditingRules {
 	brackets := []Pair{{Open: "(", Close: ")", NotInString: true, NotInComment: true}, {Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}}
 	pairs := append(append([]Pair(nil), brackets...), Pair{Open: `"`, Close: `"`, NotInString: true, NotInComment: true}, Pair{Open: "'", Close: "'", NotInString: true, NotInComment: true})
@@ -132,6 +133,7 @@ func defaultEditing() EditingRules {
 type builtinTokenizer struct{ id ID }
 
 func (b builtinTokenizer) InitialState() State { return initialBuiltin() }
+
 func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
 	s, ok := state.(builtinState)
 	if !ok {
@@ -170,3 +172,24 @@ func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
 }
 
 func codeWordSuggestions(c Context, known bool) bool { return known && !c.Comment && !c.String }
+
+func (s builtinState) Context() Context {
+	if t := s.toml; t != nil {
+		return Context{String: t.quote != 0, Comment: t.comment, Literal: t.quote == '\'', Value: !t.key}
+	}
+	if y := s.yaml; y != nil {
+		return Context{String: y.quote != 0 || y.block && !y.blockHeader, Comment: y.comment, Literal: y.quote == '\''}
+	}
+	if sh := s.shell; sh != nil {
+		mode := shTop(sh.stack)
+		return Context{String: sh.active != nil || sh.capture || mode == shSingle || mode == shDouble || mode == shANSI, Comment: sh.comment, Literal: mode == shSingle || sh.active != nil && sh.active.literal}
+	}
+
+	return Context{
+		String:  s.mode == jsonString || s.mode == attrSingle || s.mode == attrDouble,
+		Comment: s.mode == comment || s.mode == cdata || s.mode == pi || s.mode == declaration || s.mode == scriptData || s.mode == rawText || s.mode == plainText,
+		Tag:     s.pendingTag || s.mode == tagName || s.mode == tagInside || s.mode == attrName || s.mode == afterAttr || s.mode == beforeValue,
+		TagName: s.pendingTag || s.mode == tagName,
+		Value:   s.mode == beforeValue,
+	}
+}

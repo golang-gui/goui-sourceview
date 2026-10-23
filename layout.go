@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"math"
+	"sort"
 	"strconv"
 
 	"github.com/golang-gui/goui/core/geometry"
@@ -224,4 +225,272 @@ func (v *SourceView) visibleRows() (int, int) {
 	first := v.heights.At(max(0, v.offset.Y-padding))
 	last := v.heights.At(max(0, v.offset.Y+v.viewport.Height-padding))
 	return v.visibleLines.line(first), v.visibleLines.line(min(v.visibleLines.count-1, max(first, last)+1))
+}
+
+// lineInterval is half-open in projected paragraph coordinates. Paragraph zero
+// is always visible. It is not a replacement range in the text model.
+type lineInterval struct{ start, end int }
+
+type visibleRun struct{ start, end, index int }
+
+type visibleLineMap struct {
+	total, count int
+	runs         []visibleRun
+}
+
+func (m *visibleLineMap) reset(total int, hidden []lineInterval) {
+	m.total, m.count, m.runs = max(1, total), 0, m.runs[:0]
+	start := 0
+	appendRun := func(end int) {
+		if end > start {
+			m.runs = append(m.runs, visibleRun{start, end, m.count})
+			m.count += end - start
+		}
+	}
+	for _, h := range hidden { // sorted, merged by the folding state
+		h.start, h.end = max(1, h.start), min(m.total, h.end)
+		if h.end <= start || h.start >= m.total || h.end <= h.start {
+			continue
+		}
+		appendRun(h.start)
+		start = max(start, h.end)
+	}
+	appendRun(m.total)
+}
+
+func (m *visibleLineMap) line(index int) int {
+	if index >= m.count {
+		return m.total
+	}
+	index = max(0, index)
+	i := sort.Search(len(m.runs), func(i int) bool { r := m.runs[i]; return r.index+r.end-r.start > index })
+	if i == len(m.runs) {
+		return 0
+	}
+	r := m.runs[i]
+	return r.start + index - r.index
+}
+
+// index maps a hidden line to its preceding visible paragraph and reports false.
+func (m *visibleLineMap) index(line int) (int, bool) {
+	if line >= m.total {
+		return m.count, true
+	}
+	line = max(0, line)
+	i := sort.Search(len(m.runs), func(i int) bool { return m.runs[i].end > line })
+	if i == len(m.runs) {
+		return max(0, m.count-1), false
+	}
+	r := m.runs[i]
+	if line < r.start {
+		return max(0, r.index-1), false
+	}
+	return r.index + line - r.start, true
+}
+
+func (v *SourceView) resetHeights() {
+	v.heightEstimated = false
+	hidden := v.hiddenLines
+	if v.projection != nil {
+		hidden = nil
+		first, last := v.projection.FirstLine(), v.projection.LastLine()
+		delta := v.projection.ParagraphCount() - (last - first + 1)
+		for _, h := range v.hiddenLines {
+			if h.end <= first {
+				hidden = append(hidden, h)
+			} else if h.start > last {
+				hidden = append(hidden, lineInterval{h.start + delta, h.end + delta})
+			}
+		}
+	}
+	v.visibleLines.reset(v.displayCount(), hidden)
+	v.heights.Reset(v.visibleLines.count, v.lineHeight)
+}
+
+func (v *SourceView) paragraphTop(row int) float32 {
+	v.ensureHeights()
+	i, _ := v.visibleLines.index(row)
+	return v.heights.Top(i)
+}
+
+func (v *SourceView) paragraphAt(y float32) int {
+	v.ensureHeights()
+	return v.visibleLines.line(v.heights.At(y))
+}
+
+func (v *SourceView) setParagraphHeight(row int, height float32) {
+	i, visible := v.visibleLines.index(row)
+	if visible {
+		v.heights.Set(i, height)
+	}
+}
+
+func (v *SourceView) nextDisplayRow(row int) int {
+	i, _ := v.visibleLines.index(row)
+	return v.visibleLines.line(i + 1)
+}
+
+func (v *SourceView) neighboringRow(row, delta int) int {
+	v.ensureHeights()
+	i, _ := v.visibleLines.index(row)
+	if i+delta < 0 {
+		return -1
+	}
+	return v.visibleLines.line(i + delta)
+}
+
+type viewportAnchor struct {
+	offset   int
+	inset, x float32
+	valid    bool
+}
+
+func (v *SourceView) snapOffset(offset int, forward bool) int {
+	row := v.document.model.LineAt(offset)
+	r, _ := v.document.model.LineRange(row)
+	if p := v.paragraph(row); p != nil {
+		return r.Start + p.geometry.Snap(offset-r.Start, forward)
+	}
+	return v.clampOffset(offset)
+}
+
+func (v *SourceView) caretRect() (geometry.Rectangle, bool) {
+	caret := v.displayCaret()
+	row := v.displayLine(caret)
+	r := v.displayRange(row)
+	p := v.paragraph(row)
+	if p == nil {
+		return geometry.Rectangle{}, false
+	}
+	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
+	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
+}
+
+// Paint and IME updates must not shape an offscreen caret during scrolling.
+// Explicit menu, completion and navigation requests use caretRect instead.
+func (v *SourceView) cachedCaretRect() (geometry.Rectangle, bool) {
+	caret := v.displayCaret()
+	row := v.displayLine(caret)
+	p := v.cachedParagraph(row)
+	if p == nil {
+		return geometry.Rectangle{}, false
+	}
+	r := v.displayRange(row)
+	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
+	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
+}
+
+func (v *SourceView) updateIMCaret() {
+	if r, ok := v.cachedCaretRect(); ok {
+		v.im.SetCaretRect(r)
+	}
+}
+
+func (v *SourceView) RevealSelection() {
+	if v.Destroyed() {
+		return
+	}
+	request := v.operationState()
+	v.reveal = &request
+	v.pendingAnchor = false
+	v.anchor.valid = false
+	v.resolveReveal(false)
+	v.RequestLayout()
+}
+
+// Keep the logical request until the host has delivered an offset at which the
+// caret is visible with measured paragraphs. A one-shot pixel rectangle becomes
+// stale when previously unseen rows acquire their actual heights.
+func (v *SourceView) resolveReveal(measured bool) {
+	request := v.reveal
+	if request == nil {
+		return
+	}
+	if !request.valid(v) || v.Destroyed() {
+		v.reveal = nil
+		return
+	}
+	row := v.displayLine(v.displayCaret())
+	if v.viewportParagraph(row) == nil {
+		return
+	}
+	rect, ok := v.cachedCaretRect()
+	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
+		return
+	}
+	// ScrollView receives content coordinates. Include the fixed gutter in the
+	// requested width so a caret at its leading edge remains visible.
+	rect.X += v.offset.X - v.gutter
+	rect.Y += v.offset.Y
+	rect.Width += v.gutter + padding
+	if v.viewport.Width <= 0 || v.viewport.Height <= 0 {
+		return // Retain the request until the first usable allocation.
+	}
+	visible := func(start, length, offset, viewport float32) bool {
+		// ScrollView rounds offsets to whole DIP and prefers the leading edge
+		// of a target larger than the viewport.
+		if length > viewport {
+			return offset <= start && start-offset < 1
+		}
+		return start >= offset && start+length <= offset+viewport
+	}
+	if measured && visible(rect.X, rect.Width, v.offset.X, v.viewport.Width) && visible(rect.Y, rect.Height, v.offset.Y, v.viewport.Height) {
+		v.reveal = nil
+		v.captureAnchor()
+		return
+	}
+	// Validate the destination before scrolling. Measuring just the caret's
+	// paragraph leaves the preceding visible rows estimated, so their later
+	// growth can push the caret below the viewport again. Actual paragraph
+	// heights are at least lineHeight; an estimated viewport before the target
+	// therefore covers the rows needed when revealing its bottom edge.
+	first := v.paragraphAt(max(0, v.paragraphTop(row)-v.viewport.Height))
+	epoch := v.layoutEpoch
+	for at, end := first, v.neighboringRow(row, 1); at <= min(end, v.displayCount()-1); at = v.nextDisplayRow(at) {
+		p := v.viewportParagraph(at)
+		if v.reveal != request || !request.valid(v) || epoch != v.layoutEpoch || v.Destroyed() || p == nil {
+			return
+		}
+	}
+	rect, ok = v.cachedCaretRect()
+	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
+		return
+	}
+	rect.X += v.offset.X - v.gutter
+	rect.Y += v.offset.Y
+	rect.Width += v.gutter + padding
+	v.scrollSignal.Emit(rect)
+}
+
+func (v *SourceView) hit(point geometry.Point) textedit.Position {
+	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
+	r := v.displayRange(row)
+	pos := textedit.Position{Offset: r.Start}
+	if p := v.paragraph(row); p != nil {
+		pos = p.geometry.Hit(geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)})
+		pos.Offset += r.Start
+	}
+	if v.projection != nil {
+		pos.Offset = v.projection.ModelOffset(pos.Offset, pos.Upstream)
+	}
+	return pos
+}
+
+// captureAnchor records committed byte coordinates, independent of pixel estimates.
+func (v *SourceView) captureAnchor() {
+	if v.projection != nil || !v.mounted || v.observed != v.document.model.Revision() {
+		return
+	}
+	row := v.paragraphAt(max(0, v.offset.Y-padding))
+	r := v.displayRange(row)
+	p := v.viewportParagraph(row)
+	if p == nil {
+		return
+	}
+	y := max(0, v.offset.Y-padding-v.paragraphTop(row))
+	pos := p.geometry.Hit(geometry.Point{Y: y})
+	index := p.geometry.LineIndex(pos)
+	edge := p.geometry.LineEdge(index, false)
+	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: v.offset.Y - padding - v.paragraphTop(row) - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
+	v.anchorRevision = v.document.model.Revision()
 }
