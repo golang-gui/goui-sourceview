@@ -1,3 +1,4 @@
+// 有界分段测量实验，未接入 SourceView 的运行路径；成功样本不代表任意 Unicode 段落等价。
 package sourceview
 
 import (
@@ -183,6 +184,7 @@ func TestBoundedFragmentProbeMatchesSimpleParagraphs(t *testing.T) {
 // 每行四字节、字形高 12、行距 15、首行顶部 2.75。占用高度与行推进不同，
 // 不依赖宿主字体或原生库也能复现按片段 Size.Height 累加导致的位置漂移。
 type probeGapContext struct{ typography.Context }
+
 type probeGapLayout struct {
 	typography.TextLayout
 	text string
@@ -191,10 +193,13 @@ type probeGapLayout struct {
 func (probeGapContext) NewTextLayout(text string, _ typography.TextFormat, _, _ float32) (typography.TextLayout, error) {
 	return &probeGapLayout{text: text}, nil
 }
+
 func (p *probeGapLayout) Destroy() {}
+
 func (p *probeGapLayout) MeasureSize() (float32, float32) {
 	return 20, float32((len(p.text)+3)/4-1)*15 + 14.75
 }
+
 func (p *probeGapLayout) MeasureMetrics() ([]typography.TextLine, []typography.TextCluster) {
 	var lines []typography.TextLine
 	var clusters []typography.TextCluster

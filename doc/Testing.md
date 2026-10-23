@@ -1,6 +1,6 @@
 # SourceView 测试与首版验收
 
-> 状态：首版验证规格与目标。实际运行的命令、结果及缺口见 [实现记录](Implementation.md)，不从本矩阵推定所有场景均已通过。
+> 状态：测试组织与验收规格。实际运行的命令、结果及缺口见 [实现记录](Plan.md)，不从本矩阵推定所有场景均已通过。
 > 测试分类遵循 [AGENTS.md](../AGENTS.md)，具体切片见 [Plan](Plan.md)。
 
 ## 1. 测试落位与执行
@@ -23,6 +23,45 @@ GOWORK=off go test ./...
 
 后续按实际包路径补充 bench/fuzz 与目标平台编译；GOWORK=off 的结果必须使用可解析的
 GOUI 依赖版本，不以本地工作区成功代替。纯文档阶段以上命令不适用。
+
+### 根包测试的职责与共享辅助设施
+
+根包测试保留 `package sourceview`，直接验证已有私有状态，不为测试新增导出接口。
+按实际职责归并用例，测试函数名和原有断言保持稳定：
+
+| 文件 | 覆盖范围 |
+| --- | --- |
+| `sourceview_test.go`、`ime_test.go` | 文档与视图隔离、通知重入、配置及预编辑生命周期 |
+| `commands_test.go`、`editing_extensions_test.go`、`clipboard_test.go` | 编辑命令与历史、自定义编辑规则、剪贴板与异步取消 |
+| `input_test.go`、`key_bindings_test.go`、`menu_test.go` | 指针与导航计算、平台快捷键匹配、菜单可用性 |
+| `search_test.go`、`find_bar_test.go` | 原始匹配与 cluster 选区、搜索范围、替换、高亮显隐及 FindBar 生命周期 |
+| `layout_cache_test.go`、`layout_cache_native_test.go` | 最近宽度、编辑和历史复用、资源隔离、缓存失效与淘汰 |
+| `layout_colors_test.go`、`layout_colors_native_test.go` | token、语言与选区前景、重入、原生度量及光栅结果 |
+| `layout_native_test.go`、`layout_fragments_native_test.go` | 长行与初始高度估计、度量快照及其上下文边界 |
+| `layout_reveal_test.go`、`layout_work_test.go`、`visible_lines_test.go` | 可见行映射、滚动定位、帧间调度与工作集保护 |
+| `paint_test.go`、`snapshot_test.go` | 装饰几何和叠加顺序、可视区裁剪、只读语义快照 |
+| `completion*_test.go`、`folding*_test.go`、`pairs_test.go`、`tags_test.go` | 对应领域的行为、失效与资源契约 |
+| `assistance_test.go`、`goto_bar_test.go`、`markup_test.go` | 编辑辅助、行列定位与标记语言联动 |
+| `styles*_test.go`、`localization_test.go` | 主题注册、样式作用域、生命周期与多语言 |
+
+共享辅助设施放在以下文件，不再藏在某个具体功能的测试中：
+
+- `test_helpers_test.go`：纯文档观察器 `observe` 与输入法复位替身，只建立测试需要的订阅，不执行原生挂载。
+- `layout_helpers_test.go`：确定性排版替身及 JSON 着色样本，用于几何、着色和资源计数断言。
+- `paint_helpers_test.go`：通用 `recordingPainter`，记录形状、颜色及绘制顺序，不代表真实后端像素。
+- `native_helpers_test.go`、`native_helpers_{linux,windows,darwin}_test.go`：原生调用计数、度量副本、光栅范围和各平台 Context 工厂；各用例仍负责锁线程和销毁。
+
+只在某一领域使用的夹具、故障注入和断言辅助函数留在该领域，
+不建立额外测试框架，也不通过全局可变夹具共享视图或原生资源。
+
+`layout_experiment_test.go` 与 `layout_experiment_context_test.go` 是尚未接入控件的
+有界分段测量实验。它们继续参与默认 `go test`，保留成功样本、明确反例及基准，
+不能据此推断 SourceView 已启用该优化，或有限上下文可替代任意完整 Unicode 段落。
+实验范围与当前局限见 [长段落实施记录](PlanIncrementalTextLayout.md)。
+
+窗口验证保留现有入口路径；`tests/window/editor` 是基础集成程序，
+各子目录是专题场景，`tests/window/experience` 是跨功能交互验证。
+`go test ./...` 编译这些入口但不会执行其窗口场景，窗口验收必须单独启动并记录。
 
 ## 2. 必需的独立断言
 

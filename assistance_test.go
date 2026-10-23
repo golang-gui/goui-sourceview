@@ -33,6 +33,7 @@ func TestSmartIndentBackspaceIsOneUndo(t *testing.T) {
 		}
 	}
 }
+
 func TestSmartEdgesAndShift(t *testing.T) {
 	v := NewSourceView()
 	v.document.model.SetText("    word  ")
@@ -51,6 +52,7 @@ func TestSmartEdgesAndShift(t *testing.T) {
 		}
 	}
 }
+
 func TestAssistancePaintDoesNotChangeGeometry(t *testing.T) {
 	v := NewSourceView()
 	v.SetFoldingEnabled(false)
@@ -69,7 +71,7 @@ func TestAssistancePaintDoesNotChangeGeometry(t *testing.T) {
 		_ = v.SetWhitespaceMode(tc.mode)
 		v.SetShowLineEndings(tc.end)
 		v.SetSelection(textedit.Selection{Caret: 1})
-		out := &bracketPainter{}
+		out := &recordingPainter{}
 		v.paintWhitespace(out, 0, p, geometry.Point{})
 		if len(out.fills) != tc.dots || out.lines != tc.lines {
 			t.Fatal(tc, len(out.fills), out.lines)
@@ -88,6 +90,7 @@ func TestAssistancePaintDoesNotChangeGeometry(t *testing.T) {
 		t.Fatal("invalid options accepted")
 	}
 }
+
 func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 	v := NewSourceView()
 	v.SetFoldingEnabled(false)
@@ -101,7 +104,7 @@ func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 	if word != "foo" {
 		t.Fatal(word)
 	}
-	out := &bracketPainter{}
+	out := &recordingPainter{}
 	v.SetShowIndentGuides(false)
 	// Painting now culls ranges outside the arranged viewport.
 	v.LayoutVisible(geometry.Size{Width: 320, Height: 120}, geometry.Point{})
@@ -140,49 +143,5 @@ func TestOccurrenceWordDoesNotMeasureOffscreenSelection(t *testing.T) {
 		if got != tc.want || ctx.created != before || ctx.created != ctx.destroyed {
 			t.Fatalf("%q: word=%q, native calls=%d, resources=%d/%d", tc.text, got, ctx.created-before, ctx.created, ctx.destroyed)
 		}
-	}
-}
-func TestGoToOffsetUsesOneBasedRuneColumns(t *testing.T) {
-	m := textedit.NewModel("")
-	m.SetText("abc\n中e\u0301x\n")
-	for _, tc := range []struct {
-		query string
-		at    int
-		valid bool
-	}{{"1", 0, true}, {"2:2", 7, true}, {"2:4", 10, true}, {"3:1", 12, true}, {"0", 0, false}, {"2:6", 0, false}, {"1:0", 0, false}, {"1:2:3", 0, false}, {"no", 0, false}} {
-		at, err := gotoOffset(m, tc.query)
-		if (err == nil) != tc.valid || tc.valid && at != tc.at {
-			t.Fatal(tc, at, err)
-		}
-	}
-}
-
-func TestGoToRetargetHonorsCloseCallback(t *testing.T) {
-	bar := NewGoToBar()
-	a, b, c := NewSourceView(), NewSourceView(), NewSourceView()
-	bar.SetTarget(a)
-	bar.open = true
-	bar.ConnectOpen(func(open bool) {
-		if !open {
-			bar.SetTarget(c)
-		}
-	})
-	bar.SetTarget(b)
-	if bar.Target() != c {
-		t.Fatal("outer setter overwrote callback target")
-	}
-}
-func TestFoldBadgeExtentDoesNotDependOnWhitespaceFlag(t *testing.T) {
-	v := foldingFixture(t)
-	if !v.Fold(0) {
-		t.Fatal("fold")
-	}
-	v.LayoutVisible(geometry.Size{Width: 30, Height: 200}, geometry.Point{})
-	before := v.ContentSize()
-	v.SetShowLineEndings(true)
-	p := v.paragraph(0)
-	r := v.foldBadgeRect(0, p)
-	if v.ContentSize() != before || r.X+r.Width > v.ContentSize().Width {
-		t.Fatal("badge clipped or marker changed content width", r, v.ContentSize(), before)
 	}
 }

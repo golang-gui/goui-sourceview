@@ -1,3 +1,4 @@
+// 分段上下文实验及反例；默认测试继续验证有限上下文方案的适用边界。
 package sourceview
 
 import (

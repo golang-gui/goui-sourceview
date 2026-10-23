@@ -66,6 +66,7 @@ func foldingFixture(t *testing.T) *SourceView {
 	v.LayoutVisible(geometry.Size{Width: 500, Height: 200}, geometry.Point{})
 	return v
 }
+
 func TestFoldOwnershipVisibilitySelectionAndHistory(t *testing.T) {
 	v := foldingFixture(t)
 	m := v.document.model
@@ -102,6 +103,7 @@ func TestFoldOwnershipVisibilitySelectionAndHistory(t *testing.T) {
 		t.Fatal("disabled folding still hides text")
 	}
 }
+
 func TestFoldChangeMappingAndBoundaryDeletion(t *testing.T) {
 	v := foldingFixture(t)
 	m := v.document.model
@@ -127,6 +129,7 @@ func TestFoldChangeMappingAndBoundaryDeletion(t *testing.T) {
 		t.Fatal("edit inside hidden content remained hidden")
 	}
 }
+
 func TestFoldSnapshotHasTrueDiscontinuousText(t *testing.T) {
 	v := foldingFixture(t)
 	v.Fold(0)
@@ -141,6 +144,7 @@ func TestFoldSnapshotHasTrueDiscontinuousText(t *testing.T) {
 		t.Fatal("missing visible fragments/fold control", spans)
 	}
 }
+
 func TestFoldValidation(t *testing.T) {
 	for _, bad := range [][]language.FoldRange{{{StartLine: -1, EndLine: 2}}, {{StartLine: 0, EndLine: 4}}, {{StartLine: 2, EndLine: 2}}, {{StartLine: 0, EndLine: 2}, {StartLine: 1, EndLine: 3}}} {
 		if _, err := normalizeFolds(bad, 4); err == nil {
@@ -165,4 +169,19 @@ func TestFoldAnalysisPreservesUnchangedVisibleGeometry(t *testing.T) {
 	}
 	scroll.Arrange(scroll.Rect())
 	assertRevealed(t, v, scroll)
+}
+
+func TestFoldBadgeExtentDoesNotDependOnWhitespaceFlag(t *testing.T) {
+	v := foldingFixture(t)
+	if !v.Fold(0) {
+		t.Fatal("fold")
+	}
+	v.LayoutVisible(geometry.Size{Width: 30, Height: 200}, geometry.Point{})
+	before := v.ContentSize()
+	v.SetShowLineEndings(true)
+	p := v.paragraph(0)
+	r := v.foldBadgeRect(0, p)
+	if v.ContentSize() != before || r.X+r.Width > v.ContentSize().Width {
+		t.Fatal("badge clipped or marker changed content width", r, v.ContentSize(), before)
+	}
 }

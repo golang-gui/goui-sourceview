@@ -38,6 +38,7 @@ func completionFixture(t *testing.T, items []Completion) (*completionList, *shap
 	})
 	return l, ctx
 }
+
 func arrangeCompletion(l *completionList) {
 	if l.session.panel == nil {
 		l.session.panel = newCompletionPanel(l)
@@ -52,13 +53,15 @@ type completionDraw struct {
 	text   string
 	clip   geometry.Rectangle
 }
+
 type completionPainter struct {
-	bracketPainter
+	recordingPainter
 	clip    geometry.Rectangle
 	stack   []geometry.Rectangle
 	text    []completionDraw
 	rounded []completionRound
 }
+
 type completionRound struct {
 	rect   geometry.Rectangle
 	radius float32
@@ -66,14 +69,18 @@ type completionRound struct {
 }
 
 func (p *completionPainter) Save() { p.stack = append(p.stack, p.clip) }
+
 func (p *completionPainter) Restore() {
 	p.clip = p.stack[len(p.stack)-1]
 	p.stack = p.stack[:len(p.stack)-1]
 }
+
 func (p *completionPainter) SetClipRect(r geometry.Rectangle) { p.clip = r }
+
 func (p *completionPainter) FillRoundRect(r geometry.Rectangle, radius float32, b graphics.Brush) {
 	p.rounded = append(p.rounded, completionRound{r, radius, b.(graphics.Color)})
 }
+
 func (p *completionPainter) DrawTextLayout(at geometry.Point, l typography.TextLayout) {
 	p.text = append(p.text, completionDraw{at, l.Text(), p.clip})
 }
@@ -407,6 +414,7 @@ func (c *completionHookContext) NewTextLayout(s string, f typography.TextFormat,
 	}
 	return l, err
 }
+
 func TestCompletionBuildCancellationAndFailureReleaseResources(t *testing.T) {
 	t.Run("recursive measurement and painting", func(t *testing.T) {
 		l, ctx := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})

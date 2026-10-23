@@ -1,9 +1,10 @@
 package sourceview
 
 import (
+	"testing"
+
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui/textedit"
-	"testing"
 )
 
 func TestMenuCommandsRespectStateAndHistory(t *testing.T) {
@@ -43,5 +44,34 @@ func TestSelectionHitIncludesTrailingHalf(t *testing.T) {
 	}
 	if v.selectionContains(geometry.Point{X: v.gutter + padding + 51, Y: padding + 10}) {
 		t.Fatal("unselected cluster hit")
+	}
+}
+
+func TestLineMenuAvailabilityUsesLogicalSelectedRows(t *testing.T) {
+	v := NewSourceView()
+	observe(t, v)
+	v.document.model.SetText("a\nb")
+	v.SetSelection(textedit.Selection{Caret: 2}) // Ends at the next row's start.
+	if v.canCommand(CommandMoveLinesUp) || !v.canCommand(CommandMoveLinesDown) || !v.canCommand(CommandDeleteLines) {
+		t.Fatal("incorrect selected line boundary")
+	}
+	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	if !v.canCommand(CommandMoveLinesUp) || v.canCommand(CommandMoveLinesDown) {
+		t.Fatal("last line availability")
+	}
+	v.SetReadOnly(true)
+	for c := CommandMoveLinesUp; c <= CommandDeleteLines; c++ {
+		if v.canCommand(c) {
+			t.Fatal("read-only menu enabled", c)
+		}
+		v.runCommand(c)
+	}
+	if v.document.model.Text() != "a\nb" || v.document.model.CanUndo() {
+		t.Fatal("read-only menu edited")
+	}
+	v.SetReadOnly(false)
+	v.document.model.SetText("")
+	if v.canCommand(CommandDeleteLines) || !v.canCommand(CommandDuplicateLinesUp) || !v.canCommand(CommandDuplicateLinesDown) {
+		t.Fatal("empty document availability")
 	}
 }

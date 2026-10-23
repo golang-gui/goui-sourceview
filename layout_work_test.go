@@ -76,7 +76,7 @@ func layoutWorkFixture(t *testing.T, rows int) (*SourceView, *layoutWorkContext)
 func TestViewportAndPaintQueueMissingMeasurements(t *testing.T) {
 	v, ctx := layoutWorkFixture(t, 100)
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
-	v.Paint(&bracketPainter{})
+	v.Paint(&recordingPainter{})
 	if len(ctx.requests) != 0 || !v.layoutPending || len(v.layouts) != 0 {
 		t.Fatal("layout/paint synchronously measured missing paragraphs")
 	}
@@ -94,7 +94,7 @@ func TestViewportAndPaintQueueMissingMeasurements(t *testing.T) {
 		t.Fatal("new visible rows were not prepared")
 	}
 	before = len(ctx.requests)
-	v.Paint(&bracketPainter{})
+	v.Paint(&recordingPainter{})
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 100}, geometry.Point{})
 	if len(ctx.requests) != before || v.layoutPending {
 		t.Fatal("paint or shrinking height remeasured ready paragraphs")
@@ -149,7 +149,7 @@ func TestDeferredRecolorKeepsMeasuredGeometry(t *testing.T) {
 	native := p.layout.(*shapedLayout)
 	calls, created := native.colorCalls, ctx.created
 	v.SetScheme(scheme.Dark())
-	v.Paint(&bracketPainter{})
+	v.Paint(&recordingPainter{})
 	if native.colorCalls != calls || !v.layoutPending || v.cachedParagraph(0) != p {
 		t.Fatal("paint synchronously recolored or discarded geometry")
 	}
@@ -180,7 +180,7 @@ func TestFailedAutomaticLayoutDoesNotRetryEveryFrame(t *testing.T) {
 	for range 5 {
 		v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
 		v.layoutStep(time.Time{})
-		v.Paint(&bracketPainter{})
+		v.Paint(&recordingPainter{})
 	}
 	if len(ctx.requests) != 1 || reported != 1 || v.layoutPending {
 		t.Fatal("failed native request retried/reported continuously", len(ctx.requests), reported)
@@ -243,7 +243,7 @@ func TestTallViewportPinsItsWorkAndReleasesAfterShrinking(t *testing.T) {
 		t.Fatal("viewport larger than the soft cache bound kept evicting visible work")
 	}
 	before := len(ctx.requests)
-	v.Paint(&bracketPainter{})
+	v.Paint(&recordingPainter{})
 	if len(ctx.requests) != before || v.layoutPending {
 		t.Fatal("painting a ready tall viewport restarted measurement")
 	}

@@ -8,18 +8,6 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 )
 
-// Bind only the pure document observer; native mount is covered by tests/window.
-func observe(t *testing.T, v *SourceView) {
-	t.Helper()
-	v.mounted = true
-	v.document.acquire(v)
-	t.Cleanup(func() {
-		if v.mounted {
-			v.mounted = false
-			v.document.release(v)
-		}
-	})
-}
 func TestIndependentDocumentsAndViews(t *testing.T) {
 	d := NewDocument("abc\nxyz")
 	a, b := NewSourceView(), NewSourceView()
@@ -62,6 +50,7 @@ func TestIndependentDocumentsAndViews(t *testing.T) {
 		t.Fatal("last unmount retained observer")
 	}
 }
+
 func TestHistoryIndentSearchAndPrivateDocument(t *testing.T) {
 	v := NewSourceView()
 	original := v.Document()
@@ -100,6 +89,7 @@ func TestHistoryIndentSearchAndPrivateDocument(t *testing.T) {
 		t.Fatal("private document lost")
 	}
 }
+
 func TestNotificationReentryDoesNotOverwriteNewSelection(t *testing.T) {
 	d := NewDocument("abc")
 	v := NewSourceView()
@@ -130,6 +120,7 @@ func TestNotificationReentryDoesNotOverwriteNewSelection(t *testing.T) {
 		t.Fatal("notifications not drained")
 	}
 }
+
 func TestResetAndLanguageValidation(t *testing.T) {
 	d := NewDocument("abc")
 	v := NewSourceView()

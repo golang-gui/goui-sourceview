@@ -2,17 +2,11 @@ package sourceview
 
 import (
 	"errors"
-	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"testing"
+
+	"github.com/golang-gui/goui/gui/textedit"
 )
 
-type resetContext struct {
-	gui.IMContext
-	reset func()
-}
-
-func (c *resetContext) Reset() { c.reset() }
 func TestResetReentryCannotApplyOldEditRange(t *testing.T) {
 	for _, switchDocument := range []bool{false, true} {
 		t.Run(map[bool]string{false: "model edit", true: "document switch"}[switchDocument], func(t *testing.T) {
@@ -46,6 +40,7 @@ func TestResetReentryCannotApplyOldEditRange(t *testing.T) {
 		})
 	}
 }
+
 func TestUnmountReleasesOriginalDocumentBeforeNativeReset(t *testing.T) {
 	v := NewSourceView()
 	observe(t, v)
@@ -58,6 +53,7 @@ func TestUnmountReleasesOriginalDocumentBeforeNativeReset(t *testing.T) {
 		t.Fatal("unmount retained external subscription")
 	}
 }
+
 func TestEditCallbackSelectionTakesPrecedence(t *testing.T) {
 	v := NewSourceView()
 	v.Document().model.SetText("abc")
@@ -77,6 +73,7 @@ func TestEditCallbackSelectionTakesPrecedence(t *testing.T) {
 		t.Fatal("command overwrote callback selection", v.Selection())
 	}
 }
+
 func TestProjectionOnlySuppressesAffectedLineHighlighting(t *testing.T) {
 	v := NewSourceView()
 	v.Document().model.SetText("zero\none\ntwo\nthree")

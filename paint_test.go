@@ -17,40 +17,15 @@ import (
 	"github.com/golang-gui/goui/platform/typography"
 )
 
-type paintShape struct {
-	rect  geometry.Rectangle
-	width float32
-	color graphics.Color
-}
-type bracketPainter struct {
-	gui.Painter
-	fills, borders []paintShape
-	lines          int
-	order          []string
-}
-
-func (p *bracketPainter) Save()                          {}
-func (p *bracketPainter) Restore()                       {}
-func (p *bracketPainter) SetClipRect(geometry.Rectangle) {}
-func (p *bracketPainter) FillRect(r geometry.Rectangle, b graphics.Brush) {
-	p.fills = append(p.fills, paintShape{rect: r, color: b.(graphics.Color)})
-	p.order = append(p.order, "fill")
-}
-func (p *bracketPainter) DrawRect(r geometry.Rectangle, w float32, b graphics.Brush) {
-	p.borders = append(p.borders, paintShape{rect: r, width: w, color: b.(graphics.Color)})
-	p.order = append(p.order, "border")
-}
-func (p *bracketPainter) DrawLine(geometry.Point, geometry.Point, float32, graphics.Brush) { p.lines++ }
-func (p *bracketPainter) DrawTextLayout(geometry.Point, typography.TextLayout) {
-	p.order = append(p.order, "text")
-}
-
 // Use the public focus event path instead of accessing WidgetBase state.
 type bracketHost struct{ widget, focused gui.Widget }
 
-func (h *bracketHost) Widget() gui.Widget                 { return h.widget }
-func (h *bracketHost) FocusedWidget() gui.Widget          { return h.focused }
+func (h *bracketHost) Widget() gui.Widget { return h.widget }
+
+func (h *bracketHost) FocusedWidget() gui.Widget { return h.focused }
+
 func (h *bracketHost) SetFocusedWidget(w gui.Widget) bool { h.focused = w; return true }
+
 func focusBracketFixture(t *testing.T, v *SourceView) {
 	t.Helper()
 	var d gui.EventDispatcher
@@ -62,7 +37,8 @@ func focusBracketFixture(t *testing.T, v *SourceView) {
 	}
 	v.caretOn = false
 }
-func bracketFills(p *bracketPainter, c color.NRGBA) []paintShape {
+
+func bracketFills(p *recordingPainter, c color.NRGBA) []paintShape {
 	return slices.DeleteFunc(slices.Clone(p.fills), func(s paintShape) bool { return s.color != graphics.ColorOf(c) })
 }
 
@@ -79,7 +55,7 @@ func TestBracketDecorationUsesQuietFillAndInsetBorder(t *testing.T) {
 			native := item.layout.(*shapedLayout)
 			foreground := slices.Clone(native.colors)
 			created := ctx.created
-			p := &bracketPainter{}
+			p := &recordingPainter{}
 			v.Paint(p)
 			fills := bracketFills(p, s.Definition().BracketMatchBackground)
 			if len(fills) != 2 || len(p.borders) != 2 || p.lines != 0 {
@@ -109,7 +85,7 @@ func TestBracketDecorationSuppressionAndLayering(t *testing.T) {
 	v.SetFoldingEnabled(false) // Isolate bracket decoration from the independent folding gutter.
 	v.Arrange(geometry.Rect(0, 0, 400, 200))
 	focusBracketFixture(t, v)
-	paint := func() *bracketPainter { p := &bracketPainter{}; v.Paint(p); return p }
+	paint := func() *recordingPainter { p := &recordingPainter{}; v.Paint(p); return p }
 	v.SetSearch(SearchQuery{Text: "{"})
 	p := paint()
 	fills := bracketFills(p, v.colors.BracketMatchBackground)
@@ -207,5 +183,33 @@ func TestBracketRectanglesFollowWrappedAndBidiGeometry(t *testing.T) {
 	got = bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair)
 	if !reflect.DeepEqual(got, []geometry.Rectangle{geometry.Rect(0, 1, 20, 18)}) {
 		t.Fatal("shared shaping cluster painted twice", got)
+	}
+}
+
+func TestPaintRangeCullsWrappedLines(t *testing.T) {
+	const count = 1000
+	lines := make([]typography.TextLine, count)
+	clusters := make([]typography.TextCluster, count)
+	for i := range lines {
+		lines[i] = typography.TextLine{Start: i, Length: 1, Y: float32(i * 20), Height: 20}
+		clusters[i] = typography.TextCluster{Start: i, Length: 1, Width: 10, LineIndex: i}
+	}
+	item := &paragraph{geometry: textedit.NewGeometry(lines, clusters, count, 20)}
+	v := NewSourceView()
+	v.viewport = geometry.Size{Width: 200, Height: 38}
+	p := &recordingPainter{}
+	// A huge selection includes the whole logical paragraph, but only two
+	// visual lines intersect the viewport. Keep full rectangle heights for
+	// underlines and let the Painter perform the final pixel clipping.
+	v.paintRange(p, item, textedit.Range{End: count}, geometry.Point{Y: -10001},
+		textedit.Range{End: count}, color.NRGBA{A: 255})
+	if len(p.fills) != 2 {
+		t.Fatalf("painted %d selection rectangles, want 2", len(p.fills))
+	}
+	for i, fill := range p.fills {
+		want := geometry.Rect(0, float32(i*20-1), 10, 20)
+		if fill.rect != want {
+			t.Fatalf("rectangle %d = %v, want %v", i, fill.rect, want)
+		}
 	}
 }

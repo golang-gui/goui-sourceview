@@ -111,3 +111,34 @@ func TestClearedCommandBindingsPreserveDirectOperations(t *testing.T) {
 		t.Fatal("clearing shortcuts disabled history")
 	}
 }
+
+func TestLineKeyBindingsUseExactPlatformModifiers(t *testing.T) {
+	v := NewSourceView()
+	alt, _ := gui.ModAlt.Resolve()
+	primary, _ := gui.ModPrimary.Resolve()
+	duplicate := alt | events.ModifierShift
+	if runtime.GOOS == "linux" {
+		duplicate |= events.ModifierControl
+	}
+	for _, tt := range []struct {
+		key  events.Key
+		mods events.Modifiers
+		want Command
+	}{
+		{events.KeyArrowUp, alt, CommandMoveLinesUp}, {events.KeyArrowDown, alt, CommandMoveLinesDown},
+		{events.KeyArrowUp, duplicate, CommandDuplicateLinesUp}, {events.KeyArrowDown, duplicate, CommandDuplicateLinesDown},
+		{events.KeyK, primary | events.ModifierShift, CommandDeleteLines},
+	} {
+		if got, ok := v.keyCommand(events.KeyEvent{Key: tt.key, Modifiers: tt.mods}); !ok || got != tt.want {
+			t.Fatal("platform shortcut", tt, got, ok)
+		}
+		if _, ok := v.keyCommand(events.KeyEvent{Key: tt.key, Modifiers: tt.mods | events.ModifierAltGraph}); ok {
+			t.Fatal("AltGraph was treated as an editor command")
+		}
+	}
+	for _, event := range []events.KeyEvent{{Key: events.KeyArrowUp}, {Key: events.KeyK, Modifiers: primary}, {Key: events.KeyArrowLeft, Modifiers: alt}} {
+		if command, ok := v.keyCommand(event); ok && command >= CommandMoveLinesUp && command <= CommandDeleteLines {
+			t.Fatal("unrelated input consumed", event)
+		}
+	}
+}

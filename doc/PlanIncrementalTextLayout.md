@@ -168,7 +168,7 @@ SourceView 将原生行／cluster 复制为独立片段，再使用按需几何�
 
 ### 实验范围
 
-`layout_fragment_probe_test.go` 仅为测试内实验，不在正式控件路径启用：
+`layout_experiment_test.go`（原 `layout_fragment_probe_test.go`）仅为测试内实验，不在正式控件路径启用：
 
 - 每次候选输入最多 512／2048 字节，保留未完成末行，下次从其起点继续。
 - 每步正常创建／测量／导出度量／复制 Fragment／释放原生布局，片段只保留值。
