@@ -36,7 +36,8 @@ func probeBoundedFragments(ctx typography.Context, text string, format typograph
 func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format typography.TextFormat, width float32, limit int, prefixAt func(int) (string, error)) (boundedFragmentProbe, error) {
 	var result boundedFragmentProbe
 	var nextBaseline float64
-	for start := 0; start < len(text); {
+	publishStart := 0
+	for start := 0; publishStart < len(text); {
 		began := time.Now()
 		prefix := ""
 		if prefixAt != nil {
@@ -72,26 +73,36 @@ func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format
 		if err != nil {
 			return result, err
 		}
-		if end < len(text) {
-			if len(lines) < 3 {
-				return result, fmt.Errorf("probe: no complete line within bounded input")
-			}
-			// 保留一条完整重叠行，再排除可能被输入上限截断的末行。
-			fragment, err = fragment.LineRange(0, len(lines)-2)
-			if err != nil {
-				return result, err
-			}
+		first := 0
+		for first < len(lines) && start+lines[first].Start < publishStart {
+			first++
 		}
-		if fragment.Range().End <= start {
+		if first == len(lines) || start+lines[first].Start != publishStart {
+			return result, fmt.Errorf("probe: overlapping line changed its boundary")
+		}
+		keep := len(lines)
+		if end < len(text) {
+			// 保留下一条完整重叠行，并排除可能被输入上限截断的末行。
+			keep -= 2
+		}
+		if keep <= first {
+			return result, fmt.Errorf("probe: no complete line within bounded input")
+		}
+		fragment, err = fragment.LineRange(first, keep)
+		if err != nil {
+			return result, err
+		}
+		if fragment.Range().End <= publishStart {
 			return result, fmt.Errorf("probe: no progress")
 		}
+		origin := fragment.Origin().Y
 		y := float64(0)
 		if len(result.pieces) > 0 {
-			y = nextBaseline - float64(lines[0].Baseline)
+			y = nextBaseline - float64(lines[first].Baseline-origin)
 		}
 		result.pieces = append(result.pieces, probeFragment{Fragment: fragment, y: y})
 		if end < len(text) {
-			nextBaseline = y + float64(lines[len(lines)-2].Baseline)
+			nextBaseline = y + float64(lines[keep].Baseline-origin)
 		}
 		result.maxInput = max(result.maxInput, len(prefix)+end-start)
 		elapsed := time.Since(began)
@@ -99,7 +110,10 @@ func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format
 			result.first = elapsed
 		}
 		result.longest = max(result.longest, elapsed)
-		start = fragment.Range().End // preserve the incomplete tail for the next step
+		publishStart = fragment.Range().End
+		// 下一步从最后一条已发布的完整行开始；真实文本恢复数字等弱类型的
+		// 近处上下文。首行仅供测量，不重复发布，也不插入可能改变字体度量的标记。
+		start += lines[keep-1].Start
 	}
 	return result, nil
 }
