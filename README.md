@@ -57,3 +57,7 @@ go run ./example/editor
 
 The example lets you edit JSON, XML, HTML, Markdown, TOML, YAML and Shell, try search and completion, and switch
 between light and dark appearances. A [declarative example](example/declarative) and a [custom Markdown editor](example/markdown) are also available.
+
+## License
+
+[MIT](LICENSE)

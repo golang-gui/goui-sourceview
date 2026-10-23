@@ -54,3 +54,7 @@ go run ./example/editor
 
 示例可以编辑 JSON、XML、HTML、Markdown、TOML、YAML、Shell，体验查找与补全，并切换亮暗外观。
 另提供[声明式示例](../example/declarative)和[自定义 Markdown 编辑器](../example/markdown)。
+
+## 许可证
+
+[MIT](../LICENSE)
