@@ -33,26 +33,40 @@
   日志确认 CoreText / OpenGL、scale=1。前者覆盖补全宽度、滚轮、拖动、Reveal、
   留白、焦点与撤销；后者覆盖双/三击、局部选区颜色、菜单、JSON/HTML 补全、
   过期异步结果、配对及原子历史。上述生产路径通过不抵消下面的实验测试失败。
-- [ ] macOS 15.7.7 / arm64 / CoreText 原生根包测试退出 1：259 项通过、
+- macOS 15.7.7 / arm64 / CoreText 首次原生根包测试退出 1：259 项通过、
   8 个测试及子项失败，集中在 `TestExplicitContextFragmentProbe` 的四个子项和
   `TestBoundedFragmentProbeMatchesSimpleParagraphs` 的两个子项及各自父测试。
   失败与 [原有记录](PlanRemoteEditingLatency.md#验证命令与未通过项) 一致：
   独立输入片段的纵向坐标/基线或双向几何不等于完整段落。两种实验仅存在于
   `*_test.go`，正式控件未启用，未移除断言、扩大 skip 或改变预期来制造通过。
-- [ ] Windows 10 19045 / amd64 原生测试未执行：下载尺寸和 SHA256 一致，
+- Windows 10 19045 / amd64 首次原生测试被阻止：下载尺寸和 SHA256 一致，
   权限含 ReadAndExecute，但两种正常启动方式均被 Defender Exploit Guard
   事件 1121 拦截，规则 ID 为 C1DB55AB-C21A-4637-BB3F-A12568109D35。
-  保留系统安全策略，停止重复启动；三目标交叉构建不算 Windows 原生运行通过。
-- [ ] 许可证尚未确定；已询问维护者是否沿用 GOUI 的 MIT 及版权署名。
-  上述既有实验失败与 Windows 验证缺口是否接受用于本次发布，也已单独询问。
-  未获得答复前不推送 v0.1.0 标签或创建正式 Release。
+  当时保留系统安全策略并停止重复启动；三目标交叉构建不算原生运行通过。
+- [x] 维护者确认许可证与 GOUI 一致：LICENSE 逐字节复制 MIT 及同一版权署名，
+  中英文 README 补充许可证入口。维护者要求修复 Mac 失败，并明确授权临时关闭
+  Defender 完成 Windows 验证；没有把实验失败作为已知限制直接发布。
+- [x] 两个实验修正片段放置和近处上下文：占用高度不等于下一行推进，以完整重叠
+  行实测基线定位；每步附带上一条已完成的真实源文本行，恢复数字解析上下文。
+  输入预算、范围/行/簇/坐标/基线严格断言及隐式上下文反例均保留，未改正式控件
+  或 Typography。详见 [修正记录](PlanIncrementalTextLayout.md#分段实验的原生坐标修正2026-10-23)。
+- [x] Mac / CoreText 与 Windows / DirectWrite 的最终根包测试各 268 项通过，
+  零失败/跳过，原生程序实际退出 0。Linux 全包 race 通过；新增固定行距回归
+  不依赖宿主字体，原包测试数为 415，加入后为 416。
+- [x] Windows 只临时停用命中的 ASR 规则 C1DB55AB-C21A-4637-BB3F-A12568109D35，
+  通过 finally 恢复原值，并核对全部 16 条规则逐项一致；实时防护一直开启。
+  真实桌面使用 RDP 1600×900、系统 DPI 96、应用 1.5，验证正常窗口到最大化、
+  编辑、Tab 确认补全、真实复制/删除/粘贴、撤销/重做、查找、右键菜单及主题。
+  补全 scroll 和 experience 自动断言均返回 0，日志确认 DirectWrite / Direct2D。
+  桌面验证及后续原生复测后均恢复防护，无永久排除项。
 - [ ] annotated tag、Draft、公开 Release、Go proxy 和消费方验证；公开后更新
   中英文 README 安装指引并提交收尾记录。
 - 日志、干净源码、截图、验证程序与双语发布说明草稿保存在
   `/tmp/goui-sourceview-release-v0.1.0-punsevvv`；Mac 专用目录为
-  `/private/tmp/sourceview-v010.VebMVy`。Mac 真实复制验证将剪贴板文本改为 true，
-  未保留原内容；其余窗口自动测试不访问真实剪贴板。编辑只改内存，未写用户文件、
-  修改系统缩放/安全设置或修改相邻 GOUI。真实 IME、混合 DPI 和全部后端组合未验收。
+  `/private/tmp/sourceview-v010.VebMVy`。Mac、Windows 真实复制验证将剪贴板文本改为
+  true，未保留原内容；其余窗口自动测试不访问真实剪贴板。编辑只改内存，未写用户
+  文件、修改系统缩放或修改相邻 GOUI。临时安全配置变化已恢复，真实 IME、混合 DPI
+  和全部后端组合未验收。
   本轮示例、窗口专项、Mac 专用 Terminal、独立 X11 / Xfwm4 和传输 HTTP 均已关闭，
   保留原有远端连接。依赖及验证程序提交后，干净 git archive 再次执行 415 项测试、
   vet、模块校验、tidy -diff 与三目标构建均通过，窗口修正未带来新增包测试失败。
