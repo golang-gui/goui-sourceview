@@ -8,6 +8,38 @@
 当前依赖为 GOUI v0.3.0，已发布 v0.1.0。早期各切片中的未发布
 依赖及失败描述保留为当时记录，当前验证结果以发布记录为准。
 
+## 补全期间的左右导航（2026-10-23）
+
+- [x] 普通左右键沿原生视觉／Cluster 几何移动正文光标，同一词范围内重新计算默认
+  候选或请求自定义 Provider，复用 Popover、ScrollView 和列表。前缀缩短可恢复候选，
+  按编辑内容保留选中项；词首空前缀继续本次会话，越界、扩选或普通选区 setter 关闭。
+- [x] 仅键盘导航显式保留当前会话；选区更新即标记 pending，旧候选不能通过键盘、
+  hover、点击或语义动作提交。新请求取消旧请求，仍限一个运行任务和一个最新待处理项。
+  第一次结果尚未显示时左右移动也更新请求，迟到结果不能覆盖新状态。当前请求错误关闭
+  预览并报告一次。嵌入语言按光标处有效 Definition 检查，允许确认 Markdown 围栏内的 JSON 补全。
+- [x] 包内增加词内保留、边界／扩选／普通 setter 关闭、选区回调重入、pending 禁止提交
+  和语义动作的回归。既有 completion 窗口程序增加 `-case navigation -auto`，经正常
+  Window.DispatchEvent 验证候选变化、弹窗对象不变、完整词替换与一次撤销，以及受控的
+  慢 Provider、过期响应、首次结果未显示、错误一次报告和回调换文档。
+- [x] Linux amd64 / Go 1.25.8 / Pango：`go test ./...`、
+  `GOWORK=off go test -json ./... -count=1` 通过，428 PASS、0 FAIL、0 SKIP；
+  相对 `1b6ed8c` 原有 418 项全部保留。本次两个功能共增加 10 项（包含父／子用例）。
+  `GOWORK=off go test -race ./... -count=1`、`GOWORK=off go vet ./...` 通过。
+- [x] 独立 X11 / Xvnc / Xfwm4 合成桌面、Software / Pango、150% 应用缩放：
+  navigation 的 Modern 亮暗和 Basic 三组通过；原有补全 scroll、Modern dark json、
+  find、keybindings 窗口用例通过。同一 navigation 用例在 `1b6ed8c` 冻结检出上于
+  `right arrow closed/recreated completion or failed to move caret` 失败。
+- [x] 在声明式示例中以 XTest 输入 `tr`、F2 和左右键，实际原生窗口集合不变；
+  截图确认光标移动、弹窗保留以及候选 `true` 的匹配强调由 `tr` 改为 `t` 后再恢复。
+  XFixes 读取实际原生指针，正文为 `xterm`、行号为 `left_ptr`、折叠按钮为 `hand2`，
+  三者像素数据不同；不是只检查 SourceView.Cursor 的返回值。
+- [x] `GOWORK=off CGO_ENABLED=0` 下，Windows amd64 与 macOS arm64 的根包
+  `go test -c`、全仓 `go build ./...` 通过。两端仅交叉编译，未做原生窗口验收；
+  真实 IME、系统保留键、混合 DPI 和左右导航触发视口滚动的组合未验收。
+  未修改 GOUI，依赖 v0.3.0；工作区 GOUI 为 `d7280cb`。日志、程序、原生指针与
+  截图均保存仓库外，未写剪贴板、用户文件或系统设置。
+  示例正常关闭，专用 X11 与窗口管理器已退出，用户桌面会话未动。
+
 ## 侧栏与折叠指针（2026-10-23）
 
 - [x] 正文保留配置的文本指针；行号及侧栏空白使用箭头，可点击的折叠按钮与

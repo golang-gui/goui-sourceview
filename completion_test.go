@@ -8,9 +8,71 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/language"
+	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 )
+
+// 只有调用方明确传入当前会话的词内键盘移动才能保留弹窗；旧结果在刷新前不能提交。
+func TestCompletionSelectionRetentionAndReentry(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		selection               textedit.Selection
+		ordinary, reenter, keep bool
+	}{
+		{name: "left", selection: textedit.Selection{Anchor: 1, Caret: 1}, keep: true},
+		{name: "word start", selection: textedit.Selection{}, keep: true},
+		{name: "word end", selection: textedit.Selection{Anchor: 4, Caret: 4}, keep: true},
+		{name: "outside", selection: textedit.Selection{Anchor: 5, Caret: 5}},
+		{name: "selection", selection: textedit.Selection{Caret: 1}},
+		{name: "explicit setter", selection: textedit.Selection{Anchor: 1, Caret: 1}, ordinary: true},
+		{name: "callback setter", selection: textedit.Selection{Anchor: 1, Caret: 1}, reenter: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := NewSourceView()
+			observe(t, v)
+			v.document.model.SetText("word tail")
+			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			c, _ := v.completionContext(true)
+			closed := 0
+			s := &completionSession{state: v.operationState(), definition: c.Definition, explicit: true, range_: c.Range, items: []Completion{{Label: "worker", Text: "worker"}}, list: &completionList{}, popup: closingPopup{onClose: func() { closed++ }}}
+			v.completion = s
+			t.Cleanup(v.closeCompletion)
+			if tc.reenter {
+				v.ConnectSelection(func(textedit.Selection) { v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3}) })
+			}
+			if tc.ordinary {
+				v.SetSelection(tc.selection)
+			} else {
+				v.setSelectionKeepingCompletion(tc.selection, false, false, s)
+			}
+			if tc.keep {
+				if v.completion != s || !s.pending || !s.state.valid(v) || closed != 0 {
+					t.Fatal("word navigation discarded its session or kept old identity")
+				}
+				if err := v.acceptCompletion(s, 0); err != nil || v.document.model.Text() != "word tail" || v.document.model.CanUndo() {
+					t.Fatal("pending result was committed", err)
+				}
+			} else if v.completion != nil || closed != 1 {
+				t.Fatal("unrelated selection retained completion", closed)
+			}
+		})
+	}
+}
+
+// 刷新期间语义和鼠标命中都不能把旧候选暴露为可执行动作。
+func TestPendingCompletionRowsAreNotInteractive(t *testing.T) {
+	l, _ := completionFixture(t, []Completion{{Label: "true", Text: "true"}})
+	arrangeCompletion(l)
+	l.session.pending = true
+	info := l.Snapshot()
+	if info.Attributes["sourceview.completion.pending"] != true || len(info.Children) != 1 || info.Children[0].Enabled || len(info.Children[0].Actions) != 0 {
+		t.Fatal("pending completion exposed an action", info)
+	}
+	if _, ok := l.itemAt(geometry.Point{X: 10, Y: 10}); ok {
+		t.Fatal("pending completion accepted pointer input")
+	}
+}
 
 func TestLanguageAndDocumentCompletions(t *testing.T) {
 	for _, tt := range []struct {

@@ -432,7 +432,7 @@ func (l *completionList) rowRect(slot int) geometry.Rectangle {
 }
 
 func (l *completionList) itemAt(p geometry.Point) (int, bool) {
-	if l.view.completion != l.session || l.rowHeight <= 0 || p.X < 0 || p.X >= l.viewport.Width || p.Y < 0 || p.Y >= l.viewport.Height {
+	if l.view.completion != l.session || l.session.pending || l.rowHeight <= 0 || p.X < 0 || p.X >= l.viewport.Width || p.Y < 0 || p.Y >= l.viewport.Height {
 		return 0, false
 	}
 	index := int((p.Y + l.offset.Y) / l.rowHeight)
@@ -528,6 +528,7 @@ func (l *completionList) Paint(p gui.Painter) {
 func (l *completionList) Snapshot() gui.WidgetInfo {
 	info := l.WidgetBase.Snapshot()
 	info.Role = gui.Role("completion-list")
+	info.SetAttribute("sourceview.completion.pending", l.session.pending)
 	info.ItemCount, info.VisibleStart, info.VisibleEnd = len(l.session.items), l.first, l.first+l.visible
 	for slot := 0; slot < l.visible; slot++ {
 		i := l.first + slot
@@ -535,7 +536,10 @@ func (l *completionList) Snapshot() gui.WidgetInfo {
 		r := l.rowRect(slot)
 		top, bottom := max(0, r.Y), min(l.viewport.Height, r.Y+r.Height)
 		r.Y, r.Height = top, max(0, bottom-top)
-		row := gui.WidgetInfo{Role: gui.Role("completion-item"), Text: item.Label, Visible: true, Enabled: true, Selected: i == l.session.index, Actions: []gui.Action{gui.ActionClick}, Bounds: r.Translate(info.Bounds.Pos)}
+		row := gui.WidgetInfo{Role: gui.Role("completion-item"), Text: item.Label, Visible: true, Enabled: info.Enabled && !l.session.pending, Selected: i == l.session.index, Bounds: r.Translate(info.Bounds.Pos)}
+		if row.Enabled {
+			row.Actions = []gui.Action{gui.ActionClick}
+		}
 		row.SetAttribute("sourceview.completion.detail", item.Detail)
 		info.Children = append(info.Children, row)
 	}

@@ -64,8 +64,26 @@ Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后�
 - 上下键循环切换并请求选中项滚入视口，Enter/Tab 确认当前候选；鼠标移动选择、点击确认。
   滚轮和滚动条仅浏览视口，不改变选中项或提交文本；键盘随后从原选中项继续导航。
 - Escape 只关闭本次补全，不改正文；下一次正常 Tab 的规则不因此变更。
-- Backspace 更新候选；其他导航、指针定位、选区变化和外部修改关闭旧会话。
+- Backspace 更新候选。普通左右键保留正文的原生视觉／Cluster 导航；移动后仍在同一
+  完整词范围内、没有选区且有效语言定义不变时，更新前缀与候选，复用原 Popover。
+  词首空前缀可以继续显示本次候选；移出词范围、Shift 扩选、其他导航、指针定位、
+  普通 SetSelection 和外部修改关闭旧会话，不因本轮改动让任意选区变更自动触发补全。
+- 默认候选按新上下文重新计算，左移缩短前缀时恢复此前过滤掉的词；不能仅过滤旧的
+  已展示数组。自定义 Provider 按新 Caret/Prefix/Range 请求，保留原请求的 Explicit，
+  Trigger 为空，因为没有新输入触发字符；不追加内建候选或代替 Provider 过滤、排序。
+- 每次移动仅显式保留当前会话，更新选区身份后立即把旧候选标为 pending。
+  异步刷新期间保留旧列表预览，禁止 Enter/Tab、点击及 hover 导航旧候选；上下键也不
+  改变旧选中项。语义发布 `sourceview.completion.pending`，旧行禁用且不提供动作。
+  新结果按文档、修订、挂载、选区、请求代次核验后替换；选中项按 Label、实际 Text、
+  Range、Caret 和附加编辑的值保留，不按旧索引或指针地址误认。没有匹配项则关闭。
+- 首次请求尚未显示时，左右移动也取消旧请求并为同一词生成新快照。仍只有一个运行
+  请求与一个最新待处理项；不合作的 Provider 仍可能拖延新结果，但不能发布过期数据。
+  当前请求失败关闭预览并按既有错误契约报告一次；正常取消不报告错误。
+- 更新复用 Popover、ScrollView 与列表控件，释放旧候选的布局并重新测量新的有界候选集，
+  更新尺寸、位置及选中项滚入视口。每次移动复用原生窗口，候选刷新本身不额外移动正文光标或产生历史。
+  会话只保留词范围、有效 Definition 和显式触发标志，不长期保留完整请求文本快照。
 - 切文档/语言、只读、禁用、预编辑、失焦、卸载、字体/配色改变和视口滚动使会话失效。
+- 嵌入语言的会话有效性比较光标处的实际 Definition，而非要求子语言 ID 等于文档外层 ID。
 - 记录 document/revision/mount/selection/语言及请求代次；提供者返回、弹窗创建及关闭后
   都重新核验。先清除会话身份再释放弹窗，关闭回调不能递归创建新会话或提交旧范围。
 
@@ -144,6 +162,18 @@ Ctrl+Space 不再由控件默认处理，以便系统输入法正常使用；应
 后台代理。卸载断开 signal 并清除提供者引用。语言与事务契约见 [语言扩展](DesignLanguageExtensions.md)。
 
 ## 参考与取舍
+
+2026-10-23 核对左右导航的边界：
+
+- [VS Code main SuggestModel._onCursorChange / _onNewContext](https://github.com/microsoft/vscode/blob/main/src/vs/editor/contrib/suggest/browser/suggestModel.ts)
+  的当日源码对有效键盘光标变化重新过滤，左移时按词上下文重新请求；采用继续会话与取消的
+  区分，不照搬贡献系统或服务容器。这里记录 main 源码观察，不宣称其所有版本行为相同。
+- Scintilla 5 [SCI_AUTOCSETCANCELATSTART / SCI_AUTOCSELECT](https://www.scintilla.org/ScintillaDoc.html#SCI_AUTOCSETCANCELATSTART)
+  的在线文档描述词边界取消和匹配项选择；本项目明确允许本次会话在词首空前缀继续显示，
+  不照搬其默认取消位置或字符串消息协议。
+- GtkSourceView 5.22.1 [CompletionProvider.refilter](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/method.CompletionProvider.refilter.html)
+  提供重过滤既有结果的职责边界。当前 SourceView 的 Provider 完全拥有过滤和排序，
+  因此继续使用已有 Complete 回调和取消队列，不新增 Refilter 公共回调或缓存能力声明。
 
 2026-10-16 核对以下文档与源码；没有复制实现或新增第三方依赖：
 

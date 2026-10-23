@@ -282,6 +282,12 @@ func (v *SourceView) clampOffset(offset int) int {
 }
 
 func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
+	v.setSelectionKeepingCompletion(s, upstream, reveal, nil)
+}
+
+// Only keyboard movement inside an existing completion word may retain its UI.
+// Explicit setters, pointer input and reentrant callbacks use setSelection.
+func (v *SourceView) setSelectionKeepingCompletion(s textedit.Selection, upstream, reveal bool, keep *completionSession) {
 	defer v.searchState.Emit()
 	state := v.operationState()
 	s = v.clampSelection(s)
@@ -316,7 +322,12 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	v.selectionRevision = v.document.model.Revision()
 	v.selectionEpoch++
 	v.cancelPaste()
-	v.closeCompletion()
+	if keep != nil && v.completion == keep && !foldingChanged && s.Anchor == s.Caret && s.Caret >= keep.range_.Start && s.Caret <= keep.range_.End {
+		keep.state = v.operationState()
+		keep.pending = true // Old candidates cannot be committed from selection callbacks.
+	} else {
+		v.closeCompletion()
+	}
 	if v.document != state.document || v.mountEpoch != state.mount || v.document.model.Revision() != state.revision || v.selectionEpoch != state.selection+1 {
 		return
 	}

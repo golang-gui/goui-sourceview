@@ -207,6 +207,12 @@ READY 只确认原生窗口/焦点/布局已就绪；不能用它代替视觉和
 
 ## 10. 补全列表视觉
 
+`go run ./tests/window/editor/completion -case navigation -auto` 经正常窗口输入验证
+词内左右移动不关闭／重建弹窗，前缀缩短时恢复候选和选中项，越界或扩选关闭，
+确认替换完整词并保持一次撤销；同时验证嵌入语言、Provider 顺序与过滤所有权、
+pending 禁止提交、迟到结果、首次请求未显示时导航、错误报告及选区回调换文档。
+此用例断言交互与语义，不代替下述列表像素、真实 IME 或系统快捷键验证。
+
 `go run ./tests/window/editor/completion [-dark] [-case CASE] [-auto]` 提供 JSON/HTML/XML、
 长名称/说明、Unicode、滚动、折行及屏幕边缘场景。核对名称/说明基线与间距、
 普通/选中前缀颜色、独立背景与 1 DIP 边框、省略号、滚动提示及工作区内可见性。

@@ -1,6 +1,8 @@
 // Completion panel verification. Requires a desktop/window manager and native
 // fonts. Run: go run ./tests/window/editor/completion [-dark] [-case CASE]
-// [-auto]. CASE: json, html, xml, long, unicode, scroll, wrapped, edge.
+// [-auto]. CASE: json, html, xml, long, unicode, scroll, wrapped, edge, navigation.
+// navigation 必须带 -auto，验证词内左右移动复用弹窗、候选恢复、词边界与选区关闭、
+// 嵌入语言确认、慢 Provider 的取消和过期结果、请求尚未显示时移动以及选区回调换文档。
 // -basic selects Basic instead of Modern. -expect-surface transparent/opaque
 // asserts the native surface mode; on X11 run opaque without a compositor to
 // verify the alpha-unavailable fallback. Otherwise leave the expectation unset.
@@ -96,7 +98,7 @@ func verticalBar(w gui.Widget) *gui.ScrollBar {
 func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "dark code scheme")
-	scenario := flag.String("case", "json", "json/html/xml/long/unicode/scroll/wrapped/edge")
+	scenario := flag.String("case", "json", "json/html/xml/long/unicode/scroll/wrapped/edge/navigation")
 	auto := flag.Bool("auto", false, "verify input and close automatically")
 	basicTheme := flag.Bool("basic", false, "use the official Basic sheet")
 	surface := flag.String("expect-surface", "", "assert transparent or opaque popup creation")
@@ -105,6 +107,9 @@ func main() {
 	text, prefix, id := "{\n    \"value\": tr", "tr", language.JSON
 	switch *scenario {
 	case "json", "long", "scroll":
+	case "navigation":
+		check(*auto, "navigation requires -auto")
+		text, prefix, id = "trade trace true\ntruffle tail", "tr", language.Plain
 	case "html":
 		text, prefix, id = "<di", "di", language.HTML
 	case "xml":
@@ -163,6 +168,9 @@ func main() {
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(context.Context, source.CompletionContext) ([]source.Completion, error) { return items, nil }})
 	}
 	caret := len(text)
+	if *scenario == "navigation" {
+		caret = strings.Index(text, "truffle") + len(prefix)
+	}
 	v.SetSelection(textedit.Selection{Anchor: caret, Caret: caret})
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
@@ -188,6 +196,10 @@ func main() {
 		}
 	}
 	primary, _ := gui.ModPrimary.Resolve()
+	if *scenario == "navigation" {
+		verifyNavigation(app, win, v, doc, key, probe, *dark)
+		return
+	}
 	var popup gui.Popover
 	var observed gui.Popover
 	popupFrames := 0
@@ -341,6 +353,261 @@ func main() {
 	if *auto && !complete {
 		log.Fatal("verification aborted")
 	}
+}
+
+// 所有交互均走窗口输入；模型、Provider 和选区 setter 只用于准备场景或回调重入。
+func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView, doc *source.Document, key func(events.Key, events.Modifiers), probe *scaleProbe, dark bool) {
+	original := doc.Model().Text()
+	expectedFailure := fmt.Errorf("verification provider failure")
+	failures := 0
+	handle := v.ConnectError(func(err error) {
+		check(err == expectedFailure, fmt.Sprintf("unexpected completion error: %v", err))
+		failures++
+	})
+	defer handle.Disconnect()
+	start := strings.Index(original, "truffle")
+	primary, _ := gui.ModPrimary.Resolve()
+	var popup gui.Popover
+	var steps []func() bool
+	next := func(f func()) { steps = append(steps, func() bool { f(); return true }) }
+	ready := func() bool {
+		if len(win.Popovers()) == 0 {
+			return false
+		}
+		info := candidates(win.Popovers()[0])
+		return len(info.Children) > 0 && info.Attributes["sourceview.completion.pending"] != true
+	}
+	labels := func() []string {
+		var labels []string
+		for _, row := range candidates(win.Popovers()[0]).Children {
+			labels = append(labels, row.Text)
+		}
+		return labels
+	}
+	selectedText := func() string {
+		info := candidates(win.Popovers()[0])
+		i := selected(info)
+		if i < 0 {
+			return ""
+		}
+		return info.Children[i].Text
+	}
+	next(func() { key(events.KeyF2, 0) })
+	steps = append(steps, ready)
+	next(func() {
+		popup = win.Popovers()[0]
+		check(strings.Join(labels(), ",") == "trace,trade,true", "initial default candidates")
+		key(events.KeyArrowDown, 0)
+		key(events.KeyArrowDown, 0)
+		check(selectedText() == "true", "candidate setup")
+		key(events.KeyArrowRight, 0)
+		check(len(win.Popovers()) == 1 && win.Popovers()[0] == popup && v.Selection().Caret == start+3, "right arrow closed/recreated completion or failed to move caret")
+	})
+	steps = append(steps, ready)
+	next(func() {
+		check(strings.Join(labels(), ",") == "true" && selectedText() == "true", "right arrow did not refilter")
+		key(events.KeyArrowLeft, 0)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		check(win.Popovers()[0] == popup && strings.Join(labels(), ",") == "trace,trade,true" && selectedText() == "true", "left arrow failed to restore candidates or selection")
+		key(events.KeyArrowLeft, 0)
+		key(events.KeyArrowLeft, 0)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		check(win.Popovers()[0] == popup && v.Selection().Caret == start && len(labels()) == 4, "word-start completion did not retain empty prefix")
+		key(events.KeyArrowLeft, 0)
+		check(len(win.Popovers()) == 0, "leaving word range kept completion")
+		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		key(events.KeyF2, 0)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		key(events.KeyArrowLeft, events.ModifierShift)
+		check(len(win.Popovers()) == 0 && v.Selection().Anchor != v.Selection().Caret, "selection extension retained completion")
+		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		key(events.KeyF2, 0)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		key(events.KeyArrowRight, 0)
+		key(events.KeyArrowRight, 0)
+		check(len(win.Popovers()) == 0 && doc.Model().Text() == original, "empty default result kept the popup or changed text")
+		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		key(events.KeyF2, 0)
+	})
+	steps = append(steps, ready)
+	next(func() { key(events.KeyArrowRight, 0) })
+	steps = append(steps, ready)
+	next(func() {
+		key(events.KeyEnter, 0)
+		check(doc.Model().Text() == "trade trace true\ntrue tail" && len(win.Popovers()) == 0, "completion after movement used a stale edit range")
+		key(events.KeyZ, primary)
+		check(doc.Model().Text() == original && !doc.Model().CanUndo(), "completion after movement was not one undo step")
+		must(doc.SetLanguage(language.Markdown))
+		doc.Model().SetText("```json\ntr\n```")
+		v.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+	})
+	// 先让事件循环完成围栏行的增量词法状态；补全不对未知嵌入上下文猜测语言。
+	next(func() { key(events.KeyF2, 0) })
+	steps = append(steps, ready)
+	next(func() { key(events.KeyArrowLeft, 0) })
+	steps = append(steps, ready)
+	next(func() {
+		check(strings.Join(labels(), ",") == "true", "embedded JSON lost completion after movement")
+		key(events.KeyEnter, 0)
+		check(doc.Model().Text() == "```json\ntrue\n```", "embedded language completion did not commit")
+	})
+	requests := make(chan source.CompletionContext, 16)
+	nextRequest := func() source.CompletionContext {
+		select {
+		case c := <-requests:
+			return c
+		default:
+			log.Fatal("completed provider did not record its request")
+			return source.CompletionContext{}
+		}
+	}
+	gate := make(chan struct{})
+	next(func() {
+		must(doc.SetLanguage(language.Plain))
+		doc.Model().SetText("word tail")
+		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
+			requests <- c
+			if c.Prefix == "w" {
+				<-gate // 故意不合作的旧请求，用于确认迟到数据仍被丢弃。
+				return []source.Completion{{Label: "zebra"}, {Label: "alpha"}}, nil
+			}
+			return []source.Completion{{Label: "worker"}, {Label: "wonder"}}, nil
+		}})
+		key(events.KeyF2, 0)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		popup = win.Popovers()[0]
+		nextRequest()
+		key(events.KeyArrowLeft, 0)
+	})
+	steps = append(steps, func() bool {
+		select {
+		case c := <-requests:
+			check(c.Caret == 1 && c.Prefix == "w" && c.Range == (textedit.Range{Start: 0, End: 4}), "provider received stale cursor context")
+			return true
+		default:
+			return false
+		}
+	})
+	next(func() {
+		check(len(win.Popovers()) == 1 && win.Popovers()[0] == popup, "pending refresh discarded popup")
+		info := candidates(popup)
+		check(info.Attributes["sourceview.completion.pending"] == true && !info.Children[0].Enabled && len(info.Children[0].Actions) == 0, "pending candidate exposed an action")
+		key(events.KeyEnter, 0)
+		check(doc.Model().Text() == "word tail" && win.Popovers()[0] == popup, "Enter committed a pending candidate")
+		key(events.KeyArrowRight, 0)
+		close(gate)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		check(win.Popovers()[0] == popup && strings.Join(labels(), ",") == "worker,wonder", "late provider result replaced latest candidates")
+		c := nextRequest()
+		check(c.Caret == 2 && c.Prefix == "wo", "latest request was lost")
+		key(events.KeyArrowLeft, 0)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		check(win.Popovers()[0] == popup && strings.Join(labels(), ",") == "zebra,alpha", "editor filtered or reordered provider results")
+		nextRequest()
+		key(events.KeyEnter, 0)
+		check(doc.Model().Text() == "zebra tail", "provider completion after movement used stale range")
+		key(events.KeyZ, primary)
+		check(doc.Model().Text() == "word tail", "provider completion undo")
+	})
+	next(func() {
+		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
+			if c.Prefix == "w" {
+				return nil, expectedFailure
+			}
+			return []source.Completion{{Label: "worker"}}, nil
+		}})
+		key(events.KeyF2, 0)
+	})
+	steps = append(steps, ready)
+	next(func() { key(events.KeyArrowLeft, 0) })
+	steps = append(steps, func() bool {
+		if failures == 0 {
+			return false
+		}
+		check(failures == 1 && len(win.Popovers()) == 0 && doc.Model().Text() == "word tail", "provider failure kept a pending popup or was reported more than once")
+		return true
+	})
+	initialGate := make(chan struct{})
+	next(func() {
+		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
+			requests <- c
+			if c.Prefix == "wo" {
+				<-initialGate
+				return []source.Completion{{Label: "stale"}}, nil
+			}
+			return []source.Completion{{Label: "latest"}}, nil
+		}})
+		key(events.KeyF2, 0)
+	})
+	steps = append(steps, func() bool {
+		select {
+		case <-requests:
+			return true
+		default:
+			return false
+		}
+	})
+	next(func() {
+		check(len(win.Popovers()) == 0, "initial gated request unexpectedly displayed")
+		key(events.KeyArrowLeft, 0)
+		check(v.Selection().Caret == 1, "pending initial request swallowed cursor movement")
+		close(initialGate)
+	})
+	steps = append(steps, ready)
+	next(func() {
+		check(strings.Join(labels(), ",") == "latest", "initial cancelled request was published")
+		nextRequest()
+		once := true
+		h := v.ConnectSelection(func(textedit.Selection) {
+			if !once {
+				return
+			}
+			once = false
+			v.SetDocument(source.NewDocument("keep"))
+			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		})
+		key(events.KeyArrowRight, 0)
+		h.Disconnect()
+		check(len(win.Popovers()) == 0 && v.Document().Model().Text() == "keep" && v.Selection().Caret == 2, "navigation callback state was overwritten")
+	})
+	index, done := 0, false
+	deadline := time.Now().Add(10 * time.Second)
+	timer := app.NewTimer()
+	defer timer.Stop()
+	timer.ConnectTimeout(func() {
+		check(time.Now().Before(deadline), fmt.Sprintf("navigation step %d timed out; popups=%d text=%q", index, len(win.Popovers()), v.Document().Model().Text()))
+		if index < len(steps) {
+			if steps[index]() {
+				index++
+				deadline = time.Now().Add(10 * time.Second)
+			}
+			return
+		}
+		done = true
+		check(failures == 1, "missing or duplicate completion error")
+		log.Printf("PASS completion navigation, stable popup, refilter, selection, undo, embedded language, delayed/stale providers and reentry; typography=%s painter=%s scale=%g dark=%t", app.Typography().Name(), probe.painter, probe.scale, dark)
+		win.Destroy()
+	})
+	must(timer.Start(100 * time.Millisecond))
+	app.Run()
+	check(done, "navigation verification aborted")
 }
 
 type scaleProbe struct {

@@ -299,6 +299,10 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 }
 
 func (v *SourceView) moveTo(at int, upstream, extend bool) {
+	v.moveToKeepingCompletion(at, upstream, extend, nil)
+}
+
+func (v *SourceView) moveToKeepingCompletion(at int, upstream, extend bool, keep *completionSession) {
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -310,7 +314,7 @@ func (v *SourceView) moveTo(at int, upstream, extend bool) {
 	if !extend {
 		s.Anchor = at
 	}
-	v.setSelection(s, upstream, true)
+	v.setSelectionKeepingCompletion(s, upstream, true, keep)
 }
 func (v *SourceView) adjacent(at int, forward bool) int {
 	m := v.document.model
@@ -339,6 +343,10 @@ func (v *SourceView) adjacent(at int, forward bool) int {
 	return max(0, min(at, m.Len()))
 }
 func (v *SourceView) navigate(key events.Key, extend bool) {
+	v.navigateKeepingCompletion(key, extend, nil)
+}
+
+func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep *completionSession) {
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -356,7 +364,7 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 		if key == events.KeyArrowRight {
 			at = s.Range().End
 		}
-		v.moveTo(at, false, false)
+		v.moveToKeepingCompletion(at, false, false, keep)
 		return
 	}
 	if p == nil {
@@ -370,7 +378,7 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 		case events.KeyEnd:
 			caret = r.End
 		}
-		v.moveTo(caret, false, extend)
+		v.moveToKeepingCompletion(caret, false, extend, keep)
 		return
 	}
 	vertical := false
@@ -435,7 +443,7 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 	if key == events.KeyArrowLeft || key == events.KeyArrowRight {
 		caret = v.foldNavigationTarget(caret, key == events.KeyArrowRight)
 	}
-	v.moveTo(caret, pos.Upstream, extend)
+	v.moveToKeepingCompletion(caret, pos.Upstream, extend, keep)
 	if vertical {
 		v.preferredSet = true
 		v.preferredX = x

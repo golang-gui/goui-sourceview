@@ -59,16 +59,18 @@ type CompletionProvider struct {
 }
 
 type completionSession struct {
-	state    operationState
-	language language.ID
-	range_   textedit.Range
-	prefix   string
-	items    []Completion
-	index    int
-	popup    gui.Popover
-	list     *completionList
-	panel    *completionPanel
-	shown    bool
+	state             operationState
+	language          language.ID
+	range_            textedit.Range
+	prefix            string
+	items             []Completion
+	index             int
+	popup             gui.Popover
+	list              *completionList
+	panel             *completionPanel
+	shown             bool
+	definition        *language.Language
+	explicit, pending bool
 }
 
 func (v *SourceView) SetCompletionProvider(provider *CompletionProvider) {
@@ -333,6 +335,7 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	}
 	items = sanitizeCompletions(items)
 	if len(items) == 0 {
+		v.closeCompletion()
 		return nil
 	}
 	caret, ok := v.caretRect()
@@ -343,7 +346,31 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	if !state.valid(v) {
 		return nil
 	}
-	s := &completionSession{state: state, language: c.Language, range_: c.Range, prefix: c.Prefix, items: items}
+	if s := v.completion; s != nil {
+		selected := s.items[s.index]
+		s.list.release()
+		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch {
+			return nil
+		}
+		s.state, s.range_, s.prefix, s.language = state, c.Range, c.Prefix, c.Language
+		s.definition, s.explicit = c.Definition, c.Explicit
+		s.items, s.index, s.pending = items, 0, false
+		if index := slices.IndexFunc(items, func(item Completion) bool { return sameCompletion(item, selected) }); index >= 0 {
+			s.index = index
+		}
+		s.list.measured, s.list.layoutReady = false, false
+		s.list.first, s.list.visible = 0, 0
+		s.list.measureItems()
+		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch {
+			return nil
+		}
+		position.X -= s.panel.inset() - completionInset
+		s.popup.SetPosition(position)
+		s.list.RequestLayout()
+		s.list.refresh()
+		return nil
+	}
+	s := &completionSession{state: state, language: c.Language, range_: c.Range, prefix: c.Prefix, items: items, definition: c.Definition, explicit: c.Explicit}
 	s.list = newCompletionList(v, s)
 	s.panel = newCompletionPanel(s.list)
 	position.X -= s.panel.inset() - completionInset
@@ -393,6 +420,75 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	return nil
 }
 
+// Candidate identity includes the actual edit, not its transient list index.
+func sameCompletion(a, b Completion) bool {
+	if a.Label != b.Label || a.Text != b.Text || !slices.Equal(a.AdditionalEdits, b.AdditionalEdits) {
+		return false
+	}
+	if (a.Range == nil) != (b.Range == nil) || (a.Caret == nil) != (b.Caret == nil) {
+		return false
+	}
+	return (a.Range == nil || *a.Range == *b.Range) && (a.Caret == nil || *a.Caret == *b.Caret)
+}
+
+func (v *SourceView) completionLanguageCurrent(s *completionSession) bool {
+	if s.definition != nil {
+		return s.definition == v.definitionAt(v.Selection().Caret)
+	}
+	return s.language == v.document.language
+}
+
+// Horizontal navigation refreshes the current word, including a request that
+// has not shown its first popup yet. No general selection setter retains it.
+func (v *SourceView) moveCompletion(key events.Key) bool {
+	s := v.completion
+	var request CompletionContext
+	if s != nil {
+		request = CompletionContext{Definition: s.definition, Range: s.range_, Explicit: s.explicit}
+	} else if q := v.completionQueue; q != nil {
+		job := q.next
+		if job == nil {
+			job = q.active
+		}
+		if job == nil || !job.state.valid(v) {
+			return false
+		}
+		request = job.request
+	}
+	state, epoch, provider := v.operationState(), v.completionEpoch, v.completionProvider
+	v.navigateKeepingCompletion(key, false, s)
+	state.selection++
+	if s == nil {
+		epoch++ // Normal selection cleanup cancels the initial, undisplayed request.
+	}
+	if v.Destroyed() || !v.mounted || !state.valid(v) || v.completion != s || v.completionEpoch != epoch ||
+		v.completionProvider != provider || !v.Focused() || v.editable() != nil || v.projection != nil {
+		return true
+	}
+	c, ok := v.completionContext(request.Explicit)
+	if !state.valid(v) || v.completion != s || v.completionEpoch != epoch {
+		return true
+	}
+	if !ok || c.Range != request.Range || c.Definition != request.Definition {
+		v.closeCompletion()
+		return true
+	}
+	v.completionEpoch++
+	if v.completionQueue != nil {
+		v.completionQueue.cancel()
+	}
+	if provider != nil {
+		if provider.Complete == nil {
+			v.closeCompletion()
+			return true
+		}
+		v.queueCompletion(state, v.completionEpoch, c, provider.Complete)
+		return true
+	}
+	v.report(v.presentCompletions(state, v.completionEpoch, c, DefaultCompletions(c)))
+	return true
+}
+
 func (v *SourceView) closeCompletion() {
 	if v.closingCompletion {
 		return
@@ -412,7 +508,7 @@ func (v *SourceView) closeCompletion() {
 }
 
 func (v *SourceView) acceptCompletion(s *completionSession, index int) error {
-	if v.completion != s || !s.state.valid(v) || s.language != v.document.language || index < 0 || index >= len(s.items) {
+	if v.completion != s || s.pending || !s.state.valid(v) || !v.completionLanguageCurrent(s) || index < 0 || index >= len(s.items) {
 		return nil
 	}
 	item := s.items[index]
@@ -451,13 +547,16 @@ func (v *SourceView) acceptCompletion(s *completionSession, index int) error {
 func (v *SourceView) completionKey(event events.KeyEvent) bool {
 	s := v.completion
 	if s == nil {
+		if event.Modifiers == 0 && (event.Key == events.KeyArrowLeft || event.Key == events.KeyArrowRight) && v.completionQueue != nil && v.completionQueue.pending() {
+			return v.moveCompletion(event.Key)
+		}
 		if event.Key == events.KeyEscape && v.completionQueue != nil && v.completionQueue.pending() {
 			v.closeCompletion()
 			return true
 		}
 		return false
 	}
-	if !s.state.valid(v) || s.language != v.document.language {
+	if !s.state.valid(v) || !v.completionLanguageCurrent(s) {
 		v.closeCompletion()
 		return false
 	}
@@ -466,7 +565,12 @@ func (v *SourceView) completionKey(event events.KeyEvent) bool {
 		return false
 	}
 	switch event.Key {
+	case events.KeyArrowLeft, events.KeyArrowRight:
+		return v.moveCompletion(event.Key)
 	case events.KeyArrowDown, events.KeyArrowUp:
+		if s.pending {
+			return true
+		}
 		delta := 1
 		if event.Key == events.KeyArrowUp {
 			delta = -1
@@ -555,6 +659,7 @@ func (q *completionQueue) finish(items []Completion, err error, post func(func()
 		job.cancel()
 		if v := q.owner; v != nil && job.state.valid(v) && v.completionEpoch == job.epoch && v.mounted && v.editable() == nil && v.Focused() {
 			if err != nil {
+				v.closeCompletion()
 				if !errors.Is(err, context.Canceled) {
 					v.report(err)
 				}
