@@ -39,6 +39,7 @@ func editorScrollRules(base style.StyleSheet) []style.Rule {
 }
 
 var tokenKinds = []language.Kind{language.KindHeading, language.KindCode, language.KindEmphasis, language.KindLink, language.KindFence, language.KindMarker, language.KindPlain, language.KindProperty, language.KindString, language.KindEscape, language.KindNumber, language.KindKeyword, language.KindDelimiter, language.KindTag, language.KindAttribute, language.KindEntity, language.KindComment, language.KindMeta, language.KindInvalid, language.KindVariable}
+
 var tokenParts = func() map[language.Kind]string {
 	m := make(map[language.Kind]string)
 	for _, k := range tokenKinds {
@@ -65,8 +66,11 @@ func nrgba(c color.Color) color.NRGBA {
 	}
 	return color.NRGBAModel.Convert(c).(color.NRGBA)
 }
+
 func foreground(s style.Style) color.NRGBA { c, _ := s.ForegroundColor(); return nrgba(c) }
+
 func background(s style.Style) color.NRGBA { c, _ := s.BackgroundColor(); return nrgba(c) }
+
 func styleFont(s style.Style) typography.FontInfo {
 	family, _ := s.FontFamily()
 	size, _ := s.FontSize()
@@ -91,6 +95,7 @@ func boxOf(s style.Style) styleBox {
 		Color: graphics.ColorOf(nrgba(shadow.Color)), Offset: shadow.Offset, BlurRadius: max(0, shadow.BlurRadius), SpreadRadius: shadow.SpreadRadius,
 	}}
 }
+
 func (b styleBox) paint(p gui.Painter, r geometry.Rectangle) {
 	if r.Width <= 0 || r.Height <= 0 {
 		return
@@ -113,6 +118,7 @@ func (b styleBox) paint(p gui.Painter, r geometry.Rectangle) {
 		}
 	}
 }
+
 func (b styleBox) outset() float32 {
 	if b.shadow.Color.A <= 0 {
 		return 0
@@ -120,6 +126,7 @@ func (b styleBox) outset() float32 {
 	// DrawBoxShadow's documented sigma is blur/2, with a 3-sigma extent.
 	return float32(math.Ceil(float64(max(0, b.shadow.BlurRadius*1.5+b.shadow.SpreadRadius) + float32(max(math.Abs(float64(b.shadow.Offset.X)), math.Abs(float64(b.shadow.Offset.Y)))))))
 }
+
 func codeRules(d scheme.Definition) []style.Rule {
 	rules := []style.Rule{
 		style.Name("source-view").Part("indent-guide").ForegroundColor(tint(d.GutterForeground, 65)),
@@ -155,12 +162,14 @@ func codeRules(d scheme.Definition) []style.Rule {
 	}
 	return rules
 }
+
 func sameCodeColors(a, b scheme.Definition) bool {
 	return a.Background == b.Background && a.Foreground == b.Foreground && a.GutterBackground == b.GutterBackground && a.GutterForeground == b.GutterForeground &&
 		a.CurrentLine == b.CurrentLine && a.SelectionBackground == b.SelectionBackground && a.SelectionForeground == b.SelectionForeground && a.InactiveSelectionBackground == b.InactiveSelectionBackground &&
 		a.SearchBackground == b.SearchBackground && a.CurrentSearchBackground == b.CurrentSearchBackground && a.BracketMatchBackground == b.BracketMatchBackground && a.BracketMatchBorder == b.BracketMatchBorder &&
 		a.Caret == b.Caret && a.PreeditUnderline == b.PreeditUnderline && a.Border == b.Border && maps.Equal(a.Tokens, b.Tokens)
 }
+
 func (v *SourceView) styledScheme() (*scheme.Scheme, error) {
 	name := v.StyleName()
 	if name == "" {
@@ -240,4 +249,55 @@ func (v *SourceView) styledFont() typography.FontInfo {
 		font.Size = size
 	}
 	return font
+}
+
+func (v *SourceView) StyleChanged() {
+	v.updateScheme()
+	if v.Destroyed() {
+		return
+	}
+	// Hover and other unchanged style notifications must preserve a popup.
+	// Its own UI appearance can change even with an explicit code scheme.
+	if s := v.completion; s != nil && s.list.readAppearance() {
+		v.closeCompletion()
+		if v.Destroyed() {
+			return
+		}
+	}
+	if !gui.IsEnabled(v) {
+		v.closeCompletion()
+		if v.Destroyed() {
+			return
+		}
+		v.cancelPreedit()
+		if v.Destroyed() {
+			return
+		}
+		v.cancelPaste()
+		v.hideMenu()
+		if v.Destroyed() {
+			return
+		}
+	}
+	font := v.styledFont()
+	if v.font == font {
+		return
+	}
+	v.closeCompletion()
+	if v.Destroyed() {
+		return
+	}
+	// Teardown callbacks may replace the stylesheet or move the view.
+	font = v.styledFont()
+	if v.font == font {
+		return
+	}
+	v.font = font
+	v.metricsReady = false
+	v.contentWidth = 0
+	if v.anchor.valid {
+		v.pendingAnchor = true
+	}
+	v.dropLayouts()
+	v.resetHeights()
 }

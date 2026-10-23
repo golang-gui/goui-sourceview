@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
-	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
@@ -37,110 +36,117 @@ type IndentOptions struct {
 	TabWidth, IndentWidth int
 	InsertSpaces          bool
 }
-type SearchQuery struct {
-	Text                         string
-	IgnoreCase, WholeWord, Regex bool
-}
-type searchMatch struct {
-	raw                      textedit.Range
-	revision, selectionEpoch uint64
-}
 
 // SourceView is an independent editable leaf. Put it in gui.ScrollView to add
 // scrollbars; set that host's StyleName to "source-view" for a shared outer
 // frame. Construction owns no model/settings/root subscriptions.
 type SourceView struct {
-	keyBindings      KeyBindings
-	boundKeys        []boundKey
-	keyBindingsEpoch uint64
-	linkedTags       bool
-	tagMatches       tagMatchState
-	pendingPaste     *pasteRequest
-	compositionSeen  bool
 	gui.WidgetBase
-	anchor                                                                            viewportAnchor
-	anchorRevision                                                                    uint64
-	pendingAnchor                                                                     bool
-	reveal                                                                            *operationState
-	document, private                                                                 *Document
-	selection                                                                         textedit.Selection
-	selectionRevision, observed, selectionEpoch                                       uint64
-	upstream                                                                          bool
-	readOnly, acceptsTab, escapeTab                                                   bool
-	indent                                                                            IndentOptions
-	wrap                                                                              WrapMode
-	showLineNumbers                                                                   bool
-	explicitScheme                                                                    *scheme.Scheme
-	appliedScheme                                                                     *scheme.Scheme
-	themeScheme                                                                       *scheme.Scheme
-	digitWidth                                                                        float32
-	colors                                                                            scheme.Definition
-	mounted                                                                           bool
-	mountEpoch, pasteEpoch                                                            uint64
-	context                                                                           typography.Context
-	im                                                                                gui.IMContext
-	projection                                                                        *textedit.Projection
-	projectionRevision                                                                uint64
-	resettingIM                                                                       bool
-	source                                                                            textedit.EditSource
-	selectionSignal                                                                   signal.Signal1[textedit.Selection]
-	errorSignal                                                                       signal.Signal1[error]
-	scrollSignal                                                                      signal.Signal1[geometry.Rectangle]
-	changeSignal                                                                      signal.Signal1[textedit.Change]
-	viewport                                                                          geometry.Size
-	offset                                                                            geometry.Point
-	heights                                                                           textedit.HeightIndex
-	heightEstimated                                                                   bool
-	visibleLines                                                                      visibleLineMap
-	hiddenLines                                                                       []lineInterval
-	whitespace                                                                        WhitespaceMode
-	showLineEndings, indentGuides, smartHomeEnd, smartBackspace, highlightOccurrences bool
-	rulers                                                                            []int
+
+	// Document ownership and mounting.
+	document, private      *Document
+	mounted                bool
+	mountEpoch, pasteEpoch uint64
+	observed               uint64
+	source                 textedit.EditSource
+	windowFocus            signal.Handle
+
+	// Selection and editing options.
+	selection                         textedit.Selection
+	selectionRevision, selectionEpoch uint64
+	upstream                          bool
+	preferredX                        float32
+	preferredSet                      bool
+	readOnly, acceptsTab, escapeTab   bool
+	indent                            IndentOptions
+	wrap                              WrapMode
+	showLineNumbers                   bool
+
+	// Native text and input-method resources belong to this view.
+	context                      typography.Context
+	im                           gui.IMContext
+	projection                   *textedit.Projection
+	projectionRevision           uint64
+	compositionSeen, resettingIM bool
+	pendingPaste                 *pasteRequest
+
+	// Effective appearance.
+	explicitScheme, appliedScheme, themeScheme *scheme.Scheme
+	colors                                     scheme.Definition
+	font                                       typography.FontInfo
+	digitWidth, lineHeight, spaceWidth, gutter float32
+	metricsReady                               bool
+
+	// Viewport, measurements and deferred layout.
+	viewport                   geometry.Size
+	offset                     geometry.Point
+	heights                    textedit.HeightIndex
+	heightEstimated            bool
+	visibleLines               visibleLineMap
+	hiddenLines                []lineInterval
+	contentWidth               float32
+	layouts                    map[layoutKey]*paragraph
+	layoutFailures             map[layoutKey]struct{}
+	layoutEpoch                uint64
+	frameLayout, layoutPending bool
+	tick                       uint64
+	anchor                     viewportAnchor
+	anchorRevision             uint64
+	pendingAnchor              bool
+	reveal                     *operationState
+
+	// Folding and editing assistance.
 	foldColumn                                                                        float32
 	foldingEnabled                                                                    bool
 	folds                                                                             []foldEntry
 	foldRevision                                                                      uint64
 	foldDefinition                                                                    *language.Language
-	foldingSignal                                                                     signal.Signal0
-	lineHeight, spaceWidth, gutter                                                    float32
-	contentWidth                                                                      float32
-	metricsReady                                                                      bool
-	font                                                                              typography.FontInfo
-	layouts                                                                           map[layoutKey]*paragraph
-	layoutFailures                                                                    map[layoutKey]struct{}
-	layoutEpoch                                                                       uint64
-	frameLayout, layoutPending                                                        bool
-	tick                                                                              uint64
-	blink                                                                             *gui.Timer
-	blinkHandle                                                                       signal.Handle
-	caretOn                                                                           bool
-	preferredX                                                                        float32
-	preferredSet                                                                      bool
-	dragging                                                                          bool
-	dragPoint                                                                         geometry.Point
-	dragGutter                                                                        bool
-	dragUnit                                                                          int // 0: caret, 1: word, 2: logical line
-	dragRange                                                                         textedit.Range
-	clickCount                                                                        int
-	lastClick                                                                         time.Time
-	lastClickPoint                                                                    geometry.Point
-	query                                                                             SearchQuery
-	highlightSearchMatches                                                            bool
-	search                                                                            *editor.Search
-	searchRange                                                                       *textedit.Range
-	currentMatch                                                                      *searchMatch
-	searchState                                                                       signal.Signal0
-	menu                                                                              *editMenu
+	whitespace                                                                        WhitespaceMode
+	showLineEndings, indentGuides, smartHomeEnd, smartBackspace, highlightOccurrences bool
+	rulers                                                                            []int
+	linkedTags                                                                        bool
+	tagMatches                                                                        tagMatchState
 	autoPairs                                                                         bool
 	pairs                                                                             []autoPair
 	brackets                                                                          bracketState
-	completion                                                                        *completionSession
-	completionProvider                                                                *CompletionProvider
-	completionQueue                                                                   *completionQueue
-	completionEpoch                                                                   uint64
-	closingCompletion                                                                 bool
-	automaticCompletion                                                               bool
-	windowFocus                                                                       signal.Handle
+
+	// Keyboard, pointer and caret state.
+	keyBindings      KeyBindings
+	boundKeys        []boundKey
+	keyBindingsEpoch uint64
+	dragging         bool
+	dragPoint        geometry.Point
+	dragGutter       bool
+	dragUnit         int // 0: caret, 1: word, 2: logical line
+	dragRange        textedit.Range
+	clickCount       int
+	lastClick        time.Time
+	lastClickPoint   geometry.Point
+	blink            *gui.Timer
+	blinkHandle      signal.Handle
+	caretOn          bool
+	menu             *editMenu
+
+	// Search state is independent of FindBar's lifetime.
+	query                  SearchQuery
+	highlightSearchMatches bool
+	search                 *editor.Search
+	searchRange            *textedit.Range
+	currentMatch           *searchMatch
+
+	// Completion sessions and their cancellable provider work.
+	completion                             *completionSession
+	completionProvider                     *CompletionProvider
+	completionQueue                        *completionQueue
+	completionEpoch                        uint64
+	closingCompletion, automaticCompletion bool
+
+	selectionSignal signal.Signal1[textedit.Selection]
+	errorSignal     signal.Signal1[error]
+	scrollSignal    signal.Signal1[geometry.Rectangle]
+	changeSignal    signal.Signal1[textedit.Change]
+	foldingSignal   signal.Signal0
+	searchState     signal.Signal0
 }
 
 func NewSourceView() *SourceView {
@@ -174,7 +180,9 @@ func NewSourceView() *SourceView {
 	v.installContextMenu()
 	return v
 }
+
 func (v *SourceView) Document() *Document { return v.document }
+
 func (v *SourceView) SetDocument(d *Document) {
 	if d == nil {
 		d = v.private
@@ -238,7 +246,9 @@ func (v *SourceView) SetDocument(d *Document) {
 		v.selectionSignal.Emit(v.selection)
 	}
 }
+
 func (v *SourceView) Selection() textedit.Selection { return v.clampSelection(v.selection) }
+
 func (v *SourceView) SetSelection(s textedit.Selection) {
 	state := v.operationState()
 	v.cancelPreedit()
@@ -248,11 +258,13 @@ func (v *SourceView) SetSelection(s textedit.Selection) {
 	v.document.model.BreakUndoGroup()
 	v.setSelection(s, false, true)
 }
+
 func (v *SourceView) clampSelection(s textedit.Selection) textedit.Selection {
 	s.Anchor = v.clampOffset(s.Anchor)
 	s.Caret = v.clampOffset(s.Caret)
 	return s
 }
+
 func (v *SourceView) clampOffset(offset int) int {
 	m := v.document.model
 	offset = max(0, min(offset, m.Len()))
@@ -261,6 +273,7 @@ func (v *SourceView) clampOffset(offset int) int {
 	}
 	return offset
 }
+
 func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	defer v.searchState.Emit()
 	state := v.operationState()
@@ -316,7 +329,9 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 		v.foldingSignal.Emit()
 	}
 }
+
 func (v *SourceView) ReadOnly() bool { return v.readOnly }
+
 func (v *SourceView) SetReadOnly(value bool) {
 	if v.readOnly == value {
 		return
@@ -331,7 +346,9 @@ func (v *SourceView) SetReadOnly(value bool) {
 	v.updateMenu()
 	v.RequestPaint()
 }
+
 func (v *SourceView) AcceptsTab() bool { return v.acceptsTab }
+
 func (v *SourceView) SetAcceptsTab(value bool) {
 	if v.acceptsTab == value {
 		return
@@ -339,7 +356,9 @@ func (v *SourceView) SetAcceptsTab(value bool) {
 	v.acceptsTab = value
 	v.escapeTab = false
 }
+
 func (v *SourceView) IndentOptions() IndentOptions { return v.indent }
+
 func (v *SourceView) SetIndentOptions(o IndentOptions) error {
 	normalized, err := (editor.IndentOptions{TabWidth: o.TabWidth, IndentWidth: o.IndentWidth, InsertSpaces: o.InsertSpaces}).Normalized()
 	if err != nil {
@@ -352,7 +371,9 @@ func (v *SourceView) SetIndentOptions(o IndentOptions) error {
 	}
 	return nil
 }
+
 func (v *SourceView) WrapMode() WrapMode { return v.wrap }
+
 func (v *SourceView) SetWrapMode(w WrapMode) {
 	if w < WrapNone || w > WrapWordChar {
 		panic("sourceview: invalid wrap mode")
@@ -364,7 +385,9 @@ func (v *SourceView) SetWrapMode(w WrapMode) {
 		v.invalidateLayout()
 	}
 }
+
 func (v *SourceView) ShowLineNumbers() bool { return v.showLineNumbers }
+
 func (v *SourceView) SetShowLineNumbers(show bool) {
 	if v.showLineNumbers != show {
 		v.showLineNumbers = show
@@ -374,210 +397,26 @@ func (v *SourceView) SetShowLineNumbers(show bool) {
 
 // SetScheme overrides code-area colors only. nil uses the owning stylesheet.
 func (v *SourceView) SetScheme(s *scheme.Scheme) { v.explicitScheme = s; v.updateScheme() }
+
 func (v *SourceView) ConnectSelection(fn func(textedit.Selection)) signal.Handle {
 	return v.selectionSignal.Connect(fn)
 }
+
 func (v *SourceView) ConnectError(fn func(error)) signal.Handle { return v.errorSignal.Connect(fn) }
+
 func (v *SourceView) ConnectChange(fn func(textedit.Change)) signal.Handle {
 	return v.changeSignal.Connect(fn)
 }
+
 func (v *SourceView) ConnectScrollIntoView(fn func(geometry.Rectangle)) signal.Handle {
 	return v.scrollSignal.Connect(fn)
 }
+
 func (v *SourceView) IMContext() gui.IMContext {
 	if v.readOnly || !gui.IsEnabled(v) {
 		return nil
 	}
 	return v.im
-}
-func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
-	defer v.searchState.Emit()
-	epoch, d := v.mountEpoch, v.document
-	v.observed = c.Revision
-	v.reveal = nil
-	v.closeCompletion()
-	if v.document != d || v.mountEpoch != epoch || !v.mounted {
-		return
-	}
-	hadHiddenRows := len(v.hiddenLines) > 0
-	v.mapFolds(c, splices)
-	v.mapParagraphs(splices)
-	v.mapPairs(c)
-	v.mapSearchRange(c)
-	if c.Reset {
-		v.anchor.valid = false
-		v.pendingAnchor = false
-	} else if v.anchor.valid && v.anchorRevision < c.Revision {
-		for _, edit := range c.Edits {
-			v.anchor.offset = textedit.MapOffset(v.anchor.offset, edit)
-		}
-		v.anchorRevision = c.Revision
-		v.pendingAnchor = true
-	}
-	v.cancelPreedit()
-	if v.document != d || v.mountEpoch != epoch || !v.mounted {
-		return
-	}
-	v.cancelPaste()
-	v.currentMatch = nil
-	v.updateMenu()
-	old := v.selection
-	if v.selectionRevision < c.Revision {
-		if c.Reset {
-			v.selection = textedit.Selection{}
-		} else {
-			for _, e := range c.Edits {
-				v.selection.Anchor = textedit.MapOffset(v.selection.Anchor, e)
-				v.selection.Caret = textedit.MapOffset(v.selection.Caret, e)
-			}
-		}
-		v.selectionRevision = c.Revision
-	}
-	if reset || c.Reset || hadHiddenRows {
-		v.invalidateLayout()
-	} else {
-		for _, s := range splices {
-			estimate := v.lineHeight
-			if s.Removed == 1 && s.Added == 1 {
-				// A local edit invalidates geometry, not the previous scrolling
-				// estimate. Keeping it avoids hiding the scrollbar and laying
-				// out the replacement at an unnecessary intermediate width.
-				estimate = v.heights.Top(s.Index+1) - v.heights.Top(s.Index)
-			}
-			v.heights.Splice(s.Index, s.Removed, s.Added, estimate)
-		}
-		// With no collapsed ranges, logical/display rows still correspond
-		// directly. Update their count without throwing away spliced heights.
-		v.visibleLines.reset(v.displayCount(), nil)
-		v.contentWidth = 0
-		// Stable line IDs retain layouts of untouched suffixes; changed paragraphs
-		// receive new IDs and are evicted by the bounded view-local cache.
-		v.RequestLayout()
-		v.RequestPaint()
-	}
-	if c.Reset {
-		v.offset = geometry.Point{}
-		v.scrollSignal.Emit(geometry.Rect(0, 0, v.viewport.Width, v.viewport.Height))
-	}
-	if v.mountEpoch != epoch || v.document != d || !v.mounted {
-		return
-	}
-	if old != v.selection {
-		v.selectionSignal.Emit(v.Selection())
-	}
-	if v.mounted && v.mountEpoch == epoch && v.document == d {
-		v.changeSignal.Emit(c)
-	}
-}
-func (v *SourceView) mount() {
-	request := v.reveal
-	if request != nil && !request.valid(v) {
-		v.reveal = nil
-	}
-	v.mounted = true
-	v.mountEpoch++
-	if v.reveal != nil {
-		// A selection requested before first allocation still needs revealing.
-		*v.reveal = v.operationState()
-	}
-	if win := v.Window(); win != nil {
-		v.windowFocus = win.ConnectFocus(func(focused bool) {
-			if !focused {
-				v.closeCompletion()
-			}
-			v.RequestPaint()
-		})
-	}
-	if v.observed != v.document.model.Revision() {
-		v.searchRange = nil
-		if v.search != nil {
-			v.search.SetRange(nil)
-		}
-		v.anchor.valid = false
-		v.pendingAnchor = false
-		v.offset = geometry.Point{}
-	}
-	if v.foldRevision != v.document.model.Revision() || v.foldDefinition != v.document.definition {
-		v.clearFolds()
-	}
-	v.context = gui.App.Typography()
-	state := v.operationState()
-	v.document.acquire(v)
-	if !state.valid(v) || !v.mounted || v.Destroyed() {
-		return
-	}
-	attachFrame(v)
-	v.updateScheme()
-	v.invalidateLayout()
-	v.blink = gui.App.NewTimer()
-	v.blinkHandle = v.blink.ConnectTimeout(func() {
-		if !v.mounted || !activeFocus(v) || !visible(v) {
-			v.blink.Stop()
-			return
-		}
-		v.caretOn = !v.caretOn
-		if v.dragging {
-			v.dragSelection(v.dragPoint)
-		}
-		v.RequestPaint()
-	})
-	v.resetBlink()
-}
-func (v *SourceView) unmount() {
-	v.mounted = false
-	v.mountEpoch++
-	v.reveal = nil
-	v.cancelPaste()
-	v.hideMenu()
-	v.closeCompletion()
-	if v.completionQueue != nil {
-		v.completionQueue.owner = nil
-	}
-	if v.windowFocus != nil {
-		v.windowFocus.Disconnect()
-		v.windowFocus = nil
-	}
-	if v.menu != nil && v.menu.language != nil {
-		v.menu.language.Disconnect()
-		v.menu.language = nil
-	}
-	v.dragging = false
-	v.pairs = nil
-	v.brackets = bracketState{}
-	v.tagMatches = tagMatchState{}
-	if v.blink != nil {
-		v.blink.Stop()
-		v.blinkHandle.Disconnect()
-		v.blink = nil
-	}
-	detachFrame(v)
-	v.document.release(v)
-	v.cancelPreedit()
-	v.dropLayouts()
-	v.context = nil
-}
-func (v *SourceView) resetBlink() {
-	v.caretOn = true
-	if v.blink == nil {
-		return
-	}
-	if activeFocus(v) && visible(v) {
-		_ = v.blink.Start(500 * time.Millisecond)
-	} else {
-		v.blink.Stop()
-	}
-}
-func visible(v gui.Widget) bool {
-	for w := v; w != nil; w = w.Parent() {
-		if !w.Visible() {
-			return false
-		}
-	}
-	return true
-}
-
-func activeFocus(v *SourceView) bool {
-	return v.Focused() && (v.Window() == nil || v.Window().Focused() || v.menu != nil && v.menu.popup.Visible())
 }
 
 // Capture before operations that can synchronously call application code.
@@ -589,14 +428,17 @@ type operationState struct {
 func (v *SourceView) operationState() operationState {
 	return operationState{v.document, v.document.model.Revision(), v.mountEpoch, v.selectionEpoch, v.document.languageEpoch}
 }
+
 func (s operationState) valid(v *SourceView) bool {
 	return v.document == s.document && v.document.model.Revision() == s.revision && v.mountEpoch == s.mount && v.selectionEpoch == s.selection && v.document.languageEpoch == s.language
 }
+
 func (v *SourceView) report(err error) {
 	if err != nil {
 		v.errorSignal.Emit(err)
 	}
 }
+
 func (v *SourceView) editable() error {
 	if v.Destroyed() {
 		return ErrDisabled
@@ -611,6 +453,57 @@ func (v *SourceView) editable() error {
 }
 
 var _ gui.Widget = (*SourceView)(nil)
+
 var _ gui.Scrollable = (*SourceView)(nil)
+
 var _ gui.ScrollIntoViewRequester = (*SourceView)(nil)
+
 var _ gui.IMClient = (*SourceView)(nil)
+
+func (v *SourceView) Snapshot() gui.WidgetInfo {
+	info := v.WidgetBase.Snapshot()
+	info.Role = gui.Role("sourceview")
+	info.Text = ""
+	info.SetAttribute("goui.sourceview", map[string]any{"language": string(v.document.Language()), "revision": v.document.model.Revision(), "wrap": int(v.wrap), "lineNumbers": v.showLineNumbers, "layoutPending": v.layoutPending})
+	m := v.document.model
+	if v.mounted && v.observed != m.Revision() {
+		return info
+	}
+	first, last := v.visibleRows()
+	firstDisplay := first
+	if v.projection != nil {
+		first = m.LineAt(v.projection.ModelOffset(v.displayRange(first).Start, false))
+		last = m.LineAt(v.projection.ModelOffset(v.displayRange(last).End, true))
+	}
+	r, _ := m.LineRange(first)
+	end, _ := m.LineRange(last)
+	if end.End-r.Start > 64*1024 {
+		// Snapshot reads cached geometry only: it must not shape text, recolor,
+		// emit callbacks or alter the viewport just to describe visible content.
+		p := v.cachedParagraph(firstDisplay)
+		if p != nil {
+			pos := p.geometry.Hit(geometry.Point{X: max(0, v.offset.X), Y: max(0, v.offset.Y-padding-v.paragraphTop(firstDisplay))})
+			anchor := v.displayRange(firstDisplay).Start + pos.Offset
+			if v.projection != nil {
+				anchor = v.projection.ModelOffset(anchor, pos.Upstream)
+			}
+			r.Start = max(r.Start, min(end.End, anchor)-1024)
+			for r.Start < end.End && !m.IsRuneBoundary(r.Start) {
+				r.Start++
+			}
+		}
+	}
+	r.End = min(end.End, r.Start+64*1024)
+	for r.End > r.Start && !m.IsRuneBoundary(r.End) {
+		r.End--
+	}
+	text, _ := m.Slice(r)
+	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: v.Selection(), Length: m.Len(), VisibleRange: r, VisibleText: text}
+	v.snapshotFolding(&info, first, last)
+	if v.projection != nil {
+		text := v.projection.Text()
+		limit := textedit.ClampOffset(text, min(len(text), 64*1024))
+		info.TextEditing.Preedit = &gui.TextPreeditInfo{Replacement: v.projection.Replacement(), Text: text[:limit], Caret: v.projection.Caret(), Length: len(text)}
+	}
+	return info
+}

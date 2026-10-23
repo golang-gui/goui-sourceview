@@ -1,6 +1,7 @@
 # 查询范围、多行与正则替换
 
-2026-10-19，GOUI v0.2.0；实现入口 commands.go、search_range.go、internal/editor/search*.go。
+最初设计于 2026-10-19，基于 GOUI v0.2.0；当前依赖为 GOUI v0.3.0。
+实现入口为 `search.go`、`internal/editor/search*.go`；FindBar 保留独立界面与会话生命周期。
 本轮按功能优先，不新增外部搜索依赖，也不承诺全量搜索后台化。
 
 ## 查询与匹配

@@ -11,6 +11,7 @@ import (
 func (v *SourceView) ReplaceSelection(text string) error {
 	return v.replace(v.Selection().Range(), text, true)
 }
+
 func (v *SourceView) replace(r textedit.Range, text string, atomic bool) error {
 	if err := v.editable(); err != nil {
 		return err
@@ -35,8 +36,11 @@ func (v *SourceView) replace(r textedit.Range, text string, atomic bool) error {
 	}
 	return err
 }
+
 func (v *SourceView) Undo() bool { return v.history(true) }
+
 func (v *SourceView) Redo() bool { return v.history(false) }
+
 func (v *SourceView) history(undo bool) bool {
 	if v.editable() != nil {
 		return false
@@ -59,6 +63,7 @@ func (v *SourceView) history(undo bool) bool {
 	}
 	return result.Applied
 }
+
 func (v *SourceView) applyPlan(p editor.Plan) error {
 	if err := v.editable(); err != nil {
 		return err
@@ -80,6 +85,7 @@ func (v *SourceView) applyPlan(p editor.Plan) error {
 	}
 	return err
 }
+
 func (v *SourceView) Indent(outdent bool) error {
 	p, err := editor.Indent(v.document.model, v.Selection(), editor.IndentOptions{TabWidth: v.indent.TabWidth, IndentWidth: v.indent.IndentWidth, InsertSpaces: v.indent.InsertSpaces}, outdent)
 	if err != nil {
@@ -87,6 +93,7 @@ func (v *SourceView) Indent(outdent bool) error {
 	}
 	return v.applyPlan(p)
 }
+
 func (v *SourceView) tab(outdent bool) error {
 	s := v.Selection()
 	if outdent || s.Anchor != s.Caret {
@@ -109,207 +116,6 @@ func (v *SourceView) tab(outdent bool) error {
 	}
 	return v.ReplaceSelection(text)
 }
-func (v *SourceView) Copy() error {
-	if v.Selection().Anchor == v.Selection().Caret {
-		return nil
-	}
-	if !v.mounted || gui.App == nil {
-		return ErrNotMounted
-	}
-	text, err := v.document.model.Slice(v.Selection().Range())
-	if err != nil {
-		return err
-	}
-	clipboard := gui.App.Clipboard()
-	if clipboard == nil {
-		return ErrClipboardUnavailable
-	}
-	return clipboard.SetText(text)
-}
-func (v *SourceView) Cut() error {
-	if err := v.editable(); err != nil {
-		return err
-	}
-	s, d, revision, epoch := v.Selection(), v.document, v.document.model.Revision(), v.selectionEpoch
-	if s.Anchor == s.Caret {
-		return nil
-	}
-	if err := v.Copy(); err != nil {
-		return err
-	}
-	if v.document != d || d.model.Revision() != revision || v.selectionEpoch != epoch || !v.mounted {
-		return nil
-	}
-	return v.ReplaceSelection("")
-}
-
-// Paste accepts an asynchronous request. Delayed failures are reported through
-// ConnectError. A changed document, selection or mount cancels the request.
-func (v *SourceView) Paste() error {
-	if err := v.editable(); err != nil {
-		return err
-	}
-	if !v.mounted || gui.App == nil {
-		return ErrNotMounted
-	}
-	state := v.operationState()
-	v.cancelPreedit()
-	if !state.valid(v) {
-		return ErrOperationChanged
-	}
-	if err := v.editable(); err != nil {
-		return err
-	}
-	clipboard := gui.App.Clipboard()
-	if clipboard == nil {
-		return ErrClipboardUnavailable
-	}
-
-	v.cancelPaste()
-	request := &pasteRequest{view: v, document: v.document, revision: v.document.model.Revision(), mount: v.mountEpoch, selection: v.selectionEpoch, id: v.pasteEpoch}
-	v.pendingPaste = request
-	clipboard.RequestText(request.complete)
-	return nil
-}
-func (v *SourceView) Search() SearchQuery { return v.query }
-func (v *SourceView) SetSearch(q SearchQuery) {
-	q.Text = textedit.Normalize(q.Text)
-	if q == v.query {
-		return
-	}
-	v.query = q
-	v.search = editor.Compile(editor.Query{Text: q.Text, IgnoreCase: q.IgnoreCase, WholeWord: q.WholeWord, Regex: q.Regex})
-	v.search.SetRange(v.searchRange)
-	v.currentMatch = nil
-	v.RequestPaint()
-	v.searchState.Emit()
-}
-func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
-	if v.search.Empty() {
-		return textedit.Range{}, false
-	}
-	state := v.operationState()
-	v.cancelPreedit()
-	if !state.valid(v) {
-		return textedit.Range{}, false
-	}
-	start := v.Selection().Range().End
-	if backward {
-		start = v.Selection().Range().Start
-	}
-	if match := v.currentMatch; match != nil && match.revision == v.document.model.Revision() && match.selectionEpoch == v.selectionEpoch {
-		if backward {
-			start = match.raw.Start
-			if match.raw.Start == match.raw.End {
-				start--
-			}
-		} else {
-			start = match.raw.End
-			if match.raw.Start == match.raw.End {
-				start++
-			}
-		}
-	}
-	return v.findFrom(start, backward)
-}
-
-// findFrom includes the starting position, unlike advancing past a current
-// match. FindBar uses it to reconcile results after changing the search scope.
-func (v *SourceView) findFrom(start int, backward bool) (textedit.Range, bool) {
-	r, ok := v.search.Find(v.document.model, start, backward)
-	if ok {
-		v.document.model.BreakUndoGroup()
-		d, revision, search := v.document, v.document.model.Revision(), v.search
-		scope, limited := v.SearchRange()
-		expectedSelectionEpoch := v.selectionEpoch + 1
-		v.setSelection(textedit.Selection{Anchor: r.Start, Caret: r.End}, false, true)
-		actual, scoped := v.SearchRange()
-		if !v.Destroyed() && v.document == d && v.search == search && actual == scope && scoped == limited && d.model.Revision() == revision && v.selectionEpoch == expectedSelectionEpoch {
-			v.currentMatch = &searchMatch{raw: r, revision: revision, selectionEpoch: v.selectionEpoch}
-		}
-	}
-	return r, ok
-}
-func (v *SourceView) ReplaceCurrent(text string) (bool, error) {
-	if err := v.editable(); err != nil {
-		return false, err
-	}
-	if err := v.SearchError(); err != nil {
-		return false, err
-	}
-	if v.search.Empty() {
-		return false, nil
-	}
-	raw := v.Selection().Range()
-	if match := v.currentMatch; match != nil && match.revision == v.document.model.Revision() && match.selectionEpoch == v.selectionEpoch {
-		raw = match.raw
-	}
-	if !v.search.Matches(v.document.model, raw) {
-		return false, nil
-	}
-	text, err := v.search.Replacement(v.document.model, raw, text)
-	if err != nil {
-		return false, err
-	}
-	return true, v.replace(raw, text, true)
-}
-func (v *SourceView) ReplaceAll(text string) (int, error) {
-	if err := v.editable(); err != nil {
-		return 0, err
-	}
-	if err := v.SearchError(); err != nil {
-		return 0, err
-	}
-	if v.search.Empty() {
-		return 0, nil
-	}
-	p, err := v.search.ReplaceAll(v.document.model, v.Selection(), text)
-	if err != nil {
-		return 0, err
-	}
-	err = v.applyPlan(p)
-	return len(p.Edits), err
-}
-
-// The platform may retain a callback while a remote owner is unresponsive.
-// Cancelling clears widget/document references even before that callback runs.
-type pasteRequest struct {
-	view                           *SourceView
-	document                       *Document
-	revision, mount, selection, id uint64
-}
-
-func (v *SourceView) cancelPaste() {
-	v.pasteEpoch++
-	if pending := v.pendingPaste; pending != nil {
-		pending.view = nil
-		pending.document = nil
-		v.pendingPaste = nil
-	}
-}
-func (r *pasteRequest) complete(text string, err error) {
-	v, d := r.view, r.document
-	r.view = nil
-	r.document = nil
-	if v == nil {
-		return
-	}
-	if v.pendingPaste != r {
-		return
-	}
-	v.pendingPaste = nil
-	if !v.mounted || v.mountEpoch != r.mount || v.pasteEpoch != r.id || v.document != d || d.model.Revision() != r.revision || v.selectionEpoch != r.selection || v.editable() != nil {
-		return
-	}
-	if err != nil {
-		v.report(err)
-		return
-	}
-	if text == "" {
-		return
-	}
-	v.report(v.ReplaceSelection(text))
-}
 
 // ApplyEdits applies original-coordinate edits as one undo unit, with an
 // explicit post-edit selection. Document identity and revision must match.
@@ -319,4 +125,125 @@ func (v *SourceView) ApplyEdits(document *Document, revision uint64, edits []tex
 		return ErrOperationChanged
 	}
 	return v.applyPlan(editor.Plan{Edits: edits, Before: v.Selection(), After: after})
+}
+
+// InsertLine inserts an indented blank line above/below the caret's logical line.
+// Existing text is preserved, including when there is a selection.
+func (v *SourceView) InsertLine(below bool) error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	p, err := editor.InsertLine(v.document.model, v.Selection(), below)
+	if err != nil {
+		return err
+	}
+	return v.applyPlan(p)
+}
+
+// MoveWord moves to the previous code-word start or next code-word end.
+func (v *SourceView) MoveWord(forward, extend bool) {
+	if v.Destroyed() || !gui.IsEnabled(v) {
+		return
+	}
+	at := editor.WordBoundaryWith(v.document.model, v.Selection().Caret, forward, false, v.definitionAt(v.Selection().Caret).IsWord)
+	v.moveTo(v.foldNavigationTarget(at, forward), false, extend)
+}
+
+// DeleteWord deletes the selection, a whitespace run or one code word.
+// Each invocation has its own undo item. At a document edge it is a no-op.
+func (v *SourceView) DeleteWord(forward bool) error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	if v.unfoldDeleteBoundary(forward) {
+		return nil
+	}
+	if !forward {
+		if handled, err := v.deletePair(); handled {
+			return err
+		}
+	}
+	s := v.Selection()
+	r := s.Range()
+	if r.Start == r.End {
+		at := editor.WordBoundaryWith(v.document.model, s.Caret, forward, true, v.definitionAt(v.Selection().Caret).IsWord)
+		if forward {
+			r.End = v.snapOffset(at, true)
+		} else {
+			r.Start = v.snapOffset(at, false)
+		}
+	}
+	if r.Start == r.End {
+		return nil
+	}
+	if s.Anchor == s.Caret && v.expandFoldRange(r) {
+		v.foldingSignal.Emit()
+		return nil
+	}
+	return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: r.Start, Caret: r.Start}, Edits: []textedit.Edit{{Range: r}}})
+}
+
+// SelectLine expands to whole logical lines, including the following LF.
+// Repeating the command extends the selection one more line downward.
+func (v *SourceView) SelectLine() {
+	if v.Destroyed() || !gui.IsEnabled(v) {
+		return
+	}
+	r := v.Selection().Range()
+	start, _ := v.document.model.LineRange(v.document.model.LineAt(r.Start))
+	end := v.lineSelection(r.End)
+	v.SetSelection(textedit.Selection{Anchor: start.Start, Caret: end.End})
+}
+
+// JumpToBracket jumps between a confirmed pair adjacent to the caret. Unknown,
+// unmatched or out-of-budget pairs leave the selection unchanged.
+func (v *SourceView) JumpToBracket() bool {
+	if v.Destroyed() || !gui.IsEnabled(v) {
+		return false
+	}
+	ranges := v.matchingBrackets()
+	if len(ranges) != 2 {
+		return false
+	}
+	v.moveTo(ranges[1].Start, false, false)
+	return true
+}
+
+// MoveLines moves the current logical line or selected lines one row up/down.
+// It preserves indentation and selection direction. A document edge is a no-op.
+func (v *SourceView) MoveLines(down bool) error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	p, err := editor.MoveLines(v.document.model, v.Selection(), down)
+	if err != nil {
+		return err
+	}
+	return v.applyPlan(p)
+}
+
+// DuplicateLines copies the current logical line or selected lines above/below,
+// retaining the selection in the new copy. The clipboard is not involved.
+func (v *SourceView) DuplicateLines(down bool) error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	p, err := editor.DuplicateLines(v.document.model, v.Selection(), down)
+	if err != nil {
+		return err
+	}
+	return v.applyPlan(p)
+}
+
+// DeleteLines deletes the current logical line or selected lines, placing the
+// caret at the deletion boundary. Deleting an empty document is a no-op.
+func (v *SourceView) DeleteLines() error {
+	if err := v.editable(); err != nil {
+		return err
+	}
+	p, err := editor.DeleteLines(v.document.model, v.Selection())
+	if err != nil {
+		return err
+	}
+	return v.applyPlan(p)
 }

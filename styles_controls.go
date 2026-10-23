@@ -48,6 +48,7 @@ func findRules(base style.StyleSheet, c findColors, size, radius, inputRadius, f
 	}
 	return rules
 }
+
 func completionRules(c completionColors, base style.StyleSheet, size, radius, selectedRadius float32, shadow style.Shadow) []style.Rule {
 	family, _ := base.Resolve(style.Sel{Name: "label"}).FontFamily()
 	return []style.Rule{
@@ -61,3 +62,18 @@ func completionRules(c completionColors, base style.StyleSheet, size, radius, se
 }
 
 var transparent = color.NRGBA{}
+
+type completionColors struct {
+	Background, Foreground, DetailForeground color.NRGBA
+	Border                                   color.NRGBA
+	SelectedBackground, SelectedForeground   color.NRGBA
+	SelectedDetailForeground                 color.NRGBA
+	MatchForeground, SelectedMatchForeground color.NRGBA
+}
+
+type findColors struct {
+	Background, Foreground, MutedForeground           color.NRGBA
+	Border, InputBackground, InputBorder, FocusBorder color.NRGBA
+	HoverBackground, OptionBackground, OptionBorder   color.NRGBA
+	ErrorForeground, Shadow                           color.NRGBA
+}
