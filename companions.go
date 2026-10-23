@@ -133,13 +133,3 @@ func (v *SourceView) arrangeCompanions() {
 		arrange(v.goToBar)
 	}
 }
-
-// Cursor applies the editor's preferred pointer to the code area. Internal
-// controls resolve their own cursors without inheriting the code's text cursor.
-func (v *SourceView) Cursor() gui.Cursor {
-	if !v.dragging && (v.findBar != nil && v.findBar.Visible() && v.findBar.pointer.ContainsHover() ||
-		v.goToBar != nil && v.goToBar.Visible() && v.goToBar.pointer.ContainsHover()) {
-		return nil
-	}
-	return v.WidgetBase.Cursor()
-}

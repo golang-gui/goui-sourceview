@@ -12,6 +12,9 @@
 //     ancestors expand and the exact source bytes are selected.
 //  5. Switch to HTML with quoted >, void/raw-text elements, and recheck folding.
 //
+// 另经正常指针事件验证正文 I-beam、行号／侧栏箭头和折叠按钮手形；拖选期间
+// 保持起始区域的指针，隐藏行号后折叠按钮仍为手形。不修改系统鼠标设置。
+//
 // No files, clipboard or settings change. Closing early fails; restart resets.
 // Exits automatically on PASS. Physical IME, real DPI changes and visual quality
 // need separate desktop observation; this program does not claim those passed.
@@ -105,6 +108,37 @@ func main() {
 	next := func(f func()) { steps = append(steps, func() bool { f(); return true }) }
 	steps = append(steps, func() bool { return len(v.FoldingRegions()) == 2 && len(other.FoldingRegions()) == 2 })
 	next(func() {
+		info := v.Snapshot()
+		var toggle geometry.Rectangle
+		for _, child := range info.Children {
+			if data, ok := child.Attributes["goui.sourceview.fold"].(map[string]any); ok && data["startLine"] == 0 {
+				toggle = child.Bounds
+				break
+			}
+		}
+		check(toggle.Width > 0, "initial fold button missing")
+		point := geometry.Point{X: toggle.X + toggle.Width/2, Y: toggle.Y + toggle.Height/2}
+		move := func(p geometry.Point) {
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: p}))
+		}
+		move(point)
+		check(v.Cursor() == gui.CursorPointing, "fold toggle retained text cursor")
+		gutter := geometry.Point{X: info.Bounds.X + 4, Y: point.Y}
+		body := geometry.Point{X: toggle.X + toggle.Width + 30, Y: point.Y}
+		move(gutter)
+		check(v.Cursor() == gui.CursorDefault, "line number retained text cursor")
+		must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Position: gutter, Button: events.PointerButtonLeft}))
+		move(body)
+		check(v.Cursor() == gui.CursorDefault, "gutter drag changed cursor over code")
+		must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Position: body, Button: events.PointerButtonLeft}))
+		check(v.Cursor() == gui.CursorText, "code cursor not restored after drag")
+		must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Position: body, Button: events.PointerButtonLeft}))
+		move(gutter)
+		check(v.Cursor() == gui.CursorText, "body drag changed cursor over gutter")
+		must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Position: gutter, Button: events.PointerButtonLeft}))
+		check(v.Cursor() == gui.CursorDefault, "gutter cursor not restored after drag")
+	})
+	next(func() {
 		caret(3, false)
 		key(events.KeyBracketLeft, foldMods)
 		check(v.FoldingRegions()[1].Collapsed && !other.FoldingRegions()[1].Collapsed, "keyboard folding/view isolation")
@@ -133,6 +167,8 @@ func main() {
 		}
 		check(target != nil, "fold button disappeared with line numbers")
 		point := geometry.Point{X: target.Bounds.X + target.Bounds.Width/2, Y: target.Bounds.Y + target.Bounds.Height/2}
+		must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: point}))
+		check(v.Cursor() == gui.CursorPointing, "hidden line numbers removed fold pointer")
 		for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
 			must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: point, Button: events.PointerButtonLeft}))
 		}

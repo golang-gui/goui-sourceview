@@ -116,6 +116,8 @@ type SourceView struct {
 	keyBindings      KeyBindings
 	boundKeys        []boundKey
 	keyBindingsEpoch uint64
+	pointer          *gui.MotionEventController
+	pointerPoint     geometry.Point
 	dragging         bool
 	dragPoint        geometry.Point
 	dragGutter       bool

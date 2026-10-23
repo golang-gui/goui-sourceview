@@ -12,6 +12,52 @@ import (
 	"github.com/golang-gui/goui/platform/events"
 )
 
+// 指针命中只读取已排版的几何，不为侧栏或尚未显示的占位标记创建排版。
+func TestPointerRegionsUseCachedFoldGeometry(t *testing.T) {
+	v := foldingFixture(t)
+	if !v.Fold(1) {
+		t.Fatal("fold fixture")
+	}
+	v.LayoutVisible(v.viewport, v.offset)
+	button := v.foldButtonRect(1)
+	center := func(r geometry.Rectangle) geometry.Point {
+		return geometry.Point{X: r.X + r.Width/2, Y: r.Y + r.Height/2}
+	}
+	if got := v.cursorAt(center(button)); got != gui.CursorPointing {
+		t.Fatal("fold toggle cursor", got)
+	}
+	p := v.cachedParagraph(1)
+	if p == nil || v.cursorAt(center(v.foldBadgeRect(1, p))) != gui.CursorPointing {
+		t.Fatal("collapsed badge cursor")
+	}
+	if got := v.cursorAt(geometry.Point{X: 2, Y: button.Y + button.Height/2}); got != gui.CursorDefault {
+		t.Fatal("line number cursor", got)
+	}
+	if got := v.cursorAt(geometry.Point{X: v.gutter - 2, Y: v.viewport.Height - 2}); got != gui.CursorDefault {
+		t.Fatal("empty fold column cursor", got)
+	}
+	v.SetCursor(gui.CursorCrosshair)
+	if got := v.cursorAt(geometry.Point{X: v.gutter + 200, Y: 10}); got != gui.CursorCrosshair {
+		t.Fatal("body lost configured cursor", got)
+	}
+	v.dragging, v.dragGutter = true, true
+	if v.Cursor() != gui.CursorDefault {
+		t.Fatal("gutter drag cursor")
+	}
+	v.dragGutter = false
+	if v.Cursor() != gui.CursorCrosshair {
+		t.Fatal("body drag lost configured cursor")
+	}
+	v.dragging = false
+	ctx := v.context.(*shapedContext)
+	v.dropLayouts()
+	created := ctx.created
+	_ = v.cursorAt(geometry.Point{X: v.gutter + 200, Y: button.Y + button.Height/2})
+	if ctx.created != created {
+		t.Fatal("pointer hit test shaped an unmeasured paragraph")
+	}
+}
+
 func TestWordPointerAndDragUnits(t *testing.T) {
 	v, _ := colorFixture(t)
 	v.Document().Model().SetText("alpha beta\nlast\n")

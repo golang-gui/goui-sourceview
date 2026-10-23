@@ -563,7 +563,9 @@ func (v *SourceView) foldHit(point geometry.Point) (int, bool) {
 	if containsPoint(v.foldButtonRect(row), point) {
 		return row, true
 	}
-	if p := v.paragraph(row); p != nil && containsPoint(v.foldBadgeRect(row, p), point) {
+	// The badge is painted only from cached geometry. Pointer motion and clicks
+	// must not shape an unmeasured paragraph just to look for an invisible badge.
+	if p := v.cachedParagraph(row); p != nil && containsPoint(v.foldBadgeRect(row, p), point) {
 		return row, true
 	}
 	return 0, false

@@ -12,6 +12,9 @@ import (
 )
 
 func (v *SourceView) installInput() {
+	v.pointer = gui.NewMotionEventController()
+	v.pointer.ConnectMotion(func(info gui.MotionInfo) { v.pointerPoint = info.Position })
+	v.AddEventController(v.pointer)
 	companions := gui.NewKeyEventController()
 	companions.SetPhase(gui.PhaseCapture)
 	companions.ConnectKeyDown(func(ctx gui.EventContext, event events.KeyEvent) {
@@ -110,6 +113,36 @@ func (v *SourceView) installInput() {
 	drag.ConnectCancel(func() { v.dragging = false })
 	v.AddEventController(drag)
 }
+
+// Cursor resolves code, gutter and fold affordances without shaping text.
+// A captured selection keeps the cursor chosen by its starting region.
+func (v *SourceView) Cursor() gui.Cursor {
+	if v.dragging {
+		if v.dragGutter {
+			return gui.CursorDefault
+		}
+		return v.WidgetBase.Cursor()
+	}
+	if v.findBar != nil && v.findBar.Visible() && v.findBar.pointer.ContainsHover() ||
+		v.goToBar != nil && v.goToBar.Visible() && v.goToBar.pointer.ContainsHover() {
+		return nil
+	}
+	if v.pointer != nil && v.pointer.Hover() {
+		return v.cursorAt(v.pointerPoint)
+	}
+	return v.WidgetBase.Cursor()
+}
+
+func (v *SourceView) cursorAt(point geometry.Point) gui.Cursor {
+	if _, ok := v.foldHit(point); ok {
+		return gui.CursorPointing
+	}
+	if point.X < v.gutter {
+		return gui.CursorDefault
+	}
+	return v.WidgetBase.Cursor()
+}
+
 func (v *SourceView) dragSelection(point geometry.Point) {
 	if !v.mounted || !gui.IsEnabled(v) {
 		v.dragging = false
