@@ -59,10 +59,7 @@ func main() {
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)
-	bar := source.NewFindBar()
-	bar.SetTarget(v)
-	overlay.AddOverlay(bar)
-	overlay.ConnectOverlayPosition(bar, func(a, s geometry.Size, p *geometry.Point) { p.X = max(0, a.Width-s.Width-8) })
+	var bar gui.Widget
 	win.SetWidget(overlay)
 	must(win.Show())
 	win.SetFocusedWidget(v)
@@ -71,6 +68,7 @@ func main() {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: m}))
 		}
+		bar = panel(v, "sourceview-find-bar")
 	}
 
 	var named func(gui.Widget, string) gui.Widget
@@ -110,9 +108,10 @@ func main() {
 		key(events.KeyEnter, events.ModifierAlt)
 		must(win.CommitText("中"))
 		check(v.Search().Text == "a=\n中", "Alt Enter newline")
-		bar.Close()
+		v.HidePanel()
 		v.SetSelection(textedit.Selection{Anchor: 4, Caret: 7})
-		must(bar.Open(true))
+		must(v.ShowReplace())
+		bar = panel(v, "sourceview-find-bar")
 	})
 	steps = append(steps, func() {
 		click("Find in selection")
@@ -160,7 +159,7 @@ func main() {
 	}
 	for _, regex := range []bool{false, true} {
 		steps = append(steps, func() {
-			bar.Close()
+			v.HidePanel()
 			doc.Model().SetText("foo bar foo bar foo")
 			v.SetSelection(textedit.Selection{})
 			v.SetSearch(source.SearchQuery{Text: "foo", Regex: regex})
@@ -204,17 +203,17 @@ func main() {
 		steps = append(steps, func() {
 			click("Find in selection")
 			count(1, true)
-			selection, query, replacement := v.Selection(), v.Search(), bar.Replacement()
+			selection, query, replacement := v.Selection(), v.Search(), named(bar, "Replacement").(*gui.TextView).Model().Text()
 			win.SetFocusedWidget(named(bar, "Find"))
 			key(events.KeyEscape, 0)
 			_, limited := v.SearchRange()
-			check(!bar.Opened() && !limited && !v.HighlightSearchMatches(), "close left search scope/decorations")
-			check(v.Focused() && v.Selection() == selection && v.Search() == query && bar.Replacement() == replacement, "close lost focus/selection/query/replacement")
+			check(!panelVisible(v, "sourceview-find-bar") && !limited && !v.HighlightSearchMatches(), "close left search scope/decorations")
+			check(v.Focused() && v.Selection() == selection && v.Search() == query && named(bar, "Replacement").(*gui.TextView).Model().Text() == replacement, "close lost focus/selection/query/replacement")
 			key(events.KeyF3, 0)
 			check(v.Selection().Range() == (textedit.Range{Start: 16, End: 19}) && !v.HighlightSearchMatches(), "closed F3 search restored decorations or kept scope")
 			v.SetSelection(textedit.Selection{})
 			key(events.KeyF, primary)
-			check(bar.Opened() && v.HighlightSearchMatches() && v.Search() == query && !checked(), "reopening failed to restore whole-document search")
+			check(panelVisible(v, "sourceview-find-bar") && v.HighlightSearchMatches() && v.Search() == query && !checked(), "reopening failed to restore whole-document search")
 		})
 	}
 	steps = append(steps, func() {
@@ -228,34 +227,35 @@ func main() {
 	})
 	steps = append(steps, func() {
 		count(2, true)
-		bar.Close()
+		v.HidePanel()
 		doc.Model().SetText("foo bar foo bar foo")
 		v.SetSelection(textedit.Selection{})
-		must(bar.Open(false))
+		must(v.ShowFind())
+		bar = panel(v, "sourceview-find-bar")
 		v.SetSelection(textedit.Selection{Anchor: 4, Caret: 19})
 		replacement := source.NewDocument("keep")
 		h := v.ConnectSelection(func(s textedit.Selection) {
 			if s.Range() == (textedit.Range{Start: 8, End: 11}) {
 				v.SetDocument(replacement)
-				bar.Close()
+				v.HidePanel()
 			}
 		})
 		click("Find in selection")
 		h.Disconnect()
-		check(v.Document() == replacement && v.Selection() == (textedit.Selection{}) && !bar.Opened() && !v.HighlightSearchMatches(), "scope navigation overwrote reentrant document/close")
+		check(v.Document() == replacement && v.Selection() == (textedit.Selection{}) && !panelVisible(v, "sourceview-find-bar") && !v.HighlightSearchMatches(), "scope navigation overwrote reentrant document/close")
 	})
 	steps = append(steps, func() {
-		must(bar.Open(false))
+		must(v.ShowFind())
+		bar = panel(v, "sourceview-find-bar")
 		foreign := source.NewSourceView()
 		foreign.Document().Model().SetText("foo")
 		foreign.SetSearch(source.SearchQuery{Text: "foo"})
 		scope := textedit.Range{Start: 0, End: 3}
 		must(foreign.SetSearchRange(&scope))
-		bar.SetTarget(foreign) // Not mounted: this bar has never managed its search.
-		bar.Close()
+		// The independent view has never owned this UI.
+		v.HidePanel()
 		actual, limited := foreign.SearchRange()
 		check(foreign.HighlightSearchMatches() && limited && actual == scope, "bar cleared an unattached target's independent search")
-		bar.SetTarget(v)
 	})
 
 	index := 0
@@ -276,4 +276,18 @@ func main() {
 	must(timer.Start(200 * time.Millisecond))
 	app.Run()
 	check(complete, "closed early")
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
 }

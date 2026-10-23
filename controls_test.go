@@ -17,7 +17,7 @@ import (
 
 func TestDetachedFindBarBorrowsTargetWithoutSubscriptions(t *testing.T) {
 	a, b := NewSourceView(), NewSourceView()
-	bar := NewFindBar()
+	bar := newFindBar()
 	initial := len(a.EventControllers())
 	bar.SetTarget(a)
 	bar.SetReplacement("replacement")
@@ -28,7 +28,7 @@ func TestDetachedFindBarBorrowsTargetWithoutSubscriptions(t *testing.T) {
 	if err := bar.Open(false); !errors.Is(err, ErrNotMounted) {
 		t.Fatal(err)
 	}
-	if len(a.EventControllers()) != initial || a.document.connection != nil || len(bar.attached) != 0 || len(bar.lifetime) != 0 {
+	if len(a.EventControllers()) != initial || a.document.connection != nil || len(bar.attached) != 0 {
 		t.Fatal("detached companion subscribed")
 	}
 	bar.SetTarget(b)
@@ -54,7 +54,7 @@ func TestGoToOffsetUsesOneBasedRuneColumns(t *testing.T) {
 }
 
 func TestGoToRetargetHonorsCloseCallback(t *testing.T) {
-	bar := NewGoToBar()
+	bar := newGoToBar()
 	a, b, c := NewSourceView(), NewSourceView(), NewSourceView()
 	bar.SetTarget(a)
 	bar.open = true
@@ -107,7 +107,7 @@ func TestFindBarTranslatedInputsAndHints(t *testing.T) {
 		if err := mlang.SetLanguage(tc.tag); err != nil {
 			t.Fatal(err)
 		}
-		bar := NewFindBar()
+		bar := newFindBar()
 		if bar.find.Name() != tc.find || bar.replacement.Name() != tc.replacement || bar.find.Placeholder() != tc.find || bar.replacement.Placeholder() != tc.replace {
 			t.Errorf("%s: names=%q/%q hints=%q/%q", tc.tag, bar.find.Name(), bar.replacement.Name(), bar.find.Placeholder(), bar.replacement.Placeholder())
 		}
@@ -122,7 +122,7 @@ func TestFindBarTranslatedInputsAndHints(t *testing.T) {
 
 func TestFindBarTranslatedStatus(t *testing.T) {
 	preserveUILanguage(t)
-	bar := NewFindBar()
+	bar := newFindBar()
 	bar.count.query = SearchQuery{Text: "x"}
 	for _, tc := range []struct{ tag, counting, tooLong, count string }{
 		{"en", "Counting…", "Query too long to count", "Matches: 2"},
@@ -206,7 +206,7 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 		sheet := modern.Sheet(modern.Options{Dark: dark, FontFamily: "ui-font", FontSize: 19, AccentColor: rgb(0x357f40)})
 		themedScope(v, sheet)
 		l := newCompletionList(v, &completionSession{})
-		b := NewFindBar()
+		b := newFindBar()
 		// A companion uses its own explicit tree location; SetTarget does not
 		// transfer a stylesheet from an unrelated subtree.
 		themedScope(b, sheet)
@@ -260,7 +260,7 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	if l.font.Family != "owner-font" || l.font.Size != 16 || l.colors.Border.A != 0 || l.box.shadow.Color.A != graphics.ColorOf(color.NRGBA{R: 200, A: 80}).A {
 		t.Fatal("popup lost its owner scope or decorative alpha")
 	}
-	b := NewFindBar()
+	b := newFindBar()
 	themedScope(b, owner.StyleSheet())
 	b.StyleChanged()
 	border, _ := gui.ResolveWidgetStyle(b.matchCase, "sourceview.find.option", "button-checked", style.Normal).BorderColor()
@@ -329,5 +329,59 @@ func TestCompletionSelectionRadiusChangeClosesOldSession(t *testing.T) {
 	l.view.StyleChanged()
 	if l.view.completion != nil || closed != 1 || ctx.destroyed != created {
 		t.Fatal("selection-radius-only change retained a stale popup or native resources")
+	}
+}
+
+// 未挂载时不能启动原生交互，也不能因失败请求创建配套子树。
+func TestCompanionCommandsRequireMountWithoutAllocation(t *testing.T) {
+	v := NewSourceView()
+	for _, show := range []func() error{v.ShowFind, v.ShowReplace, v.ShowGoTo} {
+		if err := show(); !errors.Is(err, ErrNotMounted) {
+			t.Fatal("unmounted companion request", err)
+		}
+		if v.findBar != nil || v.goToBar != nil || len(v.Children()) != 0 {
+			t.Fatal("failed request allocated a companion")
+		}
+	}
+	v.HidePanel()
+	if err := v.SetKeyBindings(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.ShowFind(); !errors.Is(err, ErrNotMounted) {
+		t.Fatal("key configuration changed direct operation semantics", err)
+	}
+}
+
+// 使用真实模型和信号验证隐藏的清理契约，不模拟窗口输入。
+func TestHidePanelPreservesQuerySelectionAndReplacement(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText("one two one")
+	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 4})
+	v.SetSearch(SearchQuery{Text: "one", WholeWord: true})
+	scope := textedit.Range{Start: 0, End: 7}
+	if err := v.SetSearchRange(&scope); err != nil {
+		t.Fatal(err)
+	}
+	bar := newFindBar()
+	bar.SetTarget(v)
+	v.findBar = bar
+	bar.SetReplacement("replacement")
+	bar.open = true
+	bar.SetVisible(true)
+	bar.content.SetVisible(true)
+	bar.attached = append(bar.attached, v.searchState.Connect(func() {}))
+	t.Cleanup(bar.disconnect)
+	query, selection := v.Search(), v.Selection()
+	v.HidePanel()
+	_, scoped := v.SearchRange()
+	if bar.open || bar.Visible() || bar.content.Visible() || scoped || v.HighlightSearchMatches() {
+		t.Fatal("hidden companion retained interaction/search state")
+	}
+	if v.Search() != query || v.Selection() != selection || bar.Replacement() != "replacement" {
+		t.Fatal("hiding changed retained input state")
+	}
+	v.HidePanel()
+	if v.Search() != query || v.Selection() != selection {
+		t.Fatal("repeated hide changed state")
 	}
 }

@@ -59,13 +59,9 @@ func main() {
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(editor)
-	viewport := gui.NewOverlay()
-	viewport.SetChild(scroll)
+	viewport := scroll
 	viewport.SetMainWeight(1)
-	find := source.NewFindBar()
-	find.SetTarget(editor)
-	viewport.AddOverlay(find)
-	viewport.ConnectOverlayPosition(find, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
+
 	status := gui.NewLabel("")
 	status.SetStyleName(modern.MutedText)
 	update := func() {
@@ -80,7 +76,6 @@ func main() {
 		}
 	}
 	editor.ConnectError(report)
-	find.ConnectError(report)
 	button := func(label string, action func()) *gui.Button {
 		b := gui.NewButton()
 		b.SetChild(gui.NewLabel(label))
@@ -105,7 +100,7 @@ func main() {
 	}))
 	tools.AddChild(button("Comment", func() { report(editor.ToggleBlockComment()) }))
 	tools.AddChild(button("Complete", func() { report(editor.ShowCompletion()) }))
-	tools.AddChild(button("Find / Replace", func() { report(find.Open(true)) }))
+	tools.AddChild(button("Find / Replace", func() { report(editor.ShowReplace()) }))
 	tools.AddChild(button("Light / Dark", func() { *dark = !*dark; applyTheme() }))
 	header := gui.NewHeaderBar()
 	title := gui.NewLabel("Markdown  ·  Custom language, editing rules and completion")

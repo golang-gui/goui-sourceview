@@ -63,13 +63,13 @@ macOS 保留 Command+方向键、Command+G 和 Ctrl+G 的不同含义；具体�
 解除绑定即解除消费；只读状态下仍消费已绑定编辑命令，但不修改文档，沿用原有行为。
 菜单点击和直接方法调用不依赖绑定表是否为空，错误仍经原有返回值/ConnectError 契约处理。
 
-## 可选面板与声明式层
+## 内置界面与声明式层
 
-CommandFind、CommandReplace、CommandGoTo 只由挂载在同 Root 的配套栏响应。
-裸 SourceView 不消费这些命令；不让核心控件依赖具体面板或通过查找全局对象打开面板。
+CommandFind、CommandReplace、CommandGoTo 由 SourceView 自身响应，内部栏首次打开时创建。
+当前绑定精确匹配后调用 ShowFind、ShowReplace、ShowGoTo；无需外部目标关联或全局对象查询。
 FindBar 的查询/替换输入使用目标表的 FindNext/FindPrevious；其 Enter、Shift+Enter、Escape
 是字段本地交互，保持现有规则。GoToBar 的提交与关闭同理。
-每次事件读取目标的当前配置，卸载/换目标沿原有生命周期释放控制器，没有第二份绑定表或订阅协议。
+每次事件读取所属 SourceView 的当前配置。栏内不向正文追加控制器；卸载释放订阅，不保存第二份绑定表。
 
 ui.SourceView.KeyBindings(bindings) 在配置时复制传入表，显式指定才协调；nil 显式清空，
 未指定的普通重建保留交互或命令式设置。错误配置沿用其他 ui 参数的 panic 策略，

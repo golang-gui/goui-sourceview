@@ -12,7 +12,7 @@ GOUI 不反向依赖本模块。
 首版交付可编辑的单光标代码控件：IME、导航与选择、剪切复制粘贴、删除、撤销重做、
 基础缩进、字面量查找替换、行号、滚动、配色及 **JSON、XML、HTML 三种语言高亮**。
 只读是可选模式。基础补全和括号交互见 [补全设计](DesignCompletion.md) 与 [括号设计](DesignPairs.md)。
-查找替换界面作为同仓 [可选 FindBar](DesignFindBar.md) 组合，推荐用 Overlay 浮在滚动视口右上角；
+查找、替换和定位作为 SourceView 的[内置配套界面](DesignFindBar.md)，固定在视口右上角；
 控件和输入框使用所属 GUI 样式环境，裸控件只提供操作与高亮能力。
 多光标、折叠、语义补全、完整嵌入语言等后续能力见 [Roadmap](Roadmap.md)。
 
@@ -33,7 +33,7 @@ GOUI 不反向依赖本模块。
 1. SourceView 独立实现 Widget、输入行为和排版缓存，复用 GOUI 的框架设施。
 2. 复用 `gui/textedit.Model` 作为首版文本及历史基础，优先复用 Projection、Geometry、HeightIndex；不复制 Piece Tree 或私有编辑器。
 3. 以 Document 组合模型、语言和共享分析；选区、预编辑、视口、查找、配色及原生布局属于每个视图。
-4. SourceView 是实现 `Scrollable` 的叶子控件。外部组合 GOUI ScrollView 提供滚动条；宿主显式使用 `source-view` 样式，统一绘制包含滚动条的外框；行号与正文由同一控件呈现。
+4. SourceView 实现 `Scrollable`，自行绘制正文并拥有内部配套子控件。外部组合 GOUI ScrollView 提供滚动条；宿主显式使用 `source-view` 样式，统一绘制包含滚动条的外框；行号与正文由同一控件呈现。
 5. 首版语言使用自行编写的纯 Go、有状态、可分段扫描器。暂不引入原生编辑器、WebView、Tree-sitter、完整 Monarch 或 TextMate 运行时。
 6. 首版在 GUI 线程按预算推进分析；先不引入后台 goroutine、模型快照协议或多线程排版。
 7. 首版 token 样式只改变前景色。字号、字重和斜体等按 token 改变度量的能力后续单独设计。
@@ -49,7 +49,7 @@ GOUI 不反向依赖本模块。
 
 | 包或目录 | 首版职责 |
 | --- | --- |
-| 根包 `sourceview` | Document、SourceView、可选 FindBar、公共编辑与查找 API、信号 |
+| 根包 `sourceview` | Document、SourceView、内部配套界面、公共编辑与查找 API、信号 |
 | `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
 | `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
@@ -71,6 +71,7 @@ FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 | `commands.go`、`search.go` | 编辑命令、历史、剪贴板与注释切换；查找替换、范围与高亮显隐 |
 | `input.go`、`key_bindings.go` | 指针与键盘输入；快捷键配置、匹配及命令分发 |
 | `layout.go`、`layout_cache.go`、`paint.go` | 视口布局、可见行映射、命中及滚动定位；段落缓存与着色；正文和装饰绘制 |
+| `companions.go` | 内置查找／替换／定位的公开操作、互斥、视口布局和指针规则 |
 | `scheduler.go` | 帧回调、分析计时器及可见区域排版工作 |
 | `styles.go` | Basic/Modern 注册、有效样式、控件配色及样式变化处理 |
 
@@ -78,7 +79,7 @@ FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 同一领域的队列、绘制辅助或小控件合入所属功能文件；独立类型不要求独立文件。
 补全保留会话和列表两个实现文件，面板与滚动组合在列表文件内；
 FindBar 保留行为和外观两个文件；折叠及普通编辑辅助各自集中维护。
-`ui/bars.go` 合并查找和定位的薄绑定，不改变声明式生命周期。
+声明式层只绑定 SourceView，不单独声明查找或定位栏。
 SourceView 的字段按文档与挂载、选区、原生资源、外观、布局、编辑辅助、
 输入、搜索和补全分组；分组不引入额外状态对象，也不改变资源所有者。
 
@@ -100,7 +101,7 @@ flowchart LR
 | --- | --- | --- |
 | Document | 模型引用、不可变语言定义、语言 ID/epoch、共享行元数据和 token 缓存 | 活动光标、视口、原生对象、文件路径 |
 | SourceView | Document 引用、EditSource、选区与视觉 affinity、预编辑、搜索、布局缓存、挂载期订阅 | 其他视图状态、模型历史栈、Application |
-| FindBar（可选） | 输入与按钮子树、替换文字、分块计数、挂载期连接 | 借用的 SourceView、Document、历史 |
+| 内部配套栏 | 输入与按钮子树、替换文字、分块计数、挂载期连接；由 SourceView 拥有 | Document、历史 |
 | ScrollView | 滚动偏移、滚动条与视口裁剪 | 文档和代码编辑策略 |
 | Scheme | 复制后的不可变颜色表与版本身份 | Widget、系统订阅、原生资源 |
 | 挂载期 Document 连接 | 一个模型订阅、已挂载视图登记、分析驱动者 | 脱离视图后仍无限运行的任务 |
@@ -183,6 +184,10 @@ func (v *SourceView) SetSearch(query SearchQuery)
 func (v *SourceView) FindNext(backward bool) (textedit.Range, bool)
 func (v *SourceView) ReplaceCurrent(text string) (bool, error)
 func (v *SourceView) ReplaceAll(text string) (int, error)
+func (v *SourceView) ShowFind() error
+func (v *SourceView) ShowReplace() error
+func (v *SourceView) ShowGoTo() error
+func (v *SourceView) HidePanel()
 func (v *SourceView) RevealSelection()
 func (v *SourceView) ConnectSelection(fn func(textedit.Selection)) signal.Handle
 func (v *SourceView) ConnectError(fn func(error)) signal.Handle
@@ -211,7 +216,7 @@ type SearchQuery struct {
 - 同一个失败只经一个通道报告：同步公共调用返回 error；输入控制器代调用时转为错误信号；异步回调只发信号。
 - 用户在只读/禁用模式触发受限输入是正常无操作，不反复发错误信号；公共修改方法仍返回对应模式错误供程序判断。
 - SourceView 不再中转一份永久内容信号；内容监听放在 Model。Selection 信号只报告该视图实际变化。
-- FindNext 更新选区并请求可见，空查询或无命中返回 false；ReplaceCurrent 仅替换当前选区确实对应的命中；ReplaceAll 为一个撤销单元。可选 FindBar 在当前替换成功且操作未过期时选择下一项。
+- FindNext 更新选区并请求可见，空查询或无命中返回 false；ReplaceCurrent 仅替换当前选区确实对应的命中；ReplaceAll 为一个撤销单元。内置查找栏在当前替换成功且操作未过期时选择下一项。
 - `errors.Is` 可识别 ErrReadOnly、ErrDisabled、ErrNotMounted、ErrUnknownLanguage、ErrInvalidOptions、ErrOperationLimit；平台失败保留原错误链。被取消的过期粘贴不当作失败上报。
 - Scheme 是复制并验证后的不可变值；nil 使用所属 Basic/Modern 样式。Root 包提供 wrap 类型/常量别名供 ui 使用，ui 不直接导入 typography。
 - 框架契约另需实现 IMClient、Scrollable、Measure/Arrange/Paint/StyleChanged/Snapshot；不将其与用户功能 API 混为一组。

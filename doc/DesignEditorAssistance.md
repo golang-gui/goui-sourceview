@@ -27,10 +27,11 @@ Primary+Home/End 仍到全文首尾。全空白显示行使用边缘。
 智能退格仅在前导 ASCII 空白且无选区时生效：按 IndentWidth 退一级，TabWidth 计算
 已有列；必要时替换后缀以处理跨目标列的 Tab，形成一个撤销项。其他情况保留 Cluster 删除。
 
-可选 GoToBar 使用同 Root 的编辑器目标绑定和 Overlay。输入 1 起始行、可选冒号和码点列；
-转换为原文 byte 并吸附合法停靠点。Enter 确认，Escape 关闭，无实时跳转。非法/越界原位提示。
-只有挂载时接管 Control+G（包括 macOS，避免 Cmd+G 搜索冲突）。裸 SourceView 保留给应用。
-示例显式安排同时显示哪一个工具栏，不新增中心浮层协调器。
+内置行列定位通过 Ctrl+G 或 SourceView.ShowGoTo 打开，输入 1 起始行、可选冒号和码点列。
+有效输入回车后设置合法选区、展开覆盖折叠并滚动至光标；非法输入只显示校验提示。
+Escape 关闭并按焦点归还规则恢复正文。定位与查找／替换互斥，由 SourceView 统一管理。
+内部输入使用现有 TextInput、样式、语义及事件路径，不公开 GoToBar、Target 或单独声明式绑定。
+移除 CommandGoTo 的快捷键不影响 ShowGoTo 的程序调用。
 
 ## 主题、语义与验收
 
@@ -46,5 +47,4 @@ Basic/Modern 提供 whitespace、indent-guide、ruler、occurrence 等颜色与�
 [Monaco EditorOptions](https://microsoft.github.io/monaco-editor/typedoc/variables/editor_editor_api.editor.EditorOptions.html)
 提供空白、标尺和选区高亮；借鉴明确选项，布局仍以本项目原生几何为准。
 
-GoToBar 的声明式属性协调会屏蔽属性引起的通知，包括切换目标时的关闭；
-命令式调用保留实际打开/关闭通知，避免属性回写造成重建循环。
+定位栏属于 SourceView 的内部状态，声明式重建不协调其打开状态或重新初始化输入。

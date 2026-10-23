@@ -15,12 +15,10 @@ import (
 	"github.com/golang-gui/goui/widgets"
 )
 
-// FindBar is an optional companion widget. Usually mount it as an Overlay
-// above the editor viewport in the same Root, then SetTarget. It owns its
-// controls, not the editor or document.
-// Its content is initially closed; the application chooses its placement.
-type FindBar struct {
+// findBar is the editor-owned find/replace UI. It keeps input state while hidden.
+type findBar struct {
 	gui.WidgetBase
+	pointer                                            *gui.MotionEventController
 	target                                             *SourceView
 	content                                            *findSurface
 	appearance                                         findAppearance
@@ -35,7 +33,7 @@ type FindBar struct {
 	status                                             *gui.Label
 	names                                              map[gui.Widget]mlang.Getter
 	keys                                               *gui.KeyEventController
-	lifetime, attached                                 signal.Handles
+	attached                                           signal.Handles
 	frame, language                                    signal.Handle
 	mounted, open, replaceMode, syncing                bool
 	epoch                                              uint64
@@ -53,9 +51,12 @@ type FindBar struct {
 	message string
 }
 
-func NewFindBar() *FindBar {
-	b := &FindBar{names: make(map[gui.Widget]mlang.Getter)}
+func newFindBar() *findBar {
+	b := &findBar{names: make(map[gui.Widget]mlang.Getter)}
 	b.SetLayoutManager(layout.NewFillLayout())
+	b.SetVisible(false)
+	b.pointer = gui.NewMotionEventController()
+	b.AddEventController(b.pointer)
 	b.buildSurface()
 	b.find.ConnectChange(func(textedit.Change) {
 		text := b.find.Model().Text()
@@ -69,21 +70,18 @@ func NewFindBar() *FindBar {
 	})
 	b.keys = gui.NewKeyEventController()
 	b.keys.SetPhase(gui.PhaseCapture)
-	b.keys.ConnectKeyDown(func(ctx gui.EventContext, e events.KeyEvent) { b.key(ctx, e, false) })
-	keys := gui.NewKeyEventController()
-	keys.SetPhase(gui.PhaseCapture)
-	keys.ConnectKeyDown(func(ctx gui.EventContext, e events.KeyEvent) { b.key(ctx, e, true) })
-	b.AddEventController(keys)
+	b.keys.ConnectKeyDown(func(ctx gui.EventContext, e events.KeyEvent) { b.key(ctx, e, true) })
+	b.AddEventController(b.keys)
 	b.ConnectMount(b.mount)
 	b.ConnectUnmount(b.unmount)
 	return b
 }
 
-func (b *FindBar) Target() *SourceView { return b.target }
+func (b *findBar) Target() *SourceView { return b.target }
 
 // SetTarget borrows an editor. nil detaches it. Only a mounted editor in the
-// same Root gets bindings; replacing/unmounting the bar releases those bindings.
-func (b *FindBar) SetTarget(v *SourceView) {
+// same Root gets subscriptions; replacing/unmounting the bar releases them.
+func (b *findBar) SetTarget(v *SourceView) {
 	if b.Destroyed() || b.target == v {
 		return
 	}
@@ -101,11 +99,11 @@ func (b *FindBar) SetTarget(v *SourceView) {
 	b.refresh()
 }
 
-func (b *FindBar) Opened() bool { return b.open }
+func (b *findBar) Opened() bool { return b.open }
 
-func (b *FindBar) ReplaceMode() bool { return b.replaceMode }
+func (b *findBar) ReplaceMode() bool { return b.replaceMode }
 
-func (b *FindBar) SetReplaceMode(replace bool) {
+func (b *findBar) SetReplaceMode(replace bool) {
 	if b.Destroyed() || b.replaceMode == replace {
 		return
 	}
@@ -126,16 +124,16 @@ func (b *FindBar) SetReplaceMode(replace bool) {
 	b.refresh()
 }
 
-func (b *FindBar) Replacement() string { return b.replacement.Model().Text() }
+func (b *findBar) Replacement() string { return b.replacement.Model().Text() }
 
-func (b *FindBar) SetReplacement(text string) {
+func (b *findBar) SetReplacement(text string) {
 	if !b.Destroyed() {
 		setFindText(b.replacement, text)
 		b.RequestLayout()
 	}
 }
 
-func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
+func (b *findBar) ConnectOpen(fn func(bool)) signal.Handle {
 	return b.openSignal.Connect(func(open bool) {
 		if !b.Destroyed() && b.open == open {
 			fn(open)
@@ -143,7 +141,7 @@ func (b *FindBar) ConnectOpen(fn func(bool)) signal.Handle {
 	})
 }
 
-func (b *FindBar) ConnectError(fn func(error)) signal.Handle {
+func (b *findBar) ConnectError(fn func(error)) signal.Handle {
 	return b.errorSignal.Connect(func(err error) {
 		if !b.Destroyed() {
 			fn(err)
@@ -153,7 +151,7 @@ func (b *FindBar) ConnectError(fn func(error)) signal.Handle {
 
 // Open focuses the query, seeding it from a short single-line selection when
 // invoked from the editor. It never replaces a multiline selection with spaces.
-func (b *FindBar) Open(replace bool) error {
+func (b *findBar) Open(replace bool) error {
 	v := b.liveTarget()
 	if v == nil {
 		return ErrNotMounted
@@ -185,6 +183,7 @@ func (b *FindBar) Open(replace bool) error {
 	}
 	changed := !b.open
 	b.open = true
+	b.SetVisible(true)
 	v.SetHighlightSearchMatches(true)
 	b.content.SetVisible(true)
 	b.refresh()
@@ -205,7 +204,7 @@ func (b *FindBar) Open(replace bool) error {
 // Close hides search backgrounds and clears the search scope, retaining the
 // query for reopening and next/previous navigation. It returns focus only when
 // focus was inside the bar, preserving ordinary text selection.
-func (b *FindBar) Close() {
+func (b *findBar) Close() {
 	if b.Destroyed() || !b.open {
 		return
 	}
@@ -216,6 +215,7 @@ func (b *FindBar) Close() {
 	attached := len(b.attached) != 0
 	valid := func() bool { return !b.Destroyed() && !b.open && b.epoch == epoch && b.target == v }
 	b.content.SetVisible(false)
+	b.SetVisible(false)
 	if !valid() {
 		return
 	}
@@ -238,7 +238,7 @@ func (b *FindBar) Close() {
 	}
 }
 
-func (b *FindBar) liveTarget() *SourceView {
+func (b *findBar) liveTarget() *SourceView {
 	v := b.target
 	if b.Destroyed() || !b.mounted || b.Root() == nil || v == nil || v.Destroyed() || !v.mounted || v.Root() != b.Root() {
 		return nil
@@ -246,7 +246,7 @@ func (b *FindBar) liveTarget() *SourceView {
 	return v
 }
 
-func (b *FindBar) mount() {
+func (b *findBar) mount() {
 	b.mounted = true
 	b.epoch++
 	b.connect()
@@ -255,7 +255,7 @@ func (b *FindBar) mount() {
 	b.updateLabels()
 }
 
-func (b *FindBar) unmount() {
+func (b *findBar) unmount() {
 	b.mounted = false
 	b.epoch++
 	b.disconnect()
@@ -270,22 +270,13 @@ func (b *FindBar) unmount() {
 	b.count.document = nil
 }
 
-func (b *FindBar) connect() {
-	if b.target == nil || b.target.Destroyed() {
-		return
-	}
-	b.lifetime = signal.Handles{
-		b.target.ConnectMount(b.attach),
-		b.target.ConnectUnmount(func() { b.detach(); b.count.document = nil; b.refresh() }),
-	}
-	b.attach()
-}
+func (b *findBar) connect() { b.attach() }
 
-func (b *FindBar) attach() {
+func (b *findBar) attach() {
 	if len(b.attached) != 0 || b.liveTarget() == nil {
 		return
 	}
-	b.target.AddEventController(b.keys)
+	// SourceView captures activation commands; this widget handles only its own inputs.
 	b.attached = signal.Handles{b.target.searchState.Connect(b.refresh)}
 	if b.open {
 		b.target.SetHighlightSearchMatches(true)
@@ -293,12 +284,9 @@ func (b *FindBar) attach() {
 	b.refresh()
 }
 
-func (b *FindBar) detach() {
+func (b *findBar) detach() {
 	v := b.target
 	attached := len(b.attached) != 0
-	if v != nil {
-		v.RemoveEventController(b.keys)
-	}
 	b.attached.Disconnect()
 	b.attached = nil
 	if attached && b.open && v != nil && !v.Destroyed() {
@@ -307,13 +295,9 @@ func (b *FindBar) detach() {
 	}
 }
 
-func (b *FindBar) disconnect() {
-	b.lifetime.Disconnect()
-	b.lifetime = nil
-	b.detach()
-}
+func (b *findBar) disconnect() { b.detach() }
 
-func (b *FindBar) refresh() {
+func (b *findBar) refresh() {
 	if b.Destroyed() || b.syncing {
 		return
 	}
@@ -379,7 +363,7 @@ func (b *FindBar) refresh() {
 	b.updateStatus()
 }
 
-func (b *FindBar) countStep() {
+func (b *findBar) countStep() {
 	v := b.liveTarget()
 	if !b.open || !visible(b) || v == nil || b.count.done || !b.count.available {
 		return
@@ -394,7 +378,7 @@ func (b *FindBar) countStep() {
 	}
 }
 
-func (b *FindBar) updateStatus() {
+func (b *findBar) updateStatus() {
 	text := b.message
 	if text == "" && b.count.query.Text != "" {
 		switch {
@@ -423,7 +407,7 @@ func (b *FindBar) updateStatus() {
 	}
 }
 
-func (b *FindBar) updateLabels() {
+func (b *findBar) updateLabels() {
 	b.find.SetPlaceholder(resource.Find())
 	b.replacement.SetPlaceholder(resource.Replace())
 	for widget, getter := range b.names {
@@ -432,13 +416,13 @@ func (b *FindBar) updateLabels() {
 	b.refresh()
 }
 
-func (b *FindBar) navigate(backward bool) {
+func (b *findBar) navigate(backward bool) {
 	if v := b.liveTarget(); v != nil && gui.IsEnabled(v) {
 		v.FindNext(backward)
 	}
 }
 
-func (b *FindBar) fail(err error) {
+func (b *findBar) fail(err error) {
 	if err == nil || b.Destroyed() {
 		return
 	}
@@ -447,7 +431,7 @@ func (b *FindBar) fail(err error) {
 	b.errorSignal.Emit(err)
 }
 
-func (b *FindBar) replaceCurrent() {
+func (b *findBar) replaceCurrent() {
 	v := b.liveTarget()
 	if v == nil || v.editable() != nil {
 		return
@@ -466,7 +450,7 @@ func (b *FindBar) replaceCurrent() {
 	}
 }
 
-func (b *FindBar) replaceEverywhere() {
+func (b *findBar) replaceEverywhere() {
 	v := b.liveTarget()
 	if v == nil || v.editable() != nil {
 		return
@@ -478,7 +462,7 @@ func (b *FindBar) replaceEverywhere() {
 	}
 }
 
-func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
+func (b *findBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 	v := b.liveTarget()
 	if v == nil || !gui.IsEnabled(b) || !gui.IsEnabled(v) || !visible(b) {
 		return
@@ -488,7 +472,11 @@ func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 	switch {
 	case bound && (command == CommandFind || command == CommandReplace):
 		handled = true
-		b.fail(b.Open(command == CommandReplace))
+		if command == CommandReplace {
+			b.fail(v.ShowReplace())
+		} else {
+			b.fail(v.ShowFind())
+		}
 	case b.open && e.Key == events.KeyEscape && e.Modifiers == 0:
 		handled = true
 		b.Close()
@@ -509,7 +497,7 @@ func (b *FindBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 	}
 }
 
-func (b *FindBar) Snapshot() gui.WidgetInfo {
+func (b *findBar) Snapshot() gui.WidgetInfo {
 	info := b.WidgetBase.Snapshot()
 	info.Role = gui.Role("sourceview-find-bar")
 	info.Text = b.find.Model().Text()
@@ -521,7 +509,7 @@ func (b *FindBar) Snapshot() gui.WidgetInfo {
 	return info
 }
 
-var _ gui.Widget = (*FindBar)(nil)
+var _ gui.Widget = (*findBar)(nil)
 
 // setFindText preserves field history/selection on ordinary refreshes.
 func setFindText(field *gui.TextView, text string) {
@@ -533,7 +521,7 @@ func setFindText(field *gui.TextView, text string) {
 
 // Capture the range before navigating. A result selection never becomes the
 // next search scope, and an empty selection is not an interactive scope.
-func (b *FindBar) setSelectionOnly(checked bool) {
+func (b *findBar) setSelectionOnly(checked bool) {
 	if b.syncing {
 		return
 	}

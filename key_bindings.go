@@ -235,7 +235,7 @@ func (v *SourceView) keyCommand(event events.KeyEvent) (Command, bool) {
 }
 
 // runBoundCommand executes core commands after transient completion handling.
-// Companion commands return false; only their mounted owner consumes them.
+// Internal companion commands remain available without a key binding.
 func (v *SourceView) runBoundCommand(command Command) bool {
 	run := func(fn func() error) {
 		if v.editable() == nil {
@@ -243,8 +243,12 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		}
 	}
 	switch command {
-	case CommandFind, CommandReplace, CommandGoTo:
-		return false
+	case CommandFind:
+		v.report(v.ShowFind())
+	case CommandReplace:
+		v.report(v.ShowReplace())
+	case CommandGoTo:
+		v.report(v.ShowGoTo())
 	case CommandComplete:
 		run(v.ShowCompletion)
 	case CommandUndo:

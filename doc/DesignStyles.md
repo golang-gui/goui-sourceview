@@ -83,7 +83,7 @@ paragraphStyle 的着色身份失效，不重建文本几何、HeightIndex 或�
 ## 查找浮层
 
 FindBar 使用自己在控件树中的样式环境，不在内部安装固定 Basic StyleScope。
-需要两个亮暗编辑区时，将各自的编辑器和 FindBar 一起放入明确的 StyleScope。
+需要两个亮暗编辑区时，将各自的 SourceView 放入明确的 StyleScope；内部栏自然继承同一子树的样式。
 SetTarget 只建立编辑行为关联，不把另一个子树的外观隐式传进来。
 
 | 名称 / part | 用途 |

@@ -1,10 +1,11 @@
 // Command binding integration verification. Requires a desktop/window manager,
 // native typography/fonts. Run: go run ./tests/window/editor/keybindings [-dark]
 // (Linux without IME service: XMODIFIERS=@im=none). Starts two editors sharing
-// one document, a FindBar and a GoToBar. Uses normal Window.DispatchEvent and
+// one document and built-in find/go-to UI. Uses normal Window.DispatchEvent and
 // CommitText to check default Ctrl+Space propagation, explicit completion and
 // popup keys, remapping/removal, readonly commands, independent views, companion
-// open/navigation bindings, clearing/resetting, and reentrant replacement.
+// open/navigation bindings, clearing/resetting, reentrant replacement, and
+// viewport anchoring without changing the document's scrolling extent.
 // No clipboard/files/settings changes. Logs actual painter/scale; closes on
 // PASS, exits nonzero on assertion/early close. Restart resets. Physical system
 // interception, native IME and mixed-monitor DPI require separate verification.
@@ -18,6 +19,7 @@ import (
 	"log"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 
 	source "github.com/golang-gui/goui-sourceview"
@@ -66,13 +68,7 @@ func main() {
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)
 	overlay.SetMainWeight(1)
-	find, goTo := source.NewFindBar(), source.NewGoToBar()
-	find.SetTarget(v)
-	goTo.SetTarget(v)
-	for _, bar := range []gui.Widget{find, goTo} {
-		overlay.AddOverlay(bar)
-		overlay.ConnectOverlayPosition(bar, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
-	}
+
 	box := gui.NewLinearBox(layout.DirectionVertical)
 	box.SetCrossAlign(layout.CrossStretch)
 	box.AddChild(overlay)
@@ -94,6 +90,8 @@ func main() {
 		}
 	}
 	space, oldMove, move, oldFind, customFind, oldGoTo, completion, oldNext := 0, 0, 0, 0, 0, 0, 0, 0
+	var closedExtent geometry.Size
+	var findBounds geometry.Rectangle
 	for _, fallback := range []struct {
 		gesture gui.KeyGesture
 		count   *int
@@ -162,9 +160,9 @@ func main() {
 			v.SetSelection(textedit.Selection{})
 			v.SetSearch(source.SearchQuery{Text: "foo"})
 			key(events.KeyF, primary)
-			check(oldFind == 1 && !find.Opened(), "old Find binding remained active")
+			check(oldFind == 1 && !panelVisible(v, "sourceview-find-bar"), "old Find binding remained active")
 			key(events.KeyF4, 0)
-			check(find.Opened() && find.ContainsFocus(), "remapped Find did not open")
+			check(panelVisible(v, "sourceview-find-bar") && panel(v, "sourceview-find-bar").ContainsFocus(), "remapped Find did not open")
 			key(events.KeyF8, 0)
 			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 3}), "bar did not use remapped FindNext")
 			key(events.KeyF8, events.ModifierShift)
@@ -173,14 +171,14 @@ func main() {
 			key(events.KeyF3, 0)
 			check(oldNext == 1 && v.Selection().Range() == (textedit.Range{Start: 4, End: 7}), "old FindNext survived replacement")
 			key(events.KeyG, events.ModifierControl)
-			check(oldGoTo == 1 && !goTo.Opened(), "old GoTo binding remained active")
+			check(oldGoTo == 1 && !panelVisible(v, "sourceview-goto-bar"), "old GoTo binding remained active")
 			key(events.KeyF5, 0)
-			check(goTo.Opened(), "remapped GoTo did not open")
-			goTo.SetQuery("2")
+			check(panelVisible(v, "sourceview-goto-bar"), "remapped GoTo did not open")
+			named(v, "Go to line/column").(*gui.TextInput).SetText("2")
 			key(events.KeyEnter, 0)
-			check(!goTo.Opened() && v.Selection().Caret == 8, "GoTo field submit changed")
+			check(!panelVisible(v, "sourceview-goto-bar") && v.Selection().Caret == 8, "GoTo field submit changed")
 			key(events.KeyF4, events.ModifierShift)
-			check(find.Opened() && find.ReplaceMode(), "remapped Replace did not open")
+			check(panelVisible(v, "sourceview-find-bar") && named(v, "Replacement").Visible(), "remapped Replace did not open")
 			key(events.KeyEscape, 0)
 		},
 		func() {
@@ -193,7 +191,14 @@ func main() {
 			key(events.KeyF, primary)
 			key(events.KeyG, events.ModifierControl)
 			key(events.KeyF2, 0)
-			check(customFind == 1 && oldFind == 2 && oldGoTo == 2 && completion == 2 && !find.Opened() && !goTo.Opened(), "cleared table still consumed companion/core keys")
+			check(customFind == 1 && oldFind == 2 && oldGoTo == 2 && completion == 2 && !panelVisible(v, "sourceview-find-bar") && !panelVisible(v, "sourceview-goto-bar"), "cleared table still consumed companion/core keys")
+			// 删除绑定不删除内部能力；直接调用仍能打开、互斥并隐藏。
+			must(v.ShowFind())
+			check(panelVisible(v, "sourceview-find-bar"), "clearing keys disabled direct Find")
+			must(v.ShowGoTo())
+			check(panelVisible(v, "sourceview-goto-bar") && !panelVisible(v, "sourceview-find-bar"), "direct companion activation was not exclusive")
+			v.HidePanel()
+			check(v.Focused() && !panelVisible(v, "sourceview-goto-bar"), "hiding direct companion did not restore focus")
 			doc.Model().SetText("")
 			must(win.CommitText("a"))
 			key(events.KeyEnter, 0)
@@ -205,10 +210,10 @@ func main() {
 		func() {
 			must(v.SetKeyBindings(source.DefaultKeyBindings()))
 			key(events.KeyF, primary)
-			check(find.Opened(), "reset did not restore Find binding")
+			check(panelVisible(v, "sourceview-find-bar"), "reset did not restore Find binding")
 			key(events.KeyEscape, 0)
 			key(events.KeyG, events.ModifierControl)
-			check(goTo.Opened(), "reset did not restore GoTo binding")
+			check(panelVisible(v, "sourceview-goto-bar"), "reset did not restore GoTo binding")
 			key(events.KeyEscape, 0)
 			key(events.KeySpace, events.ModifierControl)
 			check(space == 2, "reset restored an implicit completion binding")
@@ -240,6 +245,28 @@ func main() {
 			check(doc.Model().Text() == "tr\nx" && move == 2, "popup close reentry executed the same event on a new binding table")
 			key(events.KeyF6, 0)
 			check(doc.Model().Text() == "tr\n\nx", "replacement binding was not active on the following event")
+		},
+		func() {
+			// 准备可滚动正文；后续打开和滚动都走正常按键、滚轮事件。
+			must(v.SetKeyBindings(source.DefaultKeyBindings()))
+			doc.Model().SetText(strings.Repeat("source line\n", 200))
+			v.SetSelection(textedit.Selection{})
+		},
+		func() {
+			closedExtent = v.ContentSize()
+			key(events.KeyF, primary)
+		},
+		func() {
+			check(v.ContentSize() == closedExtent, "opening internal UI changed document extent")
+			findBounds = panel(v, "sourceview-find-bar").Snapshot().Bounds
+			r := v.Snapshot().Bounds
+			must(win.DispatchEvent(events.WheelEvent{Position: geometry.Point{X: r.X + 20, Y: r.Y + r.Height - 20}, DeltaY: 150}))
+		},
+		func() {
+			check(scroll.ScrollY() > 0, "wheel did not scroll the document")
+			check(panel(v, "sourceview-find-bar").Snapshot().Bounds == findBounds, "internal UI moved with document scrolling")
+			check(v.ContentSize() == closedExtent, "internal UI contributed to the scrolling extent")
+			key(events.KeyEscape, 0)
 		},
 	}
 	index, done := 0, false
@@ -278,4 +305,30 @@ func (p *scaleProbe) Paint(draw gui.Painter) {
 	must(err)
 	defer img.Destroy()
 	p.painter = fmt.Sprintf("%T", img)
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
+}
+
+func named(w gui.Widget, name string) gui.Widget {
+	if w.Name() == name {
+		return w
+	}
+	for _, child := range w.Children() {
+		if found := named(child, name); found != nil {
+			return found
+		}
+	}
+	return nil
 }

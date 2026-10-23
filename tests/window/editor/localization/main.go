@@ -2,7 +2,7 @@
 // native typography and fonts. Run: go run ./tests/window/editor/localization
 // (Linux without IME service: XMODIFIERS=@im=none). -capture-dir accepts an
 // existing directory outside the repository. Initial state: one editor with an
-// optional FindBar. Key input uses Window.DispatchEvent/CommitText; setters only
+// built-in find/replace UI. Key input uses Window.DispatchEvent/CommitText; setters only
 // prepare state and choose languages/themes. Automatically checks all eight
 // languages against literal testdata, including an already open context menu,
 // input names, hints, completed counts, focus, selection/history preservation,
@@ -97,12 +97,7 @@ func main() {
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)
-	bar := source.NewFindBar()
-	bar.SetTarget(v)
-	overlay.AddOverlay(bar)
-	overlay.ConnectOverlayPosition(bar, func(available, size geometry.Size, p *geometry.Point) {
-		p.X = max(0, available.Width-size.Width-8)
-	})
+	var bar gui.Widget
 	win.SetWidget(overlay)
 	must(win.Show())
 	primary, _ := gui.ModPrimary.Resolve()
@@ -110,6 +105,7 @@ func main() {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
 		}
+		bar = panel(v, "sourceview-find-bar")
 	}
 	openReplace := func() {
 		if runtime.GOOS == "darwin" {
@@ -119,8 +115,7 @@ func main() {
 			key(events.KeyH, primary)
 		}
 	}
-	find := named(bar, "Find").(*gui.TextView)
-	replacement := named(bar, "Replacement").(*gui.TextView)
+	var find, replacement *gui.TextView
 	var selected textedit.Selection
 	var inputSelected gui.TextSelection
 	var revision uint64
@@ -128,7 +123,7 @@ func main() {
 	query := source.SearchQuery{Text: "one", IgnoreCase: true, WholeWord: true}
 	assertState := func() {
 		check(v.Document().Model().Text() == text && uint64(v.Document().Model().Revision()) == revision && v.Document().Model().CanUndo() && !v.Document().Model().CanRedo(), "language change altered document/history")
-		check(v.Selection() == selected && v.Search() == query && bar.Replacement() == "replacement 中" && bar.Opened() && bar.ReplaceMode(), "language change altered selection/search/replacement")
+		check(v.Selection() == selected && v.Search() == query && replacement.Model().Text() == "replacement 中" && panelVisible(v, "sourceview-find-bar") && replacement.Visible(), "language change altered selection/search/replacement")
 	}
 	assertBar := func(entry translation) {
 		assertState()
@@ -175,6 +170,8 @@ func main() {
 			must(win.CommitText("!"))
 			v.SetSelection(textedit.Selection{Caret: 3})
 			openReplace()
+			find = named(bar, "Find").(*gui.TextView)
+			replacement = named(bar, "Replacement").(*gui.TextView)
 			v.SetSearch(query)
 			win.SetFocusedWidget(replacement)
 			must(win.CommitText("replacement 中"))
@@ -243,10 +240,11 @@ func main() {
 				key(events.KeyEnter, 0)
 				check(v.Selection() == (textedit.Selection{Caret: len(text)}), "translated select-all command did not execute")
 				v.SetSelection(selected)
-				overlay.RemoveOverlay(bar)
+				overlay.SetChild(nil)
 				must(mlang.SetLanguage("ja"))
 				check(replacement.Name() == entry.Replacement, "detached bar retained language listener")
-				overlay.AddOverlay(bar)
+				overlay.SetChild(scroll)
+				must(v.ShowReplace())
 				phase = 6
 			}
 		case 6:
@@ -270,6 +268,7 @@ func main() {
 			must(mlang.SetLanguage("de"))
 			check(replacement.Name() == languages[5].Replacement, "unmounted bar retained language listener")
 			win.SetWidget(overlay)
+			must(v.ShowReplace())
 			phase++
 		case 10:
 			assertBar(languages[4])
@@ -283,4 +282,18 @@ func main() {
 	check(complete, "localization verification aborted")
 	must(mlang.SetLanguage("ar"))
 	check(replacement.Name() == languages[4].Replacement, "destroyed bar retained language listener")
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
 }

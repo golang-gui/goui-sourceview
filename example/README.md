@@ -77,8 +77,8 @@ system-reserved shortcuts in the user's desktop environment.
 ## Declarative
 
 `declarative` is a minimal `ui.Run` composition: stable Document, HeaderBar,
-ScrollView, SourceView and optional FindBar. Its stylesheet follows system settings.
-Use Ctrl/Cmd+F to open FindBar; editing uses the same widget as the imperative example.
+ScrollView and SourceView with built-in find, replace and go-to UI. Its stylesheet follows system settings.
+Use Ctrl/Cmd+F to open the built-in find UI; editing uses the same widget as the imperative example.
 
 `declarative` 展示最小声明式组合及稳定 Document，样式随系统设置重建。
 Ctrl/Cmd+F 打开查找栏；编辑行为由同一个命令式控件提供。
@@ -124,10 +124,10 @@ Markdown subset, without a preview or embedded Go highlighting.
 
 Use the gutter arrows to fold structured markup, headings or code fences.
 Control+G opens line[:column] navigation; Escape returns focus to the editor.
-The example keeps GoToBar and FindBar mutually exclusive.
+SourceView keeps its go-to and find/replace interfaces mutually exclusive.
 
 点击侧栏箭头折叠结构、标题或围栏；Control+G 打开行[:列]跳转，Escape 返回编辑器。
-示例显式让跳转栏与查找栏互斥。XML/HTML 的确认名称对支持输入/删除联动，撤销只需一次。
+SourceView 自动让跳转栏与查找栏互斥。XML/HTML 的确认名称对支持输入/删除联动，撤销只需一次。
 
 The find panel preserves multiline query/replacement text. Alt+Enter inserts
 newlines; Enter/Shift+Enter navigates. Toggle .* for Go regular expressions,

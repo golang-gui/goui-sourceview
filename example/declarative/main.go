@@ -1,5 +1,5 @@
-// Run: go run ./example/declarative. A minimal declarative editor with an
-// optional FindBar, a stable Document and Integrated window chrome.
+// Run: go run ./example/declarative. A minimal declarative editor with
+// built-in find and go-to UI, a stable Document and Integrated window chrome.
 package main
 
 import (
@@ -8,7 +8,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
-	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/theme/modern"
 	base "github.com/golang-gui/goui/ui"
@@ -30,12 +29,7 @@ func main() {
 					Content(
 						base.VBox(
 							base.HeaderBar(base.Label("Declarative SourceView")).Padding(8),
-							base.Overlay(
-								base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true).KeyBindings(bindings)).Style("source-view"),
-								base.OverlayItem(sourceui.FindBar("editor")).OnPosition(func(available, size geometry.Size, p *geometry.Point) {
-									p.X = max(0, available.Width-size.Width-8)
-								}),
-							).MainWeight(1),
+							base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true).KeyBindings(bindings)).Style("source-view"),
 						),
 					),
 			)

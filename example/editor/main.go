@@ -103,30 +103,8 @@ func run() error {
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(editor)
-	viewport := gui.NewOverlay()
-	viewport.SetChild(scroll)
+	viewport := scroll
 	viewport.SetMainWeight(1)
-	find := source.NewFindBar()
-	find.SetTarget(editor)
-	viewport.AddOverlay(find)
-	viewport.ConnectOverlayPosition(find, func(available, size geometry.Size, p *geometry.Point) {
-		p.X = max(0, available.Width-size.Width-8)
-	})
-
-	goTo := source.NewGoToBar()
-	goTo.SetTarget(editor)
-	viewport.AddOverlay(goTo)
-	viewport.ConnectOverlayPosition(goTo, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
-	find.ConnectOpen(func(open bool) {
-		if open {
-			goTo.Close()
-		}
-	})
-	goTo.ConnectOpen(func(open bool) {
-		if open {
-			find.Close()
-		}
-	})
 
 	current := documents[0]
 	status := gui.NewLabel("")
@@ -172,7 +150,7 @@ func run() error {
 		files.AddChild(choice)
 	}
 	files.AddChild(button("Find / Replace", func() {
-		if err := find.Open(true); err != nil {
+		if err := editor.ShowReplace(); err != nil {
 			status.SetText(err.Error())
 		}
 	}))
@@ -237,7 +215,6 @@ func run() error {
 	editor.ConnectSelection(func(gui.TextSelection) { update() })
 	editor.ConnectChange(func(gui.TextChange) { update() })
 	editor.ConnectError(func(err error) { status.SetText(err.Error()) })
-	find.ConnectError(func(err error) { status.SetText(err.Error()) })
 	show(current)
 	if err := win.Show(); err != nil {
 		return err

@@ -62,7 +62,7 @@ func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
 }
 
 // findFrom includes the starting position, unlike advancing past a current
-// match. FindBar uses it to reconcile results after changing the search scope.
+// match. findBar uses it to reconcile results after changing the search scope.
 func (v *SourceView) findFrom(start int, backward bool) (textedit.Range, bool) {
 	r, ok := v.search.Find(v.document.model, start, backward)
 	if ok {
@@ -126,11 +126,11 @@ func (v *SourceView) ReplaceAll(text string) (int, error) {
 func (v *SourceView) SearchError() error { return v.search.Err() }
 
 // HighlightSearchMatches reports whether search backgrounds are drawn.
-// New views highlight matches, including searches made without a FindBar.
+// New views highlight matches, including searches made without a findBar.
 func (v *SourceView) HighlightSearchMatches() bool { return v.highlightSearchMatches }
 
 // SetHighlightSearchMatches changes presentation only. Query, navigation,
-// replacement and ordinary text selection are unaffected. FindBar enables it
+// replacement and ordinary text selection are unaffected. findBar enables it
 // on open and disables it when closing or releasing an open search session.
 func (v *SourceView) SetHighlightSearchMatches(highlight bool) {
 	if !v.Destroyed() && v.highlightSearchMatches != highlight {

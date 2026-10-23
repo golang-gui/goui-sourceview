@@ -1,6 +1,6 @@
 # 界面语言
 
-SourceView 的编辑菜单、可选 GoToBar 和 FindBar 使用 GOUI `mlang`，内置英语 `en`、简中 `zh-CN`、
+SourceView 的编辑菜单、内置定位和查找栏 使用 GOUI `mlang`，内置英语 `en`、简中 `zh-CN`、
 日语 `ja`、韩语 `ko`、德语 `de`、法语 `fr`、俄语 `ru`、阿拉伯语 `ar`。
 地区标签按 GOUI 的 BCP 47 匹配契约处理，未匹配语言和 `und` 回退英语。
 实现与验证见 [多语言验收](PlanLocalization.md)。

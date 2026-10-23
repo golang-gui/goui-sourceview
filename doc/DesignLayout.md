@@ -1,6 +1,6 @@
 # SourceView 布局、滚动与呈现设计
 
-> 状态：首版实现规格。独立 SourceView 叶子控件复用 typography 与文本几何，
+> 状态：首版实现规格。独立 SourceView 复用 typography 与文本几何，
 > 不使用 TextView 的布局或私有缓存。原生 Tab 配置依赖 [G2](DesignGOUIIntegration.md)。
 
 实现入口：`layout.go` 管理测量、估计、可见行映射、命中、光标和滚动定位；
@@ -40,7 +40,8 @@ SourceView 继续独立管理语法、折叠投影和装饰；不等待后端增
 ## 1. Widget 与滚动组合
 
 SourceView 嵌入 WidgetBase，实现 Widget、IMClient、Scrollable、
-ScrollIntoViewRequester。焦点、IME 和语义属于同一个 Widget；
+ScrollIntoViewRequester。正文的焦点、IME 和语义属于 SourceView；内部配套输入
+保留各自的焦点、IME、选择与语义，不参与正文滚动范围。
 行号是该 Widget 的源码侧栏，不为每一行创建子 Widget。
 
 使用方式为 SourceView 放入 GOUI ScrollView。Scrollable 路径把 SourceView 安排为

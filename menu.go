@@ -110,6 +110,7 @@ func (v *SourceView) runCommand(c Command) {
 
 func (v *SourceView) installContextMenu() {
 	c := gui.NewContextMenuEventController()
+	c.SetPhase(gui.PhaseTarget)
 	c.ConnectRequest(func(ctx gui.EventContext) {
 		if !v.mounted || !gui.IsEnabled(v) {
 			return

@@ -56,10 +56,6 @@ func main() {
 	scroll.SetChild(v)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)
-	bar := source.NewGoToBar()
-	bar.SetTarget(v)
-	overlay.AddOverlay(bar)
-	overlay.ConnectOverlayPosition(bar, func(a, s geometry.Size, p *geometry.Point) { p.X = max(0, a.Width-s.Width-8) })
 	win.SetWidget(overlay)
 	must(win.Show())
 	win.SetFocusedWidget(v)
@@ -89,23 +85,23 @@ func main() {
 	})
 	steps = append(steps, func() {
 		key(events.KeyG, control)
-		check(bar.Opened(), "Control G")
+		check(panelVisible(v, "sourceview-goto-bar"), "Control G")
 		must(win.CommitText("999:1"))
 		key(events.KeyEnter, 0)
-		check(bar.Opened() && v.Selection().Caret == 4, "invalid position moved/closed")
+		check(panelVisible(v, "sourceview-goto-bar") && v.Selection().Caret == 4, "invalid position moved/closed")
 	})
 	steps = append(steps, func() {
 		key(events.KeyA, primary)
 		must(win.CommitText("2:2"))
 		key(events.KeyEnter, 0)
-		check(!bar.Opened() && v.Focused() && v.Selection().Caret == 14, "Unicode goto")
+		check(!panelVisible(v, "sourceview-goto-bar") && v.Focused() && v.Selection().Caret == 14, "Unicode goto")
 	})
 	steps = append(steps, func() {
 		v.SetReadOnly(true)
 		key(events.KeyG, control)
-		check(bar.Opened(), "readonly goto")
+		check(panelVisible(v, "sourceview-goto-bar"), "readonly goto")
 		key(events.KeyEscape, 0)
-		check(!bar.Opened() && v.Focused(), "Escape focus")
+		check(!panelVisible(v, "sourceview-goto-bar") && v.Focused(), "Escape focus")
 	})
 	index := 0
 	complete := false
@@ -124,4 +120,18 @@ func main() {
 	must(timer.Start(200 * time.Millisecond))
 	app.Run()
 	check(complete, "closed early")
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
 }

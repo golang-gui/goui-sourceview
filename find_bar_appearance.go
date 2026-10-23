@@ -34,7 +34,7 @@ var findIcons = func() map[string]gui.IconSource {
 	return icons
 }()
 
-func (b *FindBar) buildSurface() {
+func (b *findBar) buildSurface() {
 	b.content = &findSurface{bar: b}
 	b.content.SetLayoutManager(&findBarLayout{bar: b})
 	b.content.SetVisible(false)
@@ -146,8 +146,8 @@ func (b *FindBar) buildSurface() {
 
 type findAppearance struct{ surface, normal, focused, disabled, invalid styleBox }
 
-func (b *FindBar) StyleChanged() { b.updateAppearance() }
-func (b *FindBar) updateAppearance() {
+func (b *findBar) StyleChanged() { b.updateAppearance() }
+func (b *findBar) updateAppearance() {
 	name := b.StyleName()
 	if name == "" {
 		name = "sourceview.find"
@@ -169,7 +169,7 @@ func (b *FindBar) updateAppearance() {
 // A surface's shadow is reserved inside ordinary widget bounds.
 type findSurface struct {
 	gui.WidgetBase
-	bar *FindBar
+	bar *findBar
 }
 
 func (s *findSurface) Paint(p gui.Painter) {
@@ -197,7 +197,7 @@ func (s *findSurface) Paint(p gui.Painter) {
 
 // Layout addresses ordinary visible children by identity.
 type findBarLayout struct {
-	bar               *FindBar
+	bar               *findBar
 	rowHeight         float32
 	replacementHeight float32
 	controlsHeight    float32

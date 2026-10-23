@@ -88,7 +88,7 @@ func main() {
 	row := gui.NewLinearBox(layout.DirectionHorizontal)
 	row.SetCrossAlign(layout.CrossStretch)
 	var editors [2]*source.SourceView
-	var bars [2]*source.FindBar
+	var bars [2]gui.Widget
 	var overlays [2]*gui.Overlay
 	var scopes [2]*gui.StyleScope
 	for i := range editors {
@@ -101,23 +101,23 @@ func main() {
 		overlay := gui.NewOverlay()
 		overlay.SetChild(scroll)
 		overlay.SetMainWeight(1)
-		bar := source.NewFindBar()
-		bar.SetTarget(v)
-		overlay.AddOverlay(bar)
-		overlay.ConnectOverlayPosition(bar, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
+
 		scope := gui.NewStyleScope()
 		scope.SetMainWeight(1)
 		scope.SetStyleSheet(modern.Sheet(modern.Options{Dark: i == 1, FontSize: float32(*fontSize)}))
 		scope.SetChild(overlay)
 		scopes[i] = scope
 		row.AddChild(scope)
-		editors[i], bars[i], overlays[i] = v, bar, overlay
+		editors[i], bars[i], overlays[i] = v, nil, overlay
 	}
 	win.SetWidget(row)
 	must(win.Show())
 	key := func(k events.Key, mods events.Modifiers) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
+		}
+		for i, v := range editors {
+			bars[i] = panel(v, "sourceview-find-bar")
 		}
 	}
 	primary, _ := gui.ModPrimary.Resolve()
@@ -132,7 +132,7 @@ func main() {
 	var before [2]geometry.Rectangle
 	var controlTops [2]map[gui.Widget]float32
 	var beforeScroll [2]float32
-	inputScroll := func(bar *source.FindBar, field string) *gui.ScrollView {
+	inputScroll := func(bar gui.Widget, field string) *gui.ScrollView {
 		return named(bar, field).Parent().Parent().(*gui.ScrollView)
 	}
 	checkControls := func(i int, field string, remember bool) {
@@ -235,7 +235,7 @@ func main() {
 			}
 		case 1:
 			for i, bar := range bars {
-				check(bar.Opened() && !bar.ReplaceMode(), "collapsed open state")
+				check(bar.Visible() && !named(bar, "Replacement").Visible(), "collapsed open state")
 				check(editors[i].Rect() == before[i], "overlay changed editor allocation")
 				input := named(bar, "Find")
 				for _, child := range bar.Children() {
@@ -247,7 +247,7 @@ func main() {
 				}
 				// Native font metrics differ by platform. The row's allocated
 				// input height plus its 2-DIP frame and 26-DIP panel chrome is exact.
-				check(bar.Rect().Width == 512 && bar.Rect().Height == input.Rect().Height+28, fmt.Sprintf("compact natural bounds: bar=%v input=%v", bar.Rect(), input.Rect()))
+				check(bar.Rect().Width == min(float32(512), max(0, editors[i].Rect().Width-16)) && bar.Rect().Height == input.Rect().Height+28, fmt.Sprintf("compact natural bounds: bar=%v input=%v", bar.Rect(), input.Rect()))
 				check(named(bar, "Match case").Snapshot().Attributes[widgets.CheckInfoKey].(widgets.CheckInfo).State == widgets.CheckChecked, "selected option semantics")
 				minInput := float32(90)
 				if *fontSize == 14 {
@@ -274,7 +274,7 @@ func main() {
 			}
 		case 2:
 			for i, bar := range bars {
-				check(bar.ReplaceMode() && bar.Rect().Height == 2*(named(bar, "Find").Rect().Height+2)+30, "expanded compact bounds")
+				check(named(bar, "Replacement").Visible() && bar.Rect().Height == 2*(named(bar, "Find").Rect().Height+2)+30, "expanded compact bounds")
 				checkControls(i, "Find", false)
 				checkControls(i, "Replacement", true)
 				sample(i, i == 1, fmt.Sprintf("%d-expanded", i))
@@ -299,7 +299,7 @@ func main() {
 				key(events.KeyEnter, 0)
 				check(editors[i].Selection().Range().End > 0, "narrow Enter search")
 				key(events.KeyEscape, 0)
-				check(!bar.Opened() && editors[i].Focused(), "narrow close focus")
+				check(!bar.Visible() && editors[i].Focused(), "narrow close focus")
 			}
 			must(win.DispatchEvent(events.SizeEvent{Width: 1040, Height: 400, PixelWidth: 1040 * scale, PixelHeight: 400 * scale}))
 		case 5:
@@ -312,8 +312,8 @@ func main() {
 				check(named(bar, "Previous").Visible() && named(bar, "Match case").Visible(), "wide controls not restored")
 			}
 			scopes[1].SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: float32(*fontSize)}))
-			for _, bar := range bars {
-				bar.SetReplaceMode(true)
+			for i, bar := range bars {
+				must(editors[i].ShowReplace())
 				win.SetFocusedWidget(named(bar, "Find"))
 				key(events.KeyA, primary)
 				must(win.CommitText("one\none\none"))
@@ -426,4 +426,18 @@ func main() {
 	must(timer.Start(200 * time.Millisecond))
 	app.Run()
 	check(done, "appearance verification aborted")
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
 }

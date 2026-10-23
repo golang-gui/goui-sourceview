@@ -17,19 +17,17 @@ import (
 	"github.com/golang-gui/goui/style"
 )
 
-// GoToBar is an optional floating line/column input. Mount it in an Overlay in
-// the editor's Root. It borrows its target and does not own document state.
-type GoToBar struct {
+// goToBar is the editor-owned line/column input.
+type goToBar struct {
 	gui.WidgetBase
+	pointer       *gui.MotionEventController
 	target        *SourceView
 	surface       *gotoSurface
 	row           *gui.LinearBox
 	input         *gui.TextInput
 	status        *gui.Label
 	close         *gui.Button
-	keys          *gui.KeyEventController
 	lifetime      signal.Handles
-	attached      bool
 	language      signal.Handle
 	mounted, open bool
 	epoch         uint64
@@ -37,9 +35,12 @@ type GoToBar struct {
 	errorSignal   signal.Signal1[error]
 }
 
-func NewGoToBar() *GoToBar {
-	b := &GoToBar{}
+func newGoToBar() *goToBar {
+	b := &goToBar{}
 	b.SetLayoutManager(layout.NewFillLayout())
+	b.SetVisible(false)
+	b.pointer = gui.NewMotionEventController()
+	b.AddEventController(b.pointer)
 	b.surface = &gotoSurface{bar: b}
 	l := layout.NewLinearLayout(layout.DirectionVertical)
 	l.Padding = 12
@@ -69,9 +70,6 @@ func NewGoToBar() *GoToBar {
 	b.status.SetStyleName("sourceview.find.status")
 	b.surface.WidgetBase.AddChild(b.surface, b.row)
 	b.surface.WidgetBase.AddChild(b.surface, b.status)
-	b.keys = gui.NewKeyEventController()
-	b.keys.SetPhase(gui.PhaseCapture)
-	b.keys.ConnectKeyDown(b.key)
 	keys := gui.NewKeyEventController()
 	keys.SetPhase(gui.PhaseCapture)
 	keys.ConnectKeyDown(b.key)
@@ -91,8 +89,8 @@ func NewGoToBar() *GoToBar {
 	b.refresh()
 	return b
 }
-func (b *GoToBar) Target() *SourceView { return b.target }
-func (b *GoToBar) SetTarget(v *SourceView) {
+func (b *goToBar) Target() *SourceView { return b.target }
+func (b *goToBar) SetTarget(v *SourceView) {
 	if b.Destroyed() || v == b.target {
 		return
 	}
@@ -111,35 +109,35 @@ func (b *GoToBar) SetTarget(v *SourceView) {
 		b.connect()
 	}
 }
-func (b *GoToBar) Query() string { return b.input.Text() }
-func (b *GoToBar) SetQuery(text string) {
+func (b *goToBar) Query() string { return b.input.Text() }
+func (b *goToBar) SetQuery(text string) {
 	if !b.Destroyed() {
 		b.input.SetText(text)
 	}
 }
-func (b *GoToBar) Opened() bool { return b.open }
-func (b *GoToBar) ConnectError(fn func(error)) signal.Handle {
+func (b *goToBar) Opened() bool { return b.open }
+func (b *goToBar) ConnectError(fn func(error)) signal.Handle {
 	return b.errorSignal.Connect(func(err error) {
 		if !b.Destroyed() {
 			fn(err)
 		}
 	})
 }
-func (b *GoToBar) ConnectOpen(fn func(bool)) signal.Handle {
+func (b *goToBar) ConnectOpen(fn func(bool)) signal.Handle {
 	return b.openSignal.Connect(func(open bool) {
 		if !b.Destroyed() && b.open == open {
 			fn(open)
 		}
 	})
 }
-func (b *GoToBar) liveTarget() *SourceView {
+func (b *goToBar) liveTarget() *SourceView {
 	v := b.target
 	if b.Destroyed() || !b.mounted || v == nil || v.Destroyed() || !v.mounted || v.Root() != b.Root() || b.Root() == nil {
 		return nil
 	}
 	return v
 }
-func (b *GoToBar) Open() error {
+func (b *goToBar) Open() error {
 	v := b.liveTarget()
 	if v == nil {
 		return ErrNotMounted
@@ -162,6 +160,7 @@ func (b *GoToBar) Open() error {
 	b.input.SetText(fmt.Sprintf("%d:%d", line+1, utf8.RuneCountInString(prefix)+1))
 	changed := !b.open
 	b.open = true
+	b.SetVisible(true)
 	b.surface.SetVisible(true)
 	b.refresh()
 	host.SetFocusedWidget(b.input)
@@ -174,7 +173,7 @@ func (b *GoToBar) Open() error {
 	}
 	return nil
 }
-func (b *GoToBar) Close() {
+func (b *goToBar) Close() {
 	if b.Destroyed() || !b.open {
 		return
 	}
@@ -182,6 +181,7 @@ func (b *GoToBar) Close() {
 	b.open = false
 	b.epoch++
 	b.surface.SetVisible(false)
+	b.SetVisible(false)
 	if focus {
 		if v := b.liveTarget(); v != nil && visible(v) {
 			if host, ok := b.Root().(gui.EventTarget); ok {
@@ -193,34 +193,19 @@ func (b *GoToBar) Close() {
 		b.openSignal.Emit(false)
 	}
 }
-func (b *GoToBar) connect() {
-	if b.target == nil || b.target.Destroyed() {
-		return
+func (b *goToBar) connect() {
+	if b.liveTarget() != nil {
+		b.lifetime = signal.Handles{b.target.searchState.Connect(b.refresh)}
 	}
-	b.lifetime = signal.Handles{b.target.ConnectMount(b.attach), b.target.ConnectUnmount(func() { b.detach(); b.Close() }), b.target.searchState.Connect(b.refresh)}
-	b.attach()
 }
-func (b *GoToBar) attach() {
-	if b.attached || b.liveTarget() == nil {
-		return
-	}
-	b.target.AddEventController(b.keys)
-	b.attached = true
-}
-func (b *GoToBar) detach() {
-	if b.target != nil {
-		b.target.RemoveEventController(b.keys)
-	}
-	b.attached = false
-}
-func (b *GoToBar) disconnect() { b.detach(); b.lifetime.Disconnect(); b.lifetime = nil }
-func (b *GoToBar) key(ctx gui.EventContext, e events.KeyEvent) {
+func (b *goToBar) disconnect() { b.lifetime.Disconnect(); b.lifetime = nil }
+func (b *goToBar) key(ctx gui.EventContext, e events.KeyEvent) {
 	if b.liveTarget() == nil || !visible(b) || !gui.IsEnabled(b) {
 		return
 	}
 	command, bound := b.liveTarget().keyCommand(e)
 	if bound && command == CommandGoTo {
-		if err := b.Open(); err != nil {
+		if err := b.target.ShowGoTo(); err != nil {
 			b.errorSignal.Emit(err)
 		}
 		e.PreventDefault()
@@ -236,7 +221,7 @@ func (b *GoToBar) key(ctx gui.EventContext, e events.KeyEvent) {
 		ctx.StopPropagation()
 	}
 }
-func (b *GoToBar) refresh() {
+func (b *goToBar) refresh() {
 	if b.Destroyed() {
 		return
 	}
@@ -254,7 +239,7 @@ func (b *GoToBar) refresh() {
 	b.status.SetText(message)
 	b.status.SetStyleName(name)
 }
-func (b *GoToBar) submit() {
+func (b *goToBar) submit() {
 	v := b.liveTarget()
 	if v == nil {
 		return
@@ -298,7 +283,7 @@ func gotoOffset(m *textedit.Model, query string) (int, error) {
 	}
 	return r.Start + at, nil
 }
-func (b *GoToBar) Snapshot() gui.WidgetInfo {
+func (b *goToBar) Snapshot() gui.WidgetInfo {
 	info := b.WidgetBase.Snapshot()
 	info.Role = "sourceview-goto-bar"
 	info.SetAttribute("goui.sourceview.goto", map[string]any{"open": b.open})
@@ -308,7 +293,7 @@ func (b *GoToBar) Snapshot() gui.WidgetInfo {
 type gotoSurface struct {
 	gui.WidgetBase
 	inset float32
-	bar   *GoToBar
+	bar   *goToBar
 }
 
 func (s *gotoSurface) Measure(c layout.Constraint) layout.Measurement {

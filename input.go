@@ -12,11 +12,26 @@ import (
 )
 
 func (v *SourceView) installInput() {
+	companions := gui.NewKeyEventController()
+	companions.SetPhase(gui.PhaseCapture)
+	companions.ConnectKeyDown(func(ctx gui.EventContext, event events.KeyEvent) {
+		if !v.mounted || !gui.IsEnabled(v) || !visible(v) {
+			return
+		}
+		command, bound := v.keyCommand(event)
+		if bound && (command == CommandFind || command == CommandReplace || command == CommandGoTo) {
+			v.runBoundCommand(command)
+			event.PreventDefault()
+			ctx.StopPropagation()
+		}
+	})
+	v.AddEventController(companions)
 	key := gui.NewKeyEventController()
 	key.SetPhase(gui.PhaseBubble)
 	key.ConnectKeyDown(v.keyDown)
 	v.AddEventController(key)
 	drag := gui.NewDragEventController()
+	drag.SetPhase(gui.PhaseTarget)
 	drag.SetThreshold(0)
 	drag.ConnectBegin(func(point geometry.Point, mods events.Modifiers) {
 		if !v.mounted || !gui.IsEnabled(v) {

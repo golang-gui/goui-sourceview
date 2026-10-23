@@ -38,8 +38,9 @@ type IndentOptions struct {
 	InsertSpaces          bool
 }
 
-// SourceView is an independent editable leaf. Put it in gui.ScrollView to add
-// scrollbars; set that host's StyleName to "source-view" for a shared outer
+// SourceView is an editable code control with built-in find, replace and go-to
+// interfaces. Put it in gui.ScrollView to add scrollbars; set that host's
+// StyleName to "source-view" for a shared outer
 // frame. Construction owns no model/settings/root subscriptions.
 type SourceView struct {
 	gui.WidgetBase
@@ -128,7 +129,10 @@ type SourceView struct {
 	caretOn          bool
 	menu             *editMenu
 
-	// Search state is independent of FindBar's lifetime.
+	// Search state is independent of the internal find UI lifetime.
+	findBar                *findBar
+	goToBar                *goToBar
+	companionEpoch         uint64
 	query                  SearchQuery
 	highlightSearchMatches bool
 	search                 *editor.Search
@@ -646,6 +650,7 @@ func (v *SourceView) mount() {
 
 func (v *SourceView) unmount() {
 	v.mounted = false
+	v.HidePanel()
 	v.mountEpoch++
 	v.reveal = nil
 	v.cancelPaste()

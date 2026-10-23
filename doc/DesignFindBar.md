@@ -1,10 +1,12 @@
-# 可选查找替换浮层
+# 内置查找、替换与定位界面
 
-SourceView 自身提供查询、匹配高亮、结果导航与替换 API。FindBar 是同仓的可选命令式
-配套控件，应用选择是否创建。推荐通过 GOUI Overlay 放在编辑器滚动视口的右上角，
-与正文处在同一窗口，不挤占编辑区。宿主仍可选择自己的容器。
-它不是 SourceView 的内置子控件，不拥有编辑器、Document 或第二份历史。
-交互与生命周期见 [初次实现记录](PlanFindBar.md)，新外观验收见 [浮层记录](PlanFindBarAppearance.md)。
+SourceView 默认具备查找、替换和行列定位界面。配套栏是控件自己的私有子树，
+首次打开时创建，隐藏后保留输入状态；不再公开 FindBar、GoToBar 及其构造函数。
+本轮契约取代早期“由应用挂载可选栏”的设计，旧 Plan 文档保留当时的实现和验证记录。
+
+用户只需将 SourceView 放进 GOUI ScrollView。查询、结果导航和替换仍有独立的值／操作 API，
+应用可以实现自己的工具栏或查找界面。关闭默认按键使用已有 KeyBindings，
+不增加面板开关、控制器或 VisiblePanel 声明式状态。
 
 ## 参考与取舍
 
@@ -28,33 +30,40 @@ SourceView 自身提供查询、匹配高亮、结果导航与替换 API。FindB
 
 以上分别是参考源码与文档的证据。下面是本项目自己的契约，不表示与参考编辑器完全一致。
 
-## API 与组合
+## 公开操作与内部组合
 
 ```go
-find := sourceview.NewFindBar()
-find.SetTarget(editor)
-viewport := gui.NewOverlay()
-viewport.SetChild(scroll) // scroll.Child() == editor
-viewport.AddOverlay(find)
-viewport.ConnectOverlayPosition(find, func(available, size geometry.Size, p *geometry.Point) {
-    p.X = max(0, available.Width-size.Width-8)
-})
-// 挂载后由应用调用，或通过编辑器中的快捷键打开：
-err := find.Open(true) // false 只查找；true 展开替换
+editor := sourceview.NewSourceView()
+scroll := gui.NewScrollView()
+scroll.SetStyleName("source-view")
+scroll.SetChild(editor)
+// 挂载后由菜单调用；正常键盘输入使用同一操作路径。
+err := editor.ShowFind()
+err = editor.ShowReplace()
+err = editor.ShowGoTo()
+editor.HidePanel()
 ```
 
-- `Target` / `SetTarget(*SourceView)` 借用目标。nil 解除绑定；目标与查找栏须挂载在同一 Root。
-- `Open(bool) error` 打开并聚焦查询输入；未挂载、无目标或跨 Root 返回 ErrNotMounted。
-  若取消编辑器预编辑的回调使操作过期，返回 ErrOperationChanged。
-- `Opened`、`Close`、`ReplaceMode` / `SetReplaceMode`、`Replacement` / `SetReplacement`
-  分别管理打开状态、替换行和替换文字，不触发模型修改。
-- `ConnectOpen(func(bool))` 通知实际打开/关闭；`ConnectError(func(error))` 报告用户操作失败。
-  API 自己返回错误；按钮/按键入口消费并通知一次，无默认错误弹窗。
-- 一个编辑器由一个配套栏处理打开快捷键。应用自己的栏不需要创建 FindBar，直接使用 SourceView API。
+- ShowFind 聚焦查询，按既有规则从正文选区初始化查询；ShowReplace 同时展开替换。
+- ShowGoTo 以当前光标的 1 起始行／码点列初始化定位输入。
+- 三项要求已挂载且未销毁的编辑器；未挂载返回 ErrNotMounted，禁用返回 ErrDisabled。
+  焦点、预编辑和挂载回调改变操作上下文时取消旧操作，返回 ErrOperationChanged。
+- 同一视图的查找／替换与定位互斥；不同视图的输入、打开状态、订阅及配色相互独立。
+- HidePanel 保留查询、替换文字和正文选区；关闭正在显示的查找栏时隐藏搜索背景并释放选区查找范围。
+  只有焦点原本在栏内时才归还正文。外部回调产生新的操作时，不继续关闭新的界面。
+- 同步调用通过返回值反馈错误；按键与栏内按钮的失败通过 SourceView.ConnectError 报告一次。
+- 不提供公开栏对象、Target、外部定位或面板可见状态绑定。
 
-FindBar 的外层保持普通 Widget 的 Visible；内部内容初始关闭。关闭时自然测量高度为零，
-不会因为声明式通用 Visible 默认值恢复而重新打开/关闭。普通 GOUI TextView/ScrollView、Button 和
-`widgets.CheckButton` 拥有各自的输入、样式、原生资源和语义，选项有真实选中指示。
+内部栏是 SourceView 的普通 GUI 子控件，锚定当前视口右上，距边缘 8 DIP。
+不参与正文 ContentSize、HeightIndex、折行宽度或滚动偏移。可用宽高减去边距后，
+用公开约束测量栏并安排真实子树。关闭时整个栏隐藏，不留下拦截正文的空矩形。
+ScrollView 仍拥有滚动状态和滚动条；SourceView 无需另建滚动系统或公共 Editor 包装类型。
+
+正文拖选和右键菜单使用 Target 事件阶段；正文的文本鼠标指针不向内部工具栏继承。
+栏内输入保持自己的命中、焦点、IME、
+选择和滚动。编辑器的 Capture 控制器仅统一处理 Find/Replace/GoTo 命令；普通编辑
+仍要求正文获得焦点，Enter、Shift+Enter、Escape 由各输入界面处理。
+普通 TextView/ScrollView、Button 和 widgets.CheckButton 保留原生资源和语义。
 上下项、关闭和替换使用原始矢量线条图标，并提供本地化名称；Aa 和 ab 是实际的
 ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦点和禁用语义。
 选区选项采用四角选区边界和文本行的 16 DIP 矢量图形，名称为本地化的“在选区中查找”，
@@ -83,7 +92,7 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
 - 紧凑字段使用 ScrollVertical / MainWeight(0)。外框由 FindBar 绘制，TextView 维持无边框内容样式；
   文字、Placeholder、光标和输入几何由 GOUI 共用的排版规则负责。
   完整自动增高体验需要 GOUI 的内容驱动 Measure 修正；v0.2.0 尚不含此行为，
-  本地通过 go.work 联调，正式依赖升级与验收见 PlanTextViewSizing.md。
+  当前 GOUI v0.3.0 已具备该能力，依赖升级与验收见 PlanTextViewSizing.md。
 - 小于 400 DIP 隐藏计数；小于 285 DIP 隐藏输入选项、上下项和替换动作。
   输入、展开/关闭及快捷键保留；恢复宽度时恢复控制项，不清除查询或替换文字。
 - FindBar 不再拥有内部固定 StyleScope，也不从代码 Scheme 推导界面配色。
@@ -119,7 +128,7 @@ SourceView.Search 是查询的唯一来源。输入变更立即 SetSearch；外�
 搜索背景显隐由 SourceView.HighlightSearchMatches / SetHighlightSearchMatches(bool) 管理，
 新建视图默认 true，裸 SourceView 的程序化搜索行为不变；该属性只参与绘制，不改变查询、
 计数、替换或普通选区。FindBar 打开时启用，关闭或释放已打开的目标时停用；关闭范围通过
-SetSearchRange(nil) 实现。换目标、目标卸载或栏卸载时清理旧会话，打开状态重新挂载时恢复。
+SetSearchRange(nil) 实现。编辑器卸载时关闭栏并清理会话，重新挂载后由用户再次打开。
 同一 Document 的其他视图不受影响；不引入全局搜索会话或通用装饰注册体系。
 语义上的查询、普通选区与导航仍可用，不因背景隐藏伪装为空文本。
 范围/选区通知可重入，操作继续前核对生命周期、目标、Document、修订、查询、范围及选区代次。
@@ -136,7 +145,7 @@ SetSearchRange(nil) 实现。换目标、目标卸载或栏卸载时清理旧会
 | 打开替换 | Ctrl+H | Cmd+Option+F |
 | 下一项/上一项 | F3 / Shift+F3 | Cmd+G / Cmd+Shift+G，同时接受 F3 / Shift+F3 |
 
-前两项只在配套栏挂载、目标同 Root 且栏可见可用时注册处理；裸 SourceView 保留给应用。
+默认绑定由 SourceView 自身处理，无需先创建或挂载配套栏。焦点在正文或其内部配套输入时生效。
 表中为默认绑定。打开/替换及结果导航读取目标 SourceView 当前 KeyBindings，解除后旧键不再消费；
 字段本地的 Enter/Shift+Enter/Escape 保持不变，见 [命令快捷键](DesignKeyBindings.md)。
 末项属于 SourceView 的核心导航，栏内输入聚焦时由栏转发到同一目标。所有绑定精确匹配修饰键，
@@ -155,27 +164,37 @@ SetSearchRange(nil) 实现。换目标、目标卸载或栏卸载时清理旧会
 立即清零旧结果；打开后继续请求帧。显式 Find/Replace 仍遵守既有同步操作契约，
 分块计数不代表全部搜索操作已经异步化，也不是对超大文件时延的性能承诺。
 
-挂载期连接目标生命周期、私有搜索状态通知、Root 帧与语言通知。目标卸载时撤掉按键控制器和
-搜索订阅，重新挂载且 Root 相同时再连接；栏卸载时全部释放。构造及脱离 Root 时不订阅目标。
-更换目标先释放旧连接；两次相同 SetTarget 不重复注册。控件由宿主销毁，不删除或销毁借用的编辑器。
+SourceView 拥有内部栏及其生命周期。栏挂载期间连接私有搜索状态、Root 帧和语言通知，
+卸载时释放。编辑器卸载先关闭栏，再释放正文资源；允许重挂载，旧的原生资源和计数任务不能继续运行。
+懒创建不向正文重复安装按键控制器，也不按重建次数增加订阅。
 
 语义快照使用 `sourceview-find-bar` 角色；`sourceview.find` 属性给出打开/替换状态、计数及完整性。
 输入、选项、按钮保留 GOUI 的角色、有效 Enabled、名称、边界和动作，装饰不产生伪交互动作。
 
-## 声明式绑定
+## 声明式接入与取消快捷键
 
 ```go
-base.Overlay(
-    base.ScrollView(sourceui.SourceView().ID("editor").Document(document)),
-    base.OverlayItem(sourceui.FindBar("editor")).OnPosition(
-        func(available, size geometry.Size, p *geometry.Point) {
-            p.X = max(0, available.Width-size.Width-8)
-        }),
-)
+base.ScrollView(
+    sourceui.SourceView().Document(document).AcceptsTab(true),
+).Style("source-view")
 ```
 
-`ui.FindBar(targetID)` 在既有 BuildContext.AfterUpdate 中，按同 Root 的显式 ID 解析并 SetTarget。
-每次协调后重新解析，不引入隐式依赖追踪、窗口特例或新的调度器。缺失/错误类型目标解除旧绑定。
-Replacement/Open/ReplaceMode 仅在显式指定时受声明控制；OnOpen/OnError 的连接随协调更新和释放。
-SourceView.Search 同样仅在显式指定时受声明控制，普通重建保留交互查询；传入空 SearchQuery 可清除。
-SourceView.HighlightSearchMatches 同样仅在显式指定时受声明控制，未配置的普通重建保留关闭后的显隐状态。
+不声明配套控件或显示状态；重建不会因默认值恢复而关闭、打开或重新初始化内部栏。
+已有 ui.FindBar、ui.GoToBar 及根包对应公开类型删除，调用方迁移为 SourceView 上的操作。
+
+```go
+bindings := sourceview.DefaultKeyBindings()
+delete(bindings, sourceview.CommandFind)
+delete(bindings, sourceview.CommandGoTo)
+sourceui.SourceView().Document(document).KeyBindings(bindings)
+```
+
+解除绑定后不消费对应按键，应用快捷键可正常收到。查找、替换、定位的直接方法仍可用。
+若也要解除替换键，删除 CommandReplace；不为某个具体组合键另建布尔开关。
+
+## 验证边界
+
+包内验证未挂载调用、资源隔离与清理；窗口用例验证默认打开、重新绑定、取消绑定、
+重复重建、视图移除与重挂载、互斥、栏内拖选及正文事件隔离、焦点恢复、计数、替换、
+亮暗主题和缩放。测试输入经过正常 Window.DispatchEvent/CommitText，
+桌面观察另在独立 X11 会话进行。实际结果及未执行的平台组合见 Plan。

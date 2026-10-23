@@ -154,6 +154,7 @@ func (v *SourceView) LayoutVisible(viewport geometry.Size, offset geometry.Point
 }
 
 func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point, hostOffset bool) {
+	defer v.arrangeCompanions()
 	if v.viewport != viewport || v.offset != offset {
 		v.closeCompletion()
 	}

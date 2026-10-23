@@ -166,8 +166,12 @@ func main() {
 			before := a.Selection()
 			key(events.KeyA, primary|events.ModifierShift)
 			check(a.Selection() == before && fallback == 1, "unexpected Shift+A binding")
+			// 内置查找默认处理 Ctrl/Cmd+F；显式解除绑定后验证应用入口。
+			bindings := a.KeyBindings()
+			delete(bindings, source.CommandFind)
+			must(a.SetKeyBindings(bindings))
 			key(events.KeyF, primary)
-			check(fallback == 2, "bare editor intercepted application find")
+			check(fallback == 2, "unbound Find intercepted application shortcut")
 			a.SetReadOnly(true)
 			key(events.KeyEnter, primary)
 			check(fallback == 2 && doc.Model().Text() == "one two one", "readonly key leaked or edited")

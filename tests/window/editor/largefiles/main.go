@@ -125,10 +125,7 @@ func run() (result error) {
 	overlay := gui.NewOverlay()
 	overlay.SetMainWeight(1)
 	overlay.SetChild(scroll)
-	bar := source.NewFindBar()
-	bar.SetTarget(v)
-	overlay.AddOverlay(bar)
-	overlay.ConnectOverlayPosition(bar, func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })
+	var bar gui.Widget
 	row := gui.NewLinearBox(layout.DirectionHorizontal)
 	row.SetCrossAlign(layout.CrossStretch)
 	row.SetMainWeight(1)
@@ -143,6 +140,7 @@ func run() (result error) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
 		}
+		bar = panel(v, "sourceview-find-bar")
 	}
 	primary, _ := gui.ModPrimary.Resolve()
 	alt, _ := gui.ModAlt.Resolve()
@@ -364,7 +362,7 @@ func run() (result error) {
 	add("open find", func() {
 		v.SetSelection(textedit.Selection{})
 		key(events.KeyF, primary)
-		check(bar.Opened() && named(bar, "Find").Focused(), "find shortcut")
+		check(panelVisible(v, "sourceview-find-bar") && named(bar, "Find").Focused(), "find shortcut")
 		key(events.KeyA, primary)
 		must(win.CommitText(searchText))
 	})
@@ -405,7 +403,7 @@ func run() (result error) {
 		} else {
 			key(events.KeyH, primary)
 		}
-		check(bar.ReplaceMode(), "replace shortcut")
+		check(named(bar, "Replacement").Visible(), "replace shortcut")
 		win.SetFocusedWidget(named(bar, "Replacement"))
 		must(win.CommitText("REPLACED"))
 		key(events.KeyEnter, 0)
@@ -427,7 +425,7 @@ func run() (result error) {
 		}
 		assertContent(edits...)
 	})
-	add("undo all once", func() { undo(); assertContent(); bar.Close(); v.SetSearch(source.SearchQuery{}) })
+	add("undo all once", func() { undo(); assertContent(); v.HidePanel(); v.SetSearch(source.SearchQuery{}) })
 	add("readonly input and history", func() {
 		v.SetReadOnly(true)
 		revision := doc.Model().Revision()
@@ -621,4 +619,18 @@ func (p *paintProbe) Paint(draw gui.Painter) {
 	must(err)
 	log.Printf("actual painter=%T scale=%g", img, draw.PixelScale())
 	img.Destroy()
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
 }

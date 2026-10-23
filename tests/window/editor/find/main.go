@@ -1,15 +1,13 @@
-// Optional FindBar and declarative lifecycle verification. Requires a desktop,
-// native typography and fonts. Run: go run ./tests/window/editor/find (Linux
-// without IME service: XMODIFIERS=@im=none). Initially two independent editors
-// and a closed optional bar are declared. Automatically verifies Ctrl/Cmd+F,
-// replacement opening (macOS Cmd+Option+F; others Ctrl+H), query seeding,
-// Enter/Shift+Enter, checkbox keyboard/pointer input, replacement and undo,
-// read-only controls, close/focus, declarative rebuild/retarget/removal and
-// chunked count invalidation. All interaction uses Window.DispatchEvent and
-// CommitText. Public model/setter calls prepare scenarios, not simulated input.
-// No clipboard/files/settings change. Real IME/system shortcuts and mixed DPI
-// need separate manual checks. Restart to reset. Exits nonzero on assertion or
-// early close; closes automatically on success. Records native typography.
+// 内置查找、替换和声明式生命周期验证。需要真实桌面、窗口管理器、原生排版和字体。
+// 启动：go run ./tests/window/editor/find；Linux 无输入法服务时设置 XMODIFIERS=@im=none。
+// 初始声明两个独立编辑器，不创建外部配套控件；内部栏首次打开时才创建。
+// 自动通过 Window.DispatchEvent/CommitText 验证默认查找和替换键、选区取词、上下项、
+// 选项、替换和撤销、只读、关闭、搜索背景、栏内拖选及其右键菜单与正文隔离。
+// 验证无关重建保留输入、多视图隔离、解除绑定后应用可收到按键、移除后取消旧交互、
+// 重挂载创建新子树、分块计数失效、回调更换文档及聚焦期间销毁窗口。
+// 模型和方法调用仅准备场景，不作为模拟输入捷径。按实际日志记录后端和缩放。
+// 不修改剪贴板、文件或系统设置；重启复位。成功自动关闭，提前关闭或断言失败以非零退出。
+// 真实 IME、系统拦截和混合 DPI 仍需手工验证。
 package main
 
 import (
@@ -55,11 +53,13 @@ func main() {
 	runtime.LockOSThread()
 	doc := source.NewDocument("one ONE stone one")
 	other := source.NewDocument("beta beta")
-	show, target := true, "a"
+	show := true
+	bindingsA, bindingsB := source.DefaultKeyBindings(), source.DefaultKeyBindings()
 	started, complete := false, false
-	var originalBar *source.FindBar
+	var originalBar gui.Widget
+	var originalOwner *source.SourceView
 	var a, b *source.SourceView
-	baseControllers, otherControllers, fallback, opened, errors := 0, 0, 0, 0, 0
+	baseControllers, otherControllers, fallback, errors := 0, 0, 0, 0
 	partialReset := false
 	step := 0
 	must(base.Run("org.golang-gui.SourceViewFindVerification", func(app base.App) base.RootView {
@@ -68,7 +68,7 @@ func main() {
 			app.TickFunc(350*time.Millisecond, func() {
 				win := app.FindWindow("main")
 				check(win != nil, "window missing")
-				a = app.FindWidget("main", "a").(*source.SourceView)
+				a, _ = app.FindWidget("main", "a").(*source.SourceView)
 				b = app.FindWidget("main", "b").(*source.SourceView)
 				key := func(k events.Key, mods events.Modifiers) {
 					for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
@@ -92,7 +92,10 @@ func main() {
 						must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: p, Button: events.PointerButtonLeft}))
 					}
 				}
-				bar, _ := app.FindWidget("main", "find").(*source.FindBar)
+				var bar gui.Widget
+				if a != nil {
+					bar = panel(a, "sourceview-find-bar")
+				}
 				count := func(want int) {
 					check(bar != nil, "bar missing")
 					state := bar.Snapshot().Attributes["sourceview.find"].(map[string]any)
@@ -100,9 +103,9 @@ func main() {
 				}
 				switch step {
 				case 0:
-					check(bar != nil && bar.Target() == a && !bar.Opened(), "declarative target not attached")
-					originalBar = bar
-					baseControllers = len(a.EventControllers()) - 1
+					check(bar == nil, "closed editor eagerly created a find subtree")
+					originalOwner = a
+					baseControllers = len(a.EventControllers())
 					otherControllers = len(b.EventControllers())
 					s := gui.NewShortcut(gui.KeyGesture{Key: gui.KeyF, Modifiers: gui.ModPrimary})
 					s.ConnectActivate(func() { fallback++ })
@@ -110,9 +113,31 @@ func main() {
 					win.SetFocusedWidget(a)
 					a.SetSelection(textedit.Selection{Anchor: 3, Caret: 0})
 					key(events.KeyF, primary)
-					check(bar.Opened() && named(bar, "Find").Focused() && a.Search().Text == "one" && !doc.Model().CanUndo(), "query seed, focus or history")
+					bar = panel(a, "sourceview-find-bar")
+					originalBar = bar
+					check(bar.Visible() && named(bar, "Find").Focused() && a.Search().Text == "one" && !doc.Model().CanUndo(), "query seed, focus or history")
 				case 1:
 					count(3)
+					// 栏内拖选和右击不能触发正文的拖选或编辑菜单。
+					input := named(bar, "Find").(*gui.TextView)
+					selection := a.Selection()
+					bounds := input.Snapshot().Bounds
+					for i, kind := range []events.EventType{events.PointerDown, events.PointerMove, events.PointerUp} {
+						x := bounds.X + 4
+						if i > 0 {
+							x = bounds.X + 24
+						}
+						must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: geometry.Point{X: x, Y: bounds.Y + bounds.Height/2}, Button: events.PointerButtonLeft}))
+					}
+					check(a.Selection() == selection && input.Focused() && input.Selection().Anchor != input.Selection().Caret, "find drag changed source selection or lost input focus")
+					check(a.Cursor() == nil, "code text cursor leaked into the internal UI")
+					for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
+						must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: geometry.Point{X: bounds.X + 8, Y: bounds.Y + bounds.Height/2}, Button: events.PointerButtonRight}))
+					}
+					check(a.Selection() == selection && input.Focused(), "find right-click opened the source menu or moved its selection")
+					check(len(win.Popovers()) == 1, "input context menu missing or duplicated")
+					key(events.KeyEscape, 0)
+					check(bar.Visible() && input.Focused() && len(win.Popovers()) == 0, "input menu dismissal closed the find UI")
 					key(events.KeyEnter, 0)
 					check(a.Selection() == (textedit.Selection{Anchor: 10, Caret: 13}), "find enter")
 					key(events.KeyEnter, events.ModifierShift)
@@ -127,7 +152,7 @@ func main() {
 					key(events.KeySpace, 0)
 					check(a.Search().WholeWord, "word toggle keyboard")
 					openReplace()
-					check(bar.ReplaceMode(), "replace shortcut")
+					check(named(bar, "Replacement").Visible(), "replace shortcut")
 				case 3:
 					count(3)
 					field := named(bar, "Replacement")
@@ -141,7 +166,7 @@ func main() {
 					check(doc.Model().Text() == "one ONE stone one", "replace undo")
 					win.SetFocusedWidget(named(bar, "Find"))
 					key(events.KeyEscape, 0)
-					check(!bar.Opened() && a.Focused() && a.Search().Text == "one" && !a.HighlightSearchMatches(), "close focus/query/highlights")
+					check(!bar.Visible() && a.Focused() && a.Search().Text == "one" && !a.HighlightSearchMatches() && a.Cursor() == gui.CursorText, "close focus/query/highlights/cursor")
 					key(events.KeyF3, 0)
 					check(a.Selection() == (textedit.Selection{Anchor: 4, Caret: 7}), "closed-bar search navigation")
 					check(!a.HighlightSearchMatches(), "F3 restored closed-bar highlights")
@@ -152,34 +177,44 @@ func main() {
 					a.SetReadOnly(false)
 					app.RequestUpdate()
 				case 5:
-					check(bar == originalBar && bar.Opened() && a.Search().Text == "ONE" && len(a.EventControllers()) == baseControllers+1, "rebuild cleared state or duplicated controller")
-					target = "b"
-					app.RequestUpdate()
-				case 6:
-					check(bar.Target() == b && len(a.EventControllers()) == baseControllers && len(b.EventControllers()) == otherControllers+1, "retarget leaked binding")
-					check(!a.HighlightSearchMatches() && b.HighlightSearchMatches(), "retarget leaked search decorations")
-					win.SetFocusedWidget(a)
-					key(events.KeyF, primary)
-					check(fallback == 1, "old editor still intercepts find")
+					check(bar == originalBar && bar.Visible() && a.Search().Text == "ONE" && len(a.EventControllers()) == baseControllers, "rebuild cleared state or duplicated controller")
 					win.SetFocusedWidget(b)
 					key(events.KeyF, primary)
-					check(b.Search().Text == "" && named(bar, "Find").Focused(), "retarget reused old query")
+					otherBar := panel(b, "sourceview-find-bar")
+					check(otherBar != nil && otherBar != bar && otherBar.Parent() == b && bar.Parent() == a && b.Search().Text == "", "editors shared a companion or query")
+					delete(bindingsA, source.CommandFind)
+					app.RequestUpdate()
+				case 6:
+					check(len(a.EventControllers()) == baseControllers && len(b.EventControllers()) == otherControllers, "lazy creation changed owner controllers")
+					a.HidePanel()
+					check(!a.HighlightSearchMatches(), "hidden find retained search decorations")
+					win.SetFocusedWidget(a)
+					key(events.KeyF, primary)
+					check(fallback == 1 && !bar.Visible(), "disabled Find binding was consumed")
+					win.SetFocusedWidget(b)
+					key(events.KeyF, primary)
+					check(panelVisible(b, "sourceview-find-bar") && named(b, "Find").Focused(), "another view lost its own default bindings")
 					show = false
 					app.RequestUpdate()
 				case 7:
-					check(bar == nil && len(b.EventControllers()) == otherControllers, "removed bar retained binding")
-					check(!b.HighlightSearchMatches(), "removed open bar retained search decorations")
+					check(a == nil && originalOwner.Root() == nil && !originalBar.Visible(), "removed editor retained its owned companion")
+					check(originalOwner.ShowFind() == source.ErrNotMounted, "unmounted editor opened private UI")
+					b.HidePanel()
+					delete(bindingsB, source.CommandFind)
+					must(b.SetKeyBindings(bindingsB))
 					win.SetFocusedWidget(b)
 					key(events.KeyF, primary)
-					check(fallback == 2, "removed panel intercepted find")
+					check(fallback == 2 && !panelVisible(b, "sourceview-find-bar"), "removed binding intercepted Find")
 					show = true
-					target = "a"
+					bindingsA = source.DefaultKeyBindings()
 					app.RequestUpdate()
 				case 8:
-					check(bar != nil && bar != originalBar && bar.Target() == a, "bar remount")
+					check(a != originalOwner && bar == nil, "editor remount retained an old private subtree")
 					a.SetSelection(textedit.Selection{})
 					win.SetFocusedWidget(a)
 					key(events.KeyF, primary)
+					bar = panel(a, "sourceview-find-bar")
+					check(bar != nil && bar != originalBar, "remounted editor did not create a new owned bar")
 					doc.Model().SetText(strings.Repeat("x", 200000))
 					a.SetSearch(source.SearchQuery{Text: "x"})
 					var handle interface{ Disconnect() }
@@ -196,7 +231,7 @@ func main() {
 					check(partialReset, "did not exercise partial count invalidation")
 					count(2)
 					openReplace()
-					bar.SetReplacement("R")
+					named(bar, "Replacement").(*gui.TextView).Model().SetText("R")
 					a.SetSelection(textedit.Selection{})
 					key(events.KeyEnter, 0)
 				case 10:
@@ -215,33 +250,33 @@ func main() {
 					key(events.KeyEnter, 0)
 					h.Disconnect()
 					check(a.Document() == replacementDoc && replacementDoc.Model().Text() == "keep reset" && a.Selection() == (textedit.Selection{Anchor: 2, Caret: 2}), "replacement callback state overwritten")
-					check(opened >= 3 && errors == 0, "companion signals")
+					check(errors == 0, "internal companion errors were not forwarded exactly once")
 					probe := app.FindWidget("main", "probe").(*scaleProbe)
 					check(probe.scale > 0, "painter probe not rendered")
-					log.Printf("PASS optional find/replace, keyboard/pointer, counting, history, readonly, declarative rebuild/retarget/removal; typography=%s painter=%s scale=%g", gui.App.Typography().Name(), probe.painter, probe.scale)
+					log.Printf("PASS built-in find/replace, keyboard/pointer, counting, history, readonly, declarative rebuild/isolation/removal; typography=%s painter=%s scale=%g", gui.App.Typography().Name(), probe.painter, probe.scale)
 					complete = true
-					bar.Close()
-					h = bar.ConnectOpen(func(open bool) {
-						if open {
+					a.HidePanel()
+					h = a.ConnectFocused(func(focused bool) {
+						if !focused {
 							win.Destroy()
 						}
 					})
 					key(events.KeyF, primary)
 					h.Disconnect()
-					check(bar.Destroyed() && a.Destroyed() && b.Destroyed(), "host did not destroy companion/editor")
-					check(bar.Open(false) == source.ErrNotMounted, "destroyed companion opened")
+					check(a.Destroyed() && b.Destroyed() && !bar.Visible(), "host did not release the internal UI/editor")
+					check(a.ShowFind() == source.ErrNotMounted, "destroyed editor opened internal UI")
 				}
 				step++
 			})
 		}
-		var find base.View
+		var first base.View
 		if show {
-			find = sourceui.FindBar(target).ID("find").OnOpen(func(bool) { opened++ }).OnError(func(error) { errors++ })
+			first = base.ScrollView(sourceui.SourceView().ID("a").Document(doc).KeyBindings(bindingsA).OnError(func(error) { errors++ })).Style("source-view").ID("a-scroll").MainWeight(1)
 		}
-		return base.Window("main").Title("Optional SourceView find / replace").Size(760, 500).Content(
+		return base.Window("main").Title("Built-in SourceView find / replace").Size(760, 500).Content(
 			base.VBox(
-				base.Overlay(base.ScrollView(sourceui.SourceView().ID("a").Document(doc)).Style("source-view"), base.OverlayItem(find).OnPosition(func(available, size geometry.Size, p *geometry.Point) { p.X = max(0, available.Width-size.Width-8) })).MainWeight(1),
-				base.ScrollView(sourceui.SourceView().ID("b").Document(other)).Style("source-view").MainWeight(1),
+				first,
+				base.ScrollView(sourceui.SourceView().ID("b").Document(other).KeyBindings(bindingsB)).Style("source-view").ID("b-scroll").MainWeight(1),
 				newProbe(),
 			).CrossAlign(layout.CrossStretch))
 	}))
@@ -274,4 +309,18 @@ func (p *scaleProbe) Paint(draw gui.Painter) {
 	must(err)
 	defer img.Destroy()
 	p.painter = fmt.Sprintf("%T", img)
+}
+
+// 只读取普通 Widget 语义和可见性，不访问私有控件类型。
+func panel(v *source.SourceView, role string) gui.Widget {
+	for _, child := range v.Children() {
+		if child.Snapshot().Role == gui.Role(role) {
+			return child
+		}
+	}
+	return nil
+}
+func panelVisible(v *source.SourceView, role string) bool {
+	w := panel(v, role)
+	return w != nil && w.Visible()
 }
