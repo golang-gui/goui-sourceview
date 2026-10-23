@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
 	"golang.org/x/text/unicode/bidi"
 )
@@ -108,10 +107,10 @@ func removeProbePrefix(lines []typography.TextLine, clusters []typography.TextCl
 	return mappedLines, mappedClusters, nil
 }
 
-func fragmentProbeDifference(pieces []textedit.Fragment, wantLines []typography.TextLine, wantClusters []typography.TextCluster) error {
+func fragmentProbeDifference(pieces []probeFragment, wantLines []typography.TextLine, wantClusters []typography.TextCluster) error {
 	lineAt, clusterAt := 0, 0
-	y := float64(0)
 	for _, piece := range pieces {
+		y := piece.y
 		lines, clusters := piece.Metrics()
 		firstLine := lineAt
 		for _, line := range lines {
@@ -139,7 +138,6 @@ func fragmentProbeDifference(pieces []textedit.Fragment, wantLines []typography.
 			}
 			clusterAt++
 		}
-		y += float64(piece.Size().Height)
 	}
 	if lineAt != len(wantLines) || clusterAt != len(wantClusters) {
 		return fmt.Errorf("incomplete metrics: %d/%d lines, %d/%d clusters", lineAt, len(wantLines), clusterAt, len(wantClusters))

@@ -18,9 +18,15 @@ import (
 // windows. The long-RLO guard in layout_fragments_native_test.go demonstrates
 // why successful ASCII samples alone cannot establish that equivalence.
 type boundedFragmentProbe struct {
-	pieces         []textedit.Fragment
+	pieces         []probeFragment
 	maxInput       int
 	first, longest time.Duration
+}
+
+// 片段的占用范围不包含下一行的间距。单独保存由重叠行基线确定的放置坐标。
+type probeFragment struct {
+	textedit.Fragment
+	y float64
 }
 
 func probeBoundedFragments(ctx typography.Context, text string, format typography.TextFormat, width float32, limit int) (boundedFragmentProbe, error) {
@@ -29,6 +35,7 @@ func probeBoundedFragments(ctx typography.Context, text string, format typograph
 
 func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format typography.TextFormat, width float32, limit int, prefixAt func(int) (string, error)) (boundedFragmentProbe, error) {
 	var result boundedFragmentProbe
+	var nextBaseline float64
 	for start := 0; start < len(text); {
 		began := time.Now()
 		prefix := ""
@@ -66,10 +73,11 @@ func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format
 			return result, err
 		}
 		if end < len(text) {
-			if len(lines) < 2 {
+			if len(lines) < 3 {
 				return result, fmt.Errorf("probe: no complete line within bounded input")
 			}
-			fragment, err = fragment.LineRange(0, len(lines)-1)
+			// 保留一条完整重叠行，再排除可能被输入上限截断的末行。
+			fragment, err = fragment.LineRange(0, len(lines)-2)
 			if err != nil {
 				return result, err
 			}
@@ -77,7 +85,14 @@ func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format
 		if fragment.Range().End <= start {
 			return result, fmt.Errorf("probe: no progress")
 		}
-		result.pieces = append(result.pieces, fragment)
+		y := float64(0)
+		if len(result.pieces) > 0 {
+			y = nextBaseline - float64(lines[0].Baseline)
+		}
+		result.pieces = append(result.pieces, probeFragment{Fragment: fragment, y: y})
+		if end < len(text) {
+			nextBaseline = y + float64(lines[len(lines)-2].Baseline)
+		}
 		result.maxInput = max(result.maxInput, len(prefix)+end-start)
 		elapsed := time.Since(began)
 		if len(result.pieces) == 1 {
@@ -118,8 +133,8 @@ func TestBoundedFragmentProbeMatchesSimpleParagraphs(t *testing.T) {
 					t.Fatal("input was not bounded", result.maxInput, len(result.pieces))
 				}
 				lineAt, clusterAt := 0, 0
-				y := float64(0)
 				for _, piece := range result.pieces {
+					y := piece.y
 					lines, clusters := piece.Metrics()
 					firstLine := lineAt
 					for _, line := range lines {
@@ -142,13 +157,75 @@ func TestBoundedFragmentProbeMatchesSimpleParagraphs(t *testing.T) {
 						}
 						clusterAt++
 					}
-					y += float64(piece.Size().Height)
 				}
 				if lineAt != len(wantLines) || clusterAt != len(wantClusters) {
 					t.Fatalf("incomplete output: %d/%d lines %d/%d clusters", lineAt, len(wantLines), clusterAt, len(wantClusters))
 				}
 			}
 		})
+	}
+}
+
+// 每行四字节、字形高 12、行距 15、首行顶部 2.75。占用高度与行推进不同，
+// 不依赖宿主字体或原生库也能复现按片段 Size.Height 累加导致的位置漂移。
+type probeGapContext struct{ typography.Context }
+type probeGapLayout struct {
+	typography.TextLayout
+	text string
+}
+
+func (probeGapContext) NewTextLayout(text string, _ typography.TextFormat, _, _ float32) (typography.TextLayout, error) {
+	return &probeGapLayout{text: text}, nil
+}
+func (p *probeGapLayout) Destroy() {}
+func (p *probeGapLayout) MeasureSize() (float32, float32) {
+	return 20, float32((len(p.text)+3)/4-1)*15 + 14.75
+}
+func (p *probeGapLayout) MeasureMetrics() ([]typography.TextLine, []typography.TextCluster) {
+	var lines []typography.TextLine
+	var clusters []typography.TextCluster
+	for start := 0; start < len(p.text); start += 4 {
+		index := len(lines)
+		y, baseline := float32(index*15)+2.75, float32(index*15)+12
+		length := min(4, len(p.text)-start)
+		lines = append(lines, typography.TextLine{Start: start, Length: length, Y: y, Width: float32(length * 5), Height: 12, Baseline: baseline})
+		for i := range length {
+			clusters = append(clusters, typography.TextCluster{Start: start + i, Length: 1, X: float32(i * 5), Y: y, Width: 5, Height: 12, LineIndex: index})
+		}
+	}
+	return lines, clusters
+}
+
+func TestBoundedProbeKeepsInterlineGaps(t *testing.T) {
+	result, err := probeBoundedFragments(probeGapContext{}, strings.Repeat("a", 80), typography.TextFormat{}, 20, 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.pieces) < 2 || result.maxInput > 32 {
+		t.Fatal("未保留有界的独立输入", len(result.pieces), result.maxInput)
+	}
+	next := 0
+	for _, piece := range result.pieces {
+		if piece.Range().Start != next {
+			t.Fatal("片段遗漏或重复源文本", piece.Range(), next)
+		}
+		lines, clusters := piece.Metrics()
+		for _, line := range lines {
+			index := (piece.Range().Start + line.Start) / 4
+			if float32(float64(line.Y)+piece.y) != float32(index*15)+2.75 || float32(float64(line.Baseline)+piece.y) != float32(index*15)+12 {
+				t.Fatalf("行距丢失：byte=%d y=%g baseline=%g", piece.Range().Start+line.Start, float64(line.Y)+piece.y, float64(line.Baseline)+piece.y)
+			}
+		}
+		for _, cluster := range clusters {
+			index := (piece.Range().Start + cluster.Start) / 4
+			if float32(float64(cluster.Y)+piece.y) != float32(index*15)+2.75 {
+				t.Fatal("簇未使用与行相同的放置坐标", cluster)
+			}
+		}
+		next = piece.Range().End
+	}
+	if next != 80 {
+		t.Fatal("未覆盖完整文本", next)
 	}
 }
 
