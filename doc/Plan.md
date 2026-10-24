@@ -626,3 +626,17 @@ G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失�
 - 临时窗口程序用 120001 字节正文（40000 空格 + x + 80000 空格，另有 CRLF），在 1.5x 横向滚至 600000 DIP，断言 All 的可见标记、前段 Trailing 无标记、尾段 Trailing 与 All 一致；输出 PASS。程序及图片均在仓库外；这是正确性验证，不作性能提升结论。
 - Windows amd64、macOS arm64：`GOWORK=off CGO_ENABLED=0 go build ./...` 交叉构建通过，未执行原生桌面。物理 IME、跨屏 DPI、GPU 后端未在本轮验收；未将交叉构建等同平台运行。
 - 未修改 GOUI、go.mod 或全局 Go 配置。桌面副作用仅限独立测试显示，结束后关闭本次应用及显示服务。
+
+
+## 2026-10-24 超长行 End 光标显露修正
+
+- SourceView 基线 `094d46b`，GOUI 基线 `69c8d99`，两仓现有 go.work 联调。原始 `/data/xuyang8/temp/test.json` 为 184500131 字节，仅只读使用；example/temp 未修改。
+- 在独立 Xvnc/Xfwm4/Software/Pango 桌面复现：End 已将选区置为 184500131，但右侧尾部和光标被裁掉。新增纯逻辑回归用 27000003 个确定 10-DIP 字符，在 400-DIP 视口发现实际光标 X=420，直接复现需左移三次的舍入缺陷。
+- 显露完成条件改用局部矩形；全局请求用高精度边界与残差宽高保守转换。ContentSize 的既有边距向外转换；配套 GOUI ScrollView 先高精度运算再定向转换滚动值及最大范围。未修改 typography 或新增公共 API。
+- 新增 `tests/window/editor/paragraph -file FILE -nowrap -verify-end`：专用光标颜色、正常 Window.DispatchEvent、每步字节选区及 RenderWidget 光标像素断言，检查 End、三次 Left、三次 Right，以及最大化和恢复。仅适用于尾部至少三个 ASCII 字符的单行样本；像素识别允许原有抗锯齿覆盖，要求离右边缘至少 2 DIP，不使用字体金图。
+- 旧版使用 Go build overlay 指向两仓 HEAD 的生产文件，保留新回归不改工作区源码；同一程序在 allocation=0/step=0 等待 20 秒后失败：光标字节位置正确但没有可见光标像素。修复后原文件在应用缩放 1x、1.5x、2x 均通过全部 21 次光标像素/位置检查及原生窗口状态变化。测试中的 RenderWidget 属于主动观察，心跳不作为编辑性能前后对照。
+- Linux amd64 / Go 1.25.8：本仓 `go test ./...`、`go test -race ./...`、`go vet ./...` 通过；最终补充侧栏开关与不同宽度回归及针对性 race 通过。GOUI `go test ./... -p 1 -timeout 120s` 在同一独立桌面通过，ScrollView 专项及 vet 通过。
+- Windows amd64、macOS arm64 的 `CGO_ENABLED=0 go build ./...`（工作区）通过，未执行远端原生桌面或混合 DPI。未做物理 IME 验收。
+- `GOWORK=off go test . -run '^TestLongHorizontalEndRevealsCaretImmediately$' -count=1` 构建失败：已声明 GOUI v0.3.0 缺少基线已经依赖的 ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice；保持 go.mod 不变，不将联调通过表述为独立发布验证通过。
+- 首次目标排版尚未准备好时，快速连续方向键仍可能使用旧视区的几何，另作导航调度问题记录；本次修正已准备几何的显露精度，不将这一既有调度问题标为已解决。
+- 图片、日志、overlay、可执行文件均在仓库外；既有 GOUI 图片未新增或改变。验证结束关闭本次独立桌面及应用，不提交其他用户文件。

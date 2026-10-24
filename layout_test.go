@@ -1953,3 +1953,46 @@ func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
 		t.Fatal("Home 停在缓存边界", v.Selection())
 	}
 }
+
+// 27,000,003 个 10-DIP 字符使全文坐标的 float32 间隔达到 32 DIP。
+// 旧路径在 End 后的实际光标 X=420，400-DIP 视口需要按三次左键才能完整显示。
+func TestLongHorizontalEndRevealsCaretImmediately(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText(strings.Repeat("x", 27_000_003))
+	v.SetShowLineNumbers(false)
+	v.SetFoldingEnabled(false)
+	v.SetWrapMode(WrapNone)
+	observe(t, v)
+	v.document.engine.Advance(time.Time{})
+	v.context = &boundedParagraphContext{t: t}
+	t.Cleanup(v.dropLayouts)
+	scroll := gui.NewScrollView()
+	scroll.SetChild(v)
+	for i, width := range []float32{400, 401, 409.5, 640} {
+		v.SetShowLineNumbers(i%2 == 1)
+		scroll.Arrange(geometry.Rect(0, 0, width, 120))
+		v.navigate(events.KeyHome, false)
+		v.navigate(events.KeyEnd, false)
+		for range 16 {
+			scroll.Arrange(scroll.Rect())
+		}
+		if v.Selection().Caret != v.Document().Model().Len() {
+			t.Fatal("End 改变了逻辑位置", v.Selection())
+		}
+		rect, ok := v.cachedCaretRect()
+		if !ok || rect.X < v.gutter || rect.X+rect.Width > v.viewport.Width || v.reveal != nil {
+			t.Fatalf("End 后光标没有立即完整可见: width=%g caret=%v viewport=%v scroll=%g content=%v", width, rect, v.viewport, scroll.ScrollX(), v.ContentSize())
+		}
+		for range 3 {
+			before := v.Selection().Caret
+			v.navigate(events.KeyArrowLeft, false)
+			for range 4 {
+				scroll.Arrange(scroll.Rect())
+			}
+			rect, ok = v.cachedCaretRect()
+			if v.Selection().Caret != before-1 || !ok || rect.X < v.gutter || rect.X+rect.Width > v.viewport.Width {
+				t.Fatal("逐字符左移不可见或跳字", v.Selection(), rect)
+			}
+		}
+	}
+}

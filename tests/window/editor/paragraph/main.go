@@ -3,6 +3,11 @@
 // 加 -textview 验证 GOUI TextView；默认验证 SourceView。可选 -plain 关闭 JSON 高亮。
 // -nowrap 验证水平长行：拖水平滚动条至中部，逐字符点击、左右键与连续拖选，
 // 跨 4 KiB 片段时不得跳字、断裂选区或停住；Home/End 到逻辑行边界。
+// -verify-end -nowrap 自动派发 End、三次 Left、三次 Right，在正常、最大化、恢复窗口下验证。
+// 每一步检查真实选区位置，并要求 RenderWidget 中出现可见的洋红光标像素；
+// 使用专用 Caret 色，与 JSON 语法颜色区分；sRGB 不透明输出，仅识别该色的覆盖像素，
+// 不依赖字体金图。允许准备目标排版及光标闪烁的等待，超时或提前关闭失败；成功自动关闭。
+// 此自动场景仅 SourceView，输入尾部应为至少三个 ASCII 字符，无额外文件写入。
 // 使用 GOUI_PLAT_PAINTER=software/opengl（Windows 另可 direct2d）及
 // GOUI_PLAT_SCALE=1/1.5/2 选择环境；Linux 无 IME 服务可设 XMODIFIERS=@im=none。
 // 初始：Modern、Integrated 窗口、自动换行、顶部工具栏、可编辑正文。
@@ -29,10 +34,12 @@ import (
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
+	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
+	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/theme/modern"
 )
@@ -110,7 +117,11 @@ func main() {
 	textview := flag.Bool("textview", false, "test GOUI TextView")
 	plain := flag.Bool("plain", false, "disable JSON highlighting")
 	nowrap := flag.Bool("nowrap", false, "disable line wrapping")
+	verifyEnd := flag.Bool("verify-end", false, "verify End/Left/Right caret visibility and resize (SourceView, -nowrap)")
 	flag.Parse()
+	if *verifyEnd && (*textview || !*nowrap) {
+		panic("-verify-end requires SourceView and -nowrap")
+	}
 	data, err := os.ReadFile(*file)
 	must(err)
 	app, err := gui.NewApplication("org.golang-gui.LongParagraph")
@@ -132,6 +143,7 @@ func main() {
 		if *nowrap {
 			v.SetWrapMode(gui.WrapNone)
 		}
+
 		widget = v
 		setSelection = v.SetSelection
 	} else {
@@ -143,6 +155,14 @@ func main() {
 		}
 		if !*plain {
 			must(v.Document().SetLanguage(language.JSON))
+		}
+		if *verifyEnd {
+			must(v.SetWhitespaceMode(source.WhitespaceAll))
+			colors := scheme.Light().Definition()
+			colors.Caret = color.NRGBA{R: 255, B: 255, A: 255}
+			custom, err := scheme.New(colors)
+			must(err)
+			v.SetScheme(custom)
 		}
 		widget = v
 		setSelection = v.SetSelection
@@ -215,6 +235,11 @@ func main() {
 	lastRect := geometry.Rectangle{}
 	lastVisible := textedit.Range{}
 	lastScroll := geometry.Point{}
+	verified := false
+	var verify func()
+	if *verifyEnd {
+		verify = endVerification(win, widget, scroll, model, &verified)
+	}
 	heartbeat := app.NewTimer()
 	defer heartbeat.Stop()
 	heartbeat.ConnectTimeout(func() {
@@ -262,6 +287,9 @@ func main() {
 				issued = time.Time{}
 			}
 		}
+		if verify != nil && ready {
+			verify()
+		}
 		if model.Revision() != lastRevision {
 			lastRevision = model.Revision()
 			fmt.Printf("EDIT revision=%d bytes=%d selection=%v\n", lastRevision, model.Len(), info.Selection)
@@ -270,5 +298,86 @@ func main() {
 	must(heartbeat.Start(16 * time.Millisecond))
 	must(win.Show())
 	app.Run()
+	if *verifyEnd && !verified {
+		panic("End verification closed before completion")
+	}
 	fmt.Printf("CLOSED maxGap=%s nativeMaxInput=%d nativeCalls=%d largestCreate=%s paints=%d colors=%d largestMetrics=%s largestRaster=%s\n", largest, context.maximum, context.calls, context.largest, context.paints, context.colors, context.metricsTime, context.rasterTime)
+}
+
+// 验证通过正常 Window 事件分发执行，不直接调用导航或改变模型。
+func endVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
+	keys := []events.Key{events.KeyEnd, events.KeyArrowLeft, events.KeyArrowLeft, events.KeyArrowLeft, events.KeyArrowRight, events.KeyArrowRight, events.KeyArrowRight}
+	states := []gui.WindowState{gui.WindowStateNormal, gui.WindowStateMaximized, gui.WindowStateNormal}
+	var previousSize geometry.Size
+	step, allocation := -1, 0
+	expected := 0
+	deadline := time.Now().Add(30 * time.Second)
+	issue := func() {
+		if step == 0 {
+			expected = model.Len()
+		} else if step <= 3 {
+			expected--
+		} else {
+			expected++
+		}
+		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
+			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: keys[step]}))
+		}
+		actual := widget.Snapshot().TextEditing
+		if actual == nil {
+			panic("missing editing snapshot")
+		}
+		if actual.Selection.Anchor != expected || actual.Selection.Caret != expected {
+			panic(fmt.Sprintf("navigation changed byte position: step=%d got=%v want=%d", step, actual.Selection, expected))
+		}
+		deadline = time.Now().Add(20 * time.Second)
+	}
+	return func() {
+		if !time.Now().Before(deadline) {
+			panic(fmt.Sprintf("caret not visible after End/arrow: allocation=%d step=%d selection=%d scroll=%g viewport=%v", allocation, step, expected, scroll.ScrollX(), widget.Rect()))
+		}
+		if step < 0 {
+			if allocation > 0 && widget.Rect().Size == previousSize {
+				return
+			}
+			step = 0
+			issue()
+			return
+		}
+		image, err := gui.RenderWidget(widget, 0)
+		must(err)
+		found := false
+		maxInkX := -1
+		scale := float64(image.Bounds().Dx()) / float64(widget.Rect().Width)
+		// 只检索正文光标颜色，单个部分覆盖像素也要与明亮/深色语法颜色分开。
+		for y := 0; y < min(image.Bounds().Dy(), int(64*scale)); y++ {
+			for x := 0; x < image.Bounds().Dx(); x++ {
+				r, g, b, a := image.At(x, y).RGBA()
+				if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
+					found = true
+					maxInkX = max(maxInkX, x)
+				}
+			}
+		}
+		if !found || float64(maxInkX) >= float64(image.Bounds().Dx())-2*scale {
+			return
+		}
+		fmt.Printf("CARET_VISIBLE allocation=%d step=%d selection=%d scroll=%g viewport=%v\n", allocation, step, expected, scroll.ScrollX(), widget.Rect().Size)
+		step++
+		if step < len(keys) {
+			issue()
+			return
+		}
+		allocation++
+		if allocation == len(states) {
+			*complete = true
+			fmt.Println("PASS End/Left/Right caret pixels and resize")
+			win.Destroy()
+			return
+		}
+		previousSize = widget.Rect().Size
+		win.RequestState(states[allocation])
+		deadline = time.Now().Add(10 * time.Second)
+		step = -1
+	}
 }

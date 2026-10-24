@@ -136,11 +136,11 @@ func (v *SourceView) Arrange(rect geometry.Rectangle) {
 
 func (v *SourceView) ContentSize() geometry.Size {
 	v.ensureHeights()
-	width := v.gutter + 2*padding + v.contentWidth
+	width := ceilCoordinate(float64(v.contentWidth) + float64(v.gutter) + 2*float64(padding))
 	if v.wrap != WrapNone {
 		width = v.viewport.Width
 	}
-	return geometry.Size{Width: max(v.viewport.Width, width), Height: 2*padding + v.heights.Total()}
+	return geometry.Size{Width: max(v.viewport.Width, width), Height: ceilCoordinate(float64(v.heights.Total()) + 2*float64(padding))}
 }
 
 func (v *SourceView) ensureHeights() {
@@ -440,23 +440,19 @@ func (v *SourceView) resolveReveal(measured bool) {
 	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
 		return
 	}
-	// ScrollView receives content coordinates. Include the fixed gutter in the
-	// requested width so a caret at its leading edge remains visible.
-	rect.X += v.offset.X - v.gutter
-	rect.Y += v.offset.Y
-	rect.Width += v.gutter + padding
+	// Test the actual local caret before converting it to coarse host coordinates.
 	if v.viewport.Width <= 0 || v.viewport.Height <= 0 {
 		return // Retain the request until the first usable allocation.
 	}
-	visible := func(start, length, offset, viewport float32) bool {
+	visible := func(start, length, viewport float32) bool {
 		// ScrollView rounds offsets to whole DIP and prefers the leading edge
 		// of a target larger than the viewport.
 		if length > viewport {
-			return offset <= start && start-offset < 1
+			return start >= 0 && start < 1
 		}
-		return start >= offset && start+length <= offset+viewport
+		return start >= 0 && float64(start)+float64(length) <= float64(viewport)
 	}
-	if measured && visible(rect.X, rect.Width, v.offset.X, v.viewport.Width) && visible(rect.Y, rect.Height, v.offset.Y, v.viewport.Height) {
+	if measured && visible(rect.X-v.gutter, rect.Width+v.gutter+padding, v.viewport.Width) && visible(rect.Y, rect.Height, v.viewport.Height) {
 		v.reveal = nil
 		v.captureAnchor()
 		return
@@ -478,10 +474,34 @@ func (v *SourceView) resolveReveal(measured bool) {
 	if !ok || v.reveal != request || !request.valid(v) || v.Destroyed() {
 		return
 	}
-	rect.X += v.offset.X - v.gutter
-	rect.Y += v.offset.Y
-	rect.Width += v.gutter + padding
-	v.scrollSignal.Emit(rect)
+	v.scrollSignal.Emit(v.revealBounds(rect))
+}
+
+// Keep the caret's viewport-local precision until the final host request.
+// The rectangle conservatively encloses the desired edges despite a coarse
+// float32 document origin. Width/height retain the small residual distances.
+func (v *SourceView) revealBounds(rect geometry.Rectangle) geometry.Rectangle {
+	x := float64(v.offset.X) + float64(rect.X) - float64(v.gutter)
+	y := float64(v.offset.Y) + float64(rect.Y)
+	right := float64(v.offset.X) + float64(rect.X) + float64(rect.Width) + float64(padding)
+	bottom := y + float64(rect.Height)
+	left, top := floorCoordinate(x), floorCoordinate(y)
+	return geometry.Rect(left, top, ceilCoordinate(right-float64(left)), ceilCoordinate(bottom-float64(top)))
+}
+
+func ceilCoordinate(value float64) float32 {
+	n := float32(value)
+	if float64(n) < value {
+		n = math.Nextafter32(n, float32(math.Inf(1)))
+	}
+	return n
+}
+func floorCoordinate(value float64) float32 {
+	n := float32(value)
+	if float64(n) > value {
+		n = math.Nextafter32(n, float32(math.Inf(-1)))
+	}
+	return n
 }
 
 func (v *SourceView) hit(point geometry.Point) textedit.Position {
