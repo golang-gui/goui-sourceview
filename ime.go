@@ -23,6 +23,15 @@ func (v *SourceView) preedit(text string, caret int) {
 	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
 		return
 	}
+	if v.delayInput(deferredInput{apply: func() { v.applyPreedit(text, caret) }, geometry: true}) {
+		return
+	}
+	v.applyPreedit(text, caret)
+}
+func (v *SourceView) applyPreedit(text string, caret int) {
+	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
+		return
+	}
 	if text == "" {
 		v.projection = nil
 		v.resumeFolding()
@@ -45,6 +54,15 @@ func (v *SourceView) preedit(text string, caret int) {
 	v.RevealSelection()
 }
 func (v *SourceView) commit(c gui.IMCommit) {
+	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
+		return
+	}
+	if v.delayInput(deferredInput{apply: func() { v.applyCommit(c) }, geometry: true, mutates: true}) {
+		return
+	}
+	v.applyCommit(c)
+}
+func (v *SourceView) applyCommit(c gui.IMCommit) {
 	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
 		return
 	}

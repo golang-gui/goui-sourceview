@@ -667,3 +667,52 @@ ContentSize 的正文范围与原有边距同样高精度相加后向上转换�
 通过正常 Window.DispatchEvent 派发 End/Left/Right，检查字节位置与真实光标像素，
 并最大化/恢复原生窗口。目标度量可按既有事件循环延迟准备，这项修复不改变
 排版准备期间的导航调度策略。
+
+
+### 16.3 目标度量未就绪时的编辑顺序（2026-10-24）
+
+End／文档末尾可以立即确定模型 byte 位置，但远处的 ParagraphLayout.GeometryAt
+可能返回 nil，表示其上下文还需要后续事件循环。此时不能拿当前视口的 Geometry
+计算 Left、删除或插入边界，否则会跳回前面的缓存窗口，后续输入也会修改错误位置。
+
+SourceView 在正常按键／IME 分发后保留私有输入批次：
+
+- 无需字形的文档首尾、NoWrap Home/End、全选及历史可直接执行。需要字形边界的
+  导航、选区、编辑、复制与补全，先准备当前 caret／anchor 的目标度量；已有批次
+  时，后续按键、提交文本和预编辑按到达顺序跟随，不抢先使用旧选区。
+- 度量准备复用 ParagraphLayout.GeometryAt 与既有帧队列，在 layoutStep 后处理。
+  每次最多执行 8 个操作，共用每视图 2 ms／全帧 4 ms 的软预算；单次原生调用不能
+  被硬中断，预算不承诺严格的最长回调时间。不扫描或同步排版整条逻辑行。
+- 若显式选区曾在未测量时只能按 rune 校正，执行编辑前再以目标实测 cluster
+  校正 caret／anchor，组合字符不因延迟布局被拆开。普通短段落保持原来的即时路径。
+- 只保留操作参数与调用闭包，不保留 EventContext 或原生 KeyEvent.Handled 指针。
+  后者只在本次分发中响应；快照与 change 信号始终反映已实际应用的模型状态。
+- 批次属于当前文档、修订、选区代次、挂载、语言、快捷键代次与只读状态；每次操作
+  前后验证。自身的一次修改可以推进批次，外部修改或回调替换上下文则取消余项。
+  有效的异步粘贴回复可推进所属批次；失效回复继续遵循既有取消契约，不能在后来
+  的选区补写旧文本。后续输入不会因为本批合法的换行、Tab 或粘贴而被当作外部修改。
+- Escape、失焦、原生窗口失焦、卸载及错误立即释放待处理项；禁用、隐藏或其他
+  上下文变化在继续处理前取消。显式 SetSelection、ReplaceSelection、Undo／Redo、
+  SelectLine 表达调用方的新操作，取消旧输入。Find／Replace／GoTo 立即切换焦点，
+  同时取消旧批次，避免用户在查询框的输入滞留在正文后面。
+
+批次由视图持有，空间随尚未执行的输入增长；每个已执行闭包立即释放，取消或销毁
+释放整个批次。它不保存原生资源、不跨线程，也不引入公开调度接口或另一套输入协议。
+公共编程式修改仍按现有同步契约运行；本节描述正常 GUI 输入的延迟准备策略。
+
+参考与取舍：
+
+- [GTK 4.20.2 gtktextview.c](https://github.com/GNOME/gtk/blob/4.20.2/gtk/gtktextview.c#L4741)
+  的源码用 idle 分批 validate；这支持继续复用事件循环准备度量，但没有证明 GTK
+  采用本节的输入批次。SourceView 的批次是对当前 GeometryAt 可暂不可用契约的适配。
+- [VS Code 1.105.0 CursorMoveCommands](https://github.com/microsoft/vscode/blob/1.105.0/src/vs/editor/common/cursor/cursorMoveCommands.ts#L51)
+  在行首移动中区分 model／view state；本项目同样区分逻辑文档端点与实测显示位置，
+  不引入其光标对象体系，也不以 UTF-16 位置替换既有 UTF-8 byte 坐标。
+- [Scintilla 2026-10-01 文档的位置说明](https://www.scintilla.org/ScintillaDoc.html#SCI_POSITIONRELATIVE)
+  区分文档 byte 位置、字符计数和显示坐标。该文档不承诺 GOUI 原生 shaping 的
+  cluster 停靠行为；因此不直接用 byte ±1 或 rune ±1 替代已有实测导航。
+
+验证包括目标度量分步准备、导航紧跟输入、组合字符、预编辑、选区替换、历史、
+Tab／换行、异步粘贴及上下文取消；实际原文件的窗口输入另见
+[编辑测试约定](Testing.md)。不把有限文本样本等同于任意复杂段落的
+完整 Unicode 等价保证。

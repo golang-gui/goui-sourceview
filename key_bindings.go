@@ -252,9 +252,9 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 	case CommandComplete:
 		run(v.ShowCompletion)
 	case CommandUndo:
-		v.Undo()
+		v.history(true)
 	case CommandRedo:
-		v.Redo()
+		v.history(false)
 	case CommandCopy:
 		v.report(v.Copy())
 	case CommandCut:
@@ -262,12 +262,13 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 	case CommandPaste:
 		run(v.Paste)
 	case CommandDeleteSelection:
-		run(func() error { return v.ReplaceSelection("") })
+		run(func() error { return v.replace(v.Selection().Range(), "", true) })
 	case CommandSelectAll:
 		state := v.operationState()
 		v.cancelPreedit()
 		if state.valid(v) {
-			v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
+			v.document.model.BreakUndoGroup()
+			v.setSelection(textedit.Selection{Caret: v.document.model.Len()}, false, true)
 		}
 	case CommandToggleLineComment:
 		run(v.ToggleLineComment)
@@ -281,7 +282,7 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 	case CommandIndent, CommandOutdent:
 		run(func() error { return v.Indent(command == CommandOutdent) })
 	case CommandSelectLine:
-		v.SelectLine()
+		v.selectLine()
 	case CommandJumpToBracket:
 		v.JumpToBracket()
 	case CommandMoveWordLeft, CommandMoveWordRight, CommandSelectWordLeft, CommandSelectWordRight:

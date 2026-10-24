@@ -113,6 +113,7 @@ type SourceView struct {
 	brackets                                                                          bracketState
 
 	// Keyboard, pointer and caret state.
+	pendingInput     *inputBatch
 	keyBindings      KeyBindings
 	boundKeys        []boundKey
 	keyBindingsEpoch uint64
@@ -173,6 +174,7 @@ func NewSourceView() *SourceView {
 	v.ConnectUnmount(v.unmount)
 	v.ConnectFocused(func(focused bool) {
 		if !focused {
+			v.pendingInput = nil
 			v.closeCompletion()
 			v.cancelPreedit()
 			v.dragging = false
@@ -257,6 +259,7 @@ func (v *SourceView) SetDocument(d *Document) {
 func (v *SourceView) Selection() textedit.Selection { return v.clampSelection(v.selection) }
 
 func (v *SourceView) SetSelection(s textedit.Selection) {
+	v.pendingInput = nil
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -354,6 +357,7 @@ func (v *SourceView) SetReadOnly(value bool) {
 	if v.readOnly == value {
 		return
 	}
+	v.pendingInput = nil
 	v.readOnly = value
 	defer v.searchState.Emit()
 	if value {
@@ -453,6 +457,7 @@ func (s operationState) valid(v *SourceView) bool {
 
 func (v *SourceView) report(err error) {
 	if err != nil {
+		v.pendingInput = nil
 		v.errorSignal.Emit(err)
 	}
 }
@@ -622,6 +627,7 @@ func (v *SourceView) mount() {
 	if win := v.Window(); win != nil {
 		v.windowFocus = win.ConnectFocus(func(focused bool) {
 			if !focused {
+				v.pendingInput = nil
 				v.closeCompletion()
 			}
 			v.RequestPaint()
@@ -664,6 +670,7 @@ func (v *SourceView) mount() {
 }
 
 func (v *SourceView) unmount() {
+	v.pendingInput = nil
 	v.mounted = false
 	v.HidePanel()
 	v.mountEpoch++

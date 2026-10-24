@@ -23,6 +23,7 @@ func (v *SourceView) installInput() {
 		}
 		command, bound := v.keyCommand(event)
 		if bound && (command == CommandFind || command == CommandReplace || command == CommandGoTo) {
+			v.pendingInput = nil
 			v.runBoundCommand(command)
 			event.PreventDefault()
 			ctx.StopPropagation()
@@ -213,24 +214,62 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 	if !v.mounted || !v.Focused() || !gui.IsEnabled(v) {
 		return
 	}
+	if v.inputKey(event) {
+		event.PreventDefault()
+		ctx.StopPropagation()
+	}
+}
+
+func (v *SourceView) inputKey(event events.KeyEvent) bool {
+	if event.Key == events.KeyEscape && event.Modifiers == 0 {
+		v.pendingInput = nil
+	}
+	event.Handled = nil // The native dispatch response must never escape this event.
+	command, bound := v.keyCommand(event)
+	known, geometry, mutates := bound, true, false
+	if bound {
+		switch command {
+		case CommandMoveDocumentStart, CommandMoveDocumentEnd, CommandSelectDocumentStart, CommandSelectDocumentEnd,
+			CommandSelectAll, CommandFind, CommandReplace, CommandGoTo, CommandUndo, CommandRedo:
+			geometry = false
+		}
+		switch command {
+		case CommandUndo, CommandRedo, CommandCut, CommandPaste, CommandDeleteSelection, CommandMoveLinesUp, CommandMoveLinesDown,
+			CommandDuplicateLinesUp, CommandDuplicateLinesDown, CommandDeleteLines, CommandToggleLineComment, CommandToggleBlockComment,
+			CommandIndent, CommandOutdent, CommandInsertLineAbove, CommandInsertLineBelow, CommandDeleteWordLeft, CommandDeleteWordRight:
+			mutates = true
+		}
+	} else if event.Modifiers&^events.ModifierShift == 0 {
+		switch event.Key {
+		case events.KeyArrowLeft, events.KeyArrowRight, events.KeyArrowUp, events.KeyArrowDown, events.KeyPageUp, events.KeyPageDown:
+			known = true
+		case events.KeyHome, events.KeyEnd:
+			known, geometry = true, v.wrap != WrapNone
+		case events.KeyBackspace, events.KeyDelete, events.KeyEnter:
+			known, mutates = true, true
+		case events.KeyTab:
+			known, mutates = v.acceptsTab && !v.escapeTab, true
+		}
+	}
+	if known && v.delayInput(deferredInput{apply: func() { v.applyKey(event) }, geometry: geometry, mutates: mutates}) {
+		return true
+	}
+	return v.applyKey(event)
+}
+
+func (v *SourceView) applyKey(event events.KeyEvent) bool {
 	state, bindingsEpoch := v.operationState(), v.keyBindingsEpoch
 	command, bound := v.keyCommand(event)
 	if v.completionKey(event) {
-		event.PreventDefault()
-		ctx.StopPropagation()
-		return
+		return true
 	}
 	// Closing transient UI invokes external callbacks. They may replace the
 	// document, bindings or focus; the same key must not edit replacement state.
 	if v.Destroyed() || !v.mounted || !state.valid(v) || v.keyBindingsEpoch != bindingsEpoch || !v.Focused() || !gui.IsEnabled(v) {
-		event.PreventDefault()
-		ctx.StopPropagation()
-		return
+		return true
 	}
 	if bound && v.runBoundCommand(command) {
-		event.PreventDefault()
-		ctx.StopPropagation()
-		return
+		return true
 	}
 	mods := event.Modifiers
 	shift := mods&events.ModifierShift != 0
@@ -251,7 +290,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 		case events.KeyTab:
 			if v.escapeTab {
 				v.escapeTab = false
-				return
+				return false
 			}
 			if v.acceptsTab {
 				run(func() error { return v.tab(shift) })
@@ -293,10 +332,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 			handled = true
 		}
 	}
-	if handled {
-		event.PreventDefault()
-		ctx.StopPropagation()
-	}
+	return handled
 }
 
 func (v *SourceView) moveTo(at int, upstream, extend bool) {
@@ -472,4 +508,178 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 		v.preferredSet = true
 		v.preferredX = x
 	}
+}
+
+// Pending input belongs to one selection, document and binding generation.
+// It retains operations after normal input dispatch, never an EventContext or
+// native Handled pointer. Existing frame work prepares their measured stops.
+type deferredInput struct {
+	apply             func()
+	geometry, mutates bool
+}
+type inputBatch struct {
+	state    operationState
+	bindings uint64
+	readOnly bool
+	actions  []deferredInput
+}
+
+func (q *inputBatch) valid(v *SourceView) bool {
+	return q.state.valid(v) && q.bindings == v.keyBindingsEpoch && q.readOnly == v.readOnly && v.mounted && v.Focused() && gui.IsEnabled(v) && visible(v) && !v.Destroyed()
+}
+
+func (v *SourceView) inputGeometryReady() bool {
+	if v.context == nil {
+		return true
+	}
+	selection := v.Selection()
+	for i, at := range []int{selection.Caret, selection.Anchor} {
+		if i == 1 && at == selection.Caret {
+			continue
+		}
+		row := v.document.model.LineAt(at)
+		r, _ := v.document.model.LineRange(row)
+		if r.End-r.Start <= 64*1024 {
+			continue
+		}
+		p := v.paragraph(row)
+		if p == nil {
+			return false
+		}
+		if p.paged != nil && p.paged.GeometryAt(at-r.Start) == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// An explicit model offset may have been clamped while its shaping window
+// was unavailable. Normalize it before the next measured editing operation.
+func (v *SourceView) inputSelection() textedit.Selection {
+	s := v.Selection()
+	if v.projection != nil {
+		return s
+	}
+	snap := func(at int, forward bool) int {
+		r, _ := v.document.model.LineRange(v.document.model.LineAt(at))
+		if r.End-r.Start <= 64*1024 {
+			return at
+		}
+		return v.snapOffset(at, forward)
+	}
+	if s.Anchor == s.Caret {
+		s.Caret = snap(s.Caret, true)
+		s.Anchor = s.Caret
+	} else {
+		forward := s.Caret > s.Anchor
+		s.Anchor = snap(s.Anchor, !forward)
+		s.Caret = snap(s.Caret, forward)
+	}
+	return s
+}
+
+func (v *SourceView) delayInput(action deferredInput) bool {
+	if v.pendingInput != nil && !v.pendingInput.valid(v) {
+		v.pendingInput = nil
+	}
+	if v.pendingInput == nil {
+		if !action.geometry {
+			return false
+		}
+		state := v.operationState()
+		ready := v.inputGeometryReady()
+		if !state.valid(v) || !v.mounted || !v.Focused() || v.Destroyed() {
+			return true
+		}
+		if ready {
+			corrected := v.inputSelection()
+			if !state.valid(v) || v.Destroyed() {
+				return true
+			}
+			if corrected == v.Selection() {
+				return false
+			}
+		}
+		v.pendingInput = &inputBatch{state: state, bindings: v.keyBindingsEpoch, readOnly: v.readOnly}
+	}
+	v.pendingInput.actions = append(v.pendingInput.actions, action)
+	v.requestLayoutWork()
+	v.RequestPaint()
+	return true
+}
+
+func (v *SourceView) inputStep(deadline time.Time) {
+	for work := 0; work < 8 && v.pendingInput != nil; work++ {
+		q := v.pendingInput
+		if !q.valid(v) {
+			v.pendingInput = nil
+			return
+		}
+		if !deadline.IsZero() && !time.Now().Before(deadline) {
+			v.RequestPaint()
+			return
+		}
+		action := q.actions[0]
+		if action.geometry && !v.inputGeometryReady() {
+			row := v.document.model.LineAt(v.Selection().Caret)
+			if _, failed := v.layoutFailures[v.paragraphKey(row)]; failed {
+				v.pendingInput = nil
+				return
+			}
+			v.RequestPaint()
+			return
+		}
+		if v.pendingInput != q || !q.valid(v) {
+			return
+		}
+		if action.geometry {
+			before := v.operationState()
+			corrected := v.inputSelection()
+			if v.pendingInput != q || !before.valid(v) {
+				return
+			}
+			if corrected != v.Selection() {
+				v.setSelection(corrected, v.upstream, true)
+				if v.pendingInput != q {
+					return
+				}
+				if !q.advance(v, before, false) {
+					v.pendingInput = nil
+					return
+				}
+			}
+		}
+		q.actions[0] = deferredInput{}
+		q.actions = q.actions[1:]
+		before := v.operationState()
+		action.apply()
+		if v.pendingInput != q {
+			return
+		}
+		if !q.advance(v, before, action.mutates) {
+			v.pendingInput = nil
+			return
+		}
+		if len(q.actions) == 0 {
+			v.pendingInput = nil
+			return
+		}
+	}
+	if v.pendingInput != nil {
+		v.RequestPaint()
+	}
+}
+
+func (q *inputBatch) advance(v *SourceView, before operationState, mutates bool) bool {
+	after := v.operationState()
+	allowedRevision := before.revision
+	if mutates {
+		allowedRevision++
+	}
+	if after.document != before.document || after.mount != before.mount || after.language != before.language ||
+		after.revision > allowedRevision || after.selection > before.selection+1 {
+		return false
+	}
+	q.state = after
+	return q.valid(v)
 }

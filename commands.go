@@ -9,6 +9,7 @@ import (
 )
 
 func (v *SourceView) ReplaceSelection(text string) error {
+	v.pendingInput = nil
 	return v.replace(v.Selection().Range(), text, true)
 }
 
@@ -37,9 +38,15 @@ func (v *SourceView) replace(r textedit.Range, text string, atomic bool) error {
 	return err
 }
 
-func (v *SourceView) Undo() bool { return v.history(true) }
+func (v *SourceView) Undo() bool {
+	v.pendingInput = nil
+	return v.history(true)
+}
 
-func (v *SourceView) Redo() bool { return v.history(false) }
+func (v *SourceView) Redo() bool {
+	v.pendingInput = nil
+	return v.history(false)
+}
 
 func (v *SourceView) history(undo bool) bool {
 	if v.editable() != nil {
@@ -114,7 +121,7 @@ func (v *SourceView) tab(outdent bool) error {
 		}
 		text = strings.Repeat(" ", v.indent.TabWidth-column%v.indent.TabWidth)
 	}
-	return v.ReplaceSelection(text)
+	return v.replace(v.Selection().Range(), text, true)
 }
 
 // ApplyEdits applies original-coordinate edits as one undo unit, with an
@@ -186,13 +193,24 @@ func (v *SourceView) DeleteWord(forward bool) error {
 // SelectLine expands to whole logical lines, including the following LF.
 // Repeating the command extends the selection one more line downward.
 func (v *SourceView) SelectLine() {
+	v.pendingInput = nil
+	v.selectLine()
+}
+
+func (v *SourceView) selectLine() {
 	if v.Destroyed() || !gui.IsEnabled(v) {
+		return
+	}
+	state := v.operationState()
+	v.cancelPreedit()
+	if !state.valid(v) {
 		return
 	}
 	r := v.Selection().Range()
 	start, _ := v.document.model.LineRange(v.document.model.LineAt(r.Start))
 	end := v.lineSelection(r.End)
-	v.SetSelection(textedit.Selection{Anchor: start.Start, Caret: end.End})
+	v.document.model.BreakUndoGroup()
+	v.setSelection(textedit.Selection{Anchor: start.Start, Caret: end.End}, false, true)
 }
 
 // JumpToBracket jumps between a confirmed pair adjacent to the caret. Unknown,
@@ -280,7 +298,7 @@ func (v *SourceView) Cut() error {
 	if v.document != d || d.model.Revision() != revision || v.selectionEpoch != epoch || !v.mounted {
 		return nil
 	}
-	return v.ReplaceSelection("")
+	return v.replace(v.Selection().Range(), "", true)
 }
 
 // Paste accepts an asynchronous request. Delayed failures are reported through
@@ -350,7 +368,14 @@ func (r *pasteRequest) complete(text string, err error) {
 	if text == "" {
 		return
 	}
-	v.report(v.ReplaceSelection(text))
+	q, before := v.pendingInput, v.operationState()
+	err = v.replace(v.Selection().Range(), text, true)
+	v.report(err)
+	// A valid asynchronous paste is owned input, not an unrelated model edit.
+	// Later queued input follows it unless a callback replaced the context.
+	if q != nil && v.pendingInput == q && q.state == before && !q.advance(v, before, true) {
+		v.pendingInput = nil
+	}
 }
 
 // ToggleLineComment uses the language's line marker. Empty configuration is a

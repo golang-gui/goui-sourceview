@@ -189,7 +189,7 @@ func (v *SourceView) newline() error {
 			}
 		}
 	}
-	return v.ReplaceSelection("\n" + base)
+	return v.replace(v.Selection().Range(), "\n"+base, true)
 }
 
 func (v *SourceView) pairValid(p autoPair) bool {
