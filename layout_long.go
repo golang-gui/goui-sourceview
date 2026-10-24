@@ -1,18 +1,19 @@
 package sourceview
 
 import (
+	"strings"
+
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
-	"strings"
 )
 
 func (p *paragraph) geometryAt(offset int) *textedit.Geometry {
 	if p.paged != nil {
 		if g := p.paged.GeometryAt(offset); g != nil {
-			return g
+			return &g.Geometry
 		}
 	}
 	return &p.geometry
@@ -87,7 +88,9 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 	if !ready {
 		v.requestLayoutWork()
 	}
-	p.geometry = *p.paged.Geometry()
+	frame := p.paged.Geometry()
+	p.geometry = frame.Geometry
+	p.geometryX, p.geometryY = frame.X, frame.Y
 	size := p.paged.Size()
 	p.width, p.height = size.Width, size.Height
 	v.setParagraphHeight(row, p.height)
@@ -166,4 +169,29 @@ func (v *SourceView) changeLongParagraphs(c textedit.Change) {
 			p.styled = false
 		}
 	}
+}
+
+// Keep native and input coordinates local. The subtraction must happen before
+// narrowing a document position to float32.
+func (v *SourceView) geometryOrigin(row int, x, y float64) geometry.Point {
+	return geometry.Point{X: v.gutter + padding + float32(x-float64(v.offset.X)), Y: float32(float64(padding) + v.paragraphTop64(row) + y - float64(v.offset.Y))}
+}
+func (v *SourceView) paragraphOrigin(row int, p *paragraph) geometry.Point {
+	return v.geometryOrigin(row, p.geometryX, p.geometryY)
+}
+func (v *SourceView) paragraphCaret(row int, p *paragraph, pos textedit.Position, cached bool) (geometry.Rectangle, bool) {
+	g, origin := &p.geometry, v.paragraphOrigin(row, p)
+	if p.paged != nil {
+		var frame *gui.ParagraphGeometry
+		if cached {
+			frame = p.paged.CachedGeometryAt(pos.Offset)
+		} else {
+			frame = p.paged.GeometryAt(pos.Offset)
+		}
+		if frame == nil {
+			return geometry.Rectangle{}, false
+		}
+		g, origin = &frame.Geometry, v.geometryOrigin(row, frame.X, frame.Y)
+	}
+	return g.Caret(pos).Translate(origin), true
 }

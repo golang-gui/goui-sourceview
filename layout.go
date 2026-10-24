@@ -209,8 +209,14 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		r, _ := v.document.model.LineRange(row)
 		if p := v.viewportParagraph(row); p != nil {
 			g := &p.geometry
+			baseY := p.geometryY
 			if p.paged != nil {
-				g = p.paged.CachedGeometryAt(at - r.Start)
+				frame := p.paged.CachedGeometryAt(at - r.Start)
+				if frame == nil {
+					v.requestLayoutWork()
+					return
+				}
+				g, baseY = &frame.Geometry, frame.Y
 			}
 			if g == nil {
 				v.requestLayoutWork()
@@ -218,7 +224,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 			}
 			v.pendingAnchor = false
 			rect := g.Caret(textedit.Position{Offset: at - r.Start})
-			y := max(0, min(padding+v.paragraphTop(row)+rect.Y+v.anchor.inset, max(0, v.ContentSize().Height-viewport.Height)))
+			y := max(0, min(float32(float64(padding)+v.paragraphTop64(row)+baseY+float64(rect.Y)+float64(v.anchor.inset)), max(0, v.ContentSize().Height-viewport.Height)))
 			v.offset = geometry.Point{X: v.anchor.x, Y: y}
 			v.scrollSignal.Emit(geometry.Rect(v.anchor.x, y, viewport.Width, viewport.Height))
 		}
@@ -316,10 +322,12 @@ func (v *SourceView) resetHeights() {
 	v.heights.Reset(v.visibleLines.count, v.lineHeight)
 }
 
-func (v *SourceView) paragraphTop(row int) float32 {
+func (v *SourceView) paragraphTop(row int) float32 { return float32(v.paragraphTop64(row)) }
+
+func (v *SourceView) paragraphTop64(row int) float64 {
 	v.ensureHeights()
 	i, _ := v.visibleLines.index(row)
-	return v.heights.Top(i)
+	return v.heights.Top64(i)
 }
 
 func (v *SourceView) paragraphAt(y float32) int {
@@ -378,8 +386,7 @@ func (v *SourceView) caretRect() (geometry.Rectangle, bool) {
 	if p == nil {
 		return geometry.Rectangle{}, false
 	}
-	rect := p.geometryAt(caret - r.Start).Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
-	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
+	return v.paragraphCaret(row, p, textedit.Position{Offset: caret - r.Start, Upstream: v.upstream}, false)
 }
 
 // Paint and IME updates must not shape an offscreen caret during scrolling.
@@ -392,15 +399,7 @@ func (v *SourceView) cachedCaretRect() (geometry.Rectangle, bool) {
 		return geometry.Rectangle{}, false
 	}
 	r := v.displayRange(row)
-	g := &p.geometry
-	if p.paged != nil {
-		g = p.paged.CachedGeometryAt(caret - r.Start)
-		if g == nil {
-			return geometry.Rectangle{}, false
-		}
-	}
-	rect := g.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
-	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
+	return v.paragraphCaret(row, p, textedit.Position{Offset: caret - r.Start, Upstream: v.upstream}, true)
 }
 
 func (v *SourceView) updateIMCaret() {
@@ -490,7 +489,8 @@ func (v *SourceView) hit(point geometry.Point) textedit.Position {
 	r := v.displayRange(row)
 	pos := textedit.Position{Offset: r.Start}
 	if p := v.paragraph(row); p != nil {
-		pos = p.geometry.Hit(geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)})
+		origin := v.paragraphOrigin(row, p)
+		pos = p.geometry.Hit(geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y})
 		pos.Offset += r.Start
 	}
 	if v.projection != nil {
@@ -510,10 +510,11 @@ func (v *SourceView) captureAnchor() {
 	if p == nil || p.paged != nil && p.paged.VisibleRange().End == 0 {
 		return
 	}
-	y := max(0, v.offset.Y-padding-v.paragraphTop(row))
-	pos := p.geometry.Hit(geometry.Point{Y: y})
+	origin := v.paragraphOrigin(row, p)
+	y := -origin.Y
+	pos := p.geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: y})
 	index := p.geometry.LineIndex(pos)
 	edge := p.geometry.LineEdge(index, false)
-	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: v.offset.Y - padding - v.paragraphTop(row) - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
+	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: -origin.Y - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
 	v.anchorRevision = v.document.model.Revision()
 }

@@ -1,6 +1,8 @@
 // 超大单行文本交互验证，需要独立桌面、原生排版和字体，不使用 DevServer。
 // 启动：go run ./tests/window/editor/paragraph -file /data/xuyang8/temp/test.json
 // 加 -textview 验证 GOUI TextView；默认验证 SourceView。可选 -plain 关闭 JSON 高亮。
+// -nowrap 验证水平长行：拖水平滚动条至中部，逐字符点击、左右键与连续拖选，
+// 跨 4 KiB 片段时不得跳字、断裂选区或停住；Home/End 到逻辑行边界。
 // 使用 GOUI_PLAT_PAINTER=software/opengl（Windows 另可 direct2d）及
 // GOUI_PLAT_SCALE=1/1.5/2 选择环境；Linux 无 IME 服务可设 XMODIFIERS=@im=none。
 // 初始：Modern、Integrated 窗口、自动换行、顶部工具栏、可编辑正文。
@@ -107,6 +109,7 @@ func main() {
 	file := flag.String("file", "", "single-line UTF-8 file to read")
 	textview := flag.Bool("textview", false, "test GOUI TextView")
 	plain := flag.Bool("plain", false, "disable JSON highlighting")
+	nowrap := flag.Bool("nowrap", false, "disable line wrapping")
 	flag.Parse()
 	data, err := os.ReadFile(*file)
 	must(err)
@@ -126,12 +129,18 @@ func main() {
 		v := gui.NewTextView()
 		v.SetModel(model)
 		v.SetWrapMode(gui.WrapWordChar)
+		if *nowrap {
+			v.SetWrapMode(gui.WrapNone)
+		}
 		widget = v
 		setSelection = v.SetSelection
 	} else {
 		v := source.NewSourceView()
 		v.SetDocument(source.NewDocumentWithModel(model))
 		v.SetWrapMode(source.WrapWordChar)
+		if *nowrap {
+			v.SetWrapMode(source.WrapNone)
+		}
 		if !*plain {
 			must(v.Document().SetLanguage(language.JSON))
 		}
@@ -204,6 +213,8 @@ func main() {
 	lastRevision := uint64(0)
 	lastSelection := textedit.Selection{}
 	lastRect := geometry.Rectangle{}
+	lastVisible := textedit.Range{}
+	lastScroll := geometry.Point{}
 	heartbeat := app.NewTimer()
 	defer heartbeat.Stop()
 	heartbeat.ConnectTimeout(func() {
@@ -219,9 +230,18 @@ func main() {
 		if !loaded {
 			return
 		}
+		pos := geometry.Point{X: scroll.ScrollX(), Y: scroll.ScrollY()}
+		if pos != lastScroll {
+			fmt.Printf("SCROLL value=%v\n", pos)
+			lastScroll = pos
+		}
 		info := widget.Snapshot().TextEditing
 		if info == nil {
 			return
+		}
+		if info.VisibleRange != lastVisible {
+			fmt.Printf("VISIBLE range=%v\n", info.VisibleRange)
+			lastVisible = info.VisibleRange
 		}
 		if rect := widget.Rect(); rect != lastRect {
 			fmt.Printf("SIZE rect=%v\n", rect)

@@ -190,7 +190,8 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil && pos.Offset > r.Start {
 		previous := p.geometry.Adjacent(pos.Offset-r.Start, false)
-		local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
+		origin := v.paragraphOrigin(row, p)
+		local := geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y}
 		for _, rect := range p.geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
 			if containsPoint(rect, local) {
 				pos.Offset = r.Start + previous
@@ -403,7 +404,10 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 			x = g.Caret(pos).X
 		}
 		if p.paged != nil {
-			rect := g.Caret(pos)
+			rect, ok := v.paragraphCaret(row, p, pos, false)
+			if !ok {
+				break
+			}
 			delta := max(v.lineHeight, rect.Height)
 			if key == events.KeyPageUp || key == events.KeyPageDown {
 				delta = max(v.lineHeight, v.viewport.Height-v.lineHeight)
@@ -411,7 +415,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 			if key == events.KeyArrowUp || key == events.KeyPageUp {
 				delta = -delta
 			}
-			at := v.hit(geometry.Point{X: v.gutter + padding + x - v.offset.X, Y: padding + v.paragraphTop(row) + rect.Y + rect.Height/2 - v.offset.Y + delta})
+			at := v.hit(geometry.Point{X: rect.X, Y: rect.Y + rect.Height/2 + delta})
 			caret, pos = at.Offset, at
 			break
 		}

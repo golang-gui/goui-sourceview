@@ -358,3 +358,35 @@ Linux amd64／Go 1.25.8／Pango 1.50.6，通过：
   零星间隔仍是剩余问题。本批不声称所有大文件操作都已完全无停顿。
 - 测试、截图、驱动基线副本位于仓库外；未跟踪的用户文件、真实桌面、剪贴板和
   系统配置保持原状。测试窗口正常关闭，基线诊断进程和专用桌面在结束时清理。
+
+## 水平长行选区与坐标基准（2026-10-24）
+
+- SourceView 适配 GOUI ParagraphGeometry，字形、选区、搜索、空白标记、caret、
+  IME 坐标、快照与右键菜单采用配对的局部度量和双精度原点。NoWrap 相邻缓存
+  窗口为同一显示行，Home／End 面向完整逻辑行，Smart Edge 继续局部读取空白。
+- 增加 27 MB 确定模型回归，验证 X=2^28 的逐字符点击、连续选区、caret 与 Home／End。
+  固定 10-DIP 字符度量是独立预期，未使用另一条可能同时出错的转换作预期。
+- 实际样本仍为 184,500,131-byte 单行 JSON。独立 Xvnc :89 / Xfwm4 / Pango /
+  Modern / Integrated 窗口，Software 100% 与 OpenGL 150% 通过正常 XTest 输入：
+  水平远处拖选、跨 4 KiB 接缝、连续 80 次相邻移动、输入／退格／撤销／重做、
+  键盘右键菜单。SourceView 软件选区 [92250058,92250135) 跨 byte 92250112，
+  无字形采样行的背景在物理 [147,916) 连续；没有图中断裂的色块。
+- OpenGL 150% 的选区在物理 [241,901) 连续；背景 RGB=(200,217,242)，Software
+  为 (199,217,243)。连续性检查分别采样当前后端明确选区内的背景，并检查整条
+  区间，保留原有颜色测试。不能用这一检查声称后端之间像素完全一致。
+- TextView 作为共享设施的另一个消费者也做实际拖选、80 次右移和编辑历史验证；
+  自动换行和 200% 绘制补充检查。原生小参考、巨大原点、资源与空文本边界的
+  GOUI 回归及更详细操作记录见 GOUI `doc/PlanIncrementalTextLayout.md`。
+- 小 Shift+wheel 在巨大 float32 全局偏移处仍可能无效；局部坐标修复不等于通用
+  ScrollView 已具备逐 DIP 的大范围滚动精度。复杂 bidi／grapheme、真实 IME 和
+  Windows／macOS 原生桌面未追加验收；本轮只追加对应交叉编译。
+- `tests/window/editor/paragraph -nowrap` 保留手工检查入口与 SCROLL／VISIBLE 日志；
+  不读取剪贴板，不保存用户 JSON，截图和日志留在仓库外。依赖尚未发布的 GOUI
+  段落 helper 契约，go.mod 继续声明 v0.3.0，独立构建限制不因本轮工作区通过而消失。
+- 最终 `go test ./... -count=1`、`go test -race ./... -count=1`、`go vet ./...`
+  在已跟踪源码的双仓副本中通过；Windows amd64／macOS arm64 的 SourceView 全仓
+  交叉编译通过，原生运行未执行。GOUI 同期通过关闭工作区的全仓检查与相关 race／vet。
+  `GOWORK=off go test ./...` 在发布依赖上仍失败：缺少 ParagraphLayout、
+  ParagraphGeometry、Projection.Slice 和 HeightIndex.Top64，未将此项写为通过。
+- 本轮所需 GOUI 提交为 `69c8d99`（包含前一批 `9c25dd0`）；这是当前工作区接入
+  ParagraphGeometry／Top64 的实际条件，需等待包含该提交的版本发布后更新 go.mod。

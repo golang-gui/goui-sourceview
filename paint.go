@@ -36,9 +36,10 @@ func (v *SourceView) Paint(p gui.Painter) {
 			continue
 		}
 		r := v.displayRange(row)
-		origin := geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}
+		origin := v.paragraphOrigin(row, item)
 		if activeFocus(v) && row == caretRow {
-			top, bottom := max(0, origin.Y), min(bounds.Height, origin.Y+item.height)
+			lineY := v.geometryOrigin(row, 0, 0).Y
+			top, bottom := max(0, lineY), min(bounds.Height, lineY+item.height)
 			if bottom > top {
 				p.FillRect(geometry.Rect(v.gutter, top, max(0, bounds.Width-v.gutter), bottom-top), graphics.ColorOf(v.colors.CurrentLine))
 			}

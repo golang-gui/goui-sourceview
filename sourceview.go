@@ -500,7 +500,8 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 		// emit callbacks or alter the viewport just to describe visible content.
 		p := v.cachedParagraph(firstDisplay)
 		if p != nil {
-			pos := p.geometry.Hit(geometry.Point{X: max(0, v.offset.X), Y: max(0, v.offset.Y-padding-v.paragraphTop(firstDisplay))})
+			origin := v.paragraphOrigin(firstDisplay, p)
+			pos := p.geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: -origin.Y})
 			anchor := v.displayRange(firstDisplay).Start + pos.Offset
 			if v.projection != nil {
 				anchor = v.projection.ModelOffset(anchor, pos.Upstream)

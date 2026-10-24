@@ -630,3 +630,20 @@ DIP 的路径。仅设置 clip 不能替代这个几何边界。新手工程序
 这批代码依赖尚未发布的 GOUI ParagraphLayout 与 Projection.Slice。go.mod 保留可
 获取的 v0.3.0，双仓通过不提交的 go.work 联调；在包含该 GOUI 提交的版本发布前，
 关闭工作区的构建不具备这些 API，不能把工作区通过表述成独立发布验证通过。
+
+### 16.1 水平长行的坐标与显示行（2026-10-24）
+
+ParagraphLayout 返回 ParagraphGeometry：普通值 Geometry 保留段落 byte 坐标，
+像素坐标相对配对的 float64 原点。SourceView 保存当前视区快照的原点，绘制选区、
+搜索、空白标记和字形使用同一个转换；GeometryAt／CachedGeometryAt 返回的 caret
+快照则使用它自己的原点。输入先从控件坐标转到局部快照，避免在巨大 float32
+滚动值上加鼠标位置。快照、右键菜单和 IME caret 同步采用这个规则。
+
+NoWrap 的相邻缓存窗口组成一条显示行，不将缓存边界当作软换行。Home／End
+面向整条逻辑行，Smart Home／End 的前后空白按需读取；既有短段落行为不变。
+已测水平窗口用实际宽度衔接，未测全局位置继续允许估计。源码语言、选择范围与
+文本历史的 byte offset 不因窗口或基准变化而修改。
+
+这批适配更新了尚未发布的 GOUI 段落 helper 契约，不修改 typography 或全仓几何
+类型。ScrollView 现有 float32 全局偏移仍有小增量量化边界，局部选区修复不代表
+该边界已经消失。具体来源与验证见 [实施记录](PlanIncrementalTextLayout.md)。

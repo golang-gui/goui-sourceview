@@ -20,6 +20,7 @@ import (
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
+	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
@@ -1895,4 +1896,60 @@ func TestLongParagraphIgnoresOffscreenTokenChanges(t *testing.T) {
 		t.Fatal("不可见词法范围使同一窗口重复着色", before, context.colors)
 	}
 	v.dropLayouts()
+}
+
+// 用确定的 10-DIP 字符度量验证控件转换，而非仅验证几何 helper。
+// 文档坐标超过 2^28 后，旧路径的相邻 float32 值已相隔 32 DIP。
+func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText(strings.Repeat("x", 27_000_000))
+	v.SetShowLineNumbers(false)
+	v.SetFoldingEnabled(false)
+	v.SetWrapMode(WrapNone)
+	observe(t, v)
+	v.document.engine.Advance(time.Time{})
+	context := &boundedParagraphContext{t: t}
+	v.context = context
+	v.Arrange(geometry.Rect(0, 0, 400, 120))
+	t.Cleanup(v.dropLayouts)
+	const offset = float32(1 << 28)
+	v.LayoutVisible(geometry.Size{Width: 400, Height: 120}, geometry.Point{X: offset})
+	var p *paragraph
+	for i := 0; i < 256; i++ {
+		p = v.paragraph(0)
+		if p != nil && p.paged != nil && p.paged.VisibleRange().Start > 20_000_000 {
+			break
+		}
+	}
+	if p == nil || p.paged == nil || p.geometry.LineCount() != 1 {
+		t.Fatal("远处单行视区没有就绪")
+	}
+	// byte 26843546 的真实文档 X 为 268435460，即视口 X=10。
+	const first = 26843546
+	for i := 0; i < 20; i++ {
+		point := geometry.Point{X: 10 + float32(i*10), Y: 16}
+		if got := v.hit(point); got.Offset != first+i {
+			t.Fatalf("点击 %v 定位到 %d want %d", point, got.Offset, first+i)
+		}
+	}
+	focusBracketFixture(t, v)
+	v.SetSelection(textedit.Selection{Anchor: first, Caret: first + 20})
+	draw := &recordingPainter{}
+	v.Paint(draw)
+	fills := bracketFills(draw, v.colors.SelectionBackground)
+	if len(fills) != 1 || fills[0].rect.X != 10 || fills[0].rect.Width != 200 {
+		t.Fatalf("选区应连续覆盖 20 个字符：%v", fills)
+	}
+	if rect, ok := v.cachedCaretRect(); !ok || rect.X != 210 {
+		t.Fatalf("光标与选区末端不一致：%v %v", rect, ok)
+	}
+	// End 是文档逻辑行末尾，不是当前 4 KiB 缓存的末尾。
+	v.navigate(events.KeyEnd, false)
+	if v.Selection().Caret != v.Document().Model().Len() {
+		t.Fatal("End 停在缓存边界", v.Selection())
+	}
+	v.navigate(events.KeyHome, false)
+	if v.Selection().Caret != 0 {
+		t.Fatal("Home 停在缓存边界", v.Selection())
+	}
 }

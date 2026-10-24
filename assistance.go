@@ -153,6 +153,43 @@ func (v *SourceView) deleteIndent() (bool, error) {
 }
 
 func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.Key) textedit.Position {
+	if p.paged != nil && v.wrap == WrapNone {
+		r := v.displayRange(p.row)
+		edge := textedit.Position{}
+		if key == events.KeyEnd {
+			edge.Offset = r.End - r.Start
+			edge.Upstream = true
+		}
+		if !v.smartHomeEnd {
+			return edge
+		}
+		if key == events.KeyHome {
+			at := len(editor.LeadingIndent(v.document.model, r.Start+pos.Offset))
+			if at != pos.Offset {
+				return textedit.Position{Offset: at}
+			}
+		} else {
+			// Only the trailing whitespace is relevant. Stop at the first
+			// non-space byte instead of materializing the entire logical line.
+			at := r.End
+			for at > r.Start {
+				a := max(r.Start, at-4096)
+				for !v.document.model.IsRuneBoundary(a) {
+					a++
+				}
+				text, _ := v.document.model.Slice(textedit.Range{Start: a, End: at})
+				n := len(text) - len(strings.TrimRight(text, " \t"))
+				at -= n
+				if n < len(text) {
+					break
+				}
+			}
+			if at-r.Start != pos.Offset {
+				return textedit.Position{Offset: at - r.Start, Upstream: true}
+			}
+		}
+		return edge
+	}
 	g := p.geometryAt(pos.Offset)
 	index := g.LineIndex(pos)
 	edge := g.LineEdge(index, key == events.KeyEnd)
@@ -227,12 +264,13 @@ func tint(c color.NRGBA, alpha uint8) color.NRGBA { c.A = alpha; return c }
 
 func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *paragraph, origin geometry.Point, word string) {
 	ruler := graphics.ColorOf(v.partColor("ruler", tint(v.colors.GutterForeground, 45)))
-	top, bottom := max(0, origin.Y), min(v.viewport.Height, origin.Y+p.height)
+	lineY := v.geometryOrigin(row, 0, 0).Y
+	top, bottom := max(0, lineY), min(v.viewport.Height, lineY+p.height)
 	for _, col := range v.rulers {
 		if bottom <= top {
 			break
 		}
-		x := v.gutter + padding - v.offset.X + float32(col)*v.spaceWidth
+		x := v.gutter + padding + float32(float64(col)*float64(v.spaceWidth)-float64(v.offset.X))
 		draw.DrawLine(geometry.Point{X: x, Y: top}, geometry.Point{X: x, Y: bottom}, 1, ruler)
 	}
 	if v.indentGuides && p.textStart == 0 {

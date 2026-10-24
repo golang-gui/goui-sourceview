@@ -26,25 +26,26 @@ func (k layoutKey) sameText(other layoutKey) bool {
 }
 
 type paragraph struct {
-	layout, number typography.TextLayout
-	paged          *gui.ParagraphLayout
-	pageVersion    uint64
-	colorRange     textedit.Range
-	textStart      int
-	sourceRange    textedit.Range
-	geometry       textedit.Geometry
-	whitespace     *whitespaceLayout
-	fragment       textedit.Fragment
-	text           string
-	width, height  float32
-	style          paragraphStyle
-	styled         bool
-	replaced       bool
-	foreground     color.NRGBA
-	colors         []paragraphColor
-	used           uint64
-	row            int
-	numberText     string
+	layout, number       typography.TextLayout
+	paged                *gui.ParagraphLayout
+	pageVersion          uint64
+	colorRange           textedit.Range
+	textStart            int
+	sourceRange          textedit.Range
+	geometry             textedit.Geometry
+	geometryX, geometryY float64
+	whitespace           *whitespaceLayout
+	fragment             textedit.Fragment
+	text                 string
+	width, height        float32
+	style                paragraphStyle
+	styled               bool
+	replaced             bool
+	foreground           color.NRGBA
+	colors               []paragraphColor
+	used                 uint64
+	row                  int
+	numberText           string
 }
 
 // Non-default effective foreground ranges, after token and selection overlays.
