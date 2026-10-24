@@ -93,3 +93,12 @@ Basic/Modern 提供 whitespace、selected-whitespace、indent-guide、ruler、oc
 声明式 WhitespaceMode / ShowLineEndings 只在显式声明时协调；省略时保留控件当前状态，
 新控件仍默认 None/false。显式 None/false 可以关闭，互不影响。示例 View 菜单每次打开
 从 getter 构造当前标记，不另建模式信号或默认快捷键。
+
+
+## 指针样式与覆盖层关闭
+
+正文／行号／折叠按钮的鼠标样式使用当前控件局部位置。PointerEnter 或覆盖层关闭
+引发的 crossing 可能没有相邻 PointerMove，因此 SourceView 在共享 MotionEventController
+处理进入通知前读取 CrossingContext.Position。正常移动仍复用原有 MotionInfo；
+不触发文本测量，不新增控件事件协议。查找栏关闭后重新命中正文，应立即恢复文本
+光标，侧栏则保持默认或折叠按钮的指针样式。

@@ -603,6 +603,34 @@ func TestDeferredCompositionFollowsNavigation(t *testing.T) {
 	}
 }
 
+// 覆盖层移除或首次进入时没有 PointerMove，仍应使用 crossing 提供的正文坐标。
+func TestCursorUsesCrossingPositionBeforeFirstMotion(t *testing.T) {
+	v := NewSourceView()
+	v.Arrange(geometry.Rect(0, 0, 400, 160))
+	host := &bracketHost{widget: v, focused: v}
+	var dispatcher gui.EventDispatcher
+	for _, event := range []events.PointerEvent{
+		{EventType: events.PointerEnter, Position: geometry.Point{X: 150, Y: 20}},
+		{EventType: events.PointerMove, Position: geometry.Point{X: 5, Y: 20}},
+		{EventType: events.PointerLeave, Position: geometry.Point{X: 150, Y: 20}},
+		{EventType: events.PointerEnter, Position: geometry.Point{X: 150, Y: 20}},
+	} {
+		if err := dispatcher.DispatchEvent(host, event); err != nil {
+			t.Fatal(err)
+		}
+		if event.EventType == events.PointerLeave {
+			continue
+		}
+		expected := gui.CursorText
+		if event.Position.X < 10 {
+			expected = gui.CursorDefault
+		}
+		if v.Cursor() != expected {
+			t.Fatal("stale hover coordinates", event, v.Cursor(), expected)
+		}
+	}
+}
+
 func TestDeferredNewlineTabAndTypingStayOrdered(t *testing.T) {
 	v := pendingInputFixture(t, "abc")
 	v.SetAcceptsTab(true)

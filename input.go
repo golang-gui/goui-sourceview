@@ -11,10 +11,26 @@ import (
 	"github.com/golang-gui/goui/platform/events"
 )
 
+// Hover may be retargeted after a child overlay closes without PointerMove.
+// Remember the crossing position before the shared controller emits hover state.
+type sourceMotionController struct {
+	*gui.MotionEventController
+	point *geometry.Point
+}
+
+func (c *sourceMotionController) HandleCrossing(ctx gui.CrossingContext) {
+	if ctx.Type() == gui.CrossingPointer && ctx.Direction() == gui.CrossingEnter {
+		if point, ok := ctx.Position(); ok {
+			*c.point = point
+		}
+	}
+	c.MotionEventController.HandleCrossing(ctx)
+}
+
 func (v *SourceView) installInput() {
 	v.pointer = gui.NewMotionEventController()
 	v.pointer.ConnectMotion(func(info gui.MotionInfo) { v.pointerPoint = info.Position })
-	v.AddEventController(v.pointer)
+	v.AddEventController(&sourceMotionController{MotionEventController: v.pointer, point: &v.pointerPoint})
 	companions := gui.NewKeyEventController()
 	companions.SetPhase(gui.PhaseCapture)
 	companions.ConnectKeyDown(func(ctx gui.EventContext, event events.KeyEvent) {
