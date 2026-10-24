@@ -65,8 +65,8 @@ func Indent(m *textedit.Model, s textedit.Selection, options IndentOptions, outd
 		return p, err
 	}
 	r := s.Range()
-	if _, err := m.Slice(r); err != nil {
-		return p, err
+	if r.Start < 0 || r.End > m.Len() || !m.IsRuneBoundary(r.Start) || !m.IsRuneBoundary(r.End) {
+		return p, fmt.Errorf("sourceview: invalid selection range")
 	}
 	first, last := m.LineAt(r.Start), m.LineAt(r.End)
 	if r.End > r.Start && last > first {
@@ -115,13 +115,25 @@ func LeadingIndent(m *textedit.Model, caret int) string {
 	row := m.LineAt(caret)
 	r, _ := m.LineRange(row)
 	r.End = min(r.End, caret)
-	text, err := m.Slice(r)
-	if err != nil {
-		return ""
+	var indent strings.Builder
+	for at := r.Start; at < r.End; {
+		end := min(r.End, at+4096)
+		for !m.IsRuneBoundary(end) {
+			end--
+		}
+		text, err := m.Slice(textedit.Range{Start: at, End: end})
+		if err != nil {
+			return ""
+		}
+		i := 0
+		for i < len(text) && (text[i] == ' ' || text[i] == '\t') {
+			i++
+		}
+		indent.WriteString(text[:i])
+		if i < len(text) {
+			break
+		}
+		at = end
 	}
-	i := 0
-	for i < len(text) && (text[i] == ' ' || text[i] == '\t') {
-		i++
-	}
-	return text[:i]
+	return indent.String()
 }

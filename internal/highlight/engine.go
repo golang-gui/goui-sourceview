@@ -30,23 +30,22 @@ type work struct {
 
 // Engine belongs to one active Document. All calls are sequential.
 type Engine struct {
-	model                *textedit.Model
-	id                   language.ID
-	syntax               *language.Language
-	revision             uint64
-	lines                lineStore
-	nextID               uint64
-	building             bool
-	buildAt, buildLength int
-	buildBlock           []*Line
-	dirty                []interval
-	next                 int
-	work                 *work
-	lru                  list.List
-	elements             map[*Line]*list.Element
-	payloadBytes         int
-	err                  error
-	scanned              int
+	model        *textedit.Model
+	id           language.ID
+	syntax       *language.Language
+	revision     uint64
+	lines        lineStore
+	nextID       uint64
+	building     bool
+	buildRow     int
+	dirty        []interval
+	next         int
+	work         *work
+	lru          list.List
+	elements     map[*Line]*list.Element
+	payloadBytes int
+	err          error
+	scanned      int
 }
 
 // New creates an incremental analyzer without reading the document.
@@ -93,9 +92,7 @@ func (e *Engine) Reset(id language.ID) {
 	e.revision = e.model.Revision()
 	e.lines = lineStore{}
 	e.building = true
-	e.buildAt = 0
-	e.buildLength = 0
-	e.buildBlock = nil
+	e.buildRow = 0
 	e.next = -1
 	e.work = nil
 	e.dirty = nil
@@ -320,28 +317,27 @@ func (e *Engine) read(start, end int) (string, error) {
 }
 
 func (e *Engine) buildStep() error {
-	if e.buildAt < e.model.Len() {
-		text, err := e.read(e.buildAt, min(e.model.Len(), e.buildAt+ChunkSize))
+	// Model already indexes logical newlines. Building lexical metadata must
+	// not reread a multi-megabyte logical line just to count those same bytes.
+	last := min(e.model.LineCount(), e.buildRow+128)
+	block := make([]*Line, 0, last-e.buildRow)
+	for e.buildRow < last {
+		r, err := e.model.LineRange(e.buildRow)
 		if err != nil {
 			return err
 		}
-		for i := 0; i < len(text); i++ {
-			e.buildLength++
-			if text[i] == '\n' {
-				e.buildBlock = append(e.buildBlock, e.newLine(e.buildLength, true))
-				e.buildLength = 0
-				if len(e.buildBlock) == 128 {
-					e.lines.root = merge(e.lines.root, e.lines.tree(e.buildBlock))
-					e.buildBlock = nil
-				}
-			}
+		lf := e.buildRow+1 < e.model.LineCount()
+		length := r.End - r.Start
+		if lf {
+			length++
 		}
-		e.buildAt += len(text)
+		block = append(block, e.newLine(length, lf))
+		e.buildRow++
+	}
+	e.lines.root = merge(e.lines.root, e.lines.tree(block))
+	if e.buildRow < e.model.LineCount() {
 		return nil
 	}
-	e.buildBlock = append(e.buildBlock, e.newLine(e.buildLength, false))
-	e.lines.root = merge(e.lines.root, e.lines.tree(e.buildBlock))
-	e.buildBlock = nil
 	e.building = false
 	if e.syntax.Tokenizer() != nil {
 		e.addDirty(0, e.LineCount())

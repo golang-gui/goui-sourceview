@@ -327,3 +327,24 @@ func TestLineOperationValidationAndInsertBudget(t *testing.T) {
 		t.Fatal("rejected operation mutated model")
 	}
 }
+
+// 输入位于代码长行中部时，只需读取真实前导缩进，不能复制数 MB 的代码前缀。
+func TestLeadingIndentOnLongLine(t *testing.T) {
+	for _, prefix := range []string{"", " \t  ", strings.Repeat(" ", 9000)} {
+		m := textedit.NewModel(prefix + strings.Repeat("word ", 400000))
+		if got := LeadingIndent(m, m.Len()/2); got != prefix {
+			t.Fatalf("缩进长度=%d want=%d", len(got), len(prefix))
+		}
+	}
+}
+
+func BenchmarkLeadingIndentOnLongLine(b *testing.B) {
+	m := textedit.NewModel("    " + strings.Repeat("word ", 400000))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if LeadingIndent(m, m.Len()/2) != "    " {
+			b.Fatal("缩进错误")
+		}
+	}
+}

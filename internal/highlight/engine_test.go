@@ -376,3 +376,22 @@ func TestLineStoreBlockAggregatesMatchEveryBytePosition(t *testing.T) {
 		t.Fatal("exclusive block/document endpoint mapping")
 	}
 }
+
+// 单个元数据步骤复用模型行索引，不应按单行 byte 数分批重新读完整文本。
+func TestMetadataUsesModelLineIndex(t *testing.T) {
+	for _, text := range []string{strings.Repeat("x", 4<<20), "a\n\nb\n", strings.Repeat("a\n", 300)} {
+		m := textedit.NewModel(text)
+		e := New(m, language.Plain)
+		steps := 0
+		for e.building {
+			if err := e.buildStep(); err != nil {
+				t.Fatal(err)
+			}
+			steps++
+		}
+		if steps != (m.LineCount()+127)/128 {
+			t.Fatalf("steps=%d lines=%d", steps, m.LineCount())
+		}
+		checkIndex(t, e, m)
+	}
+}
