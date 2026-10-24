@@ -336,3 +336,12 @@ go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-inp
 语法和选区颜色更新包含按帧推进的工作。基础 editor 程序的 20 轮配色检查保持原有
 逐像素断言及原生资源复用断言，每轮允许两帧处理已请求的更新；不能在同一个 timer
 回调连续修改 20 次后，要求中间每次原生位图已同步更新。
+
+
+拖选补充场景：`paragraph -file /outside/repo/long.json -verify-pointer -nowrap`
+从冷 End 的实际光标像素开始，按半 DIP 递减拖动至前一个停靠点，要求模型精确
+选中最后一个 ASCII 字符，再反向拖回 EOF 并检查真实选区底色；没有先按 Left
+准备末尾几何。`-width 640` 可改变初始窗口宽度。输入文件不写回，成功自动关闭。
+`frame` 另持有鼠标跨多个帧验证“宽首行／短次行”向外拖选：短行横向偏移保持零，
+长行仍增加偏移。对应的未复现项与结果另见编辑回归记录，不能把测试通过当作
+已解释用户机器上的所有现象。

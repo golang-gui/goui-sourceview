@@ -8,6 +8,7 @@
 // 使用专用 Caret 色，与 JSON 语法颜色区分；sRGB 不透明输出，仅识别该色的覆盖像素，
 // 不依赖字体金图。允许准备目标排版及光标闪烁的等待，超时或提前关闭失败；成功自动关闭。
 // 此自动场景仅 SourceView，输入尾部应为至少三个 ASCII 字符，无额外文件写入。
+// -verify-pointer -nowrap 自动验证 End 后正反向拖选最后一个字符，不改文本。
 // -verify-input 自动验证冷定位后立即 Left/提交文本的顺序，选区替换、删除、
 // 换行、只读及撤销重做；可额外 -clipboard 测试末尾小选区的真实剪切/粘贴。
 // -clipboard 会覆盖本显示的剪贴板，只应在独立测试桌面启用；默认不访问剪贴板。
@@ -117,16 +118,21 @@ func must(err error) {
 
 func main() {
 	runtime.LockOSThread()
+	windowWidth := flag.Float64("width", 1000, "initial window width in DIP")
 	file := flag.String("file", "", "single-line UTF-8 file to read")
 	textview := flag.Bool("textview", false, "test GOUI TextView")
 	plain := flag.Bool("plain", false, "disable JSON highlighting")
 	nowrap := flag.Bool("nowrap", false, "disable line wrapping")
 	verifyEnd := flag.Bool("verify-end", false, "verify End/Left/Right caret visibility and resize (SourceView, -nowrap)")
+	verifyPointer := flag.Bool("verify-pointer", false, "verify pointer selection of the final character (SourceView, -nowrap)")
 	verifyInput := flag.Bool("verify-input", false, "verify rapid navigation/editing on the original long document")
 	clipboard := flag.Bool("clipboard", false, "also verify small native cut/paste selections (disposable desktop)")
 	flag.Parse()
-	if *verifyInput && (*textview || *verifyEnd) {
+	if *verifyInput && (*textview || *verifyEnd || *verifyPointer) {
 		panic("-verify-input requires SourceView and cannot combine with -verify-end")
+	}
+	if *verifyPointer && (*textview || !*nowrap || *verifyEnd) {
+		panic("-verify-pointer requires SourceView and -nowrap, without -verify-end")
 	}
 	if *verifyEnd && (*textview || !*nowrap) {
 		panic("-verify-end requires SourceView and -nowrap")
@@ -138,7 +144,7 @@ func main() {
 	context := &observedContext{Context: app.Typography()}
 	gui.App = observedApplication{app, context}
 	app.SetStyleSheet(modern.Sheet(modern.Options{}))
-	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 1000, Height: 700}, Chrome: gui.WindowChromeIntegrated})
+	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: float32(*windowWidth), Height: 700}, Chrome: gui.WindowChromeIntegrated})
 	must(err)
 	defer win.Destroy()
 	must(win.SetTitle("GOUI Long Paragraph"))
@@ -165,11 +171,14 @@ func main() {
 		if !*plain {
 			must(v.Document().SetLanguage(language.JSON))
 		}
-		if *verifyEnd || *verifyInput {
+		if *verifyEnd || *verifyInput || *verifyPointer {
 			v.SetAutomaticCompletion(false)
 			must(v.SetWhitespaceMode(source.WhitespaceAll))
 			colors := scheme.Light().Definition()
 			colors.Caret = color.NRGBA{R: 255, B: 255, A: 255}
+			if *verifyPointer {
+				colors.SelectionBackground = color.NRGBA{G: 255, A: 255}
+			}
 			custom, err := scheme.New(colors)
 			must(err)
 			v.SetScheme(custom)
@@ -254,6 +263,8 @@ func main() {
 	var verify func()
 	if *verifyEnd {
 		verify = endVerification(win, widget, scroll, model, &verified)
+	} else if *verifyPointer {
+		verify = pointerVerification(win, widget, scroll, model, &verified)
 	} else if *verifyInput {
 		verify = inputVerification(win, widget.(*source.SourceView), model, func() string { return original }, *clipboard, *nowrap, &verified)
 	}
@@ -315,7 +326,7 @@ func main() {
 	must(heartbeat.Start(16 * time.Millisecond))
 	must(win.Show())
 	app.Run()
-	if (*verifyEnd || *verifyInput) && !verified {
+	if (*verifyEnd || *verifyInput || *verifyPointer) && !verified {
 		panic("End verification closed before completion")
 	}
 	fmt.Printf("CLOSED maxGap=%s nativeMaxInput=%d nativeCalls=%d largestCreate=%s paints=%d colors=%d largestMetrics=%s largestRaster=%s\n", largest, context.maximum, context.calls, context.largest, context.paints, context.colors, context.metricsTime, context.rasterTime)
@@ -540,5 +551,107 @@ func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Mod
 			fmt.Println("PASS cold End/Left/typing, replacement, deletion, newline, readonly, clipboard and undo/redo; original bytes restored")
 			win.Destroy()
 		}
+	}
+}
+
+// 从真实光标像素取得局部停靠点，再走正常按下／拖动／释放路径。
+func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
+	var advance func()
+	stage := 0
+	deadline := time.Now().Add(30 * time.Second)
+	pointer := func(kind events.EventType, p geometry.Point) {
+		r := widget.Snapshot().Bounds
+		must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: geometry.Point{X: r.X + p.X, Y: r.Y + p.Y}, Button: events.PointerButtonLeft}))
+	}
+	return func() {
+		if !time.Now().Before(deadline) {
+			panic(fmt.Sprintf("pointer verification timeout stage=%d selection=%v", stage, widget.Snapshot().TextEditing.Selection))
+		}
+		if advance != nil {
+			advance()
+			return
+		}
+		if stage == 0 {
+			for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
+				must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: events.KeyEnd}))
+			}
+			stage++
+			return
+		}
+		img, err := gui.RenderWidget(widget, 0)
+		must(err)
+		scale := float64(img.Bounds().Dx()) / float64(widget.Rect().Width)
+		left, top, bottom := img.Bounds().Dx(), img.Bounds().Dy(), -1
+		for y := 0; y < min(img.Bounds().Dy(), int(64*scale)); y++ {
+			for x := 0; x < img.Bounds().Dx(); x++ {
+				r, g, b, a := img.At(x, y).RGBA()
+				if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
+					left = min(left, x)
+					top = min(top, y)
+					bottom = max(bottom, y)
+				}
+			}
+		}
+		if bottom < 0 {
+			return
+		}
+		end := geometry.Point{X: float32(float64(left) / scale), Y: float32(float64(top+bottom) / 2 / scale)}
+		offset := scroll.ScrollX()
+		previous := end
+		pointer(events.PointerDown, end)
+		found := false
+		for x := end.X - .5; x > max(0, end.X-64); x -= .5 {
+			previous.X = x
+			pointer(events.PointerMove, previous)
+			got := widget.Snapshot().TextEditing.Selection
+			if got.Caret != model.Len() {
+				if got.Anchor != model.Len() || got.Caret != model.Len()-1 {
+					panic(fmt.Sprintf("cold pointer skipped final character: got=%v end=%v previous=%v scroll=%g", got, end, previous, scroll.ScrollX()))
+				}
+				found = true
+				break
+			}
+		}
+		pointer(events.PointerUp, previous)
+		if !found {
+			panic(fmt.Sprintf("cannot select final character: end=%v previous=%v selection=%v", end, previous, widget.Snapshot().TextEditing.Selection))
+		}
+		// 等待双击时间窗过去，再验证反向的普通拖动。
+		ready := time.Now().Add(450 * time.Millisecond)
+		advance = func() {
+			if time.Now().Before(ready) {
+				return
+			}
+
+			pointer(events.PointerDown, previous)
+			pointer(events.PointerMove, end)
+			pointer(events.PointerUp, end)
+			got := widget.Snapshot().TextEditing.Selection
+			if got.Anchor != model.Len()-1 || got.Caret != model.Len() {
+				panic(fmt.Sprintf("forward pointer missed final character: got=%v end=%v previous=%v", got, end, previous))
+			}
+			if scroll.ScrollX() != offset {
+				panic("in-viewport pointer selection changed horizontal offset")
+			}
+			selected, err := gui.RenderWidget(widget, 0)
+			must(err)
+			green := 0
+			for y := max(0, top); y <= bottom; y++ {
+				for x := max(0, int(float64(previous.X-2)*scale)); x < min(selected.Bounds().Dx(), int(float64(end.X+2)*scale)); x++ {
+					r, g, b, a := selected.At(x, y).RGBA()
+					if a == 65535 && g > 64000 && r < 1000 && b < 1000 {
+						green++
+					}
+				}
+			}
+			if green == 0 {
+				panic("final character selected in model but missing selection pixels")
+			}
+
+			*complete = true
+			fmt.Println("PASS cold End final character pointer selection in both directions")
+			win.Destroy()
+		}
+
 	}
 }
