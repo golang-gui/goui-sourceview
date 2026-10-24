@@ -60,6 +60,9 @@ Restart resets the samples. Closing the main window exits. No DevServer is start
 - Use Find / Replace or platform shortcuts; try `editor` in JSON or `feature`
   in HTML. Replace one/all and Undo. Escape closes the floating panel.
   打开查找替换，在 JSON 搜索 `editor`、HTML 搜索 `feature`，尝试替换及撤销，Escape 关闭浮层。
+- Open View to choose Off, Selection, Trailing, Boundary or All whitespace markers,
+  and toggle logical line endings independently. These options change display only.
+  从 View 菜单选择空白显示模式，独立切换逻辑换行标记；这些选项只改变显示。
 - Right-click for the editor menu. F2 opens completion; type brackets,
   quotes, or select text and type an opening bracket. Try line movement shortcuts.
   右键打开菜单；F2 请求补全，输入括号/引号或包裹选区，尝试按快捷键移动整行。

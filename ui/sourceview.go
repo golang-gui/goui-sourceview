@@ -114,10 +114,13 @@ func (v *SourceViewView) OnFoldingChanged(fn func()) *SourceViewView {
 	return v
 }
 
+// WhitespaceMode explicitly controls markers; omission preserves the current view setting.
 func (v *SourceViewView) WhitespaceMode(mode source.WhitespaceMode) *SourceViewView {
 	v.whitespace = &mode
 	return v
 }
+
+// ShowLineEndings explicitly controls logical newline markers; omission preserves the current setting.
 func (v *SourceViewView) ShowLineEndings(b bool) *SourceViewView      { v.lineEndings = &b; return v }
 func (v *SourceViewView) ShowIndentGuides(b bool) *SourceViewView     { v.indentGuides = &b; return v }
 func (v *SourceViewView) SmartHomeEnd(b bool) *SourceViewView         { v.smartHomeEnd = &b; return v }
@@ -189,17 +192,17 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 		enabled = *v.foldingEnabled
 	}
 	w.SetFoldingEnabled(enabled)
-	w.SetShowLineEndings(boolOption(v.lineEndings, false))
+	if v.lineEndings != nil {
+		w.SetShowLineEndings(*v.lineEndings)
+	}
 	w.SetShowIndentGuides(boolOption(v.indentGuides, true))
 	w.SetSmartHomeEnd(boolOption(v.smartHomeEnd, true))
 	w.SetSmartBackspace(boolOption(v.smartBackspace, true))
 	w.SetHighlightOccurrences(boolOption(v.occurrences, true))
-	mode := source.WhitespaceNone
 	if v.whitespace != nil {
-		mode = *v.whitespace
-	}
-	if err := w.SetWhitespaceMode(mode); err != nil {
-		panic(err)
+		if err := w.SetWhitespaceMode(*v.whitespace); err != nil {
+			panic(err)
+		}
 	}
 	if err := w.SetRulers(v.rulers); err != nil {
 		panic(err)

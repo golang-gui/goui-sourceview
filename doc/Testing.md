@@ -294,3 +294,21 @@ XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/find
 只读、共享视图、重新挂载及折行/主题锚点都有明确断言。
 可见性失败单独记录并继续检查独立内容状态，最终仍以非零退出；不能只读取 COMPLETE 日志计为通过。
 样本来源、观察边界与操作见入口及 testdata/README；实际结果见 [中大文件验证](PlanLargeFiles.md)。
+
+
+## 空白字符显示
+
+`tests/window/editor/assistance` 同时验证普通编辑辅助与空白标记：
+
+```sh
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software GOUI_PLAT_SCALE=1 go run ./tests/window/editor/assistance -basic
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software GOUI_PLAT_SCALE=1.5 go run ./tests/window/editor/assistance
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software GOUI_PLAT_SCALE=2 go run ./tests/window/editor/assistance -dark
+```
+
+需要桌面及窗口管理器；在独立显示运行，程序自动关闭，提前关闭失败。
+正常 Window.DispatchEvent 选择全部文本，对比同一次捕获条件下 None、All、Boundary、
+Selection 的实际像素，并检查特殊空格单元、CRLF/EOF、输出及撤销不受显示选项影响。
+排除闪烁光标区域，不使用跨平台字体金图；记录实际捕获比例、后端与主题。
+逻辑包测试另外覆盖 Trailing、半开选区、长行索引预算/视口过滤、软换行、IME 映射和分片边界。
+物理输入法和混合 DPI 仍需单独验收，截图观察不替代这些断言。

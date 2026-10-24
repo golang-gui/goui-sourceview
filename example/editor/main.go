@@ -190,6 +190,45 @@ func run() error {
 		choice.ConnectChange(func(state widgets.CheckState) { option.change(state == widgets.CheckChecked) })
 		tools.AddChild(choice)
 	}
+	// Rebuild labels from the view when opening; no parallel option state.
+	viewOptions := gui.NewButton()
+	viewOptions.SetChild(gui.NewLabel("View"))
+	viewMenu := gui.NewPopoverMenu(viewOptions)
+	defer viewMenu.Hide()
+	viewOptions.ConnectClicked(func() {
+		menu := gui.NewMenu()
+		label := func(text string, checked bool) string {
+			if checked {
+				return "✓ " + text
+			}
+			return "   " + text
+		}
+		for _, option := range []struct {
+			label string
+			mode  source.WhitespaceMode
+		}{
+			{"Whitespace: Off", source.WhitespaceNone}, {"Whitespace: Selection", source.WhitespaceSelection},
+			{"Whitespace: Trailing", source.WhitespaceTrailing}, {"Whitespace: Boundary", source.WhitespaceBoundary},
+			{"Whitespace: All", source.WhitespaceAll},
+		} {
+			menu.Append(label(option.label, editor.WhitespaceMode() == option.mode), func() {
+				if err := editor.SetWhitespaceMode(option.mode); err != nil {
+					status.SetText(err.Error())
+				}
+				win.SetFocusedWidget(editor)
+			})
+		}
+		menu.AppendSeparator()
+		menu.Append(label("Line endings", editor.ShowLineEndings()), func() {
+			editor.SetShowLineEndings(!editor.ShowLineEndings())
+			win.SetFocusedWidget(editor)
+		})
+		viewMenu.SetMenu(menu)
+		if err := viewMenu.ShowAt(geometry.Point{Y: viewOptions.Rect().Height}); err != nil {
+			status.SetText(err.Error())
+		}
+	})
+	tools.AddChild(viewOptions)
 	tools.AddChild(spacer())
 	hint := gui.NewLabel("F2: complete  ·  F3: next match")
 	hint.SetStyleName(modern.MutedText)

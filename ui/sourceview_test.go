@@ -98,3 +98,32 @@ func TestKeyBindingsAreExplicitAndCopied(t *testing.T) {
 	}
 	view.Unmount(ctx, w)
 }
+
+// 未声明显示选项的重建保留交互状态，显式 None/false 仍可关闭。
+func TestUncontrolledWhitespaceSurvivesDeclarativeUpdate(t *testing.T) {
+	ctx := &context{}
+	view := SourceView()
+	w := view.Mount(ctx).(*source.SourceView)
+	defer view.Unmount(ctx, w)
+	view.Update(ctx, w)
+	if w.WhitespaceMode() != source.WhitespaceNone || w.ShowLineEndings() {
+		t.Fatal("new view defaults")
+	}
+	if err := w.SetWhitespaceMode(source.WhitespaceBoundary); err != nil {
+		t.Fatal(err)
+	}
+	w.SetShowLineEndings(true)
+	view.Update(ctx, w)
+	if w.WhitespaceMode() != source.WhitespaceBoundary || !w.ShowLineEndings() {
+		t.Fatal("rebuild reset interactive state")
+	}
+	SourceView().WhitespaceMode(source.WhitespaceNone).Update(ctx, w)
+	if w.WhitespaceMode() != source.WhitespaceNone || !w.ShowLineEndings() {
+		t.Fatal("explicit None or independent EOL option ignored")
+	}
+	SourceView().WhitespaceMode(source.WhitespaceAll).ShowLineEndings(false).Update(ctx, w)
+	view.Update(ctx, w)
+	if w.WhitespaceMode() != source.WhitespaceAll || w.ShowLineEndings() {
+		t.Fatal("explicit false or retained mode ignored")
+	}
+}

@@ -595,4 +595,11 @@ G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失�
 - 复用已测量字符几何，按帧预算构建块索引，水平/垂直视口过滤；逻辑行边界、半开选区、CRLF/EOF 和未覆盖 IME 段落分别验证。
 - 在独立工作树（基线 743a8eb，GOUI v0.3.0）实现，保留主工作区既有长段落分页改动及未跟踪验证程序。
 - `GOWORK=off go test ./... -count=1` 通过；初次回归编译时误用了 Projection 方法名，改为公开 Update；IME 回归将选区设置移至创建投影前，避免 SetSelection 正常取消投影。所有既有断言保留。
-- 样式、声明式选项保留、示例入口和窗口验证见本节后续记录。
+- Basic/Modern 增加 selected-whitespace；声明式省略 WhitespaceMode/ShowLineEndings 保留当前视图值，显式 None/false 可关闭。example/editor 的 View 菜单每次打开读取 getter，使用普通 Menu/Popover，不增加默认快捷键。
+- Linux amd64 / Go 1.25.8 / Pango，独立 GOUI v0.3.0：`GOWORK=off go test ./... -count=1` 全仓通过，基线 460 项，本次 469 项，无测试失败或跳过；`go test -race ./...` 和 `go vet ./...` 通过。新增断言包含片段逻辑边界与公开 Geometry 适配，未删改既有断言。
+- 独立 X11（Xvnc 24-bit、Xfwm4 compositor）/ Software：assistance 窗口在 Basic 1x、Modern Light 1.5x、Modern Dark 2x 通过普通 Window.DispatchEvent 选择、逐测量单元像素差异、CRLF/EOF、GoTo/导航/撤销断言。首次像素比较包含闪烁光标导致差异，按明确采样边界排除光标后通过；未放宽抗锯齿容差。
+- 1.5x 示例通过 XTest 鼠标打开 View、选择 Boundary、重新打开检查当前勾选，以及观察特殊空格与 RTL Tab 箭头。截图仅作观察，窗口像素断言以 assistance 程序为准。
+- 工作区联调使用相邻 GOUI `5f30e52` 加其现有未提交 ParagraphLayout 等改动；本仓 `go test ./...` 通过。分页集成仅在既有未提交 layout_long.go 增加装饰适配调用，保持与分页工作同一提交边界。本次不提交该草稿或其他用户改动。
+- 临时窗口程序用 120001 字节正文（40000 空格 + x + 80000 空格，另有 CRLF），在 1.5x 横向滚至 600000 DIP，断言 All 的可见标记、前段 Trailing 无标记、尾段 Trailing 与 All 一致；输出 PASS。程序及图片均在仓库外；这是正确性验证，不作性能提升结论。
+- Windows amd64、macOS arm64：`GOWORK=off CGO_ENABLED=0 go build ./...` 交叉构建通过，未执行原生桌面。物理 IME、跨屏 DPI、GPU 后端未在本轮验收；未将交叉构建等同平台运行。
+- 未修改 GOUI、go.mod 或全局 Go 配置。桌面副作用仅限独立测试显示，结束后关闭本次应用及显示服务。
