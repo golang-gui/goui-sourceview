@@ -74,7 +74,11 @@ func (q *frameQueue) frame(_ time.Time) {
 		if !v.mounted || v.Root() != q.root || !visible(v) {
 			continue
 		}
-		v.layoutStep(minTime(deadline, time.Now().Add(2*time.Millisecond)))
+		until := minTime(deadline, time.Now().Add(2*time.Millisecond))
+		v.layoutStep(until)
+		if v.mounted && !v.Destroyed() {
+			v.whitespaceStep(until)
+		}
 		if !v.mounted || v.Root() != q.root || v.Destroyed() {
 			continue
 		}

@@ -7,7 +7,10 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
+	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/gui/textedit"
+	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
@@ -201,5 +204,32 @@ func TestEditorFrameAndScrollBarThemeParts(t *testing.T) {
 		if width, _ := body.BorderWidth(); width != 0 {
 			t.Fatal("code body must not draw a second frame")
 		}
+	}
+}
+
+// 官方主题及局部覆盖分别提供普通/选中标记颜色，不触发重新排版。
+func TestWhitespaceStyleParts(t *testing.T) {
+	for _, sheet := range []style.StyleSheet{basic.Sheet(), modern.Sheet(modern.Options{}), modern.Sheet(modern.Options{Dark: true})} {
+		normal := foreground(sheet.Resolve(style.Sel{Name: "source-view", Part: "whitespace"}))
+		selected := foreground(sheet.Resolve(style.Sel{Name: "source-view", Part: "selected-whitespace"}))
+		if normal.A != 125 || selected.A != 215 || normal == selected {
+			t.Fatal("whitespace theme parts", normal, selected)
+		}
+	}
+	v := NewSourceView()
+	v.Document().Model().SetText(" ")
+	observe(t, v)
+	v.context = &shapedContext{}
+	t.Cleanup(v.dropLayouts)
+	v.LayoutVisible(geometry.Size{Width: 200, Height: 100}, geometry.Point{})
+	p := v.paragraph(0)
+	selected := rgb(0xec22aa)
+	themedScope(v, style.Sheet(style.Name("source-view").Part("selected-whitespace").ForegroundColor(selected)))
+	v.SetSelection(textedit.Selection{Caret: 1})
+	_ = v.SetWhitespaceMode(WhitespaceAll)
+	out := &recordingPainter{}
+	v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
+	if len(out.fills) != 1 || out.fills[0].color != graphics.ColorOf(selected) || p != v.paragraph(0) {
+		t.Fatal("selected marker style", out.fills)
 	}
 }

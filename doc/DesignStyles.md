@@ -71,6 +71,7 @@ ScrollView 在所有焦点/禁用状态间预留稳定圆角安全内区，聚�
 | bracket | 匹配背景与边框色 |
 | caret / preedit | 插入点、预编辑下划线前景 |
 | border | 编辑区边框色 |
+| whitespace / selected-whitespace | 普通/被选中空白及换行标记的前景 |
 | token-plain/property/string/escape/number/keyword/delimiter/tag/attribute/entity/comment/meta/invalid | 对应 token 前景 |
 
 解析使用 `gui.ResolveWidgetStyle`，因此支持应用主题和显式 `StyleScope`。

@@ -26,6 +26,7 @@ func (k layoutKey) sameText(other layoutKey) bool {
 
 type paragraph struct {
 	layout, number typography.TextLayout
+	whitespace     *whitespaceLayout
 	geometry       textedit.Geometry
 	fragment       textedit.Fragment
 	text           string
@@ -263,6 +264,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	}
 	w, h := native.MeasureSize()
 	lines, clusters := native.MeasureMetrics()
+	p.whitespace = newWhitespaceLayout(text, lines, clusters)
 	var g textedit.Geometry
 	fragment, fragmentErr := textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
 	if fragmentErr == nil {

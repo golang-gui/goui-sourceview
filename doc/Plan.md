@@ -587,3 +587,12 @@ G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失�
 - [x] Linux amd64 / Go 1.25.8 / Pango：`GOWORK=off go test ./...` 与普通 `go test ./...` 全仓通过，原 v0.1.1 缺少 ApplyBatch / BatchOptions 的独立构建阻塞已解除。
 - [x] `GOWORK=off CGO_ENABLED=0 go build ./...` 在 Linux amd64、Windows amd64、macOS arm64 三个目标通过，包含全部示例与窗口验证程序；技能格式和文档链接/锚点/围栏检查通过。
 - 本轮只修改 SourceView 的依赖与文档，没有修改 GOUI 或新增控件行为；Windows/macOS 仅交叉构建，未做新窗口、真实 IME、剪贴板或混合 DPI 操作验收，不将这些项目计为通过。
+
+
+## 2026-10-24 空白字符显示
+
+- 增加 Boundary 模式，支持 NBSP、窄 NBSP 和全角空格；保留已有模式枚举值及默认关闭。
+- 复用已测量字符几何，按帧预算构建块索引，水平/垂直视口过滤；逻辑行边界、半开选区、CRLF/EOF 和未覆盖 IME 段落分别验证。
+- 在独立工作树（基线 743a8eb，GOUI v0.3.0）实现，保留主工作区既有长段落分页改动及未跟踪验证程序。
+- `GOWORK=off go test ./... -count=1` 通过；初次回归编译时误用了 Projection 方法名，改为公开 Update；IME 回归将选区设置移至创建投影前，避免 SetSelection 正常取消投影。所有既有断言保留。
+- 样式、声明式选项保留、示例入口和窗口验证见本节后续记录。

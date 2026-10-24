@@ -152,6 +152,16 @@ func (p *recordingPainter) Save() {}
 
 func (p *recordingPainter) Restore() {}
 
+func (p *recordingPainter) PixelScale() float32 { return 1 }
+
+func (p *recordingPainter) FillRoundRect(r geometry.Rectangle, _ float32, b graphics.Brush) {
+	p.FillRect(r, b)
+}
+
+func (p *recordingPainter) DrawRoundRect(r geometry.Rectangle, _ float32, w float32, b graphics.Brush) {
+	p.DrawRect(r, w, b)
+}
+
 func (p *recordingPainter) SetClipRect(geometry.Rectangle) {}
 
 func (p *recordingPainter) FillRect(r geometry.Rectangle, b graphics.Brush) {

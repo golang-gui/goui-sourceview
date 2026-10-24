@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
@@ -13,21 +14,24 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
+	"github.com/golang-gui/goui/platform/typography"
 )
 
+// WhitespaceMode controls decorative markers without changing source text.
 type WhitespaceMode uint8
 
 const (
-	WhitespaceNone WhitespaceMode = iota
-	WhitespaceSelection
-	WhitespaceTrailing
-	WhitespaceAll
+	WhitespaceNone      WhitespaceMode = iota // Hide whitespace markers.
+	WhitespaceSelection                       // Mark whitespace contained in the selection.
+	WhitespaceTrailing                        // Mark whitespace at the end of a logical line.
+	WhitespaceAll                             // Mark all supported whitespace.
+	WhitespaceBoundary                        // Mark indentation, trailing/repeated spaces, Tabs and special spaces.
 )
 
 func (v *SourceView) WhitespaceMode() WhitespaceMode { return v.whitespace }
 
 func (v *SourceView) SetWhitespaceMode(mode WhitespaceMode) error {
-	if mode > WhitespaceAll {
+	if mode > WhitespaceBoundary {
 		return fmt.Errorf("sourceview: invalid whitespace mode %d", mode)
 	}
 	if !v.Destroyed() && v.whitespace != mode {
@@ -280,40 +284,449 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 	}
 }
 
-func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, origin geometry.Point) {
-	if v.whitespace == WhitespaceNone && !v.showLineEndings {
-		return
-	}
-	c := graphics.ColorOf(v.partColor("whitespace", tint(v.colors.GutterForeground, 125)))
-	trailing := len(strings.TrimRight(p.text, " \t"))
-	line := v.displayRange(row)
-	selection := v.Selection().Range()
-	for at, b := range []byte(p.text) {
-		if b != ' ' && b != '\t' {
-			continue
-		}
-		show := v.whitespace == WhitespaceAll || v.whitespace == WhitespaceTrailing && at >= trailing || v.whitespace == WhitespaceSelection && v.projection == nil && selection.Start <= line.Start+at && selection.End > line.Start+at
-		if !show {
-			continue
-		}
-		for _, r := range p.geometry.Selection(textedit.Range{Start: at, End: at + 1}) {
-			x, y := origin.X+r.X, origin.Y+r.Y+r.Height*.55
-			if b == ' ' {
-				draw.FillRect(geometry.Rect(x+r.Width/2-.75, y-.75, 1.5, 1.5), c)
-			} else if r.Width >= 5 {
-				left, right := x+2, x+r.Width-2
-				draw.DrawLine(geometry.Point{X: left, Y: y}, geometry.Point{X: right, Y: y}, 1, c)
-				draw.DrawLine(geometry.Point{X: right - 3, Y: y - 2}, geometry.Point{X: right, Y: y}, 1, c)
-				draw.DrawLine(geometry.Point{X: right - 3, Y: y + 2}, geometry.Point{X: right, Y: y}, 1, c)
+// Whitespace geometry borrows the unchanged layout's measured values. The
+// paragraph owns both lifetimes; no extra native layout or per-marker geometry
+// query is needed. A small bounding tree indexes groups of measured clusters.
+type whitespaceLayout struct {
+	version, revision         uint64
+	text                      string
+	textStart, length         int
+	read                      func(int, bool) string
+	lines                     []typography.TextLine
+	runs                      [][]typography.TextCluster
+	run, at                   int
+	nodes                     []whitespaceNode
+	roots                     []int
+	leading, trailing         int
+	leadingDone, trailingDone bool
+	end                       geometry.Rectangle
+	endStart                  int
+	endReady                  bool
+	endRTL                    bool
+}
+
+type whitespaceNode struct {
+	bounds                  geometry.Rectangle
+	left, right             int
+	run, first, end, leaves int
+}
+
+const whitespaceClusterBlock = 256
+
+func newWhitespaceLayout(text string, lines []typography.TextLine, clusters []typography.TextCluster) *whitespaceLayout {
+	w := &whitespaceLayout{text: text, length: len(text), lines: lines, trailing: len(text), endStart: -1}
+	if len(clusters) != 0 {
+		w.runs = [][]typography.TextCluster{clusters}
+	} else {
+		for _, line := range lines {
+			if len(line.Clusters) != 0 {
+				w.runs = append(w.runs, line.Clusters)
 			}
 		}
 	}
-	if v.showLineEndings && v.projection == nil && row+1 < v.document.model.LineCount() {
-		r := p.geometry.Caret(textedit.Position{Offset: len(p.text), Upstream: true})
-		x, y := origin.X+r.X+3, origin.Y+r.Y+r.Height*.55
-		draw.DrawLine(geometry.Point{X: x + 5, Y: y - 4}, geometry.Point{X: x + 5, Y: y}, 1, c)
-		draw.DrawLine(geometry.Point{X: x + 5, Y: y}, geometry.Point{X: x, Y: y}, 1, c)
-		draw.DrawLine(geometry.Point{X: x + 2, Y: y - 2}, geometry.Point{X: x, Y: y}, 1, c)
-		draw.DrawLine(geometry.Point{X: x + 2, Y: y + 2}, geometry.Point{X: x, Y: y}, 1, c)
+	if text == "" && len(lines) != 0 {
+		line := lines[len(lines)-1]
+		w.end, w.endReady = geometry.Rect(line.X, line.Y, 0, line.Height), true
 	}
+	return w
+}
+
+func whitespaceKind(r rune) int {
+	switch r {
+	case ' ':
+		return 1
+	case '\t':
+		return 2
+	case '\u00a0', '\u202f':
+		return 3
+	case '\u3000':
+		return 4
+	}
+	return 0
+}
+
+func (w *whitespaceLayout) pending(boundaries bool) bool {
+	return w.run < len(w.runs) || boundaries && (!w.leadingDone || !w.trailingDone)
+}
+
+func whitespaceIntersects(a, b geometry.Rectangle) bool {
+	return a.Width > 0 && a.Height > 0 && a.X < b.X+b.Width && b.X < a.X+a.Width && a.Y < b.Y+b.Height && b.Y < a.Y+a.Height
+}
+
+func whitespaceUnion(a, b geometry.Rectangle) geometry.Rectangle {
+	if a.Width <= 0 || a.Height <= 0 {
+		return b
+	}
+	if b.Width <= 0 || b.Height <= 0 {
+		return a
+	}
+	x, y := min(a.X, b.X), min(a.Y, b.Y)
+	return geometry.Rect(x, y, max(a.X+a.Width, b.X+b.Width)-x, max(a.Y+a.Height, b.Y+b.Height)-y)
+}
+
+func (w *whitespaceLayout) cell(c typography.TextCluster) (geometry.Rectangle, bool) {
+	if c.LineIndex < 0 || c.LineIndex >= len(w.lines) || c.Start < 0 || c.Length <= 0 || c.Start > len(w.text)-c.Length {
+		return geometry.Rectangle{}, false
+	}
+	line := w.lines[c.LineIndex]
+	return geometry.Rect(c.X, line.Y, c.Width, line.Height), true
+}
+
+// A pass has both a wall-clock deadline and a finite input budget, even when
+// the caller supplies no deadline. Tests may repeatedly advance an index.
+func (w *whitespaceLayout) advance(deadline time.Time, boundaries bool) {
+	for work := 0; work < 8192 && w.pending(boundaries); work += whitespaceClusterBlock {
+		if !deadline.IsZero() && !time.Now().Before(deadline) {
+			return
+		}
+		if w.run < len(w.runs) {
+			run := w.runs[w.run]
+			end := min(len(run), w.at+whitespaceClusterBlock)
+			node := whitespaceNode{left: -1, right: -1, run: w.run, first: w.at, end: end, leaves: 1}
+			for _, c := range run[w.at:end] {
+				if rect, ok := w.cell(c); ok {
+					node.bounds = whitespaceUnion(node.bounds, rect)
+					if c.Start+c.Length == len(w.text) && c.Start > w.endStart {
+						x := rect.X + rect.Width
+						if c.Direction == typography.TextRightToLeft {
+							x = rect.X
+						}
+						w.end, w.endStart, w.endReady = geometry.Rect(x, rect.Y, 0, rect.Height), c.Start, true
+						w.endRTL = c.Direction == typography.TextRightToLeft
+					}
+				}
+			}
+			index := len(w.nodes)
+			w.nodes = append(w.nodes, node)
+			for len(w.roots) > 0 {
+				left := w.roots[len(w.roots)-1]
+				if w.nodes[left].leaves != w.nodes[index].leaves {
+					break
+				}
+				w.roots = w.roots[:len(w.roots)-1]
+				parent := whitespaceNode{bounds: whitespaceUnion(w.nodes[left].bounds, w.nodes[index].bounds), left: left, right: index, leaves: 2 * w.nodes[index].leaves}
+				index = len(w.nodes)
+				w.nodes = append(w.nodes, parent)
+			}
+			w.roots = append(w.roots, index)
+			w.at = end
+			if end == len(run) {
+				w.run++
+				w.at = 0
+			}
+		}
+		if boundaries {
+			w.scanBoundaries()
+		}
+
+	}
+}
+
+// Querying a ready tree only visits intersecting cluster blocks, including for
+// a single unwrapped line and logically disjoint bidirectional text spans.
+func (w *whitespaceLayout) visit(clip geometry.Rectangle, fn func(typography.TextCluster, geometry.Rectangle)) int {
+	visited := 0
+	var walk func(int)
+	walk = func(index int) {
+		node := w.nodes[index]
+		if !whitespaceIntersects(node.bounds, clip) {
+			return
+		}
+		if node.left >= 0 {
+			walk(node.left)
+			walk(node.right)
+			return
+		}
+		for _, c := range w.runs[node.run][node.first:node.end] {
+			visited++
+			if rect, ok := w.cell(c); ok && whitespaceIntersects(rect, clip) {
+				fn(c, rect)
+			}
+		}
+	}
+	for _, root := range w.roots {
+		walk(root)
+	}
+	return visited
+}
+
+// read, when present, supplies a bounded valid-UTF-8 chunk beginning at at
+// (forward), or ending at at (backward), in complete logical-line offsets.
+// This keeps fragment edges distinct from logical indentation and trailing text.
+func (w *whitespaceLayout) chunk(at int, backward bool) string {
+	if w.read != nil {
+		return w.read(at, backward)
+	}
+	a, b := at, min(len(w.text), at+512)
+	if backward {
+		a, b = max(0, at-512), at
+		for a < b && !utf8.RuneStart(w.text[a]) {
+			a++
+		}
+	} else {
+		for b < len(w.text) && b > a && !utf8.RuneStart(w.text[b]) {
+			b--
+		}
+	}
+	return w.text[a:b]
+}
+
+func (w *whitespaceLayout) scanBoundaries() {
+	if !w.leadingDone {
+		text := w.chunk(w.leading, false)
+		for n := 0; n < 128 && text != ""; n++ {
+			r, size := utf8.DecodeRuneInString(text)
+			if whitespaceKind(r) == 0 {
+				w.leadingDone = true
+				break
+			}
+			w.leading += size
+			text = text[size:]
+		}
+		w.leadingDone = w.leadingDone || w.leading == w.length
+	}
+	if !w.trailingDone {
+		text := w.chunk(w.trailing, true)
+		for n := 0; n < 128 && text != ""; n++ {
+			r, size := utf8.DecodeLastRuneInString(text)
+			if whitespaceKind(r) == 0 {
+				w.trailingDone = true
+				break
+			}
+			w.trailing -= size
+			text = text[:len(text)-size]
+		}
+		w.trailingDone = w.trailingDone || w.trailing == 0
+	}
+}
+
+func (w *whitespaceLayout) show(mode WhitespaceMode, start, end, kind int, selected bool) bool {
+	switch mode {
+	case WhitespaceAll:
+		return true
+	case WhitespaceSelection:
+		return selected
+	case WhitespaceTrailing:
+		return w.textStart+start >= w.trailing
+	case WhitespaceBoundary:
+		if kind != 1 || w.textStart+start < w.leading || w.textStart+start >= w.trailing || start > 0 && w.text[start-1] == ' ' || end < len(w.text) && w.text[end] == ' ' {
+			return true
+		}
+		if start == 0 && w.textStart > 0 {
+			text := w.chunk(w.textStart, true)
+			if strings.HasSuffix(text, " ") {
+				return true
+			}
+		}
+		if end == len(w.text) && w.textStart+end < w.length {
+			return strings.HasPrefix(w.chunk(w.textStart+end, false), " ")
+		}
+		return false
+	}
+	return false
+}
+
+func (v *SourceView) whitespaceStep(deadline time.Time) {
+	if v.whitespace == WhitespaceNone && !v.showLineEndings || !v.mounted || !visible(v) {
+		return
+	}
+	boundaries := v.whitespace == WhitespaceBoundary || v.whitespace == WhitespaceTrailing
+	first, last := v.visibleRows()
+	for row := first; row <= last; row = v.nextDisplayRow(row) {
+		if _, ok := v.highlightRow(row); !ok {
+			continue
+		}
+		p := v.cachedParagraph(row)
+		if p == nil || p.whitespace == nil || !p.whitespace.pending(boundaries) {
+			continue
+		}
+		p.whitespace.advance(deadline, boundaries)
+		v.RequestPaint()
+		if !deadline.IsZero() && !time.Now().Before(deadline) {
+			return
+		}
+	}
+}
+
+func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, origin geometry.Point) {
+	if v.whitespace == WhitespaceNone && !v.showLineEndings || v.viewport.Width <= 0 || v.viewport.Height <= 0 {
+		return
+	}
+	sourceRow, ok := v.highlightRow(row)
+	if !ok {
+		return
+	} // An IME-covered paragraph has no committed source mapping.
+	w := p.whitespace
+	if w == nil {
+		return
+	}
+	boundaries := v.whitespace == WhitespaceBoundary || v.whitespace == WhitespaceTrailing
+	if !v.frameLayout {
+		for w.pending(boundaries) {
+			w.advance(time.Time{}, boundaries)
+		}
+	} else if w.pending(boundaries) {
+		v.RequestPaint()
+	}
+	line, _ := v.document.model.LineRange(sourceRow)
+	selection := v.Selection().Range()
+	clip := geometry.Rect(v.gutter-origin.X, -origin.Y, max(0, v.viewport.Width-v.gutter), v.viewport.Height)
+	normal := v.partColor("whitespace", tint(v.colors.GutterForeground, 125))
+	selectedColor := v.partColor("selected-whitespace", tint(v.colors.Foreground, 215))
+	if v.whitespace != WhitespaceNone {
+		w.visit(clip, func(c typography.TextCluster, rect geometry.Rectangle) {
+			start, end := c.Start, c.Start+c.Length
+			r, size := utf8.DecodeRuneInString(w.text[start:end])
+			kind := whitespaceKind(r)
+			if kind == 0 {
+				return
+			}
+			// A backend may merge a run of blank characters into one indivisible
+			// cluster. Mark that measured cell once; never invent internal stops.
+			for at := start + size; at < end; {
+				next, n := utf8.DecodeRuneInString(w.text[at:end])
+				if whitespaceKind(next) != kind {
+					return
+				}
+				at += n
+			}
+			selected := selection.Start <= line.Start+w.textStart+start && selection.End >= line.Start+w.textStart+end
+			if !w.show(v.whitespace, start, end, kind, selected) {
+				return
+			}
+			color := normal
+			if selected {
+				color = selectedColor
+			}
+			v.paintWhitespaceCell(draw, rect.Translate(origin), kind, c.Direction == typography.TextRightToLeft, color)
+		})
+	}
+	if v.showLineEndings && sourceRow+1 < v.document.model.LineCount() && w.textStart+len(w.text) == w.length && w.endReady {
+		r := w.end.Translate(origin)
+		x, y := r.X+1, r.Y+r.Height*.55
+		if w.endRTL {
+			x = r.X - 6
+		}
+		mark := geometry.Rect(x, y-4, 5, 7)
+		if !whitespaceIntersects(mark, clip.Translate(origin)) {
+			return
+		}
+		color := normal
+		if selection.Start <= line.End && selection.End > line.End {
+			color = selectedColor
+		}
+		brush := graphics.ColorOf(color)
+		draw.DrawLine(geometry.Point{X: x + 4, Y: y - 4}, geometry.Point{X: x + 4, Y: y}, 1, brush)
+		draw.DrawLine(geometry.Point{X: x + 4, Y: y}, geometry.Point{X: x, Y: y}, 1, brush)
+		draw.DrawLine(geometry.Point{X: x + 2, Y: y - 2}, geometry.Point{X: x, Y: y}, 1, brush)
+		draw.DrawLine(geometry.Point{X: x + 2, Y: y + 2}, geometry.Point{X: x, Y: y}, 1, brush)
+	}
+}
+
+func (v *SourceView) paintWhitespaceCell(draw gui.Painter, r geometry.Rectangle, kind int, rtl bool, color color.NRGBA) {
+	brush := graphics.ColorOf(color)
+	x, y := r.X+r.Width/2, r.Y+r.Height*.55
+	switch kind {
+	case 1:
+		draw.FillRoundRect(geometry.Rect(x-.75, y-.75, 1.5, 1.5), .75, brush)
+	case 2:
+		if r.Width < 3 {
+			return
+		}
+		left, right := r.X+1, r.X+r.Width-1
+		from, to := left, right
+		if rtl {
+			from, to = right, left
+		}
+		wing := min(float32(3), (right-left)/2)
+		if rtl {
+			wing = -wing
+		}
+		draw.DrawLine(geometry.Point{X: from, Y: y}, geometry.Point{X: to, Y: y}, 1, brush)
+		draw.DrawLine(geometry.Point{X: to - wing, Y: y - 2}, geometry.Point{X: to, Y: y}, 1, brush)
+		draw.DrawLine(geometry.Point{X: to - wing, Y: y + 2}, geometry.Point{X: to, Y: y}, 1, brush)
+	case 3:
+		size := min(float32(3), r.Width-1)
+		if size > 0 {
+			draw.DrawRoundRect(geometry.Rect(x-size/2, y-size/2, size, size), size/2, 1, brush)
+		}
+	case 4:
+		size := min(r.Width-2, r.Height*.4)
+		if size > 0 {
+			draw.DrawRect(geometry.Rect(x-size/2, y-size/2, size, size), 1, brush)
+		}
+	}
+}
+
+// refreshWhitespace adapts an existing partial Geometry snapshot. It uses
+// measured atomic stops, never reshapes substrings or guesses character widths.
+// The caller supplies the fragment's byte origin and geometry generation.
+func (v *SourceView) refreshWhitespace(p *paragraph, start int, version uint64) {
+	row, ok := v.highlightRow(p.row)
+	if !ok {
+		p.whitespace = nil
+		return
+	}
+	source, _ := v.document.model.LineRange(row)
+	length := source.End - source.Start
+	if w := p.whitespace; w != nil && w.version == version && w.revision == v.document.model.Revision() && w.textStart == start && w.text == p.text && w.length == length {
+		return
+	}
+	var lines []typography.TextLine
+	var clusters []typography.TextCluster
+	for at := 0; at < len(p.text); {
+		end := p.geometry.Snap(start+at+1, true) - start
+		if end <= at || end > len(p.text) {
+			break
+		}
+		r, _ := utf8.DecodeRuneInString(p.text[at:end])
+		if whitespaceKind(r) != 0 {
+			a := p.geometry.Caret(textedit.Position{Offset: start + at})
+			b := p.geometry.Caret(textedit.Position{Offset: start + end, Upstream: true})
+			direction := typography.TextLeftToRight
+			if a.Y == b.Y && a.X > b.X {
+				direction = typography.TextRightToLeft
+			}
+			for _, rect := range p.geometry.Selection(textedit.Range{Start: start + at, End: start + end}) {
+				clusters = append(clusters, typography.TextCluster{Start: at, Length: end - at, X: rect.X, Width: rect.Width, LineIndex: len(lines), Direction: direction})
+				lines = append(lines, typography.TextLine{Y: rect.Y, Height: rect.Height})
+			}
+		}
+		at = end
+	}
+	w := newWhitespaceLayout(p.text, lines, clusters)
+	w.version, w.textStart, w.length, w.trailing = version, start, length, length
+	w.revision = v.document.model.Revision()
+	// The model and revision belong to this snapshot, including its edge reader.
+	// A replacement paragraph always receives a different snapshot/reader.
+	model, revision := v.document.model, v.document.model.Revision()
+	w.read = func(at int, backward bool) string {
+		if model.Revision() != revision {
+			w.leadingDone, w.trailingDone = true, true
+			return ""
+		}
+		a, b := at, min(length, at+512)
+		if backward {
+			a, b = max(0, at-512), at
+			for a < b && !model.IsRuneBoundary(source.Start+a) {
+				a++
+			}
+		} else {
+			for b > a && !model.IsRuneBoundary(source.Start+b) {
+				b--
+			}
+		}
+		text, _ := model.Slice(textedit.Range{Start: source.Start + a, End: source.Start + b})
+		return text
+	}
+	if start+len(p.text) == length {
+		w.end = p.geometry.Caret(textedit.Position{Offset: length, Upstream: true})
+		w.endReady = true
+		if length > start {
+			at := p.geometry.Snap(length-1, false)
+			before := p.geometry.Caret(textedit.Position{Offset: at})
+			w.endRTL = before.Y == w.end.Y && before.X > w.end.X
+		}
+	}
+	p.whitespace = w
 }
