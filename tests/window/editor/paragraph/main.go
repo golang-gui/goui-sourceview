@@ -9,6 +9,8 @@
 // 不依赖字体金图。允许准备目标排版及光标闪烁的等待，超时或提前关闭失败；成功自动关闭。
 // 此自动场景仅 SourceView，输入尾部应为至少三个 ASCII 字符，无额外文件写入。
 // -verify-pointer -nowrap 自动验证 End 后正反向拖选最后一个字符，不改文本。
+// -verify-forward -nowrap 在冷 End 后直接由左向右拖选末尾，多帧推进，
+// 检查水平偏移、模型位置及最终光标像素；不先反向拖动。
 // -verify-input 自动验证冷定位后立即 Left/提交文本的顺序，选区替换、删除、
 // 换行、只读及撤销重做；可额外 -clipboard 测试末尾小选区的真实剪切/粘贴。
 // -clipboard 会覆盖本显示的剪贴板，只应在独立测试桌面启用；默认不访问剪贴板。
@@ -124,12 +126,16 @@ func main() {
 	plain := flag.Bool("plain", false, "disable JSON highlighting")
 	nowrap := flag.Bool("nowrap", false, "disable line wrapping")
 	verifyEnd := flag.Bool("verify-end", false, "verify End/Left/Right caret visibility and resize (SourceView, -nowrap)")
+	verifyForward := flag.Bool("verify-forward", false, "verify cold End and left-to-right dragging of the tail (SourceView, -nowrap)")
 	verifyPointer := flag.Bool("verify-pointer", false, "verify pointer selection of the final character (SourceView, -nowrap)")
 	verifyInput := flag.Bool("verify-input", false, "verify rapid navigation/editing on the original long document")
 	clipboard := flag.Bool("clipboard", false, "also verify small native cut/paste selections (disposable desktop)")
 	flag.Parse()
-	if *verifyInput && (*textview || *verifyEnd || *verifyPointer) {
+	if *verifyInput && (*textview || *verifyEnd || *verifyPointer || *verifyForward) {
 		panic("-verify-input requires SourceView and cannot combine with -verify-end")
+	}
+	if *verifyForward && (*textview || !*nowrap || *verifyEnd || *verifyPointer || *verifyInput) {
+		panic("-verify-forward requires SourceView and -nowrap, without other verifiers")
 	}
 	if *verifyPointer && (*textview || !*nowrap || *verifyEnd) {
 		panic("-verify-pointer requires SourceView and -nowrap, without -verify-end")
@@ -171,12 +177,12 @@ func main() {
 		if !*plain {
 			must(v.Document().SetLanguage(language.JSON))
 		}
-		if *verifyEnd || *verifyInput || *verifyPointer {
+		if *verifyEnd || *verifyInput || *verifyPointer || *verifyForward {
 			v.SetAutomaticCompletion(false)
 			must(v.SetWhitespaceMode(source.WhitespaceAll))
 			colors := scheme.Light().Definition()
 			colors.Caret = color.NRGBA{R: 255, B: 255, A: 255}
-			if *verifyPointer {
+			if *verifyPointer || *verifyForward {
 				colors.SelectionBackground = color.NRGBA{G: 255, A: 255}
 			}
 			custom, err := scheme.New(colors)
@@ -263,6 +269,8 @@ func main() {
 	var verify func()
 	if *verifyEnd {
 		verify = endVerification(win, widget, scroll, model, &verified)
+	} else if *verifyForward {
+		verify = forwardVerification(win, widget, scroll, model, &verified)
 	} else if *verifyPointer {
 		verify = pointerVerification(win, widget, scroll, model, &verified)
 	} else if *verifyInput {
@@ -326,8 +334,8 @@ func main() {
 	must(heartbeat.Start(16 * time.Millisecond))
 	must(win.Show())
 	app.Run()
-	if (*verifyEnd || *verifyInput || *verifyPointer) && !verified {
-		panic("End verification closed before completion")
+	if (*verifyEnd || *verifyInput || *verifyPointer || *verifyForward) && !verified {
+		panic("editor verification closed before completion")
 	}
 	fmt.Printf("CLOSED maxGap=%s nativeMaxInput=%d nativeCalls=%d largestCreate=%s paints=%d colors=%d largestMetrics=%s largestRaster=%s\n", largest, context.maximum, context.calls, context.largest, context.paints, context.colors, context.metricsTime, context.rasterTime)
 }
@@ -653,5 +661,109 @@ func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollVi
 			win.Destroy()
 		}
 
+	}
+}
+
+// 冷 End 后先从左向右拖选多个字符，每个事件循环只推进一个鼠标位置。
+func forwardVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
+	stage := 0
+	deadline := time.Now().Add(30 * time.Second)
+	var start, end, point geometry.Point
+	var offset float32
+	anchor, length := 0, 0
+	pointer := func(kind events.EventType, p geometry.Point) {
+		bounds := widget.Snapshot().Bounds
+		event := events.PointerEvent{EventType: kind, Position: geometry.Point{X: bounds.X + p.X, Y: bounds.Y + p.Y}}
+		if kind == events.PointerMove {
+			event.Buttons = events.PointerButtonLeftDown
+		} else {
+			event.Button = events.PointerButtonLeft
+		}
+		must(win.DispatchEvent(event))
+	}
+	return func() {
+		if !time.Now().Before(deadline) {
+			panic(fmt.Sprintf("forward drag timeout: stage=%d selection=%v", stage, widget.Snapshot().TextEditing.Selection))
+		}
+		if stage == 0 {
+			for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
+				must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: events.KeyEnd}))
+			}
+			stage++
+			return
+		}
+		if stage == 1 {
+			img, err := gui.RenderWidget(widget, 0)
+			must(err)
+			scale := float64(img.Bounds().Dx()) / float64(widget.Rect().Width)
+			left, top, bottom := img.Bounds().Dx(), img.Bounds().Dy(), -1
+			for y := 0; y < min(img.Bounds().Dy(), int(64*scale)); y++ {
+				for x := 0; x < img.Bounds().Dx(); x++ {
+					r, g, b, a := img.At(x, y).RGBA()
+					if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
+						left = min(left, x)
+						top = min(top, y)
+						bottom = max(bottom, y)
+					}
+				}
+			}
+			if bottom < 0 {
+				return
+			}
+			end = geometry.Point{X: float32(float64(left) / scale), Y: float32(float64(top+bottom) / 2 / scale)}
+			start = geometry.Point{X: end.X - 150, Y: end.Y}
+			point = start
+			offset = scroll.ScrollX()
+			length = model.Len()
+			pointer(events.PointerDown, start)
+			anchor = widget.Snapshot().TextEditing.Selection.Anchor
+			if anchor >= length || anchor < length-256 {
+				panic(fmt.Sprintf("wrong tail anchor: %d, end=%d", anchor, length))
+			}
+			fmt.Printf("FORWARD_BEGIN anchor=%d point=%v end=%v offset=%g\n", anchor, start, end, offset)
+			stage++
+			return
+		}
+		if stage == 2 {
+			point.X += 4
+			pointer(events.PointerMove, point)
+			got := widget.Snapshot().TextEditing.Selection
+			fmt.Printf("FORWARD_MOVE point=%v selection=%v offset=%g\n", point, got, scroll.ScrollX())
+			if scroll.ScrollX() != offset {
+				panic(fmt.Sprintf("tail moved during in-viewport forward drag: before=%g after=%g point=%v selection=%v", offset, scroll.ScrollX(), point, got))
+			}
+			if got.Anchor != anchor || got.Caret < anchor || got.Caret > length || model.Len() != length {
+				panic("forward drag changed anchor or text")
+			}
+			if point.X < end.X+24 {
+				return
+			}
+			// 完成拖选时同时核对实际字形位置，不能只检查 ScrollX。
+			image, err := gui.RenderWidget(widget, 0)
+			must(err)
+			scale := float64(image.Bounds().Dx()) / float64(widget.Rect().Width)
+			caretX := image.Bounds().Dx()
+			for y := 0; y < min(image.Bounds().Dy(), int(64*scale)); y++ {
+				for x := 0; x < image.Bounds().Dx(); x++ {
+					r, g, b, a := image.At(x, y).RGBA()
+					if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
+						caretX = min(caretX, x)
+					}
+				}
+			}
+			actual := float64(caretX) / scale
+			if actual < float64(end.X)-1 || actual > float64(end.X)+1 {
+				panic(fmt.Sprintf("tail glyphs moved while scroll offset stayed constant: old=%g new=%g", end.X, actual))
+			}
+
+			pointer(events.PointerUp, point)
+			got = widget.Snapshot().TextEditing.Selection
+			if got.Caret != length {
+				panic(fmt.Sprintf("forward drag cannot select the end: got=%v want=%d", got, length))
+			}
+			*complete = true
+			fmt.Println("PASS cold End forward tail drag preserves text position and reaches EOF")
+			win.Destroy()
+		}
 	}
 }

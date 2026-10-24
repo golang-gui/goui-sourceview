@@ -345,3 +345,11 @@ go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-inp
 `frame` 另持有鼠标跨多个帧验证“宽首行／短次行”向外拖选：短行横向偏移保持零，
 长行仍增加偏移。对应的未复现项与结果另见编辑回归记录，不能把测试通过当作
 已解释用户机器上的所有现象。
+
+
+`paragraph -file /outside/repo/long.json -verify-forward -nowrap -width 800`
+单独覆盖用户补充的顺序：冷 End 后先从左向右拖选尾部，每个事件循环只推进
+一个带左键按住状态的 PointerMove。拖动之前不按 Left，也不先反向选中末字符；
+逐步检查选区锚点、模型长度与水平偏移，结束时要求到达 EOF，且实际光标像素
+仍在原来的末尾坐标。该用例通过仅表示这组环境未复现移动，不能作为缺陷已修复
+的证据。输入文件不写回、不访问剪贴板，提前关闭或超时失败。
