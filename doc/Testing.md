@@ -312,3 +312,27 @@ Selection 的实际像素，并检查特殊空格单元、CRLF/EOF、输出及�
 排除闪烁光标区域，不使用跨平台字体金图；记录实际捕获比例、后端与主题。
 逻辑包测试另外覆盖 Trailing、半开选区、长行索引预算/视口过滤、软换行、IME 映射和分片边界。
 物理输入法和混合 DPI 仍需单独验收，截图观察不替代这些断言。
+
+
+## 全编辑功能回归
+
+按现有功能分别执行 `tests/window/editor`、`experience` 与 editor 的专题程序，
+不能以 `go test ./...` 只编译窗口入口代替桌面操作验收。已执行的后端、缩放、
+主题、语言组合与未覆盖项见 [编辑回归记录](PlanEditingRegression.md)。
+
+超长行新增自动场景：
+
+```bash
+go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-end -nowrap
+go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-input -nowrap
+go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-input
+```
+
+`-verify-input` 从冷的文档末尾立即派发 Left／CommitText，随后验证替换、双向删除、
+换行、只读、撤销重做，并在退出前精确比较全文。可加 `-clipboard` 验证系统剪切／
+粘贴；它覆盖测试显示的剪贴板，只能在独立桌面启用。输入文件只读，不保存回原路径。
+`-verify-end` 另检查正常／最大化／恢复窗口的光标像素，二者不能同时使用。
+
+语法和选区颜色更新包含按帧推进的工作。基础 editor 程序的 20 轮配色检查保持原有
+逐像素断言及原生资源复用断言，每轮允许两帧处理已请求的更新；不能在同一个 timer
+回调连续修改 20 次后，要求中间每次原生位图已同步更新。

@@ -8,6 +8,10 @@
 // 使用专用 Caret 色，与 JSON 语法颜色区分；sRGB 不透明输出，仅识别该色的覆盖像素，
 // 不依赖字体金图。允许准备目标排版及光标闪烁的等待，超时或提前关闭失败；成功自动关闭。
 // 此自动场景仅 SourceView，输入尾部应为至少三个 ASCII 字符，无额外文件写入。
+// -verify-input 自动验证冷定位后立即 Left/提交文本的顺序，选区替换、删除、
+// 换行、只读及撤销重做；可额外 -clipboard 测试末尾小选区的真实剪切/粘贴。
+// -clipboard 会覆盖本显示的剪贴板，只应在独立测试桌面启用；默认不访问剪贴板。
+// 文件始终只读，最后与原始全文精确比较；提前关闭或超时失败。可与 -nowrap 组合。
 // 使用 GOUI_PLAT_PAINTER=software/opengl（Windows 另可 direct2d）及
 // GOUI_PLAT_SCALE=1/1.5/2 选择环境；Linux 无 IME 服务可设 XMODIFIERS=@im=none。
 // 初始：Modern、Integrated 窗口、自动换行、顶部工具栏、可编辑正文。
@@ -118,7 +122,12 @@ func main() {
 	plain := flag.Bool("plain", false, "disable JSON highlighting")
 	nowrap := flag.Bool("nowrap", false, "disable line wrapping")
 	verifyEnd := flag.Bool("verify-end", false, "verify End/Left/Right caret visibility and resize (SourceView, -nowrap)")
+	verifyInput := flag.Bool("verify-input", false, "verify rapid navigation/editing on the original long document")
+	clipboard := flag.Bool("clipboard", false, "also verify small native cut/paste selections (disposable desktop)")
 	flag.Parse()
+	if *verifyInput && (*textview || *verifyEnd) {
+		panic("-verify-input requires SourceView and cannot combine with -verify-end")
+	}
 	if *verifyEnd && (*textview || !*nowrap) {
 		panic("-verify-end requires SourceView and -nowrap")
 	}
@@ -156,7 +165,8 @@ func main() {
 		if !*plain {
 			must(v.Document().SetLanguage(language.JSON))
 		}
-		if *verifyEnd {
+		if *verifyEnd || *verifyInput {
+			v.SetAutomaticCompletion(false)
 			must(v.SetWhitespaceMode(source.WhitespaceAll))
 			colors := scheme.Light().Definition()
 			colors.Caret = color.NRGBA{R: 255, B: 255, A: 255}
@@ -217,11 +227,16 @@ func main() {
 	box.AddChild(scroll)
 	win.SetWidget(box)
 	loaded, ready := false, false
+	var original string
 	load := app.NewTimer()
 	defer load.Stop()
 	load.ConnectTimeout(func() {
 		at := time.Now()
-		model.SetText(string(data))
+		text := string(data)
+		model.SetText(text)
+		if *verifyInput {
+			original = text
+		}
 		data = nil
 		loaded = true
 		win.SetFocusedWidget(widget)
@@ -239,6 +254,8 @@ func main() {
 	var verify func()
 	if *verifyEnd {
 		verify = endVerification(win, widget, scroll, model, &verified)
+	} else if *verifyInput {
+		verify = inputVerification(win, widget.(*source.SourceView), model, func() string { return original }, *clipboard, *nowrap, &verified)
 	}
 	heartbeat := app.NewTimer()
 	defer heartbeat.Stop()
@@ -298,7 +315,7 @@ func main() {
 	must(heartbeat.Start(16 * time.Millisecond))
 	must(win.Show())
 	app.Run()
-	if *verifyEnd && !verified {
+	if (*verifyEnd || *verifyInput) && !verified {
 		panic("End verification closed before completion")
 	}
 	fmt.Printf("CLOSED maxGap=%s nativeMaxInput=%d nativeCalls=%d largestCreate=%s paints=%d colors=%d largestMetrics=%s largestRaster=%s\n", largest, context.maximum, context.calls, context.largest, context.paints, context.colors, context.metricsTime, context.rasterTime)
@@ -379,5 +396,149 @@ func endVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, 
 		win.RequestState(states[allocation])
 		deadline = time.Now().Add(10 * time.Second)
 		step = -1
+	}
+}
+
+// 连续输入在同一事件循环回调中发出，不能靠等待排版掩盖旧片段导航。
+func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Model, original func() string, clipboard, nowrap bool, complete *bool) func() {
+	primary, _ := gui.ModPrimary.Resolve()
+	key := func(k events.Key, mods events.Modifiers) {
+		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
+			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
+		}
+	}
+	stage := -1
+	n := 0
+	tail := ""
+	deadline := time.Now().Add(45 * time.Second)
+	matches := func(length int, suffix string) bool {
+		if model.Len() != length {
+			return false
+		}
+		text, err := model.Slice(textedit.Range{Start: length - len(suffix), End: length})
+		must(err)
+		return text == suffix
+	}
+	return func() {
+		if !time.Now().Before(deadline) {
+			panic(fmt.Sprintf("input verification timeout: stage=%d bytes=%d selection=%v", stage, model.Len(), v.Selection()))
+		}
+		switch stage {
+		case -1:
+			n = model.Len()
+			source := original()
+			if n < 3 || len(source) != n || source[n-1] >= 128 || source[n-2] >= 128 || source[n-3] >= 128 {
+				panic("verification fixture must be normalized and end in three ASCII bytes")
+			}
+			tail = source[n-1:]
+			endMods := primary
+			if nowrap {
+				endMods = 0
+			}
+			key(events.KeyEnd, endMods)
+			key(events.KeyArrowLeft, 0)
+			must(win.CommitText("Z"))
+			if model.Len() != n || v.Selection().Caret != n {
+				panic(fmt.Sprintf("cold input used an unrelated window: bytes=%d selection=%v", model.Len(), v.Selection()))
+			}
+			stage = 0
+		case 0:
+			if !matches(n+1, "Z"+tail) || v.Selection().Caret != n {
+				return
+			}
+			key(events.KeyArrowLeft, events.ModifierShift)
+			must(win.CommitText("Q"))
+			stage = 1
+		case 1:
+			if !matches(n+1, "Q"+tail) {
+				return
+			}
+			key(events.KeyZ, primary)
+			stage = 2
+		case 2:
+			if !matches(n+1, "Z"+tail) {
+				return
+			}
+			if v.Selection().Range() != (textedit.Range{Start: n - 1, End: n}) {
+				panic("replacement undo lost its selection")
+			}
+			key(events.KeyZ, primary|events.ModifierShift)
+			stage = 3
+		case 3:
+			if !matches(n+1, "Q"+tail) {
+				return
+			}
+			key(events.KeyBackspace, 0)
+			stage = 4
+		case 4:
+			if !matches(n, tail) {
+				return
+			}
+			key(events.KeyArrowRight, 0)
+			key(events.KeyArrowLeft, 0)
+			key(events.KeyDelete, 0)
+			stage = 5
+		case 5:
+			if !matches(n-1, original()[n-2:n-1]) {
+				return
+			}
+			key(events.KeyZ, primary)
+			stage = 6
+		case 6:
+			if !matches(n, tail) {
+				return
+			}
+			if !model.EqualText(original()) {
+				panic("editing/undo changed unrelated original bytes")
+			}
+			if clipboard {
+				key(events.KeyArrowRight, events.ModifierShift)
+				key(events.KeyX, primary)
+				stage = 7
+			} else {
+				stage = 9
+			}
+		case 7:
+			if !matches(n-1, original()[n-2:n-1]) {
+				return
+			}
+			key(events.KeyV, primary)
+			stage = 8
+		case 8:
+			if !matches(n, tail) {
+				return
+			}
+			stage = 9
+		case 9:
+			key(events.KeyEnd, primary)
+			key(events.KeyEnter, 0)
+			must(win.CommitText("Z"))
+			stage = 10
+		case 10:
+			if !matches(n+2, "\nZ") {
+				return
+			}
+			key(events.KeyZ, primary)
+			key(events.KeyZ, primary)
+			stage = 11
+		case 11:
+			if !matches(n, tail) {
+				return
+			}
+			v.SetReadOnly(true)
+			if win.CommitText("bad") == nil {
+				panic("readonly accepted text")
+			}
+			key(events.KeyBackspace, 0)
+			key(events.KeyDelete, 0)
+			key(events.KeyZ, primary)
+			if !model.EqualText(original()) {
+				panic("readonly or history corrupted original content")
+			}
+			v.SetReadOnly(false)
+			*complete = true
+			fmt.Println("PASS cold End/Left/typing, replacement, deletion, newline, readonly, clipboard and undo/redo; original bytes restored")
+			win.Destroy()
+		}
 	}
 }

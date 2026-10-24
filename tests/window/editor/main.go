@@ -105,21 +105,141 @@ func main() {
 			original := observed.last[probeText]
 			check(original != nil && win.Focused(), "recolor probe has no active native window/layout")
 			created := observed.created[probeText]
-			for i := 0; i < 20; i++ {
-				base := []*scheme.Scheme{scheme.Light(), scheme.Dark()}[i%2]
-				def := base.Definition()
-				def.SelectionForeground = color.NRGBA{R: 0x11, G: 0x11, B: 0x11, A: 255}
-				if i%2 == 1 {
-					def.SelectionForeground = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+			runInput := func() {
+				editor.SetScheme(nil)
+				log.Print("PASS native recolor reuse and active selection foreground")
+				document.Model().SetText("a\nb\n")
+				editor.SetSelection(textedit.Selection{})
+				must(win.CommitText("x"))
+				check(document.Model().Text() == "xa\nb\n", "ordinary commit: %q", document.Model().Text())
+				key(events.KeyZ, primary)
+				check(document.Model().Text() == "a\nb\n", "undo")
+				key(events.KeyZ, primary|events.ModifierShift)
+				check(document.Model().Text() == "xa\nb\n", "redo")
+				editor.SetReadOnly(true)
+				check(win.CommitText("bad") != nil, "read-only exposed text input")
+				key(events.KeyBackspace, 0)
+				check(document.Model().Text() == "xa\nb\n", "read only changed")
+				editor.SetReadOnly(false)
+				key(events.KeyA, primary)
+				key(events.KeyTab, 0)
+				check(document.Model().Text() == "    xa\n    b\n", "multiline indent %q", document.Model().Text())
+				key(events.KeyZ, primary)
+				check(document.Model().Text() == "xa\nb\n", "atomic indent undo")
+				key(events.KeyEscape, 0)
+				key(events.KeyTab, 0)
+				check(win.FocusedWidget() == after, "Escape/Tab did not leave editor")
+				win.SetFocusedWidget(editor)
+				editor.SetAcceptsTab(false)
+				key(events.KeyTab, 0)
+				check(win.FocusedWidget() == after, "default Tab traversal")
+				editor.SetAcceptsTab(true)
+				win.SetFocusedWidget(editor)
+				for _, id := range []language.ID{language.JSON, language.XML, language.HTML} {
+					must(document.SetLanguage(id))
 				}
-				s, err := scheme.New(def)
+				editor.SetSearch(source.SearchQuery{Text: "b"})
+				r, ok := editor.FindNext(false)
+				check(ok && r == (textedit.Range{Start: 3, End: 4}), "find %v %v", r, ok)
+				replaced, err := editor.ReplaceCurrent("β")
 				must(err)
-				editor.SetScheme(s)
-				editor.SetSelection(textedit.Selection{Anchor: probe.Start, Caret: probe.End})
+				check(replaced && document.Model().Text() == "xa\nβ\n", "replace")
+				// Snapshot and view lifetime use the same public document.
+				info := editor.Snapshot()
+				check(info.TextEditing != nil && info.TextEditing.VisibleText == "xa\nβ\n", "snapshot %+v", info)
+				scroll.SetChild(nil)
+				var numbered strings.Builder
+				for row := 0; row < 2000; row++ {
+					fmt.Fprintf(&numbered, "<p>line %04d</p>\n", row)
+				}
+				document.Model().SetText(numbered.String())
+				scroll.SetChild(editor)
+				// Bind a second native view briefly; unloading it must not stop the first.
+				otherScroll := gui.NewScrollView()
+				otherScroll.SetStyleName("source-view")
+				otherScroll.SetChild(second)
+				box.AddChild(otherScroll)
+				box.RemoveChild(otherScroll)
+				end := document.Model().Len()
+				editor.SetSelection(textedit.Selection{Anchor: end, Caret: end})
 				editor.RevealSelection()
+				timer2 := app.NewTimer()
+				timer2.ConnectTimeout(func() {
+					check(scroll.ScrollY() > 0, "end caret was not revealed; scroll=%g", scroll.ScrollY())
+					info := editor.Snapshot()
+					check(info.TextEditing != nil && info.TextEditing.Selection.Caret == end, "end selection")
+					// A real pointer press must move selection through gesture dispatch.
+					bounds := info.Bounds
+					for _, eventType := range []events.EventType{events.PointerDown, events.PointerUp} {
+						must(win.DispatchEvent(events.PointerEvent{EventType: eventType, Position: geometry.Point{X: bounds.X + 80, Y: bounds.Y + 15}, Button: events.PointerButtonLeft}))
+					}
+					check(editor.Selection().Caret < end, "pointer did not select")
+					scroll.SetScrollY(12000)
+					timer3 := app.NewTimer()
+					timer3.ConnectTimeout(func() {
+						old := editor.Snapshot().TextEditing
+						inserted := "<!-- inserted -->\n"
+						must(document.Model().Replace(textedit.Range{}, inserted))
+						timer4 := app.NewTimer()
+						timer4.ConnectTimeout(func() {
+							current := editor.Snapshot().TextEditing
+							check(current.VisibleRange.Start == old.VisibleRange.Start+len(inserted), "viewport anchor moved after insert: %v -> %v", old.VisibleRange, current.VisibleRange)
+							check(strings.HasPrefix(current.VisibleText, strings.Split(old.VisibleText, "\n")[0]), "anchor text changed")
+
+							if *clipboardTest {
+								document.Model().SetText("sourceview clipboard")
+								win.SetFocusedWidget(editor)
+								key(events.KeyA, primary)
+								key(events.KeyX, primary)
+								cutOK := document.Model().Text() == ""
+								key(events.KeyV, primary)
+								pasteOK := document.Model().Text() == "sourceview clipboard"
+								check(cutOK && pasteOK, "native clipboard cut=%v paste=%v", cutOK, pasteOK)
+								log.Print("PASS native clipboard cut/paste with disposable test text")
+							}
+							log.Print("PASS normal input, history, indent, readonly, Tab, search, snapshot, shared document, remount, reveal, pointer, viewport anchor")
+							win.Destroy()
+						})
+						must(timer4.StartOnce(150 * time.Millisecond))
+					})
+					must(timer3.StartOnce(150 * time.Millisecond))
+				})
+				must(timer2.StartOnce(300 * time.Millisecond))
+			}
+
+			// 每轮配色等待真实帧完成；不通过重复 setter 强行驱动私有缓存。
+			frames, issued, index := 0, 0, 0
+			waiting := false
+			var current *scheme.Scheme
+			frameHandle := win.ConnectFrame(func(time.Time) { frames++ })
+			colorTimer := app.NewTimer()
+			win.ConnectDestroy(func() { colorTimer.Stop(); frameHandle.Disconnect() })
+			deadline := time.Now().Add(20 * time.Second)
+			colorTimer.ConnectTimeout(func() {
+				check(time.Now().Before(deadline), "native recolor frame timeout at %d", index)
+				if !waiting {
+					base := []*scheme.Scheme{scheme.Light(), scheme.Dark()}[index%2]
+					def := base.Definition()
+					def.SelectionForeground = color.NRGBA{R: 0x11, G: 0x11, B: 0x11, A: 255}
+					if index%2 == 1 {
+						def.SelectionForeground = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+					}
+					current, err = scheme.New(def)
+					must(err)
+					editor.SetScheme(current)
+					editor.SetSelection(textedit.Selection{Anchor: probe.Start, Caret: probe.End})
+					editor.RevealSelection()
+					issued, waiting = frames, true
+					must(win.RequestPaint())
+					return
+				}
+				if frames < issued+2 {
+					must(win.RequestPaint())
+					return
+				}
 				check(observed.last[probeText] == original && observed.created[probeText] == created, "color/selection rebuilt native line")
 				format := original.Format()
-				format.TextColor = s.Definition().SelectionForeground
+				format.TextColor = current.Definition().SelectionForeground
 				fresh, err := observed.Context.NewTextLayout(probeText, format, 1<<20, 1<<24)
 				must(err)
 				got, err := original.Rasterize(1, rasterRegion(original, 1), nil)
@@ -129,106 +249,16 @@ func main() {
 				must(err)
 				check(got.Width == want.Width && got.Height == want.Height && got.Stride == want.Stride && bytes.Equal(pixels, want.Pixels), "active selection retained obsolete foreground")
 				fresh.Destroy()
-			}
-			editor.SetScheme(nil)
-			log.Print("PASS native recolor reuse and active selection foreground")
-			document.Model().SetText("a\nb\n")
-			editor.SetSelection(textedit.Selection{})
-			must(win.CommitText("x"))
-			check(document.Model().Text() == "xa\nb\n", "ordinary commit: %q", document.Model().Text())
-			key(events.KeyZ, primary)
-			check(document.Model().Text() == "a\nb\n", "undo")
-			key(events.KeyZ, primary|events.ModifierShift)
-			check(document.Model().Text() == "xa\nb\n", "redo")
-			editor.SetReadOnly(true)
-			check(win.CommitText("bad") != nil, "read-only exposed text input")
-			key(events.KeyBackspace, 0)
-			check(document.Model().Text() == "xa\nb\n", "read only changed")
-			editor.SetReadOnly(false)
-			key(events.KeyA, primary)
-			key(events.KeyTab, 0)
-			check(document.Model().Text() == "    xa\n    b\n", "multiline indent %q", document.Model().Text())
-			key(events.KeyZ, primary)
-			check(document.Model().Text() == "xa\nb\n", "atomic indent undo")
-			key(events.KeyEscape, 0)
-			key(events.KeyTab, 0)
-			check(win.FocusedWidget() == after, "Escape/Tab did not leave editor")
-			win.SetFocusedWidget(editor)
-			editor.SetAcceptsTab(false)
-			key(events.KeyTab, 0)
-			check(win.FocusedWidget() == after, "default Tab traversal")
-			editor.SetAcceptsTab(true)
-			win.SetFocusedWidget(editor)
-			for _, id := range []language.ID{language.JSON, language.XML, language.HTML} {
-				must(document.SetLanguage(id))
-			}
-			editor.SetSearch(source.SearchQuery{Text: "b"})
-			r, ok := editor.FindNext(false)
-			check(ok && r == (textedit.Range{Start: 3, End: 4}), "find %v %v", r, ok)
-			replaced, err := editor.ReplaceCurrent("β")
-			must(err)
-			check(replaced && document.Model().Text() == "xa\nβ\n", "replace")
-			// Snapshot and view lifetime use the same public document.
-			info := editor.Snapshot()
-			check(info.TextEditing != nil && info.TextEditing.VisibleText == "xa\nβ\n", "snapshot %+v", info)
-			scroll.SetChild(nil)
-			var numbered strings.Builder
-			for row := 0; row < 2000; row++ {
-				fmt.Fprintf(&numbered, "<p>line %04d</p>\n", row)
-			}
-			document.Model().SetText(numbered.String())
-			scroll.SetChild(editor)
-			// Bind a second native view briefly; unloading it must not stop the first.
-			otherScroll := gui.NewScrollView()
-			otherScroll.SetStyleName("source-view")
-			otherScroll.SetChild(second)
-			box.AddChild(otherScroll)
-			box.RemoveChild(otherScroll)
-			end := document.Model().Len()
-			editor.SetSelection(textedit.Selection{Anchor: end, Caret: end})
-			editor.RevealSelection()
-			timer2 := app.NewTimer()
-			timer2.ConnectTimeout(func() {
-				check(scroll.ScrollY() > 0, "end caret was not revealed; scroll=%g", scroll.ScrollY())
-				info := editor.Snapshot()
-				check(info.TextEditing != nil && info.TextEditing.Selection.Caret == end, "end selection")
-				// A real pointer press must move selection through gesture dispatch.
-				bounds := info.Bounds
-				for _, eventType := range []events.EventType{events.PointerDown, events.PointerUp} {
-					must(win.DispatchEvent(events.PointerEvent{EventType: eventType, Position: geometry.Point{X: bounds.X + 80, Y: bounds.Y + 15}, Button: events.PointerButtonLeft}))
+				index++
+				waiting = false
+				if index == 20 {
+					colorTimer.Stop()
+					frameHandle.Disconnect()
+					runInput()
 				}
-				check(editor.Selection().Caret < end, "pointer did not select")
-				scroll.SetScrollY(12000)
-				timer3 := app.NewTimer()
-				timer3.ConnectTimeout(func() {
-					old := editor.Snapshot().TextEditing
-					inserted := "<!-- inserted -->\n"
-					must(document.Model().Replace(textedit.Range{}, inserted))
-					timer4 := app.NewTimer()
-					timer4.ConnectTimeout(func() {
-						current := editor.Snapshot().TextEditing
-						check(current.VisibleRange.Start == old.VisibleRange.Start+len(inserted), "viewport anchor moved after insert: %v -> %v", old.VisibleRange, current.VisibleRange)
-						check(strings.HasPrefix(current.VisibleText, strings.Split(old.VisibleText, "\n")[0]), "anchor text changed")
-
-						if *clipboardTest {
-							document.Model().SetText("sourceview clipboard")
-							win.SetFocusedWidget(editor)
-							key(events.KeyA, primary)
-							key(events.KeyX, primary)
-							cutOK := document.Model().Text() == ""
-							key(events.KeyV, primary)
-							pasteOK := document.Model().Text() == "sourceview clipboard"
-							check(cutOK && pasteOK, "native clipboard cut=%v paste=%v", cutOK, pasteOK)
-							log.Print("PASS native clipboard cut/paste with disposable test text")
-						}
-						log.Print("PASS normal input, history, indent, readonly, Tab, search, snapshot, shared document, remount, reveal, pointer, viewport anchor")
-						win.Destroy()
-					})
-					must(timer4.StartOnce(150 * time.Millisecond))
-				})
-				must(timer3.StartOnce(150 * time.Millisecond))
 			})
-			must(timer2.StartOnce(300 * time.Millisecond))
+			must(colorTimer.Start(30 * time.Millisecond))
+
 		})
 		must(timer.StartOnce(300 * time.Millisecond))
 	}
