@@ -5,6 +5,7 @@
 // 初始为 Integrated 窗口中的 TextView、SourceView，各有双向滚动条。
 // 正常 DispatchEvent 输入依次验证点击聚焦、滚轮、两轴拖动、焦点转移；
 // 再验证禁用、自动换行隐藏横条、短文本隐藏双条及主题切换后重新布局。
+// SourceView 另验证宽首行／短次行：短行向窗口外拖选不横滚，长行仍横滚。
 // 每步断言视口、两条滚动条都在同一外框内，聚焦/禁用不改变正文宽高，
 // 语义树仅暴露真实正文，滚动范围和拖动后偏移符合预期。
 // 自动验证通过后关闭；超时、提前关闭或断言失败返回非零。手动检查时滚动、
@@ -141,6 +142,8 @@ func main() {
 	timer := app.NewTimer()
 	defer timer.Stop()
 	stage, frames, previous := 0, 0, 0
+	dragChecks := 0
+	var outside geometry.Point
 	done := false
 	var stable [2]geometry.Rectangle
 	win.ConnectFrame(func(time.Time) { frames++ })
@@ -216,6 +219,40 @@ func main() {
 			}
 			app.SetStyleSheet(sheet())
 		case 9:
+			code.SetWrapMode(source.WrapNone)
+			code.SetShowLineNumbers(false)
+			code.SetFoldingEnabled(false)
+			code.Document().Model().SetText(strings.Repeat("W", 20_000) + "\nshort")
+			hosts[1].SetScrollX(0)
+			hosts[1].SetScrollY(0)
+		case 10:
+			r := code.Snapshot().Bounds
+			p := geometry.Point{X: r.X + 15, Y: r.Y + 30}
+			outside = geometry.Point{X: r.X + r.Width + 80, Y: p.Y}
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Button: events.PointerButtonLeft, Position: p}))
+			check(code.Selection().Caret >= 20_001 && code.Selection().Caret < 20_006, "pointer did not start in the short second line")
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Buttons: events.PointerButtonLeftDown, Position: outside}))
+		case 11:
+			check(hosts[1].ScrollX() == 0, "short second-line drag scrolled horizontally")
+			check(code.Selection().Range().End == 20_006, "short second-line drag missed its end")
+			dragChecks++
+			if dragChecks < 3 {
+				return
+			}
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: outside}))
+			r := code.Snapshot().Bounds
+			p := geometry.Point{X: r.X + 15, Y: r.Y + 14}
+			outside = geometry.Point{X: r.X + r.Width + 80, Y: p.Y}
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Button: events.PointerButtonLeft, Position: p}))
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Buttons: events.PointerButtonLeftDown, Position: outside}))
+		case 12:
+			if hosts[1].ScrollX() == 0 {
+				return
+			}
+			check(code.Selection().Caret < 20_001 && code.Selection().Caret > 30, "long-line drag lost its selection")
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: outside}))
+			log.Print("PASS short-line drag stops horizontal scrolling; long-line drag continues")
+		case 13:
 			done = true
 			log.Print("PASS editor frame geometry, focus stability, wheel, both thumb drags, disabled, wrapping, content shrink and theme invalidation")
 			if *inspect {

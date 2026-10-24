@@ -165,14 +165,35 @@ func (v *SourceView) dragSelection(point geometry.Point) {
 		v.dragging = false
 		return
 	}
-	if point.Y < 0 || point.Y > v.viewport.Height || !v.dragGutter && (point.X < v.gutter || point.X > v.viewport.Width) {
-		target := geometry.Rect(max(0, point.X+v.offset.X-v.gutter), max(0, point.Y+v.offset.Y), v.gutter+1, v.lineHeight)
+	state := v.operationState()
+	pos, caret, measured := v.hitCaret(point)
+	if !state.valid(v) || !v.mounted || v.Destroyed() {
+		return
+	}
+	horizontal := measured && !v.dragGutter && v.wrap == WrapNone &&
+		(point.X < v.gutter && caret.X < v.gutter || point.X > v.viewport.Width && float64(caret.X)+float64(caret.Width) > float64(v.viewport.Width))
+	vertical := point.Y < 0 || point.Y > v.viewport.Height
+	if horizontal || vertical {
+		// An unchanged axis requests the exact retained offset, without rounding a
+		// viewport-sized far edge at a large document coordinate.
+		target := geometry.Rect(v.offset.X, v.offset.Y, 0, 0)
+		if horizontal {
+			bounds := v.revealBounds(caret)
+			target.X, target.Width = bounds.X, bounds.Width
+		}
+		if vertical {
+			y := max(0, float64(v.offset.Y)+float64(point.Y))
+			target.Y = floorCoordinate(y)
+			target.Height = ceilCoordinate(y + float64(v.lineHeight) - float64(target.Y))
+		}
 		v.scrollSignal.Emit(target)
-		if !v.mounted {
+		if !state.valid(v) || !v.mounted || v.Destroyed() || !v.dragging {
 			return
 		}
 	}
-	pos := v.hit(point)
+	if !measured {
+		return
+	}
 	s := v.Selection()
 	s.Caret = pos.Offset
 	if v.dragUnit != 0 {

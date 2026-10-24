@@ -505,18 +505,28 @@ func floorCoordinate(value float64) float32 {
 }
 
 func (v *SourceView) hit(point geometry.Point) textedit.Position {
+	pos, _, _ := v.hitCaret(point)
+	return pos
+}
+
+// Hit and its scroll target must use one measured snapshot and local origin.
+func (v *SourceView) hitCaret(point geometry.Point) (textedit.Position, geometry.Rectangle, bool) {
 	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	r := v.displayRange(row)
 	pos := textedit.Position{Offset: r.Start}
+	var caret geometry.Rectangle
+	measured := false
 	if p := v.paragraph(row); p != nil {
 		origin := v.paragraphOrigin(row, p)
 		pos = p.geometry.Hit(geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y})
+		caret = p.geometry.Caret(pos).Translate(origin)
+		measured = true
 		pos.Offset += r.Start
 	}
 	if v.projection != nil {
 		pos.Offset = v.projection.ModelOffset(pos.Offset, pos.Upstream)
 	}
-	return pos
+	return pos, caret, measured
 }
 
 // captureAnchor records committed byte coordinates, independent of pixel estimates.

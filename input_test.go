@@ -760,3 +760,105 @@ func TestDeferredInputReentrantModelEditCancelsRemainder(t *testing.T) {
 		t.Fatal("callback edit was overwritten by obsolete input", tailText(t, v, 8))
 	}
 }
+
+// 第一行的宽度不能让第二行已经到尾部的拖选继续向右滚动。
+func TestDragOutsideShortLineDoesNotScrollHorizontally(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText(strings.Repeat("x", 120) + "\nshort\n")
+	v.SetFoldingEnabled(false)
+	v.SetShowLineNumbers(false)
+	observe(t, v)
+	v.context = &shapedContext{}
+	v.LayoutVisible(geometry.Size{Width: 400, Height: 100}, geometry.Point{})
+	v.dragging = true
+	v.setSelection(textedit.Selection{Anchor: 122, Caret: 122}, false, false)
+	var targets []geometry.Rectangle
+	h := v.ConnectScrollIntoView(func(r geometry.Rectangle) { targets = append(targets, r) })
+	defer h.Disconnect()
+	v.dragSelection(geometry.Point{X: 450, Y: padding + v.lineHeight + 5})
+	if v.Selection().Range() != (textedit.Range{Start: 122, End: 126}) {
+		t.Fatal("short line end", v.Selection())
+	}
+	for _, r := range targets {
+		if float64(r.X)+float64(r.Width) > float64(v.viewport.Width) {
+			t.Fatal("short line drag requested horizontal scrolling", r)
+		}
+	}
+}
+
+func TestDragAutoscrollKeepsAxesIndependent(t *testing.T) {
+	for _, tc := range []struct {
+		name                               string
+		x, y, offset                       float32
+		row                                int
+		wrap, gutter, horizontal, vertical bool
+	}{
+		{name: "long line right", x: 450, y: 10, horizontal: true},
+		{name: "short line left", x: -30, y: 30, row: 1},
+		{name: "short line hidden left", x: -30, y: 30, row: 1, offset: 300, horizontal: true},
+		{name: "gutter drag right", x: 450, y: 10, gutter: true},
+		{name: "wrapped right", x: 450, y: 10, wrap: true},
+		{name: "vertical only", x: 450, y: 150, vertical: true},
+		{name: "vertical at large x", x: 450, y: 150, offset: 1 << 28, vertical: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := NewSourceView()
+			v.Document().Model().SetText(strings.Repeat("x", 120) + "\nshort\n")
+			v.SetFoldingEnabled(false)
+			v.SetShowLineNumbers(false)
+			if tc.wrap {
+				v.SetWrapMode(WrapWordChar)
+			}
+			observe(t, v)
+			v.context = &shapedContext{}
+			v.LayoutVisible(geometry.Size{Width: 400, Height: 100}, geometry.Point{X: tc.offset})
+			v.dragging, v.dragGutter = true, tc.gutter
+			r, _ := v.Document().Model().LineRange(tc.row)
+			v.setSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start}, false, false)
+			var targets []geometry.Rectangle
+			h := v.ConnectScrollIntoView(func(r geometry.Rectangle) { targets = append(targets, r) })
+			defer h.Disconnect()
+			v.dragSelection(geometry.Point{X: tc.x, Y: tc.y})
+			if len(targets) == 0 {
+				if tc.horizontal || tc.vertical {
+					t.Fatal("missing scroll request")
+				}
+				return
+			}
+			if len(targets) != 1 {
+				t.Fatal("duplicate scroll requests", targets)
+			}
+			got := targets[0]
+			if !tc.horizontal && (got.X != tc.offset || got.Width != 0) {
+				t.Fatal("unchanged x axis moved", got)
+			}
+			if tc.horizontal && (got.X == tc.offset && got.Width == 0) {
+				t.Fatal("horizontal drag stopped", got)
+			}
+			if !tc.vertical && (got.Y != 0 || got.Height != 0) {
+				t.Fatal("horizontal drag moved y axis", got)
+			}
+			if tc.vertical && got.Y+got.Height <= 100 {
+				t.Fatal("vertical drag stopped", got)
+			}
+		})
+	}
+}
+
+func TestDragScrollCallbackCannotApplyOldSelection(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText(strings.Repeat("x", 120))
+	v.SetShowLineNumbers(false)
+	v.SetFoldingEnabled(false)
+	observe(t, v)
+	v.context = &shapedContext{}
+	v.LayoutVisible(geometry.Size{Width: 400, Height: 100}, geometry.Point{})
+	v.dragging = true
+	replacement := NewDocument("replacement")
+	h := v.ConnectScrollIntoView(func(geometry.Rectangle) { v.SetDocument(replacement) })
+	defer h.Disconnect()
+	v.dragSelection(geometry.Point{X: 450, Y: 10})
+	if v.Document() != replacement || v.Selection() != (textedit.Selection{}) {
+		t.Fatal("applied selection after reentrant document replacement", v.Selection())
+	}
+}
