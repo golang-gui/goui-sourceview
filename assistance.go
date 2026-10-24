@@ -126,9 +126,9 @@ func (v *SourceView) deleteIndent() (bool, error) {
 		return false, nil
 	}
 	r, _ := v.document.model.LineRange(v.document.model.LineAt(s.Caret))
-	before, err := v.document.model.Slice(textedit.Range{Start: r.Start, End: s.Caret})
-	if err != nil {
-		return true, err
+	before := editor.LeadingIndent(v.document.model, s.Caret)
+	if len(before) != s.Caret-r.Start {
+		return false, nil
 	}
 	n, col := leadingColumns(before, v.indent.TabWidth)
 	if n != len(before) || col == 0 {
@@ -153,13 +153,14 @@ func (v *SourceView) deleteIndent() (bool, error) {
 }
 
 func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.Key) textedit.Position {
-	index := p.geometry.LineIndex(pos)
-	edge := p.geometry.LineEdge(index, key == events.KeyEnd)
+	g := p.geometryAt(pos.Offset)
+	index := g.LineIndex(pos)
+	edge := g.LineEdge(index, key == events.KeyEnd)
 	if !v.smartHomeEnd {
 		return edge
 	}
-	line := p.geometry.LineMetrics(index)
-	a, b := max(0, line.Start), min(len(p.text), line.Start+line.Length)
+	line := g.LineMetrics(index)
+	a, b := max(0, line.Start-p.textStart), min(len(p.text), line.Start+line.Length-p.textStart)
 	if a > b {
 		return edge
 	}
@@ -172,10 +173,10 @@ func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.K
 	if key == events.KeyEnd {
 		at = a + len(strings.TrimRight(text, " \t"))
 	}
-	if at == pos.Offset {
+	if at+p.textStart == pos.Offset {
 		return edge
 	}
-	return textedit.Position{Offset: at, Upstream: key == events.KeyEnd}
+	return textedit.Position{Offset: at + p.textStart, Upstream: key == events.KeyEnd}
 }
 
 func (v *SourceView) occurrenceWord() string {
@@ -226,11 +227,15 @@ func tint(c color.NRGBA, alpha uint8) color.NRGBA { c.A = alpha; return c }
 
 func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *paragraph, origin geometry.Point, word string) {
 	ruler := graphics.ColorOf(v.partColor("ruler", tint(v.colors.GutterForeground, 45)))
+	top, bottom := max(0, origin.Y), min(v.viewport.Height, origin.Y+p.height)
 	for _, col := range v.rulers {
+		if bottom <= top {
+			break
+		}
 		x := v.gutter + padding - v.offset.X + float32(col)*v.spaceWidth
-		draw.DrawLine(geometry.Point{X: x, Y: origin.Y}, geometry.Point{X: x, Y: origin.Y + p.height}, 1, ruler)
+		draw.DrawLine(geometry.Point{X: x, Y: top}, geometry.Point{X: x, Y: bottom}, 1, ruler)
 	}
-	if v.indentGuides {
+	if v.indentGuides && p.textStart == 0 {
 		bytes, columns := leadingColumns(p.text, v.indent.TabWidth)
 		guide := graphics.ColorOf(v.partColor("indent-guide", tint(v.colors.GutterForeground, 65)))
 		col, target := 0, v.indent.IndentWidth
@@ -276,7 +281,7 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 				continue
 			}
 		}
-		r := textedit.Range{Start: line.Start + start, End: line.Start + end}
+		r := textedit.Range{Start: line.Start + p.textStart + start, End: line.Start + p.textStart + end}
 		if r == v.Selection().Range() {
 			continue
 		}

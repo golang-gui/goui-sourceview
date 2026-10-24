@@ -1781,3 +1781,118 @@ func TestSelectionMovementWithoutOverrideDoesNotRecolor(t *testing.T) {
 		}
 	}
 }
+
+// 通过实际两个消费者的公开 TextLayout 契约限制原生送测规模。
+type boundedParagraphContext struct {
+	shapedContext
+	t      *testing.T
+	colors int
+}
+
+func (c *boundedParagraphContext) NewTextLayout(text string, f typography.TextFormat, w, h float32) (typography.TextLayout, error) {
+	if len(text) > 8192 {
+		c.t.Fatalf("原生输入未分段：%d", len(text))
+	}
+	l, err := c.shapedContext.NewTextLayout(text, f, w, h)
+	if err != nil {
+		return nil, err
+	}
+	return &boundedParagraphNative{TextLayout: l, context: c}, nil
+}
+
+type boundedParagraphNative struct {
+	typography.TextLayout
+	context *boundedParagraphContext
+}
+
+func (l *boundedParagraphNative) SetTextColor(start, length int, c color.Color) {
+	l.context.colors++
+	l.TextLayout.SetTextColor(start, length, c)
+}
+
+func TestLongParagraphEditOwnership(t *testing.T) {
+	v := NewSourceView()
+	model := v.Document().Model()
+	model.SetText("before\n" + strings.Repeat("long word ", 10000) + "\nafter")
+	v.SetShowLineNumbers(false)
+	v.SetWrapMode(WrapNone)
+	observe(t, v)
+	v.document.engine.Advance(time.Time{})
+	context := &boundedParagraphContext{t: t}
+	v.context = context
+	v.ensureMetrics()
+	v.Arrange(geometry.Rect(0, 0, 400, 200))
+	p := v.paragraph(1)
+	if p == nil || p.paged == nil {
+		t.Fatal("长段落未启用有界测量")
+	}
+	cache := p.paged
+	if err := model.Replace(textedit.Range{Start: 0, End: 0}, "new\n"); err != nil {
+		t.Fatal(err)
+	}
+	v.document.engine.Advance(time.Time{})
+	p = v.paragraph(2)
+	if p == nil || p.paged != cache {
+		t.Fatal("前段变化丢失未受影响的段落缓存")
+	}
+	r, _ := model.LineRange(2)
+	if p.sourceRange != r {
+		t.Fatal("缓存读取范围未映射", p.sourceRange, r)
+	}
+	at := r.Start + 100
+	if err := model.Replace(textedit.Range{Start: at, End: at}, "Q"); err != nil {
+		t.Fatal(err)
+	}
+	v.document.engine.Advance(time.Time{})
+	p = v.paragraph(2)
+	if p == nil || p.paged != cache {
+		t.Fatal("局部编辑丢失段落所有权")
+	}
+	if g := p.paged.GeometryAt(101); g == nil || g.Snap(101, false) != 101 {
+		t.Fatal("局部编辑光标错误")
+	}
+	if err := model.Replace(textedit.Range{Start: at, End: at}, "\n"); err != nil {
+		t.Fatal(err)
+	}
+	v.document.engine.Advance(time.Time{})
+	p = v.paragraph(3)
+	if p == nil || p.paged == cache {
+		t.Fatal("分段后沿用旧段落的读取状态")
+	}
+	v.dropLayouts()
+	if context.created != context.destroyed {
+		t.Fatal("原生布局泄漏", context.created, context.destroyed)
+	}
+}
+
+// 长行尾部的词法进度不应重复清除并设置当前窗口的同一组原生颜色。
+func TestLongParagraphIgnoresOffscreenTokenChanges(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText(strings.Repeat("x ", 50000))
+	observe(t, v)
+	v.document.engine.Advance(time.Time{})
+	context := &boundedParagraphContext{t: t}
+	v.context = context
+	v.SetShowLineNumbers(false)
+	v.Arrange(geometry.Rect(0, 0, 400, 200))
+	p := v.paragraph(0)
+	if p == nil || p.paged == nil {
+		t.Fatal("缺少长行窗口")
+	}
+	key, style := v.paragraphKey(0), p.style
+	style.tokenValid = true
+	tokens := []highlight.Token{{Start: 0, End: 100, Kind: language.KindString}, {Start: 70000, End: 71000, Kind: language.KindString}}
+	if !v.colorParagraph(key, p, style, tokens, false) {
+		t.Fatal("无法着色")
+	}
+	before := context.colors
+	tokens[1].End = 80000
+	style.tokenVersion++
+	if !v.colorParagraph(key, p, style, tokens, false) {
+		t.Fatal("无法更新词法版本")
+	}
+	if context.colors != before {
+		t.Fatal("不可见词法范围使同一窗口重复着色", before, context.colors)
+	}
+	v.dropLayouts()
+}

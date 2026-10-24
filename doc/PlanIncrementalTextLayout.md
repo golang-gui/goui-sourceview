@@ -312,3 +312,49 @@ Linux amd64／Go 1.25.8／Pango 1.50.6，通过：
   场景未执行。宽度命中窗口用例不作为“未完成排版仍可操作窗口”的验收通过。
 
 本轮没有改动 GOUI，因此没有新增 GOUI 提交或把此前的 GOUI 验证写成本轮重新执行。
+
+## 超长单行窗口与实际编辑验收（2026-10-24）
+
+本批双仓联调依赖 GOUI `9c25dd0`（包含 `9e9c83d`）。SourceView 保留 go.mod
+中的可获取版本 v0.3.0，直到包含 ParagraphLayout／Projection.Slice 的 GOUI 版本
+正式发布后再更新。这里的工作区验证不能替代独立发布验证。
+
+- 样本为用户指定的 `/data/xuyang8/temp/test.json`：184,500,131 bytes，零 LF/CR，
+  含多 MB JSON 字符串。只读取样本；所有编辑留在内存，没有保存回文件。
+- 新增 `tests/window/editor/paragraph`，同一 Integrated / Modern 窗口通过
+  `-textview` 切换 TextView，默认 SourceView+JSON。原生 NewTextLayout 输入超过
+  8192 bytes 立即失败；记录 LOAD、输入后的 byte/caret、实际分配、HEARTBEAT、
+  目标原生窗口 Rasterize 后的 TEXT_READY。不把公开 setter 耗时当作真实操作耗时。
+- Linux amd64 / Go 1.25.8 / Pango，专用 Xvnc `:89` + Xfwm4 合成桌面。
+  Software 100% 下通过 XTest 正常事件验证首屏／中部／末尾，连续键入、退格、
+  Delete、回车、撤销／重做、滚轮、真实滚动条和窗口边缘拖动、数次不同宽高。
+  中部最终 byte/caret 为 184500137／92250071，末尾输入后为
+  184500139／184500139；明确断言输入与撤销结果，截图检查真实文字和语法颜色。
+- Software 本次观察：同步加载 428.9 ms，中部请求处理 2.10 ms／实际目标就绪
+  2.17 秒；末尾 2.41 ms／1.82 秒；原生最大输入 4,161 bytes，最大 metrics
+  1.14 ms、Rasterize 40.05 ms，加载后最大 HEARTBEAT 间隔 208.35 ms。
+  后两项的测量范围不同，不能把整个间隔归因于原生排版。
+- OpenGL 150% 在同一私有桌面补充实际输入／退格／撤销／重做、宽高改变和滚动
+  冒烟检查；原生最大输入 4,172 bytes，窗口正常关闭。此轮存在其他 Go 检查的
+  CPU 负载，不用于严格性能对照。该环境是 Xvnc／Mesa，不代表实机 GPU 或远端平台。
+- GOUI `5f30e52` 在相同文件与 TextView 驱动中将整个 184,500,131 bytes 送入
+  Pango，观察超过 5 秒未首屏就绪，期间真实 Middle 点击未处理。看门狗 SIGQUIT
+  栈为 Pango GetExtents；诊断终止单独记录，不算正常退出。更详细记录在 GOUI
+  `doc/PlanIncrementalTextLayout.md`。这里不提供没有重复样本支撑的加速比或 P99。
+- 验证过程中曾发现三个真实缺陷：缓存重编号让接缝输入光标回退；巨大的逻辑行
+  CurrentLine 填充在 Software 构造路径时长时间阻塞；不可见长字符串的词法进度
+  反复重设当前窗口颜色。已分别改为正确的窗口失效、提交 Painter 前裁剪、比较
+  视区内有效颜色，并补接缝、背景边界和不可见 token 变化回归，保留原有断言。
+- `go test ./...`、`go test -race ./... -count=1`、`go vet ./...` 通过。
+  无 Root 的有限准备曾在 race instrumentation 下未完成视区；现允许固定有界
+  步骤，保持事件循环路径的原预算，原有 UTF-8 快照断言与重复 race 回归通过。
+- Windows amd64／macOS arm64：`CGO_ENABLED=0 go test ./... -exec=true` 在本地
+  工作区交叉编译通过；未原生运行，不报告两端排版或 UI 性能已验收。
+- `GOWORK=off go test ./...` **失败**，原因为发布的 GOUI v0.3.0 不包含
+  ParagraphLayout、NewParagraphLayout 和 Projection.Slice，错误命令及输出已保留。
+  未添加机器专属 replace，未伪造版本；需后续发布 GOUI 后完成独立依赖验收。
+- 真实 IME、任意复杂双向文本、超大单个 grapheme、非均匀 NoWrap 全局坐标等价性
+  未完成专项覆盖。远处上下文首次索引仍会延迟显示；初始同步加载和 0.2 秒级的
+  零星间隔仍是剩余问题。本批不声称所有大文件操作都已完全无停顿。
+- 测试、截图、驱动基线副本位于仓库外；未跟踪的用户文件、真实桌面、剪贴板和
+  系统配置保持原状。测试窗口正常关闭，基线诊断进程和专用桌面在结束时清理。

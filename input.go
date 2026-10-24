@@ -327,7 +327,7 @@ func (v *SourceView) adjacent(at int, forward bool) int {
 		return max(0, r.Start-1)
 	}
 	if p := v.paragraph(row); p != nil {
-		return r.Start + p.geometry.Adjacent(at-r.Start, forward)
+		return r.Start + p.geometryAt(at-r.Start).Adjacent(at-r.Start, forward)
 	}
 	if forward {
 		at++
@@ -381,12 +381,13 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 		v.moveToKeepingCompletion(caret, false, extend, keep)
 		return
 	}
+	g := p.geometryAt(pos.Offset)
 	vertical := false
 	x := v.preferredX
 	switch key {
 	case events.KeyArrowLeft, events.KeyArrowRight:
 		right := key == events.KeyArrowRight
-		if next, ok := p.geometry.Visual(pos, right); ok {
+		if next, ok := g.Visual(pos, right); ok {
 			pos = next
 			caret = r.Start + pos.Offset
 		} else {
@@ -399,43 +400,62 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 	case events.KeyArrowUp, events.KeyArrowDown, events.KeyPageUp, events.KeyPageDown:
 		vertical = true
 		if !v.preferredSet {
-			x = p.geometry.Caret(pos).X
+			x = g.Caret(pos).X
 		}
-		index := p.geometry.LineIndex(pos)
+		if p.paged != nil {
+			rect := g.Caret(pos)
+			delta := max(v.lineHeight, rect.Height)
+			if key == events.KeyPageUp || key == events.KeyPageDown {
+				delta = max(v.lineHeight, v.viewport.Height-v.lineHeight)
+			}
+			if key == events.KeyArrowUp || key == events.KeyPageUp {
+				delta = -delta
+			}
+			at := v.hit(geometry.Point{X: v.gutter + padding + x - v.offset.X, Y: padding + v.paragraphTop(row) + rect.Y + rect.Height/2 - v.offset.Y + delta})
+			caret, pos = at.Offset, at
+			break
+		}
+		index := g.LineIndex(pos)
 		down := key == events.KeyArrowDown || key == events.KeyPageDown
 		delta := -1
 		if down {
 			delta = 1
 		}
 		if key == events.KeyPageUp || key == events.KeyPageDown {
-			target := v.paragraphTop(row) + p.geometry.Caret(pos).Y + float32(delta)*max(v.lineHeight, v.viewport.Height-v.lineHeight)
+			target := v.paragraphTop(row) + g.Caret(pos).Y + float32(delta)*max(v.lineHeight, v.viewport.Height-v.lineHeight)
 			row = v.paragraphAt(max(0, target))
 			r, _ = m.LineRange(row)
 			p = v.paragraph(row)
 			if p != nil {
-				pos = p.geometry.Hit(geometry.Point{X: x, Y: target - v.paragraphTop(row)})
+				g = &p.geometry
+			}
+			if p != nil {
+				pos = g.Hit(geometry.Point{X: x, Y: target - v.paragraphTop(row)})
 				caret = r.Start + pos.Offset
 			}
 		} else {
 			index += delta
-			if index < 0 || index >= p.geometry.LineCount() {
+			if index < 0 || index >= g.LineCount() {
 				next := v.neighboringRow(row, delta)
 				if next >= 0 && next < m.LineCount() {
 					row = next
 					r, _ = m.LineRange(row)
 					p = v.paragraph(row)
 					if p != nil {
+						g = &p.geometry
+					}
+					if p != nil {
 						index = 0
 						if !down {
-							index = p.geometry.LineCount() - 1
+							index = g.LineCount() - 1
 						}
 					}
 				} else {
-					index = max(0, min(index, p.geometry.LineCount()-1))
+					index = max(0, min(index, g.LineCount()-1))
 				}
 			}
 			if p != nil {
-				pos = p.geometry.HitLine(index, x)
+				pos = g.HitLine(index, x)
 				caret = r.Start + pos.Offset
 			}
 		}

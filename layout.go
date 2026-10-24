@@ -208,8 +208,16 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		row := v.document.model.LineAt(at)
 		r, _ := v.document.model.LineRange(row)
 		if p := v.viewportParagraph(row); p != nil {
+			g := &p.geometry
+			if p.paged != nil {
+				g = p.paged.CachedGeometryAt(at - r.Start)
+			}
+			if g == nil {
+				v.requestLayoutWork()
+				return
+			}
 			v.pendingAnchor = false
-			rect := p.geometry.Caret(textedit.Position{Offset: at - r.Start})
+			rect := g.Caret(textedit.Position{Offset: at - r.Start})
 			y := max(0, min(padding+v.paragraphTop(row)+rect.Y+v.anchor.inset, max(0, v.ContentSize().Height-viewport.Height)))
 			v.offset = geometry.Point{X: v.anchor.x, Y: y}
 			v.scrollSignal.Emit(geometry.Rect(v.anchor.x, y, viewport.Width, viewport.Height))
@@ -350,6 +358,13 @@ func (v *SourceView) snapOffset(offset int, forward bool) int {
 	row := v.document.model.LineAt(offset)
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil {
+		if p.paged != nil {
+			if g := p.paged.GeometryAt(offset - r.Start); g != nil {
+				return r.Start + g.Snap(offset-r.Start, forward)
+			}
+			v.requestLayoutWork()
+			return v.clampOffset(offset)
+		}
 		return r.Start + p.geometry.Snap(offset-r.Start, forward)
 	}
 	return v.clampOffset(offset)
@@ -363,7 +378,7 @@ func (v *SourceView) caretRect() (geometry.Rectangle, bool) {
 	if p == nil {
 		return geometry.Rectangle{}, false
 	}
-	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
+	rect := p.geometryAt(caret - r.Start).Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
 	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
 }
 
@@ -377,7 +392,14 @@ func (v *SourceView) cachedCaretRect() (geometry.Rectangle, bool) {
 		return geometry.Rectangle{}, false
 	}
 	r := v.displayRange(row)
-	rect := p.geometry.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
+	g := &p.geometry
+	if p.paged != nil {
+		g = p.paged.CachedGeometryAt(caret - r.Start)
+		if g == nil {
+			return geometry.Rectangle{}, false
+		}
+	}
+	rect := g.Caret(textedit.Position{Offset: caret - r.Start, Upstream: v.upstream})
 	return rect.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}), true
 }
 
@@ -485,7 +507,7 @@ func (v *SourceView) captureAnchor() {
 	row := v.paragraphAt(max(0, v.offset.Y-padding))
 	r := v.displayRange(row)
 	p := v.viewportParagraph(row)
-	if p == nil {
+	if p == nil || p.paged != nil && p.paged.VisibleRange().End == 0 {
 		return
 	}
 	y := max(0, v.offset.Y-padding-v.paragraphTop(row))

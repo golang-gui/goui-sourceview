@@ -38,7 +38,10 @@ func (v *SourceView) Paint(p gui.Painter) {
 		r := v.displayRange(row)
 		origin := geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y}
 		if activeFocus(v) && row == caretRow {
-			p.FillRect(geometry.Rect(v.gutter, origin.Y, max(0, bounds.Width-v.gutter), item.height), graphics.ColorOf(v.colors.CurrentLine))
+			top, bottom := max(0, origin.Y), min(bounds.Height, origin.Y+item.height)
+			if bottom > top {
+				p.FillRect(geometry.Rect(v.gutter, top, max(0, bounds.Width-v.gutter), bottom-top), graphics.ColorOf(v.colors.CurrentLine))
+			}
 		}
 		v.paintAssistanceBackground(p, row, item, origin, occurrence)
 		if v.projection == nil {
@@ -51,7 +54,12 @@ func (v *SourceView) Paint(p gui.Painter) {
 				}
 			}
 			if v.highlightSearchMatches {
-				for _, match := range v.search.InRange(v.document.model, r, 2000) {
+				searchRange := r
+				if item.paged != nil {
+					visible := item.paged.VisibleRange()
+					searchRange = textedit.Range{Start: r.Start + visible.Start, End: r.Start + visible.End}
+				}
+				for _, match := range v.search.InRange(v.document.model, searchRange, 2000) {
 					c := v.colors.SearchBackground
 					if v.currentMatch != nil && v.currentMatch.raw == match {
 						c = v.colors.CurrentSearchBackground
@@ -71,12 +79,16 @@ func (v *SourceView) Paint(p gui.Painter) {
 					p.DrawRect(geometry.Rect(rect.X+.5, rect.Y+.5, rect.Width-1, rect.Height-1), 1, graphics.ColorOf(c))
 				}
 			}
-			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 {
-				edge := item.geometry.Caret(textedit.Position{Offset: len(item.text), Upstream: true})
+			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 && (item.paged == nil || item.paged.CachedOffset(r.End-r.Start)) {
+				edge := item.geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
 				p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))
 			}
 		}
-		p.DrawTextLayout(origin, item.layout)
+		if item.paged != nil {
+			item.paged.Paint(p, origin)
+		} else {
+			p.DrawTextLayout(origin, item.layout)
+		}
 		v.paintWhitespace(p, row, item, origin)
 		v.paintFoldBadge(p, row, item)
 		if v.projection != nil {

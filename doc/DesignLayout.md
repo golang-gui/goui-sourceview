@@ -587,3 +587,46 @@ Context.NewTextLayout 创建布局，通过 MeasureMetrics 保存普通值 Fragm
 依赖版本，独立构建另行验证。设计边界见
 [GOUI 文本布局设计](../../goui/doc/DesignIncrementalTextLayout.md)，本批记录见
 [实施记录](PlanShapedWrapping.md)。
+
+## 16. 超长单逻辑行的局部测量（2026-10-24）
+
+超过 64 KiB 的显示段落使用 GOUI 的 `gui.ParagraphLayout`。这一具体 GUI helper
+由 TextView 与 SourceView 共同使用，负责原生窗口、普通值 Geometry、前缀方向
+上下文和估计高度；不修改 typography，不要求各后端实现新的排版接口。
+本节更新第 15 节中“长段落仍完整送测”的实施状态。
+
+每次视区准备最多增加一个约 4 KiB 的原生窗口，确认的软折点与源 byte 范围一起
+保留。未确认的最后显示行延续到下一窗口，不把工作分块变成文档 LF。远处的
+Unicode 前缀上下文分批索引，可延迟显示，帧间继续处理最新视区需求。没有 Root
+的离屏调用允许少量固定有界步骤，不同步追完整个长段落。
+
+SourceView 的高亮和布局分别调度：语法 Scan 使用原有可恢复 State，按字节推进，
+已确认的词法前缀逐步着色，未确认部分允许显示基础前景色。元数据建索引直接查询模型已有的
+LineRange，不重复读取整个文件找 LF。此版没有新增逻辑行内部的编辑词法检查点；
+一次长行编辑仍可能让该行颜色重新分步分析，不能报告为“着色已即时完成”。
+
+paragraph 的 text 只保存当前已测窗口；textStart 记录它在逻辑行内的真实 byte
+起点。语法／选区范围传给 helper 裁切后再应用原生颜色。Whitespace、Home／End、
+occurrence 与行尾绘制必须使用这个起点，不能把局部字符串末尾当作逻辑行末尾。
+搜索绘制只查询已测范围，真正的全局搜索语义保持原设计。
+
+局部编辑保留长段落 helper，失效编辑点之后的上下文窗口，按需重建。逻辑行拆分、
+合并或跨边界替换释放旧 helper；之前逻辑行的修改只映射读取范围，不让一个视图
+的窗口引用另一个逻辑行。字体、投影、文档、换行、挂载等仍沿原有生命周期释放。
+宽度变化在同一 helper 内更新，只保留文本上下文与估计，不保留旧宽度的长行原生
+工作集；短段落已有的两个近期宽度不变。
+
+全局滚动范围和随机窗口的原点在未完全测量时是估计，局部命中、字形、caret 和
+选区使用同一组实测度量。复杂双向文本、特别长的 grapheme 及非均匀 NoWrap 全局
+坐标仍有适用边界，不能把有限回归覆盖写成对任意完整段落绝对等价的承诺。详见
+[GOUI 有界窗口设计](../../goui/doc/DesignIncrementalTextLayout.md#17-超长单逻辑行的有界原生窗口2026-10-24)。
+
+CurrentLine、ruler 等装饰先与视口求交再提交 Painter，避免软件绘图先构造数千万
+DIP 的路径。仅设置 clip 不能替代这个几何边界。新手工程序
+`tests/window/editor/paragraph` 同时验证 TextView 和 SourceView：只读实际文件，
+记录加载、真实输入、窗口分配、事件循环间隔及目标原生窗口实际光栅化就绪时间。
+日志和截图保留在仓库外，验收记录见 [实施记录](PlanIncrementalTextLayout.md)。
+
+这批代码依赖尚未发布的 GOUI ParagraphLayout 与 Projection.Slice。go.mod 保留可
+获取的 v0.3.0，双仓通过不提交的 go.work 联调；在包含该 GOUI 提交的版本发布前，
+关闭工作区的构建不具备这些 API，不能把工作区通过表述成独立发布验证通过。

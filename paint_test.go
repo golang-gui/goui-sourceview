@@ -277,3 +277,24 @@ func TestSnapshotLongLineWithMissingCacheDoesNotShape(t *testing.T) {
 		t.Fatal("snapshot created layouts for a missing cache")
 	}
 }
+
+// 裁剪路径前必须先限制背景几何；巨大的原始矩形会让软件光栅化器长时间构建路径。
+func TestCurrentLineBackgroundIsBoundedBeforeRasterization(t *testing.T) {
+	v, _ := colorFixture(t)
+	v.Arrange(geometry.Rect(0, 0, 400, 200))
+	focusBracketFixture(t, v)
+	p := v.paragraph(0)
+	p.height = 30_000_000
+	v.heights.Set(0, p.height)
+	draw := &recordingPainter{}
+	v.Paint(draw)
+	fills := bracketFills(draw, v.colors.CurrentLine)
+	if len(fills) == 0 {
+		t.Fatal("缺少当前行背景")
+	}
+	for _, f := range fills {
+		if f.rect.Y < 0 || f.rect.Y+f.rect.Height > v.Rect().Height {
+			t.Fatalf("背景超出视口：%v", f.rect)
+		}
+	}
+}
