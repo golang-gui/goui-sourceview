@@ -205,7 +205,9 @@ type SearchQuery struct {
 }
 ```
 
-- `NewDocument` 创建 UTF-8/LF 规范化模型，初始语言为 plain；WithModel 的 nil 建立空模型。
+- `NewDocument` 在规范化前识别文档输出换行格式，再创建 UTF-8/LF 模型，初始语言为 plain；
+  WithModel 的 nil 建立空模型，默认 LF 输出。原格式导出、混合换行和末尾空行的契约见
+  [文档换行](DesignLineEndings.md)。
 - 内置 `language.ID` 为 `Plain`（空 ID）、`JSON`、`XML`、`HTML`；未知 ID 返回错误，原配置不变。同一语言不触发失效。
 - `SetDocument(nil)` 回到该控件保留的私有文档（初始为空，保留此前内容）；同一指针是无操作。真正切换取消预编辑、待粘贴和搜索结果，重置选区及视觉状态，并请求从文首显示。
 - SetSelection 钳制到模型及 rune 边界；相关行可排版时按 Cluster 修正，保持 Anchor/Caret 方向。程序设置可操作未挂载对象，不触发用户编辑。
@@ -228,7 +230,8 @@ type SearchQuery struct {
 | 语言 | Plain，应用显式选择或调用语言推测工具 | Document |
 | 编辑 | 可编辑，单光标，接收 Tab 作为代码输入 | 视图 |
 | 缩进 | TabWidth=4，IndentWidth=4，InsertSpaces=true | 视图 |
-| 换行 | WrapNone；可切 WrapChar / WrapWordChar | 视图 |
+| 自动换行 | WrapNone；可切 WrapChar / WrapWordChar | 视图 |
+| 输出换行 | 导入识别 LF/CRLF/CR；没有换行时为 LF | Document |
 | 行号 | 显示；内部逻辑行从 0，侧栏显示从 1 | 视图 |
 | 字体 | 等宽 family 请求，默认 12 pt；显式 GUI 样式可覆盖 | 视图样式 |
 | 配色 | 跟随 Basic/Modern；显式 Scheme 仅覆盖代码色 | 视图 |

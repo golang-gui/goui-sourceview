@@ -8,6 +8,38 @@
 当前依赖为 GOUI v0.3.0，已发布 v0.1.0。早期各切片中的未发布
 依赖及失败描述保留为当时记录，当前验证结果以发布记录为准。
 
+## 文档换行与末尾 CRLF（2026-10-24）
+
+- [x] NewDocument 在模型归一化前检测 LF/CRLF/CR，混用选择出现最多的格式，
+  同数选择其中最先出现的格式；DetectLineEnding 额外返回混用标志。
+  模型继续使用 UTF-8/LF，NewDocumentWithModel 默认 LF，已知原格式可显式配置。
+- [x] Document 提供 LineEnding、SetLineEnding、ConnectLineEndingChanged 和 WriteTo。
+  输出配置不修改文本、修订、选区或文本历史，不冒充可撤销的格式转换命令。
+  WriteTo 按最多 32 KiB 的规范化文本块导出，保留末尾换行数量，返回实际输出量、
+  底层错误或短写错误；writer 回调修改文本或格式代次时停止，格式改回也能识别。
+- [x] 原有 sourceview_test.go 增加格式、混用、EOF、跨块 Unicode、真实临时文件、
+  修改与撤销、共享视图、订阅重入和 writer 失败用例；assistance_test.go 验证
+  CRLF 只有一个逻辑行尾标记，最后空行不再添加标记。没有新增零散测试文件。
+  示例状态栏显示输出格式及编码后的字节数；应用参考与专题设计同步更新。
+- [x] Linux amd64 / Go 1.25.8 / Pango：修改前 428 PASS、0 FAIL、0 SKIP；
+  修改后 `go test ./...`、`GOWORK=off go test -json ./... -count=1` 通过，
+  后者 460 PASS、0 FAIL、0 SKIP，原有全部用例保留。
+  `GOWORK=off go test -race ./... -count=1`、`GOWORK=off go vet ./...` 通过。
+- [x] 关闭工作区构建的示例在独立 X11 / Xvnc / Xfwm4 合成桌面运行，
+  Software / Pango、150% 应用缩放，读取仓库外 `abc\r\n\r\n` 样本。
+  通过 XTest 执行 EOF 插入 x、Enter、两次撤销、删除末尾换行及撤销，逐张观察截图：
+  CRLF 标签保持，行数／输出字节数依次为 3/7、3/8、4/10、3/8、3/7、2/5、3/7。
+  本机无 OCR，窗口标签为人工读图核对；实际导出字节另由包内明确断言验证。
+  原输入文件字节未变化，未增加保存按钮或写入用户文件。
+- [x] `GOWORK=off CGO_ENABLED=0` 下，Windows amd64 / macOS arm64 的根包
+  `go test -c` 及全仓 `go build ./...` 通过；未执行两端原生运行。
+  本轮未修改 GOUI；独立依赖为 v0.3.0，工作区 GOUI 为
+  `5f30e52b5de7c14c90688fda91f1fd0b310f753d`。
+  日志、截图与程序在仓库外，用户 `example/temp/` 未修改或纳入提交。
+  示例正常关闭，专用 X11 与窗口管理器均已退出，用户桌面会话未动。
+- 未包含混合换行逐行保真、可撤销格式转换、其他文件编码、原子文件保存、
+  异步快照导出或真实 IME 验收；具体边界见 [换行设计](DesignLineEndings.md)。
+
 ## 补全期间的左右导航（2026-10-23）
 
 - [x] 普通左右键沿原生视觉／Cluster 几何移动正文光标，同一词范围内重新计算默认

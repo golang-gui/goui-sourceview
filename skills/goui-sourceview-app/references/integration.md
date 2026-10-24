@@ -87,8 +87,13 @@ HidePanel；同步调用处理返回错误，用户操作失败通过 ConnectErr
 - 一个打开的文件通常对应一份持久 Document。共享 Document 的视图共享文本、历史及语言，
   其选区和滚动独立。SetDocument 切换会重置当前视图的选择等状态；保留各文件的光标/滚动
   需要应用自己的标签状态，不能仅凭共享文档推断会自动恢复。
-- NewDocument / Model.SetText 会归一化 UTF-8 和 LF。文件编码、换行形式、路径、脏标记、
-  文件冲突和保存失败由应用处理。Model.SetText 是重载，会清历史，不应在普通编辑回调中使用。
+- NewDocument 在归一化 UTF-8/LF 前识别 LF/CRLF/CR 输出格式。需要按文档格式保存时用
+  Document.WriteTo(writer)，处理其返回的写入量与错误；Model.Text 仍是规范化文本。
+  DetectLineEnding 返回主格式和混用标志；混合换行导出会统一格式，不逐行保真。
+  NewDocumentWithModel 默认 LF，已知原格式时显式 SetLineEnding。该 setter 是输出配置，
+  不进入文本撤销栈；变化通过 ConnectLineEndingChanged 通知。
+  Model.SetText 是重载，会清历史、归一化文本并保留当前输出配置，不应在普通编辑回调中使用。
+  文件编码、路径、脏标记、文件冲突和原子保存仍由应用处理。
 - 内置语言通过 SetLanguage 设置；文件识别可使用 language.Guess(filename, sample)，
   再显式绑定结果。不要把文件扩展名或任意字符串直接当作已注册的语言。
 - 应用格式化、模板和批量替换可用 `view.ApplyEdits(document, revision, edits, afterSelection)`。

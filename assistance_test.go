@@ -94,6 +94,40 @@ func TestAssistancePaintDoesNotChangeGeometry(t *testing.T) {
 	}
 }
 
+// 标记表示实际逻辑换行；CRLF 只显示一次，EOF 的空行不产生额外标记。
+func TestCRLFEndMarkersPreserveTerminalNewlines(t *testing.T) {
+	for _, tc := range []struct {
+		text    string
+		markers int
+	}{
+		{"", 0}, {"abc", 0}, {"abc\r\n", 1}, {"abc\r\n\r\n", 2}, {"\r\n", 1},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			v := NewSourceView()
+			v.SetDocument(NewDocument(tc.text))
+			v.SetFoldingEnabled(false)
+			v.SetShowLineEndings(true)
+			v.context = &shapedContext{}
+			t.Cleanup(v.dropLayouts)
+			markers := 0
+			for row := 0; row < v.Document().Model().LineCount(); row++ {
+				p := v.paragraph(row)
+				if p == nil {
+					t.Fatal("missing paragraph")
+				}
+				out := &recordingPainter{}
+				v.paintWhitespace(out, row, p, geometry.Point{})
+				if out.lines > 0 {
+					markers++
+				}
+			}
+			if markers != tc.markers {
+				t.Fatal("logical line-ending markers", markers, tc.markers)
+			}
+		})
+	}
+}
+
 func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 	v := NewSourceView()
 	v.SetFoldingEnabled(false)

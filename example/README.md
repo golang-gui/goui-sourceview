@@ -52,10 +52,10 @@ Restart resets the samples. Closing the main window exits. No DevServer is start
 
 - Click filenames to switch; edit one, switch away and back, then Undo.
   点击文件名切换，编辑后切换回来，确认内容和撤销历史保留。
-- Toggle Word wrap, Line numbers and Read only; the footer shows language, line,
-  Unicode character column, line count, byte count and editing mode. The displayed
+- Toggle Word wrap, Line numbers and Read only; the footer shows language, LF/CRLF/CR,
+  line, Unicode character column, line count, output byte count and editing mode. The displayed
   column counts Unicode code points, rather than bytes or visual tab columns.
-  切换折行、行号及只读；底部显示语言、行列、行数、字节数和模式。
+  切换折行、行号及只读；底部显示语言、LF/CRLF/CR、行列、行数、输出字节数和模式。
   显示列按 Unicode 码点计数，不是模型字节偏移或 Tab 展开后的视觉列。
 - Use Find / Replace or platform shortcuts; try `editor` in JSON or `feature`
   in HTML. Replace one/all and Undo. Escape closes the floating panel.

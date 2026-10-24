@@ -120,9 +120,21 @@ func run() error {
 		if editor.ReadOnly() {
 			mode = "Read only"
 		}
-		status.SetText(fmt.Sprintf("%s  ·  %s  ·  Ln %d, Col %d  ·  %d lines  ·  %d bytes  ·  %s", current.name, current.document.Language(), row+1, utf8.RuneCountInString(prefix)+1, m.LineCount(), m.Len(), mode))
+		byteCount := int64(m.Len())
+		if current.document.LineEnding() == source.LineEndingCRLF {
+			byteCount += int64(m.LineCount() - 1)
+		}
+		status.SetText(fmt.Sprintf("%s  ·  %s  ·  %s  ·  Ln %d, Col %d  ·  %d lines  ·  %d bytes  ·  %s", current.name, current.document.Language(), current.document.LineEnding(), row+1, utf8.RuneCountInString(prefix)+1, m.LineCount(), byteCount, mode))
 		undo.SetEnabled(!editor.ReadOnly() && m.CanUndo())
 		redo.SetEnabled(!editor.ReadOnly() && m.CanRedo())
+	}
+	for _, d := range documents {
+		h := d.document.ConnectLineEndingChanged(func(source.LineEnding) {
+			if current.document == d.document {
+				update()
+			}
+		})
+		defer h.Disconnect()
 	}
 	show := func(d exampleDocument) {
 		current = d
