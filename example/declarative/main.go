@@ -5,19 +5,19 @@ package main
 import (
 	"log"
 
-	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
-	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/theme/modern"
 	base "github.com/golang-gui/goui/ui"
 )
 
 func main() {
-	document := source.NewDocument("{\n    \"editor\": \"GOUI SourceView\",\n    \"editable\": true\n}\n")
-	_ = document.SetLanguage(language.JSON)
-	bindings := source.DefaultKeyBindings()
-	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	document := sourceui.NewDocument("{\n    \"editor\": \"GOUI SourceView\",\n    \"editable\": true\n}\n")
+	if err := document.SetLanguage(language.JSON); err != nil {
+		log.Fatal(err)
+	}
+	bindings := sourceui.DefaultKeyBindings()
+	bindings[sourceui.CommandComplete] = []sourceui.KeyGesture{{Key: base.KeyF2}}
 	if err := base.Run("org.golang-gui.SourceViewDeclarative", func(app base.App) base.RootView {
 		return base.Root().
 			StyleSheet(modern.FromSettings(app.Settings())).
@@ -29,7 +29,11 @@ func main() {
 					Content(
 						base.VBox(
 							base.HeaderBar(base.Label("Declarative SourceView")).Padding(8),
-							base.ScrollView(sourceui.SourceView().ID("editor").Document(document).AcceptsTab(true).KeyBindings(bindings)).Style("source-view"),
+							base.ScrollView(sourceui.SourceView().ID("editor").Document(document).
+								AcceptsTab(true).
+								IndentOptions(sourceui.IndentOptions{TabWidth: 4, IndentWidth: 4, InsertSpaces: false}).
+								WhitespaceMode(sourceui.WhitespaceBoundary).
+								KeyBindings(bindings)).Style("source-view"),
 						),
 					),
 			)

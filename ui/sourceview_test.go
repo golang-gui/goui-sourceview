@@ -5,7 +5,6 @@ import (
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	base "github.com/golang-gui/goui/ui"
 )
 
@@ -21,9 +20,9 @@ func TestBindingRestoresDefaultsAndDisconnects(t *testing.T) {
 	initial := SourceView()
 	widget := initial.Mount(ctx).(*source.SourceView)
 	initial.Update(ctx, widget)
-	document := source.NewDocument("abc")
+	document := NewDocument("abc")
 	events := 0
-	configured := SourceView().Document(document).ReadOnly(true).ShowLineNumbers(false).AcceptsTab(true).WrapMode(source.WrapWordChar).Selection(textedit.Selection{Caret: 2}).OnSelection(func(textedit.Selection) { events++ })
+	configured := SourceView().Document(document).ReadOnly(true).ShowLineNumbers(false).AcceptsTab(true).WrapMode(WrapWordChar).Selection(TextSelection{Caret: 2}).OnSelection(func(TextSelection) { events++ })
 	configured.Update(ctx, widget)
 	options := SourceView().AutoPairs(false).AutomaticCompletion(false)
 	options.Update(ctx, widget)
@@ -37,17 +36,17 @@ func TestBindingRestoresDefaultsAndDisconnects(t *testing.T) {
 	if events != 0 || widget.Document() != document || !widget.ReadOnly() || widget.ShowLineNumbers() || !widget.AcceptsTab() {
 		t.Fatal("update emitted or lost config")
 	}
-	widget.SetSelection(textedit.Selection{Caret: 3})
+	widget.SetSelection(TextSelection{Caret: 3})
 	if events != 1 {
 		t.Fatal(events)
 	}
 	initial.Update(ctx, widget)
-	if widget.Document() == document || widget.ReadOnly() || !widget.ShowLineNumbers() || widget.AcceptsTab() || widget.WrapMode() != source.WrapNone {
+	if widget.Document() == document || widget.ReadOnly() || !widget.ShowLineNumbers() || widget.AcceptsTab() || widget.WrapMode() != WrapNone {
 		t.Fatal("defaults not restored")
 	}
 	configured.Update(ctx, widget)
 	configured.Unmount(ctx, gui.Widget(widget))
-	widget.SetSelection(textedit.Selection{})
+	widget.SetSelection(TextSelection{})
 	if events != 1 {
 		t.Fatal("unmount leaked callback", events)
 	}
@@ -58,18 +57,18 @@ func TestUncontrolledSearchSurvivesDeclarativeUpdate(t *testing.T) {
 	v := SourceView()
 	w := v.Mount(ctx).(*source.SourceView)
 	v.Update(ctx, w)
-	w.SetSearch(source.SearchQuery{Text: "user query", WholeWord: true})
+	w.SetSearch(SearchQuery{Text: "user query", WholeWord: true})
 	w.SetHighlightSearchMatches(false)
 	v.Update(ctx, w)
-	if w.Search() != (source.SearchQuery{Text: "user query", WholeWord: true}) || w.HighlightSearchMatches() {
+	if w.Search() != (SearchQuery{Text: "user query", WholeWord: true}) || w.HighlightSearchMatches() {
 		t.Fatal("rebuild cleared interactive query")
 	}
 	SourceView().HighlightSearchMatches(true).Update(ctx, w)
 	if !w.HighlightSearchMatches() {
 		t.Fatal("explicit search highlight option ignored")
 	}
-	SourceView().Search(source.SearchQuery{}).Update(ctx, w)
-	if w.Search() != (source.SearchQuery{}) {
+	SourceView().Search(SearchQuery{}).Update(ctx, w)
+	if w.Search() != (SearchQuery{}) {
 		t.Fatal("explicit controlled empty query ignored")
 	}
 	v.Unmount(ctx, w)
@@ -80,11 +79,11 @@ func TestKeyBindingsAreExplicitAndCopied(t *testing.T) {
 	view := SourceView()
 	w := view.Mount(ctx).(*source.SourceView)
 	view.Update(ctx, w)
-	bindings := source.KeyBindings{source.CommandComplete: {{Key: gui.KeyF2}}}
+	bindings := KeyBindings{CommandComplete: {{Key: gui.KeyF2}}}
 	configured := SourceView().KeyBindings(bindings)
-	bindings[source.CommandComplete][0].Key = gui.KeyF4
+	bindings[CommandComplete][0].Key = gui.KeyF4
 	configured.Update(ctx, w)
-	if got := w.KeyBindings()[source.CommandComplete]; len(got) != 1 || got[0].Key != gui.KeyF2 {
+	if got := w.KeyBindings()[CommandComplete]; len(got) != 1 || got[0].Key != gui.KeyF2 {
 		t.Fatal("view retained caller key slices", got)
 	}
 	view.Update(ctx, w)
@@ -106,24 +105,24 @@ func TestUncontrolledWhitespaceSurvivesDeclarativeUpdate(t *testing.T) {
 	w := view.Mount(ctx).(*source.SourceView)
 	defer view.Unmount(ctx, w)
 	view.Update(ctx, w)
-	if w.WhitespaceMode() != source.WhitespaceNone || w.ShowLineEndings() {
+	if w.WhitespaceMode() != WhitespaceNone || w.ShowLineEndings() {
 		t.Fatal("new view defaults")
 	}
-	if err := w.SetWhitespaceMode(source.WhitespaceBoundary); err != nil {
+	if err := w.SetWhitespaceMode(WhitespaceBoundary); err != nil {
 		t.Fatal(err)
 	}
 	w.SetShowLineEndings(true)
 	view.Update(ctx, w)
-	if w.WhitespaceMode() != source.WhitespaceBoundary || !w.ShowLineEndings() {
+	if w.WhitespaceMode() != WhitespaceBoundary || !w.ShowLineEndings() {
 		t.Fatal("rebuild reset interactive state")
 	}
-	SourceView().WhitespaceMode(source.WhitespaceNone).Update(ctx, w)
-	if w.WhitespaceMode() != source.WhitespaceNone || !w.ShowLineEndings() {
+	SourceView().WhitespaceMode(WhitespaceNone).Update(ctx, w)
+	if w.WhitespaceMode() != WhitespaceNone || !w.ShowLineEndings() {
 		t.Fatal("explicit None or independent EOL option ignored")
 	}
-	SourceView().WhitespaceMode(source.WhitespaceAll).ShowLineEndings(false).Update(ctx, w)
+	SourceView().WhitespaceMode(WhitespaceAll).ShowLineEndings(false).Update(ctx, w)
 	view.Update(ctx, w)
-	if w.WhitespaceMode() != source.WhitespaceAll || w.ShowLineEndings() {
+	if w.WhitespaceMode() != WhitespaceAll || w.ShowLineEndings() {
 		t.Fatal("explicit false or retained mode ignored")
 	}
 }

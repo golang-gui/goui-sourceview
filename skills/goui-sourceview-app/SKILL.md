@@ -16,14 +16,16 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
   ```sh
   go list -m -json github.com/golang-gui/goui-sourceview github.com/golang-gui/goui
   go doc github.com/golang-gui/goui-sourceview
+  go doc github.com/golang-gui/goui-sourceview/ui
   go doc github.com/golang-gui/goui-sourceview/language
   ```
 
 - 按 Version、Dir、Replace 核对公开契约；模块缓存只读。新项目先确认实际可获取且相互兼容
   的版本，不虚构 tag，不因技能或在线 main 较新而升级已有应用。
-- 当前版本直接依赖 GOUI v0.2.0，已包含批量编辑、样式注册和 TextInput 占位提示等
-  所需接口，正常接入不需要相邻 GOUI 检出或 go.work。只有同时修改两个模块时才按需
-  使用本地工作区；不提交机器专属 replace 或修改全局 Go 环境，交付前关闭工作区验证。
+- 按实际应用与 SourceView 的 go.mod 核对 GOUI 版本。兼容的发布版本通常不需要相邻
+  检出或 go.work；若实际源码依赖尚未发布的 GOUI 能力，记录所需版本或提交条件。
+  双仓联调按需使用本地工作区，不提交机器专属 replace 或修改全局 Go 环境；
+  交付前关闭工作区验证，不把联调通过当作独立依赖可用。
 
 按任务阅读参考，无需一次读取全部：
 
@@ -33,7 +35,7 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
 ## 会影响应用正确性的约定
 
 - SourceView 是独立编辑控件。`gui` 接入用根包，声明式接入用本模块的 `ui`；滚动仍由
-  GOUI ScrollView 提供，查找栏按需组合到 Overlay。不要嵌套 TextView 或复制编辑状态机。
+  GOUI ScrollView 提供，查找、替换、定位由 SourceView 内置管理。不要嵌套 TextView 或复制编辑状态机。
 - Document 保存文本、历史和语言，可由多个视图共享；选区、滚动、折叠、配对与补全会话属于视图。
   Document 不需要 Destroy。把文档、语言定义和补全提供者放在 build 之外或明确的持久状态中，
   不在每次重建时重载文本、重新创建提供者或手工销毁窗口拥有的控件树。

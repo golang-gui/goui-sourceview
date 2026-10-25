@@ -223,6 +223,42 @@ type SearchQuery struct {
 - Scheme 是复制并验证后的不可变值；nil 使用所属 Basic/Modern 样式。Root 包提供 wrap 类型/常量别名供 ui 使用，ui 不直接导入 typography。
 - 框架契约另需实现 IMClient、Scrollable、Measure/Arrange/Paint/StyleChanged/Snapshot；不将其与用户功能 API 混为一组。
 
+### 声明式类型入口
+
+`sourceview/ui` 直接声明常见配置、事件和资源句柄的类型别名，沿用 GOUI ui 的做法：
+
+| 类型 | 声明式入口 |
+| --- | --- |
+| 文档与换行 | `Document`、`LineEnding` 及 LF/CRLF/CR 常量 |
+| 编辑选项 | `IndentOptions`、`WrapMode`、`WhitespaceMode` 及其全部枚举值 |
+| 搜索 | `SearchQuery`、`TextRange` |
+| 折叠数据 | `FoldRegion` |
+| 补全 | `Completion`、`CompletionContext`、`CompletionProvider` |
+| 快捷键 | `Command`、全部 44 个命令常量、`KeyBindings`、`KeyGesture` |
+| 通用文本 | `TextModel`、`TextRange`、`TextEdit`、`TextChange`、`TextSelection`，与 GOUI ui 共用类型 |
+
+声明式方法签名使用这些本包名称。别名与根包/GOUI 类型身份相同，能直接传递已有文档、
+选项、选区、回调、补全提供者及快捷键表；不复制模型、包装资源或另建状态。
+`BindSelection` 继续使用 GOUI 的 `BindState[TextSelection]`，协调与生命周期机制不变。
+
+`NewDocument`、`NewDocumentWithModel`、`DetectLineEnding`、`DefaultKeyBindings` 及
+三种内置补全函数只转发到根包原实现。函数使用普通声明而非可变函数变量；默认快捷键
+仍每次返回独立表，补全仍遵守原有有界快照与取消契约。
+
+普通声明式应用可只导入 SourceView 的 ui 和 GOUI 的 ui，按键/修饰键常量使用后者。
+语言定义和配色的创建继续使用 `language`、`scheme` 资源包；命令式控件由根包拥有。
+例如：
+
+```go
+document := sourceui.NewDocument("text") // 保持在 build 外
+view := sourceui.SourceView().Document(document).AcceptsTab(true).
+    IndentOptions(sourceui.IndentOptions{TabWidth: 4, IndentWidth: 4, InsertSpaces: false}).
+    WhitespaceMode(sourceui.WhitespaceBoundary).
+    OnSelection(func(selection sourceui.TextSelection) { /* 更新应用状态 */ })
+```
+
+使用示例见 `example/declarative`。已有调用方继续传入根包和 GOUI 值，无需转换。
+
 ## 6. 默认值与配置作用域
 
 | 项 | 默认值 | 作用域 |

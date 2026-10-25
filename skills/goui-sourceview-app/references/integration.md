@@ -27,7 +27,6 @@ package main
 import (
     "log"
 
-    source "github.com/golang-gui/goui-sourceview"
     "github.com/golang-gui/goui-sourceview/language"
     sourceui "github.com/golang-gui/goui-sourceview/ui"
     "github.com/golang-gui/goui/layout"
@@ -36,7 +35,7 @@ import (
 )
 
 func main() {
-    document := source.NewDocument("{\n  \"name\": \"example\"\n}\n")
+    document := sourceui.NewDocument("{\n  \"name\": \"example\"\n}\n")
     if err := document.SetLanguage(language.JSON); err != nil {
         log.Fatal(err)
     }
@@ -47,7 +46,8 @@ func main() {
                 Content(base.VBox(
                     base.HeaderBar(base.Label("Source editor")).Padding(8),
                     base.ScrollView(sourceui.SourceView().ID("editor").
-                        Document(document).AcceptsTab(true)).Style("source-view"),
+                        Document(document).AcceptsTab(true).
+                        IndentOptions(sourceui.IndentOptions{TabWidth: 4, IndentWidth: 4, InsertSpaces: false})).Style("source-view"),
                 ).CrossAlign(layout.CrossStretch)),
         )
     })
@@ -59,6 +59,12 @@ func main() {
 
 Integrated 采用 GOUI 的平台支持与降级规则。自定义窗口装饰不是接入编辑器的前置条件，
 已有应用可以保留自己的窗口模式。接受 Tab 插入由 AcceptsTab 显式选择。
+声明式配置、事件与补全类型使用 `sourceui.IndentOptions`、`TextSelection`、`TextChange`、
+`SearchQuery`、`CompletionProvider`、`KeyBindings` 等；文档与默认快捷键通过
+`sourceui.NewDocument`、`sourceui.DefaultKeyBindings` 创建。按键常量使用 GOUI ui。
+这些入口与命令式类型是别名；语言和配色仍从对应资源包创建。先用 `go doc` 核对实际
+SourceView 版本是否提供这些声明式入口，不把较新的 main API 用到旧版模块。
+
 
 ## 命令式组合
 

@@ -6,58 +6,57 @@ import (
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	base "github.com/golang-gui/goui/ui"
 )
 
 type SourceViewView struct {
-	keyBindings    source.KeyBindings
+	keyBindings    KeyBindings
 	keyBindingsSet bool
-	searchRange    *gui.TextRange
+	searchRange    *TextRange
 	searchRangeSet bool
 	linkedTags     *bool
 	base.ViewBase[SourceViewView]
-	document                                                             *source.Document
+	document                                                             *Document
 	readOnly, acceptsTab                                                 bool
-	selection                                                            *textedit.Selection
-	indent                                                               *source.IndentOptions
-	wrap                                                                 *source.WrapMode
+	selection                                                            *TextSelection
+	indent                                                               *IndentOptions
+	wrap                                                                 *WrapMode
 	lineNumbers                                                          *bool
 	colors                                                               *scheme.Scheme
-	query                                                                *source.SearchQuery
+	query                                                                *SearchQuery
 	highlightSearchMatches                                               *bool
-	onChange                                                             func(textedit.Change)
-	onSelection                                                          func(textedit.Selection)
+	onChange                                                             func(TextChange)
+	onSelection                                                          func(TextSelection)
 	onError                                                              func(error)
 	autoPairs, automaticCompletion                                       *bool
-	completionProvider                                                   *source.CompletionProvider
-	whitespace                                                           *source.WhitespaceMode
+	completionProvider                                                   *CompletionProvider
+	whitespace                                                           *WhitespaceMode
 	lineEndings, indentGuides, smartHomeEnd, smartBackspace, occurrences *bool
 	rulers                                                               []int
 	foldingEnabled                                                       *bool
 	onFoldingChanged                                                     func()
 }
 
-func SourceView() *SourceViewView                                        { v := &SourceViewView{}; v.Self = v; return v }
-func (v *SourceViewView) Document(d *source.Document) *SourceViewView    { v.document = d; return v }
-func (v *SourceViewView) ReadOnly(b bool) *SourceViewView                { v.readOnly = b; return v }
-func (v *SourceViewView) AcceptsTab(b bool) *SourceViewView              { v.acceptsTab = b; return v }
-func (v *SourceViewView) Selection(s textedit.Selection) *SourceViewView { v.selection = &s; return v }
-func (v *SourceViewView) IndentOptions(o source.IndentOptions) *SourceViewView {
+func SourceView() *SourceViewView                                   { v := &SourceViewView{}; v.Self = v; return v }
+func (v *SourceViewView) Document(d *Document) *SourceViewView      { v.document = d; return v }
+func (v *SourceViewView) ReadOnly(b bool) *SourceViewView           { v.readOnly = b; return v }
+func (v *SourceViewView) AcceptsTab(b bool) *SourceViewView         { v.acceptsTab = b; return v }
+func (v *SourceViewView) Selection(s TextSelection) *SourceViewView { v.selection = &s; return v }
+func (v *SourceViewView) IndentOptions(o IndentOptions) *SourceViewView {
 	v.indent = &o
 	return v
 }
-func (v *SourceViewView) WrapMode(w source.WrapMode) *SourceViewView  { v.wrap = &w; return v }
-func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView      { v.lineNumbers = &b; return v }
-func (v *SourceViewView) Scheme(s *scheme.Scheme) *SourceViewView     { v.colors = s; return v }
-func (v *SourceViewView) Search(q source.SearchQuery) *SourceViewView { v.query = &q; return v }
+func (v *SourceViewView) WrapMode(w WrapMode) *SourceViewView     { v.wrap = &w; return v }
+func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView  { v.lineNumbers = &b; return v }
+func (v *SourceViewView) Scheme(s *scheme.Scheme) *SourceViewView { v.colors = s; return v }
+func (v *SourceViewView) Search(q SearchQuery) *SourceViewView    { v.query = &q; return v }
 
 // KeyBindings explicitly replaces command bindings; nil clears them. Omission
 // preserves the widget's existing bindings across declarative updates.
-func (v *SourceViewView) KeyBindings(bindings source.KeyBindings) *SourceViewView {
-	v.keyBindings = make(source.KeyBindings, len(bindings))
+func (v *SourceViewView) KeyBindings(bindings KeyBindings) *SourceViewView {
+	v.keyBindings = make(KeyBindings, len(bindings))
 	for command, keys := range bindings {
-		v.keyBindings[command] = append([]gui.KeyGesture(nil), keys...)
+		v.keyBindings[command] = append([]KeyGesture(nil), keys...)
 	}
 	v.keyBindingsSet = true
 	return v
@@ -66,23 +65,23 @@ func (v *SourceViewView) HighlightSearchMatches(b bool) *SourceViewView {
 	v.highlightSearchMatches = &b
 	return v
 }
-func (v *SourceViewView) OnChange(fn func(textedit.Change)) *SourceViewView {
+func (v *SourceViewView) OnChange(fn func(TextChange)) *SourceViewView {
 	v.onChange = fn
 	return v
 }
-func (v *SourceViewView) OnSelection(fn func(textedit.Selection)) *SourceViewView {
+func (v *SourceViewView) OnSelection(fn func(TextSelection)) *SourceViewView {
 	v.onSelection = fn
 	return v
 }
 func (v *SourceViewView) OnError(fn func(error)) *SourceViewView { v.onError = fn; return v }
-func (v *SourceViewView) BindSelection(s base.BindState[textedit.Selection]) *SourceViewView {
+func (v *SourceViewView) BindSelection(s base.BindState[TextSelection]) *SourceViewView {
 	if s != nil {
 		v.Selection(s.Get()).OnSelection(s.Set)
 	}
 	return v
 }
 func (v *SourceViewView) LinkedTags(enabled bool) *SourceViewView { v.linkedTags = &enabled; return v }
-func (v *SourceViewView) SearchRange(r gui.TextRange) *SourceViewView {
+func (v *SourceViewView) SearchRange(r TextRange) *SourceViewView {
 	copy := r
 	v.searchRange = &copy
 	v.searchRangeSet = true
@@ -100,7 +99,7 @@ func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {
 	v.automaticCompletion = &enabled
 	return v
 }
-func (v *SourceViewView) CompletionProvider(provider *source.CompletionProvider) *SourceViewView {
+func (v *SourceViewView) CompletionProvider(provider *CompletionProvider) *SourceViewView {
 	v.completionProvider = provider
 	return v
 }
@@ -115,7 +114,7 @@ func (v *SourceViewView) OnFoldingChanged(fn func()) *SourceViewView {
 }
 
 // WhitespaceMode explicitly controls markers; omission preserves the current view setting.
-func (v *SourceViewView) WhitespaceMode(mode source.WhitespaceMode) *SourceViewView {
+func (v *SourceViewView) WhitespaceMode(mode WhitespaceMode) *SourceViewView {
 	v.whitespace = &mode
 	return v
 }
@@ -138,12 +137,12 @@ func boolOption(value *bool, fallback bool) bool {
 }
 
 type state struct {
-	document         *source.Document
-	indent           source.IndentOptions
-	wrap             source.WrapMode
+	document         *Document
+	indent           IndentOptions
+	wrap             WrapMode
 	lineNumbers      bool
-	onChange         func(textedit.Change)
-	onSelection      func(textedit.Selection)
+	onChange         func(TextChange)
+	onSelection      func(TextSelection)
 	onError          func(error)
 	handles          signal.Handles
 	onFoldingChanged func()
@@ -159,12 +158,12 @@ func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 				s.onFoldingChanged()
 			}
 		}),
-		w.ConnectChange(func(c textedit.Change) {
+		w.ConnectChange(func(c TextChange) {
 			if s.onChange != nil {
 				s.onChange(c)
 			}
 		}),
-		w.ConnectSelection(func(value textedit.Selection) {
+		w.ConnectSelection(func(value TextSelection) {
 			if s.onSelection != nil {
 				s.onSelection(value)
 			}

@@ -676,3 +676,11 @@ G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失�
 - 实际 OpenGL 1x 的 example/editor 经 XTest 鼠标打开 View 并选择 All；桌面捕获前后对照，在第二行前导区的四个独立标记得到 3×3、4×3、4×3、4×3 像素包围盒（包含抗锯齿），无旧版 4×1 扁条。另经真实 Ctrl+A 观察选中效果，正常 Alt+F4 退出。未接 DevServer，未改剪贴板或系统设置，图片只存仓库外。
 - `go test ./...`、`go test -race ./...`、`go vet ./...` 通过；Windows amd64、macOS arm64 的 `CGO_ENABLED=0 go build ./...` 工作区交叉构建通过。未执行远端原生桌面、Windows Direct2D 或 macOS 原生运行，也未验收物理 IME/跨屏。
 - `GOWORK=off go test ./...` 仍因修改前已存在的 GOUI v0.3.0 接口缺失失败（ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice），没有更新依赖或修改 GOUI。用户未跟踪的 example/temp 保留。
+
+## 2026-10-25 声明式类型入口
+
+- 在 ui/types.go 集中补齐 SourceView 配置、文档/换行、折叠数据、补全、搜索、通用文本值及 KeyGesture 的类型别名；完整转发 44 个命令常量以及 Wrap/Whitespace/LineEnding 常量。声明式公开方法和回调使用本包类型名称，保留原类型身份与全部既有协调行为。
+- 增加文档构造、换行检测、默认快捷键及三种补全函数的薄转发；不增加可变函数变量或另一套模型/状态。示例与应用技能的声明式代码统一使用 sourceui，通用按键使用 GOUI ui；语言、配色仍使用各自资源包。
+- 现有绑定测试改用这些 UI 名称，原有断言保留。仓库外消费程序仅导入 SourceView ui、GOUI ui 与标准库，构造文档/配置/回调/补全/快捷键并执行通过，另断言模型共享、CRLF 检测与默认快捷键表相互独立。
+- Linux amd64 / Go 1.25.8，SourceView 基线 bea900d；相邻 GOUI 检出在验证期间更新至 fd86a2e，使用本地工作区复核：go test ./...、go vet ./...、声明式示例与从技能提取的完整 main 构建通过；skill-creator quick_validate 通过。Windows amd64、macOS arm64 的 CGO_ENABLED=0 go build ./... 交叉构建通过。
+- GOWORK=off go test ./... 仍因主分支既有 GOUI v0.3.0 接口缺失失败（ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice）。本轮未修改 GOUI 或模块依赖；未运行新的窗口/输入验收，不把构建通过视为平台原生验收。用户 example/temp 保留。

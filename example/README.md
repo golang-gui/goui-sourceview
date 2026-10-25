@@ -86,6 +86,15 @@ Use Ctrl/Cmd+F to open the built-in find UI; editing uses the same widget as the
 `declarative` 展示最小声明式组合及稳定 Document，样式随系统设置重建。
 Ctrl/Cmd+F 打开查找栏；编辑行为由同一个命令式控件提供。
 
+Configuration types, document construction and key bindings use `sourceui` directly;
+GOUI key constants use `base`. This example explicitly inserts real Tabs and shows
+Boundary whitespace markers. Existing sample indentation remains spaces.
+
+配置类型、文档构造和快捷键统一使用 `sourceui`，GOUI 按键常量使用 `base`，
+无需导入命令式根包或 gui。此例显式配置真实 Tab 输入并显示 Boundary 空白标记；
+初始样本中的缩进仍是普通空格。
+
+
 See [editor shortcuts](../doc/DesignEditing.md#13-常用编辑快捷键) for the complete
 platform-specific bindings, and [style integration](../doc/DesignStyles.md) for customization.
 
