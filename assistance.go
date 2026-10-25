@@ -614,8 +614,9 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 	line, _ := v.document.model.LineRange(sourceRow)
 	selection := v.Selection().Range()
 	clip := geometry.Rect(v.gutter-origin.X, -origin.Y, max(0, v.viewport.Width-v.gutter), v.viewport.Height)
-	normal := v.partColor("whitespace", tint(v.colors.GutterForeground, 125))
-	selectedColor := v.partColor("selected-whitespace", tint(v.colors.Foreground, 215))
+	fallback := whitespaceColor(v.colors.Background)
+	normal := v.partColor("whitespace", fallback)
+	selectedColor := v.partColor("selected-whitespace", fallback)
 	if v.whitespace != WhitespaceNone {
 		w.visit(clip, func(c typography.TextCluster, rect geometry.Rectangle) {
 			start, end := c.Start, c.Start+c.Length

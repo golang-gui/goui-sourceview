@@ -129,11 +129,21 @@ func (b styleBox) outset() float32 {
 	return float32(math.Ceil(float64(max(0, b.shadow.BlurRadius*1.5+b.shadow.SpreadRadius) + float32(max(math.Abs(float64(b.shadow.Offset.X)), math.Abs(float64(b.shadow.Offset.Y)))))))
 }
 
+// Defaults follow the actual code background, including an explicit Scheme.
+// Both states stay quiet; applications can override their style parts separately.
+func whitespaceColor(bg color.NRGBA) color.NRGBA {
+	if uint32(bg.R)*299+uint32(bg.G)*587+uint32(bg.B)*114 < 128000 {
+		return tint(rgb(0xe3e4e2), 0x29)
+	}
+	return tint(rgb(0x333333), 0x33)
+}
+
 func codeRules(d scheme.Definition) []style.Rule {
+	whitespace := whitespaceColor(d.Background)
 	rules := []style.Rule{
 		style.Name("source-view").Part("indent-guide").ForegroundColor(tint(d.GutterForeground, 65)),
-		style.Name("source-view").Part("whitespace").ForegroundColor(tint(d.GutterForeground, 125)),
-		style.Name("source-view").Part("selected-whitespace").ForegroundColor(tint(d.Foreground, 215)),
+		style.Name("source-view").Part("whitespace").ForegroundColor(whitespace),
+		style.Name("source-view").Part("selected-whitespace").ForegroundColor(whitespace),
 		style.Name("source-view").Part("ruler").ForegroundColor(tint(d.GutterForeground, 45)),
 		style.Name("source-view").Part("occurrence").ForegroundColor(tint(d.SearchBackground, 55)),
 		style.Name("source-view").FontFamily("monospace").FontSize(12).BackgroundColor(d.Background).ForegroundColor(d.Foreground),

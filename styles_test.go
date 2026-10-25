@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"image/color"
 	"reflect"
 	"sync"
 	"testing"
@@ -209,11 +210,18 @@ func TestEditorFrameAndScrollBarThemeParts(t *testing.T) {
 
 // 官方主题及局部覆盖分别提供普通/选中标记颜色，不触发重新排版。
 func TestWhitespaceStyleParts(t *testing.T) {
-	for _, sheet := range []style.StyleSheet{basic.Sheet(), modern.Sheet(modern.Options{}), modern.Sheet(modern.Options{Dark: true})} {
-		normal := foreground(sheet.Resolve(style.Sel{Name: "source-view", Part: "whitespace"}))
-		selected := foreground(sheet.Resolve(style.Sel{Name: "source-view", Part: "selected-whitespace"}))
-		if normal.A != 125 || selected.A != 215 || normal == selected {
-			t.Fatal("whitespace theme parts", normal, selected)
+	for _, tc := range []struct {
+		sheet style.StyleSheet
+		want  color.NRGBA
+	}{
+		{basic.Sheet(), color.NRGBA{0x33, 0x33, 0x33, 0x33}},
+		{modern.Sheet(modern.Options{}), color.NRGBA{0x33, 0x33, 0x33, 0x33}},
+		{modern.Sheet(modern.Options{Dark: true}), color.NRGBA{0xe3, 0xe4, 0xe2, 0x29}},
+	} {
+		normal := foreground(tc.sheet.Resolve(style.Sel{Name: "source-view", Part: "whitespace"}))
+		selected := foreground(tc.sheet.Resolve(style.Sel{Name: "source-view", Part: "selected-whitespace"}))
+		if normal != tc.want || selected != tc.want {
+			t.Fatal("whitespace theme parts", normal, selected, tc.want)
 		}
 	}
 	v := NewSourceView()
@@ -223,13 +231,49 @@ func TestWhitespaceStyleParts(t *testing.T) {
 	t.Cleanup(v.dropLayouts)
 	v.LayoutVisible(geometry.Size{Width: 200, Height: 100}, geometry.Point{})
 	p := v.paragraph(0)
-	selected := rgb(0xec22aa)
-	themedScope(v, style.Sheet(style.Name("source-view").Part("selected-whitespace").ForegroundColor(selected)))
-	v.SetSelection(textedit.Selection{Caret: 1})
+	normal, selected := rgb(0x116688), rgb(0xec22aa)
+	themedScope(v, style.Sheet(style.Name("source-view").Part("whitespace").ForegroundColor(normal), style.Name("source-view").Part("selected-whitespace").ForegroundColor(selected)))
 	_ = v.SetWhitespaceMode(WhitespaceAll)
 	out := &recordingPainter{}
 	v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
+	if len(out.fills) != 1 || out.fills[0].color != graphics.ColorOf(normal) {
+		t.Fatal("normal marker style", out.fills)
+	}
+	v.SetSelection(textedit.Selection{Caret: 1})
+	out = &recordingPainter{}
+	v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
 	if len(out.fills) != 1 || out.fills[0].color != graphics.ColorOf(selected) || p != v.paragraph(0) {
 		t.Fatal("selected marker style", out.fills)
+	}
+}
+
+// 显式代码 Scheme 的装饰默认色依据代码背景，不能落回 GUI 主题或强正文色。
+func TestWhitespaceExplicitSchemeDefaults(t *testing.T) {
+	for _, tc := range []struct {
+		scheme *scheme.Scheme
+		want   color.NRGBA
+	}{
+		{scheme.Light(), color.NRGBA{0x33, 0x33, 0x33, 0x33}},
+		{scheme.Dark(), color.NRGBA{0xe3, 0xe4, 0xe2, 0x29}},
+	} {
+		v := NewSourceView()
+		v.Document().Model().SetText(" ")
+		observe(t, v)
+		v.SetScheme(tc.scheme)
+		ctx := &shapedContext{}
+		v.context = ctx
+		t.Cleanup(v.dropLayouts)
+		v.LayoutVisible(geometry.Size{Width: 200, Height: 100}, geometry.Point{})
+		p := v.paragraph(0)
+		created := ctx.created
+		_ = v.SetWhitespaceMode(WhitespaceAll)
+		for _, selection := range []textedit.Selection{{}, {Caret: 1}} {
+			v.SetSelection(selection)
+			out := &recordingPainter{}
+			v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
+			if len(out.fills) != 1 || out.fills[0].color != graphics.ColorOf(tc.want) || ctx.created != created || v.paragraph(0) != p {
+				t.Fatal("explicit scheme marker color/layout", out.fills, tc.want)
+			}
+		}
 	}
 }

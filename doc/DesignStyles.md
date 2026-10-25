@@ -74,6 +74,11 @@ ScrollView 在所有焦点/禁用状态间预留稳定圆角安全内区，聚�
 | whitespace / selected-whitespace | 普通/被选中空白及换行标记的前景 |
 | token-plain/property/string/escape/number/keyword/delimiter/tag/attribute/entity/comment/meta/invalid | 对应 token 前景 |
 
+空白标记的两个 part 默认采用相同的低对比中性色：代码背景较亮时为
+`#33333333`，较暗时为 `#E3E4E229`（RGBA，末两位为 alpha）。选择变化只改变
+使用的 part，不自动提高到正文前景强度。应用可分别覆盖普通和选中色，包括透明值。
+显式代码 Scheme 沿现有 partColor 契约使用由代码背景决定的相同默认色。
+
 解析使用 `gui.ResolveWidgetStyle`，因此支持应用主题和显式 `StyleScope`。
 颜色转为普通 NRGBA 后按现有 Scheme 契约验证；无效的代码基础色经 ConnectError 上报。
 `StyleChanged` 即使字体未改变也更新配色。等价颜色沿用同一不可变 Scheme；颜色变化只让

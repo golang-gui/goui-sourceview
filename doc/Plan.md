@@ -668,3 +668,11 @@ G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失�
 - `go test ./...` 通过。窗口形状、选区、CRLF/EOF 及原有导航检查在 Software Basic 1x、OpenGL Modern Light 1x/1.5x、Dark 2x 通过。像素采样排除单元边界，避免 ceil 将相邻 Tab 混入，圆形宽高及中心允许误差仍为 1 物理像素，没有放宽旧断言。
 - 后端名称通过仓库外 Go build overlay 在 GOUI 已有 NewPainter 调用后输出公开 Painter.Name，仅作诊断，无行为变化；四组结果均核对实际后端，未接受静默回退。RenderWidget 使用该窗口的实际 Painter；桌面实际截图及最终颜色验收在配色切片补充。
 - `GOWORK=off go test . -run '^TestAssistancePaintDoesNotChangeGeometry$' -count=1` 在修改前即构建失败：GOUI v0.3.0 缺少已被主分支使用的 ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice。此次不修改依赖或把工作区通过视为独立依赖通过。
+
+## 2026-10-25 空白标记配色与最终验收
+
+- Basic/Modern 普通与选中标记默认同色，亮背景 `#33333333`、暗背景 `#E3E4E229`，参考 Monaco 的 editorWhitespace.foreground。保留两个可独立覆盖的 part；显式 Scheme 使用代码背景决定的相同默认色。测试按独立 RGBA 常量断言，并检查覆盖及选区不重建布局。
+- Linux amd64 / Go 1.25.8 / Pango / Xvnc 24-bit + Xfwm4 compositor：Software 与实际 OpenGL（Mesa 23.2.1 llvmpipe，非硬件加速）分别在 1x/1.5x/2x × Basic/Modern Light/Modern Dark 的 18 组场景通过；另有两后端各一组 9pt、一组 18pt，共 22 组形状、选区、模式、原文/输出与原有编辑辅助断言全部通过。没有将 Mesa 软件执行 OpenGL 说成 GPU 硬件验收。
+- 实际 OpenGL 1x 的 example/editor 经 XTest 鼠标打开 View 并选择 All；桌面捕获前后对照，在第二行前导区的四个独立标记得到 3×3、4×3、4×3、4×3 像素包围盒（包含抗锯齿），无旧版 4×1 扁条。另经真实 Ctrl+A 观察选中效果，正常 Alt+F4 退出。未接 DevServer，未改剪贴板或系统设置，图片只存仓库外。
+- `go test ./...`、`go test -race ./...`、`go vet ./...` 通过；Windows amd64、macOS arm64 的 `CGO_ENABLED=0 go build ./...` 工作区交叉构建通过。未执行远端原生桌面、Windows Direct2D 或 macOS 原生运行，也未验收物理 IME/跨屏。
+- `GOWORK=off go test ./...` 仍因修改前已存在的 GOUI v0.3.0 接口缺失失败（ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice），没有更新依赖或修改 GOUI。用户未跟踪的 example/temp 保留。

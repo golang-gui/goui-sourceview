@@ -79,7 +79,9 @@ Escape 关闭并按焦点归还规则恢复正文。定位与查找／替换互�
 ## 主题、语义与验收
 
 Basic/Modern 提供 whitespace、selected-whitespace、indent-guide、ruler、occurrence 等颜色与折叠样式。
-选中标记独立使用 selected-whitespace 前景，不覆盖语法文字；行尾标记按换行字节是否被选中决定颜色。
+普通/选中标记分别使用 whitespace、selected-whitespace 前景，不覆盖语法文字；
+两者默认同色，应用仍可独立覆盖。亮色默认 #33333333，暗色默认 #E3E4E229，
+依代码背景的加权明度选择，显式 Scheme 也遵守此默认规则。行尾标记按换行字节是否被选中选择对应 part。
 沿用 stylesheet 变化通知，不增加系统订阅，不覆盖语法前景和半透明选区。
 纯装饰不伪造动作；GoTo 输入/按钮保留真实语义、名称、状态、焦点和生命周期。
 
@@ -115,3 +117,7 @@ Basic/Modern 提供 whitespace、selected-whitespace、indent-guide、ruler、oc
 2026-10-25 外观核对采用上述 Monaco/VS Code `main` 的 SVG 分支：圆点半径为
 spaceWidth/7、垂直居中，Tab 是 spaceWidth 尺度的单个填充轮廓。SourceView 采用
 这些比例与合成方式，使用现有 GOUI 几何绘制，而非引入 SVG 或测量替代符号。
+
+默认透明度与颜色参考 [Monaco/VS Code editorWhitespace.foreground 定义](https://github.com/microsoft/vscode/blob/main/src/vs/editor/common/core/editorColorRegistry.ts)
+（2026-10-25 核对的 main 源码），不使用正文前景作为默认选中标记色。显式 Scheme 的
+装饰取色仍遵守现有契约，普通模式通过所属 GOUI stylesheet 的两个 part 解析；没有新增主题系统。
