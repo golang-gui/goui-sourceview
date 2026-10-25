@@ -353,3 +353,10 @@ go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-inp
 逐步检查选区锚点、模型长度与水平偏移，结束时要求到达 EOF，且实际光标像素
 仍在原来的末尾坐标。该用例通过仅表示这组环境未复现移动，不能作为缺陷已修复
 的证据。输入文件不写回、不访问剪贴板，提前关闭或超时失败。
+
+
+`editor/frame` 同时检查 GOUI TextView 和 SourceView 的长短行拖选，按当前字体的
+实际内容高度定位 TextView 第二行，不假定两种控件行高相同。窗口探针输出实际
+绘图资源类型及 PixelScale；明确指定 Software／OpenGL 时若发生回退则失败。
+GOUI 的原文件冷 End 正向拖选另由其 `tests/window/gui/text_caret -file ... -width 800`
+验证，通用修复保留在 GOUI，不从框架反向导入本扩展。

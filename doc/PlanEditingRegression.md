@@ -167,3 +167,45 @@
 
 本轮仅新增回归，没有已确认的生产修复；问题仍待定位。已询问系统、缩放和绘图
 后端，以对齐运行环境；不将多组未复现结果改写成用户报告错误或问题已经解决。
+
+
+## 截图定位：GOUI TextView 的拖选偏移回退（2026-10-25）
+
+用户截图显示无行号、无语法色的普通文本。核对两个仓库的同名 `example/temp`：
+GOUI 版本是 `ui.TextView().WrapMode(ui.WrapNone)`，扩展版本是 `ui.SourceView()`。
+此前 SourceView 的正反向／正向拖选通过没有覆盖 TextView 的私有编辑器路径。
+本轮在 GOUI 例程复现了与截图一致的 64-DIP 位移，故不再将此反馈记为未复现。
+
+直接 XTest：打开原 184,500,131-byte 文件，End 到末尾，首次由左至右拖选。
+修复前水平偏移从 `1005022784` 退到 `1005022720`，最终停在 EOF 前四字节；
+包内数学反例及正常 Window.DispatchEvent 原生程序均确认该问题。修复后相同
+实际操作偏移保持不变，复制的 18 字节精确等于文件后缀，包含最后一个字符。
+
+本轮 GUI 修复提交为 `5efc894`、`2e3633f`；本仓按 go.work 联调，go.mod 未改变。
+
+问题位于 GOUI textEditor：自动拖选用 float32 内容减视口重新计算上限，与
+ScrollView 的 float64 差值、向远端转换规则不同，鼠标仍在正文内部也启动定时器
+并拉回偏移。框架现统一范围计算，未越界的轴保持偏移，越界步进按方向转换，
+避免小步进在大坐标下丢失。TextInput 共享计算，未增加公开 API 或改动 typography。
+框架另外补齐 TextView 的当前短行视觉端点判断；SourceView 原有修复保留。
+
+验证环境为 Linux amd64／Pango，独立 Xvnc／Xfwm4。最终结果：
+
+- 原文件 TextView 末尾拖选：Software／OpenGL × 100%／150%／200% ×
+  640／800-DIP 窗口，共 12 组通过；原有 32 KiB 换行 caret 回归两后端 150% 通过。
+- 组合窗口 `editor/frame` 同时覆盖 TextView 和 SourceView：两后端 × 三种缩放 ×
+  Basic／Modern Light，共 12 组通过。最初追加的 TextView 场景误用了固定 30-DIP
+  纵坐标，点中了第一行；改为按两行 ASCII 实际内容高度定位第二行中心，保留全部
+  模型范围和滚动断言，重跑通过。该测试配置失败未计作产品通过。
+- GOUI 全仓 2792 个含子用例 PASS，15 个手工／平台环境测试 SKIP，0 FAIL；
+  SourceView 全仓 516 PASS、0 SKIP、0 FAIL。GOUI `gui/ui/gui/textedit` race 通过。
+- 普通 GOUI `go vet ./...` 有 29 条既有未命名字段告警；用修复前生产文件 overlay
+  验证同样 29 条、无新增。`go vet -composites=false ./...` 通过。
+- 最终 26 组原生组合全部通过，窗口内探针确认实际为 `software.imageResource`／
+  `opengl.imageResource`，以及各自 1／1.5／2 缩放；未把请求后端当作实际后端。
+- 两仓 Windows amd64／macOS arm64、CGO=0 全仓编译通过，未原生运行。
+  SourceView 关闭 go.work 后的既有未发布段落 API 缺失仍保留，go.mod 未改。
+
+测试不保存原文件，不修改／提交两仓未跟踪的 temp 例程。源文件没有因为测试生成
+图片或可执行文件；GOUI 既有测试图片的前后哈希一致。原生截图、反例和命令输出
+留在仓库外临时目录。GUI 通用修复在 GOUI 提交，本仓只增加组合回归与验收记录。

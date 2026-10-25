@@ -5,7 +5,7 @@
 // 初始为 Integrated 窗口中的 TextView、SourceView，各有双向滚动条。
 // 正常 DispatchEvent 输入依次验证点击聚焦、滚轮、两轴拖动、焦点转移；
 // 再验证禁用、自动换行隐藏横条、短文本隐藏双条及主题切换后重新布局。
-// SourceView 另验证宽首行／短次行：短行向窗口外拖选不横滚，长行仍横滚。
+// TextView／SourceView 另验证宽首行／短次行：短行向窗口外拖选不横滚，长行仍横滚。
 // 每步断言视口、两条滚动条都在同一外框内，聚焦/禁用不改变正文宽高，
 // 语义树仅暴露真实正文，滚动范围和拖动后偏移符合预期。
 // 自动验证通过后关闭；超时、提前关闭或断言失败返回非零。手动检查时滚动、
@@ -17,8 +17,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
 	"log"
 	"math"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -89,7 +91,10 @@ func main() {
 	bar.SetChild(gui.NewLabel("TextView / SourceView — shared editor frames"))
 	box.AddChild(bar)
 	box.AddChild(row)
-	win.SetWidget(box)
+	probeRoot := gui.NewOverlay()
+	probeRoot.SetChild(box)
+	probeRoot.AddOverlay(&painterProbe{})
+	win.SetWidget(probeRoot)
 	must(win.Show())
 	click := func(point geometry.Point) {
 		for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
@@ -253,6 +258,42 @@ func main() {
 			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: outside}))
 			log.Print("PASS short-line drag stops horizontal scrolling; long-line drag continues")
 		case 13:
+			plain.SetWrapMode(gui.WrapNone)
+			plain.Model().SetText(strings.Repeat("W", 20_000) + "\nshort")
+			hosts[0].SetScrollX(0)
+			hosts[0].SetScrollY(0)
+			dragChecks = 0
+		case 14:
+			r := plain.Snapshot().Bounds
+			// 两行均为同一 ASCII 字体，按实际内容高度取第二行中心，不能假定 20-DIP 行高。
+			lineHeight := (plain.ContentSize().Height - 2*plain.Padding()) / 2
+			p := geometry.Point{X: r.X + 15, Y: r.Y + plain.Padding() + 1.5*lineHeight}
+			outside = geometry.Point{X: r.X + r.Width + 80, Y: p.Y}
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Button: events.PointerButtonLeft, Position: p}))
+			check(plain.Selection().Caret >= 20_001 && plain.Selection().Caret < 20_006, "TextView pointer missed the short second line")
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Buttons: events.PointerButtonLeftDown, Position: outside}))
+		case 15:
+			check(hosts[0].ScrollX() == 0, "TextView short second-line drag scrolled horizontally")
+			check(plain.Selection().Range().End == 20_006, "TextView short-line drag missed EOF")
+			dragChecks++
+			if dragChecks < 3 {
+				return
+			}
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: outside}))
+			r := plain.Snapshot().Bounds
+			lineHeight := (plain.ContentSize().Height - 2*plain.Padding()) / 2
+			p := geometry.Point{X: r.X + 15, Y: r.Y + plain.Padding() + lineHeight/2}
+			outside = geometry.Point{X: r.X + r.Width + 80, Y: p.Y}
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Button: events.PointerButtonLeft, Position: p}))
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Buttons: events.PointerButtonLeftDown, Position: outside}))
+		case 16:
+			if hosts[0].ScrollX() == 0 {
+				return
+			}
+			check(plain.Selection().Caret < 20_001 && plain.Selection().Caret > 30, "TextView long-line drag lost its selection")
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: outside}))
+			log.Print("PASS TextView short-line drag stops; long-line drag continues")
+		case 17:
 			done = true
 			log.Print("PASS editor frame geometry, focus stability, wheel, both thumb drags, disabled, wrapping, content shrink and theme invalidation")
 			if *inspect {
@@ -272,4 +313,29 @@ func main() {
 	must(timer.Start(200 * time.Millisecond))
 	app.Run()
 	check(done, "frame verification aborted")
+}
+
+// 非布局装饰，仅观察窗口实际使用的绘图后端与缩放。
+type painterProbe struct {
+	gui.WidgetBase
+	reported bool
+}
+
+func (p *painterProbe) Measure(c layout.Constraint) layout.Measurement {
+	return layout.Measured(c.Clamp(geometry.Size{Width: 1, Height: 1}))
+}
+func (p *painterProbe) Paint(draw gui.Painter) {
+	if p.reported {
+		return
+	}
+	p.reported = true
+	img, err := draw.NewImage(image.NewRGBA(image.Rect(0, 0, 1, 1)))
+	must(err)
+	name := fmt.Sprintf("%T", img)
+	img.Destroy()
+	prefer := os.Getenv("GOUI_PLAT_PAINTER")
+	if prefer == "software" || prefer == "opengl" {
+		check(strings.Contains(name, prefer+"."), "requested painter unavailable: "+name)
+	}
+	log.Printf("actual painter image=%s scale=%g", name, draw.PixelScale())
 }
