@@ -668,36 +668,44 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 
 func (v *SourceView) paintWhitespaceCell(draw gui.Painter, r geometry.Rectangle, kind int, rtl bool, color color.NRGBA) {
 	brush := graphics.ColorOf(color)
-	x, y := r.X+r.Width/2, r.Y+r.Height*.55
+	unit := min(v.spaceWidth, r.Width, r.Height)
+	if unit <= 0 {
+		return
+	}
+	x, y := r.X+r.Width/2, r.Y+r.Height/2
+	stroke := unit / 7
 	switch kind {
 	case 1:
-		draw.FillRoundRect(geometry.Rect(x-.75, y-.75, 1.5, 1.5), .75, brush)
+		// Rectangle edge snapping can flatten a tiny rounded square. An
+		// ellipse keeps equal radii under fractional translations and DPI.
+		draw.FillEllipse(geometry.Point{X: x, Y: y}, unit/7, unit/7, brush)
 	case 2:
-		if r.Width < 3 {
-			return
+		// Draw one short silhouette at the logical leading edge. Separate
+		// translucent strokes would darken their shared arrowhead joins.
+		point := func(dx, dy float32) geometry.Point {
+			px := r.X + unit*.05 + dx
+			if rtl {
+				px = r.X + r.Width - unit*.05 - dx
+			}
+			return geometry.Point{X: px, Y: y + dy}
 		}
-		left, right := r.X+1, r.X+r.Width-1
-		from, to := left, right
-		if rtl {
-			from, to = right, left
+		half, head, end := stroke/2, unit*.25, unit*.85
+		points := [...]geometry.Point{
+			point(0, -half), point(end-head+half, -half),
+			point(end-head-half, -head+half), point(end-head+half, -head-half),
+			point(end+half, 0), point(end-head+half, head+half),
+			point(end-head-half, head-half), point(end-head+half, half), point(0, half),
 		}
-		wing := min(float32(3), (right-left)/2)
-		if rtl {
-			wing = -wing
+		path := graphics.MoveTo(points[0].X, points[0].Y)
+		for _, p := range points[1:] {
+			path = path.LineTo(p.X, p.Y)
 		}
-		draw.DrawLine(geometry.Point{X: from, Y: y}, geometry.Point{X: to, Y: y}, 1, brush)
-		draw.DrawLine(geometry.Point{X: to - wing, Y: y - 2}, geometry.Point{X: to, Y: y}, 1, brush)
-		draw.DrawLine(geometry.Point{X: to - wing, Y: y + 2}, geometry.Point{X: to, Y: y}, 1, brush)
+		draw.FillPath(path.Close(), brush)
 	case 3:
-		size := min(float32(3), r.Width-1)
-		if size > 0 {
-			draw.DrawRoundRect(geometry.Rect(x-size/2, y-size/2, size, size), size/2, 1, brush)
-		}
+		draw.DrawEllipse(geometry.Point{X: x, Y: y}, unit/4, unit/4, stroke, brush)
 	case 4:
-		size := min(r.Width-2, r.Height*.4)
-		if size > 0 {
-			draw.DrawRect(geometry.Rect(x-size/2, y-size/2, size, size), 1, brush)
-		}
+		size := unit * .75
+		draw.DrawRect(geometry.Rect(x-size/2, y-size/2, size, size), stroke, brush)
 	}
 }
 

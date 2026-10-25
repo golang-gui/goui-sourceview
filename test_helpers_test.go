@@ -144,6 +144,8 @@ type paintShape struct {
 type recordingPainter struct {
 	gui.Painter
 	fills, borders []paintShape
+	ellipses       []paintShape
+	paths          []graphics.Path
 	lines          int
 	order          []string
 }
@@ -153,6 +155,21 @@ func (p *recordingPainter) Save() {}
 func (p *recordingPainter) Restore() {}
 
 func (p *recordingPainter) PixelScale() float32 { return 1 }
+
+func (p *recordingPainter) FillEllipse(c geometry.Point, rx, ry float32, b graphics.Brush) {
+	r := geometry.Rect(c.X-rx, c.Y-ry, 2*rx, 2*ry)
+	p.ellipses = append(p.ellipses, paintShape{rect: r, color: b.(graphics.Color)})
+	p.FillRect(r, b)
+}
+
+func (p *recordingPainter) DrawEllipse(c geometry.Point, rx, ry, width float32, b graphics.Brush) {
+	p.DrawRect(geometry.Rect(c.X-rx, c.Y-ry, 2*rx, 2*ry), width, b)
+}
+
+func (p *recordingPainter) FillPath(path graphics.Path, _ graphics.Brush) {
+	p.paths = append(p.paths, path)
+	p.order = append(p.order, "fill")
+}
 
 func (p *recordingPainter) FillRoundRect(r geometry.Rectangle, _ float32, b graphics.Brush) {
 	p.FillRect(r, b)

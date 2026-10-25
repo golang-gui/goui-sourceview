@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"math"
 	"reflect"
 	"runtime"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 )
 
@@ -71,17 +73,17 @@ func TestAssistancePaintDoesNotChangeGeometry(t *testing.T) {
 	p := v.paragraph(0)
 	created := ctx.created
 	for _, tc := range []struct {
-		mode        WhitespaceMode
-		end         bool
-		dots, lines int
-	}{{WhitespaceAll, true, 2, 7}, {WhitespaceTrailing, false, 1, 0}, {WhitespaceNone, true, 0, 4}, {WhitespaceSelection, false, 1, 0}} {
+		mode               WhitespaceMode
+		end                bool
+		dots, lines, paths int
+	}{{WhitespaceAll, true, 2, 4, 1}, {WhitespaceTrailing, false, 1, 0, 0}, {WhitespaceNone, true, 0, 4, 0}, {WhitespaceSelection, false, 1, 0, 0}} {
 		_ = v.SetWhitespaceMode(tc.mode)
 		v.SetShowLineEndings(tc.end)
 		v.SetSelection(textedit.Selection{Caret: 1})
 		out := &recordingPainter{}
 		v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
-		if len(out.fills) != tc.dots || out.lines != tc.lines {
-			t.Fatal(tc, len(out.fills), out.lines)
+		if len(out.fills) != tc.dots || out.lines != tc.lines || len(out.paths) != tc.paths {
+			t.Fatal(tc, len(out.fills), out.lines, len(out.paths))
 		}
 		if v.paragraph(0) != p || ctx.created != created {
 			t.Fatal("display options reshaped text")
@@ -926,5 +928,74 @@ func TestWhitespaceFromPartialGeometry(t *testing.T) {
 	v.refreshWhitespace(p, 3, 2)
 	if p.whitespace == w {
 		t.Fatal("geometry generation did not invalidate")
+	}
+}
+
+// 空格使用等半径椭圆，尺寸跟随已测得的字体空格宽度；合并 cluster 不放大圆点。
+func TestWhitespaceDotIsCenteredCircle(t *testing.T) {
+	for _, unit := range []float32{6, 10, 16} {
+		for _, width := range []float32{unit, unit * 8} {
+			v := NewSourceView()
+			v.spaceWidth = unit
+			cell := geometry.Rect(11.3, 24.7, width, unit*2+3)
+			out := &recordingPainter{}
+			v.paintWhitespaceCell(out, cell, 1, false, rgb(0x556677))
+			if len(out.ellipses) != 1 || len(out.paths) != 0 {
+				t.Fatalf("space %g/%g did not use FillEllipse: %+v", unit, width, out)
+			}
+			r := out.ellipses[0].rect
+			close := func(a, b float32) bool { return math.Abs(float64(a-b)) < 1e-4 }
+			if !close(r.Width, 2*unit/7) || !close(r.Width, r.Height) || !close(r.X+r.Width/2, cell.X+cell.Width/2) || !close(r.Y+r.Height/2, cell.Y+cell.Height/2) {
+				t.Fatal("circle size/center", unit, width, r, cell)
+			}
+		}
+	}
+}
+
+// Tab 为一个填充路径，范围不超过单个空格；RTL 与 LTR 关于测量单元中心镜像。
+func TestWhitespaceTabIsShortMirroredPath(t *testing.T) {
+	v := NewSourceView()
+	v.spaceWidth = 10
+	cell := geometry.Rect(12.3, 20.5, 40, 22)
+	var points [2][]geometry.Point
+	for i, rtl := range []bool{false, true} {
+		out := &recordingPainter{}
+		v.paintWhitespaceCell(out, cell, 2, rtl, rgb(0x556677))
+		if len(out.paths) != 1 || out.lines != 0 {
+			t.Fatal("Tab must have one silhouette", rtl, len(out.paths), out.lines)
+		}
+		closed := false
+		out.paths[0].Range(func(op graphics.PathOperation, args []float32) bool {
+			if op == graphics.PathClose {
+				closed = true
+				return false
+			}
+			if op != graphics.PathMoveTo && op != graphics.PathLineTo {
+				t.Fatal("unexpected arrow operation", op)
+			}
+			points[i] = append(points[i], geometry.Point{X: args[0], Y: args[1]})
+			return false
+		})
+		if !closed || len(points[i]) < 7 {
+			t.Fatal("incomplete arrow", points[i])
+		}
+		for _, p := range points[i] {
+			lo, hi := cell.X, cell.X+v.spaceWidth
+			if rtl {
+				lo, hi = cell.X+cell.Width-v.spaceWidth, cell.X+cell.Width
+			}
+			if p.X < lo || p.X > hi || p.Y < cell.Y || p.Y > cell.Y+cell.Height {
+				t.Fatal("arrow stretched across Tab", p, lo, hi)
+			}
+		}
+	}
+	if len(points[0]) != len(points[1]) {
+		t.Fatal("direction changed topology")
+	}
+	for i, p := range points[0] {
+		q := points[1][i]
+		if math.Abs(float64(p.X+q.X-2*cell.X-cell.Width)) > 1e-4 || p.Y != q.Y {
+			t.Fatal("RTL arrow not mirrored", p, q)
+		}
 	}
 }

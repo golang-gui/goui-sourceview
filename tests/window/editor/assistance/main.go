@@ -1,35 +1,38 @@
-// Native editing assistance verification. Requires a desktop and window manager.
-// Run: XMODIFIERS=@im=none go run ./tests/window/editor/assistance [-basic | -dark].
-// Starts with mixed indentation and Unicode. Through Window.DispatchEvent and
-// CommitText: Home/End toggle, Shift extends, Backspace deletes one indent and
-// Undo restores, Control+G opens a floating input, invalid positions stay open,
-// Enter jumps using one-based rune columns, Escape restores editor focus, and
-// read-only navigation remains possible. Whitespace/guides/rulers are visible.
-// Assertions verify source bytes, selections, focus and overlay state. Visual
-// quality, physical IME and actual DPI transitions need separate observation.
-// Also checks real native whitespace cells (space/Tab/NBSP/NNBSP/ideographic
-// space), modes and selected marks through Window.DispatchEvent + RenderWidget.
-// Each measured cell must gain pixels compared with None. Pixels are compared
-// in the same opaque sRGB image, so there is no cross-platform font golden or
-// widened AA tolerance. Scale is read from the actual capture; repeat with
-// GOUI_PLAT_SCALE=1/1.5/2 and -basic/-dark. Native metrics stay authoritative.
-// No clipboard/files/settings changes; restart resets. Closes after PASS;
-// closing early fails. Record backend, scale and theme with the result.
+// 编辑辅助和空白外观的原生窗口验证，需要桌面及窗口管理器。
+// 启动：XMODIFIERS=@im=none go run ./tests/window/editor/assistance [-basic | -dark]。
+// 初始为混合缩进与 Unicode 文本；通过普通 Window.DispatchEvent/CommitText 检查
+// Home/End 切换、Shift 选区、缩进退格/撤销、Ctrl+G 定位、非法位置保留输入、
+// Unicode 列定位、Escape 焦点返回和只读导航。断言原文、选区、焦点与浮层状态。
+// 后续检查普通空格、Tab、NBSP、窄 NBSP、全角空格的标记、显示模式、全选和 CRLF/EOF。
+// RenderWidget 使用当前窗口 Painter，标记须可见、圆形且居中；同后端不透明 sRGB
+// 前后像素比较，不使用跨平台字体金图。采样位置、量化阈值及误差在 checkDotShape 说明。
+// 分别用 GOUI_PLAT_PAINTER=software/opengl、GOUI_PLAT_SCALE=1/1.5/2 运行；
+// -code-size 9/12/18 检查字号变化；-capture-dir DIR 将 PNG 写入仓库外现有目录。
+// Linux 的 XMODIFIERS 设置用于未启动输入法服务的桌面，其他系统无需该环境变量。
+// RenderWidget 不证明桌面合成、物理 IME 或实际跨屏 DPI 正确，这些需要单独观察。
+// 不改变剪贴板、文件或系统设置（显式 capture-dir 的图片除外）；重启复位。
+// PASS 后自动关闭，提前关闭失败；记录实际后端、缩放、主题与平台。
 package main
 
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
+	"github.com/golang-gui/goui/style"
+	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 	"image"
+	"image/png"
 	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 )
@@ -46,14 +49,25 @@ func check(ok bool, message string) {
 }
 func main() {
 	runtime.LockOSThread()
-	basic := flag.Bool("basic", false, "Basic theme")
+	useBasic := flag.Bool("basic", false, "Basic theme")
 	dark := flag.Bool("dark", false, "Dark Modern")
+	codeSize := flag.Float64("code-size", 12, "code font size in points")
+	captureDir := flag.String("capture-dir", "", "existing external directory for whitespace captures")
 	flag.Parse()
+	check(*codeSize >= 8 && *codeSize <= 48, "code-size must be between 8 and 48")
+	if *captureDir != "" {
+		info, err := os.Stat(*captureDir)
+		must(err)
+		check(info.IsDir(), "capture-dir is not a directory")
+	}
 	app, e := gui.NewApplication("org.golanggui.SourceViewAssistance")
 	must(e)
-	if !*basic {
-		app.SetStyleSheet(modern.Sheet(modern.Options{Dark: *dark}))
+	rules := basic.Rules()
+	if !*useBasic {
+		rules = modern.Rules(modern.Options{Dark: *dark})
 	}
+	rules = append(rules, style.Name("source-view").FontSize(float32(*codeSize)))
+	app.SetStyleSheet(style.Sheet(rules...))
 	win, e := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 750, Height: 460}, Chrome: gui.WindowChromeIntegrated})
 	must(e)
 	defer win.Destroy()
@@ -116,7 +130,7 @@ func main() {
 		key(events.KeyEscape, 0)
 		check(!panelVisible(v, "sourceview-goto-bar") && v.Focused(), "Escape focus")
 	})
-	steps = append(steps, whitespaceChecks(app, win, v)...)
+	steps = append(steps, whitespaceChecks(app, win, v, float32(*codeSize), *captureDir)...)
 	index := 0
 	complete := false
 	timer := app.NewTimer()
@@ -151,8 +165,8 @@ func panelVisible(v *source.SourceView, role string) bool {
 }
 
 // 通过实际窗口及正常键盘路径验证标记；不公开私有几何或添加测试控制协议。
-func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView) []func() {
-	const text = " \t\u00a0\u202f\u3000"
+func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView, codeSize float32, captureDir string) []func() {
+	const text = "      \t\u00a0\u202f\u3000"
 	var plain, marked image.Image
 	var scale float32
 	var cells []geometry.Rectangle
@@ -184,7 +198,7 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView)
 		win.SetFocusedWidget(v)
 	}, func() {
 		// 参考只调用公开排版 API，字体及 Tab 格式与示例显式默认一致。
-		format := typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}}
+		format := typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: codeSize}}
 		space, err := app.Typography().NewTextLayout(" ", format, 1<<20, 1<<20)
 		must(err)
 		sw, _ := space.MeasureSize()
@@ -198,7 +212,7 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView)
 			cells = append(cells, geometry.Rect(6+c.X, 6+line.Y, c.Width, line.Height))
 		}
 		native.Destroy()
-		check(len(cells) == 5, "native whitespace sample did not provide five measured cells")
+		check(len(cells) == 10, "native whitespace sample did not provide ten measured cells")
 		must(v.SetWhitespaceMode(source.WhitespaceNone))
 		plain = capture()
 		scale = float32(plain.Bounds().Dx()) / v.Rect().Width
@@ -206,6 +220,13 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView)
 		marked = capture()
 		for i, r := range cells {
 			check(changed(plain, marked, r) > 0, "missing native whitespace marker in cell "+string(rune('0'+i)))
+		}
+		if captureDir != "" {
+			saveCapture(plain, filepath.Join(captureDir, "whitespace-none.png"))
+			saveCapture(marked, filepath.Join(captureDir, "whitespace-all.png"))
+		}
+		for i := 1; i < 6; i++ {
+			checkDotShape(plain, marked, cells[i], sw, float64(scale))
 		}
 		must(v.SetWhitespaceMode(source.WhitespaceBoundary))
 	}, func() {
@@ -223,6 +244,12 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView)
 		for _, r := range cells {
 			check(changed(base, selected, r) > 0, "missing selected whitespace marker")
 		}
+		for i := 1; i < 6; i++ {
+			checkDotShape(base, selected, cells[i], cells[i].Width, float64(scale))
+		}
+		if captureDir != "" {
+			saveCapture(selected, filepath.Join(captureDir, "whitespace-selection.png"))
+		}
 		must(v.SetWhitespaceMode(source.WhitespaceNone))
 		v.SetShowLineEndings(false)
 		base = capture()
@@ -236,4 +263,41 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView)
 		check(out.String() == text+"\r\n" && !v.Document().Model().CanUndo(), "display changed output or undo")
 		log.Printf("PASS native whitespace cells, modes, selection and CRLF/EOF; scale=%g backend=%s", scale, app.Typography().Name())
 	}}
+}
+
+// 采样只包含实际空格单元，避开光标、字形、边框。比较同后端、不透明 sRGB 的
+// 前后 RGB 覆盖差（忽略 <=1 byte 的尾部量化），不依赖字体金图。圆点必须二维，
+// 包围盒宽高差最多 1 物理像素，中心距测量单元中心最多 1 像素；4×1 扁条必然失败。
+// 水平方向只取单元内侧完整像素，再留 1 像素，避免 ceil 扩张混入相邻 Tab 的边缘。
+func checkDotShape(before, after image.Image, cell geometry.Rectangle, spaceWidth float32, scale float64) {
+	minX, minY, maxX, maxY := after.Bounds().Max.X, after.Bounds().Max.Y, -1, -1
+	for y := int(math.Floor(float64(cell.Y) * scale)); y < int(math.Ceil(float64(cell.Y+cell.Height)*scale)); y++ {
+		for x := int(math.Ceil(float64(cell.X)*scale)) + 1; x < int(math.Floor(float64(cell.X+cell.Width)*scale))-1; x++ {
+			ar, ag, ab, _ := before.At(x, y).RGBA()
+			br, bg, bb, _ := after.At(x, y).RGBA()
+			delta := max(math.Abs(float64(ar>>8)-float64(br>>8)), math.Abs(float64(ag>>8)-float64(bg>>8)), math.Abs(float64(ab>>8)-float64(bb>>8)))
+			if delta <= 1 {
+				continue
+			}
+			minX, minY, maxX, maxY = min(minX, x), min(minY, y), max(maxX, x), max(maxY, y)
+		}
+	}
+	width, height := maxX-minX+1, maxY-minY+1
+	check(width >= 2 && height >= 2 && abs(width-height) <= 1, fmt.Sprintf("whitespace is not round: %dx%d cell=%v scale=%g", width, height, cell, scale))
+	expectedDiameter := float64(spaceWidth) * 2 / 7 * scale
+	check(float64(max(width, height)) <= math.Ceil(expectedDiameter)+2 && float64(min(width, height)) >= math.Max(2, math.Floor(expectedDiameter)-1), fmt.Sprintf("whitespace diameter %dx%d, expected %g", width, height, expectedDiameter))
+	cx, cy := float64(minX+maxX+1)/2, float64(minY+maxY+1)/2
+	check(math.Abs(cx-float64(cell.X+cell.Width/2)*scale) <= 1 && math.Abs(cy-float64(cell.Y+cell.Height/2)*scale) <= 1, fmt.Sprintf("whitespace center (%g,%g), cell=%v scale=%g", cx, cy, cell, scale))
+}
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+func saveCapture(img image.Image, path string) {
+	f, err := os.Create(path)
+	must(err)
+	must(png.Encode(f, img))
+	must(f.Close())
 }

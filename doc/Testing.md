@@ -360,3 +360,10 @@ go run ./tests/window/editor/paragraph -file /outside/repo/long.json -verify-inp
 绘图资源类型及 PixelScale；明确指定 Software／OpenGL 时若发生回退则失败。
 GOUI 的原文件冷 End 正向拖选另由其 `tests/window/gui/text_caret -file ... -width 800`
 验证，通用修复保留在 GOUI，不从框架反向导入本扩展。
+
+空白外观回归还需分别设置 `GOUI_PLAT_PAINTER=software` 和 `opengl`，并可用
+`-code-size 9|12|18` 验证字体变化。`-capture-dir DIR` 可将 None/All/Selection
+捕获写入仓库外现有目录。圆点断言使用单元内侧完整像素（另留 1 像素边距），
+排除相邻 Tab 的抗锯齿；允许最多 1 像素宽高/中心差，4×1 扁条必须失败。
+程序不会声称 RenderWidget 等同桌面合成；实际后端需要单独记录，不能把请求 OpenGL
+后的静默降级算作 OpenGL 通过。

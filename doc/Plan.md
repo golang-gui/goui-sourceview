@@ -660,3 +660,11 @@ G1/G2/G3 已随 GOUI v0.2.0 发布并通过本机独立依赖验证；历史失�
 - `GOWORK=off go test . -run '^TestLongHorizontalEndRevealsCaretImmediately$' -count=1` 构建失败：已声明 GOUI v0.3.0 缺少基线已经依赖的 ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice；保持 go.mod 不变，不将联调通过表述为独立发布验证通过。
 - 首次目标排版尚未准备好时，快速连续方向键仍可能使用旧视区的几何，另作导航调度问题记录；本次修正已准备几何的显露精度，不将这一既有调度问题标为已解决。
 - 图片、日志、overlay、可执行文件均在仓库外；既有 GOUI 图片未新增或改变。验证结束关闭本次独立桌面及应用，不提交其他用户文件。
+
+## 2026-10-25 空白标记形状
+
+- SourceView 基线 `4b7623e`，本地工作区 GOUI `2603a67`；只修改 SourceView。空格改用等半径 FillEllipse，半径为空格宽度的 1/7，测量单元垂直居中；Tab 改为单个短箭头填充路径并保留 RTL 镜像，特殊空格同步字体比例。
+- 新增绘制原语、圆形中心/比例、合并 cluster 与 Tab 路径回归。修改前，两项新逻辑用例均失败；独立 X11/Xvnc/Xfwm4、OpenGL 1x 的新窗口断言复现 `whitespace is not round: 4x1`，与用户截图一致。旧代码及新断言不改工作区生产文件，通过临时二进制保留对照。
+- `go test ./...` 通过。窗口形状、选区、CRLF/EOF 及原有导航检查在 Software Basic 1x、OpenGL Modern Light 1x/1.5x、Dark 2x 通过。像素采样排除单元边界，避免 ceil 将相邻 Tab 混入，圆形宽高及中心允许误差仍为 1 物理像素，没有放宽旧断言。
+- 后端名称通过仓库外 Go build overlay 在 GOUI 已有 NewPainter 调用后输出公开 Painter.Name，仅作诊断，无行为变化；四组结果均核对实际后端，未接受静默回退。RenderWidget 使用该窗口的实际 Painter；桌面实际截图及最终颜色验收在配色切片补充。
+- `GOWORK=off go test . -run '^TestAssistancePaintDoesNotChangeGeometry$' -count=1` 在修改前即构建失败：GOUI v0.3.0 缺少已被主分支使用的 ParagraphLayout、ParagraphGeometry、HeightIndex.Top64、Projection.Slice。此次不修改依赖或把工作区通过视为独立依赖通过。

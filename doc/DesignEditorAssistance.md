@@ -23,6 +23,15 @@
 | All | 显示全部支持的空白字符 |
 | Boundary | 显示行首、行尾、连续普通空格，以及所有 Tab 和上述特殊空格；隐藏内部孤立普通空格 |
 
+圆点使用 `FillEllipse` 的等半径圆形，中心为测量单元中心；半径取已测普通空格宽度的
+1/7，并受单元宽高约束。合并多个空格的 cluster 不放大标记。不能用微小圆角矩形
+代替：GOUI OpenGL/Direct2D 对矩形四边分别进行像素对齐，会改变微小图形的宽高比。
+
+Tab 使用单个闭合填充路径，长度约一个普通空格宽度，位于 Tab 单元的逻辑起点，
+RTL 水平镜像。箭头各部分一次合成，避免多条半透明线在接头处叠加加深。
+空心圆、方框同步按字体调整尺寸和线宽，仍位于单元中央。
+这些图形直接使用现有 Painter，不增加原生排版、字形资源或缓存身份。
+
 标记复用 native 测得的 Cluster 坐标及所属 TextLine 行高，不能按字节乘平均宽度。
 不可分的同类空白 cluster 只标记一次，不猜测内部停靠点；混有正文的 cluster 不覆盖正文。
 选区按模型 UTF-8 字节区间判断，正反方向等价，空选区不产生 Selection 标记。
@@ -102,3 +111,7 @@ Basic/Modern 提供 whitespace、selected-whitespace、indent-guide、ruler、oc
 处理进入通知前读取 CrossingContext.Position。正常移动仍复用原有 MotionInfo；
 不触发文本测量，不新增控件事件协议。查找栏关闭后重新命中正文，应立即恢复文本
 光标，侧栏则保持默认或折叠按钮的指针样式。
+
+2026-10-25 外观核对采用上述 Monaco/VS Code `main` 的 SVG 分支：圆点半径为
+spaceWidth/7、垂直居中，Tab 是 spaceWidth 尺度的单个填充轮廓。SourceView 采用
+这些比例与合成方式，使用现有 GOUI 几何绘制，而非引入 SVG 或测量替代符号。
