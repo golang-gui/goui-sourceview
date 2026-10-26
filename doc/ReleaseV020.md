@@ -49,9 +49,15 @@ Go 1.25.8／DirectWrite、macOS 15.7.7 arm64／Go 1.24.9／CoreText，
 无 cgo 构建，以及 Linux 全仓 race 通过。Linux 独立 X11／Software 窗口验证覆盖
 内置查找、补全、空白显示、外框、宽度缓存，以及 176 MiB 单行编辑与拖选。
 
-候选源码、环境、测试结果与未执行项记录在 [发布准备](Plan.md)。本轮尚未进行
-Mac／Windows 窗口专项、真实 IME 或混合 DPI 验收；正式发布前仍需核对冻结候选、
-标签与 Release。README 安装指引在公开验证后更新。
+macOS／CoreText／OpenGL 和 Windows／DirectWrite／Direct2D 已运行原生窗口矩阵，
+覆盖查找、外框、补全、宽度缓存、编辑和长行场景，应用缩放按场景为 100%／150%／200%。
+其中 macOS 与 Windows 的 Basic 100% 空白圆点检查失败；Windows 150% 的超长单行
+末字符指针选取和前向拖选检查也失败。其余矩阵场景的明确 PASS 已核对；失败原因与
+修正尚未完成复验，不能将本版本标记为全部发布门槛通过。
+
+候选源码、环境和检查项记录在 [发布准备](Plan.md)。真实 IME、混合 DPI 及全部
+Painter 组合尚未验收；正式发布前还需确认上述窗口失败、冻结候选并核对标签与
+Release。README 安装指引在版本公开并通过消费方验证后更新。
 
 未访问的大文本区域仍可使用估计几何；有界排版不承诺任意文件即时精确布局或
 所有 Unicode 上下文与完整原生段落完全等价。首次读取、模型建立和单次原生排版
@@ -110,10 +116,19 @@ Module verification, tidy, vet and no-cgo builds pass on all three; full race pa
 on Linux. Isolated Linux X11 / Software window checks cover find, completion,
 whitespace, frames, width caching, and editing/dragging in a 176 MiB single line.
 
-Candidate source, environments, results and outstanding checks are recorded in the
-[release preparation log](Plan.md). Mac/Windows window scenarios, physical IME and
-mixed DPI were not rerun in this preparation. Candidate and tag/Release verification
-remain pending; README installation instructions change after public verification.
+Native window matrices ran on macOS / CoreText / OpenGL and Windows / DirectWrite /
+Direct2D, covering find, frames, completion, width caching, editing and long lines at
+application scales of 100%, 150% or 200%, depending on the case. Basic whitespace-dot
+checks failed at 100% on both platforms. On Windows at 150%, final-character pointer
+selection and forward dragging in a very long single line also failed. Explicit PASS
+results were checked for the remaining cases. The failing cases and proposed test
+adjustments still require verification; the release gates are not all satisfied.
+
+Candidate source, environments and outstanding checks are recorded in the
+[release preparation log](Plan.md). Physical IME, mixed DPI and every painter
+combination remain unverified. The window failures, final candidate and tag/Release
+must be checked before publication. README installation instructions change after
+the public version passes consumer verification.
 
 Unvisited regions may use estimated geometry. Bounded layout does not promise immediate,
 exact layout of every file or equivalence to a complete native paragraph for all Unicode

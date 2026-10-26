@@ -47,15 +47,62 @@ go.mod 当前声明已发布的 GOUI v0.4.0，正在准备 SourceView v0.2.0；
   保持原文两条合法路径，保留后续文本／选区／历史断言；中大两个样本复验通过。
 - 性能边界：本轮 176 MiB 自动换行验证记录同步加载约 400 ms，整段验证的事件循环
   最大间隔约 567 ms；只是本环境观察，未做同条件前后性能比较，不宣称已消除阻塞。
-  本轮没有 Mac／Windows 窗口专项、真实 IME、混合 DPI 或全部 Painter 组合验收。
+  此次基础验证尚未包含 Mac／Windows 窗口专项；后续窗口结果见下方候选复核。
+  真实 IME、混合 DPI 或全部 Painter 组合仍未验收。
 - [ ] 冻结候选后核对标签、Draft、正式发布及 Go proxy 消费方；本轮为发布准备。
 
 完整源码、清单和日志在 `/tmp/goui-sourceview-v020-8g4ptcop`；远端专用目录为
 Mac `/private/tmp/sourceview-v020.bh738A`、Windows
 `%TEMP%/sourceview-v020-a4dcf8f9bb454740bb0aff54a008384e`。
 已关闭本轮独立显示和窗口管理器；保留原有远端连接与用户工作区。没有修改 GOUI、
-剪贴板或系统配置，没有推送或创建 v0.2.0 标签／Release。远端原生窗口专项和公开发布
-仍应按 Release.md 在正式发布前核对，历史 v0.1.0 验收不能替代本轮未执行项。
+剪贴板或系统配置，没有推送或创建 v0.2.0 标签／Release。远端原生窗口结果见下方；
+公开发布仍按 Release.md 执行，历史 v0.1.0 验收不能替代本轮未执行项。
+
+### v0.2.0 候选复核（2026-10-26）
+
+本次以已提交的 `8e11d8df7c246094cbdfb25e03819d5bc67d91d5` 为源码候选重新核对
+发布材料。
+工作区两份未完成的窗口测试修改、未跟踪的 Doing.md 和用户 example/temp 均未纳入
+候选，不继续此前的测试修改或编辑器优化。下列窗口失败仍是已有证据，不能因本次
+重新准备而写成通过。
+
+- [x] 核对 origin：main 为 `464dfb59e3ea17dbb67cd2fafdd30c8df4659013`，本地
+  候选在其之后有 29 个提交；v0.2.0 标签不存在，GitHub 只有正式 v0.1.0 Release，
+  没有 v0.2.0 Draft。此状态为本次检查时的结果，实际发布前仍须重查。
+- [x] 从候选 git archive 建立 `/tmp/goui-sourceview-v020-ready.hXJCgF/source`。
+  Linux amd64／Go 1.25.8：GOWORK=off 的 go mod verify、go mod tidy -diff、
+  go test -json ./... -count=1、go vet ./... 和 go test -race ./... -count=1
+  全部通过；520 PASS、0 FAIL、0 SKIP。根工作区的 go test ./... 也通过。
+- [x] 干净候选的 GOWORK=off／CGO_ENABLED=0 全仓构建在 Linux amd64、Windows
+  amd64、macOS arm64 三个目标通过，包含示例与窗口程序。这是本次交叉构建结果；
+  三端原生包测试是上方已记录的结果，本次未重复远端运行。
+- [x] go list -m 确认使用发布的 GOUI v0.4.0，无 replace；LICENSE 与该依赖版本
+  逐字节一致。已核对 v0.1.0 以来的实际提交和公开方法，双语 Release Notes 包含
+  内置配套栏迁移、声明式入口、换行导出、空白标记与长行行为的变化。
+- [x] 核对此前远端桌面日志：macOS 15.7.7 arm64／CoreText／OpenGL 的 15 个场景
+  中 14 个明确通过，Basic 100% 空白圆点检查失败。Windows 10 19045 amd64／
+  DirectWrite／Direct2D 的 15 个场景中，12 个明确通过，3 个失败。通过范围包括
+  查找 100%／150%、外框深色 150%、Modern 空白 150%／深色 200%、补全滚动亮暗
+  150%／导航 150%、宽度缓存 150%、编辑体验 150%、长行自动换行输入 150% 及
+  不折行 End／左右导航／调整窗口 150%；Mac 还通过两项长行指针用例。
+- [ ] 两端 Basic 100% 的空白圆点断言失败：Mac 日志的单元宽度约 3.33 DIP，
+  原采样范围没有完整像素；Windows 日志为 1×2 物理像素。已有测试采样修正草稿，
+  但未在两端重建复验，本次不纳入候选，也不宣称绘制或测试已修正。
+- [ ] Windows 150% 的 4,800,014-byte 单行样本在 paragraph 的 `-nowrap -verify-pointer`
+  场景报 final-character forward selection 失败，在 `-nowrap -verify-forward`
+  场景报视区内拖选时 ScrollX 改变。日志可见 End
+  后横向偏移继续收敛，采样时序可能有关；此为待验证的解释，不是已确认结论。
+  尚未复验的 paragraph 测试调整仍留在工作区。不能删除原断言或直接接受该失败。
+- [ ] Windows 总控脚本的子进程 ExitCode 为 null，虽然计划任务本身返回 0，仍须以
+  各场景明确 PASS／panic 为准；后续重跑应记录实际退出码。先前 Windows 结果不作为
+  “15 个场景全部通过”的证据。
+- [ ] 窗口失败确认并处理后，重新冻结候选，核对正常桌面示例和未执行范围，再进入
+  推送、标签、Draft、正式发布及代理／消费模块验证。此次只完成发布资料与独立
+  构建验证，没有推送、打标签或发布；README 保留公开可用的 v0.1.0 安装命令。
+
+本次复核仅更新 Plan 与 ReleaseV020，未修改 GOUI 或 SourceView 产品代码。
+干净候选测试和 race 日志保留在 `/tmp/goui-sourceview-v020-ready.hXJCgF/logs`；
+此前远端日志位置见上一段，保留失败用于继续验证，不将临时产物作为 Release 附件。
 
 
 ## CheckButtonGroup 使用方迁移（2026-10-26）
