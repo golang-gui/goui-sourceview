@@ -5,9 +5,58 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-go.mod 当前仍声明 GOUI v0.3.0，SourceView v0.1.0 已发布；当前开发代码已使用
-后续未发布的 GOUI 接口。各轮联调、独立依赖失败和平台缺口见下方记录，发布
-记录只代表当时验收，不把本地工作区通过视为当前版本可以独立构建。
+go.mod 当前声明已发布的 GOUI v0.4.0，正在准备 SourceView v0.2.0；
+最新公开版本仍为 v0.1.0。历史联调和依赖失败保留为当时记录，
+当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
+
+## v0.2.0 发布准备（2026-10-26）
+
+- [x] GOUI v0.4.0 已正式发布；模块代理下载来源为
+  `665f2946665fd5f45b2f3e419588f74b4528eea3`。go.mod / go.sum 更新到该版本，
+  其余依赖版本及 Go 1.24 最低要求保持不变；未修改 GOUI、本地 go.work 或用户 example/temp。
+- [x] 同步示例、设计与接入技能中的依赖条件；双语 README 说明当前源码的依赖，
+  安装命令保留已公开的 v0.1.0，待新版本公开并完成代理验证后更新。
+- [x] 增加 [v0.2.0 双语发布说明](ReleaseV020.md)，记录内置查找／定位栏的迁移、
+  声明式类型入口、换行导出、空白标记、长段落与操作改进，以及适用边界。
+- [x] Linux amd64／Go 1.25.8：干净源码关闭工作区后，go mod verify、
+  go mod tidy -diff、全仓非缓存测试、race 和 vet 通过；520 PASS、0 FAIL、0 SKIP。
+  go list -m 确认使用模块缓存中的 GOUI v0.4.0，无替换；LICENSE 与该版本逐字节一致。
+  本地原工作区 go test ./... 同样通过。
+- [x] Windows 10 19045 amd64／Go 1.25.8／DirectWrite，macOS 15.7.7 arm64／
+  Go 1.24.9／CoreText：同一源码独立原生全仓各 520 PASS、0 FAIL、0 SKIP，
+  verify、tidy -diff、vet、CGO_ENABLED=0 go build ./... 通过。三端 108 份
+  Go／module 文件逐一 SHA256 相同，没有借用相邻 GOUI 源码。Windows 首次日志
+  汇总遇到 PowerShell 字符解码错误；改用 cmd 保留 UTF-8 JSON 原始输出后重跑成功，
+  未修改测试预期或系统安全配置。
+- [x] Linux amd64、Windows amd64、macOS arm64 的 GOWORK=off／CGO_ENABLED=0
+  全仓交叉构建通过，包含示例与窗口程序；技能中完整 main 构建及 quick_validate 通过。
+- [x] 代码候选为 `fdd2c1fbc5f39c56374946cb2b0588a5db26c296`，依赖与快照修复
+  分别提交。从该提交的 git archive 关闭工作区再次 verify／tidy／全仓非缓存测试通过，
+  520 PASS、0 FAIL、0 SKIP；108 份 Go／module 文件与三端已验证源码逐字节一致。
+  后续发布说明提交只改文档；正式打标签前仍需核对最终候选。
+- [x] Linux Ubuntu 22.04.5／Pango／独立 Xvnc :86／Xfwm4 合成开启／Software：
+  find 在 100%／150%、frame 深色 150%、assistance Basic 100%／Modern 150%／
+  深色 200%、completion scroll／navigation 150%、resize_cache 150% 的正常
+  Window.DispatchEvent／CommitText 自动断言通过。250 KiB 单行的输入和不折行 End、
+  原 184500131-byte 文件的自动换行输入／替换／删除／撤销重做及不折行正向拖选通过。
+  文件只读，编辑仅在内存；未启用真实剪贴板选项。
+- [x] 修正语义快照读取待排版空 Geometry 的崩溃；旧代码在新增固定回归上仍 panic，
+  新代码保持 64 KiB 文本上限且不触发测量。原宽度隔离测试改为明确准备缓存几何，
+  不再让不支持软折行的确定性夹具驱动真实分页；原有隔离与无测量断言保留。
+  窗口输入用例先在较小样本因“必须延迟”假设失败，现同时检查正确即时完成和未就绪
+  保持原文两条合法路径，保留后续文本／选区／历史断言；中大两个样本复验通过。
+- 性能边界：本轮 176 MiB 自动换行验证记录同步加载约 400 ms，整段验证的事件循环
+  最大间隔约 567 ms；只是本环境观察，未做同条件前后性能比较，不宣称已消除阻塞。
+  本轮没有 Mac／Windows 窗口专项、真实 IME、混合 DPI 或全部 Painter 组合验收。
+- [ ] 冻结候选后核对标签、Draft、正式发布及 Go proxy 消费方；本轮为发布准备。
+
+完整源码、清单和日志在 `/tmp/goui-sourceview-v020-8g4ptcop`；远端专用目录为
+Mac `/private/tmp/sourceview-v020.bh738A`、Windows
+`%TEMP%/sourceview-v020-a4dcf8f9bb454740bb0aff54a008384e`。
+已关闭本轮独立显示和窗口管理器；保留原有远端连接与用户工作区。没有修改 GOUI、
+剪贴板或系统配置，没有推送或创建 v0.2.0 标签／Release。远端原生窗口专项和公开发布
+仍应按 Release.md 在正式发布前核对，历史 v0.1.0 验收不能替代本轮未执行项。
+
 
 ## CheckButtonGroup 使用方迁移（2026-10-26）
 
