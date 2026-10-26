@@ -1,15 +1,44 @@
 # SourceView 开发与验收计划
 
-> v0.1.0 已发布；实际验收范围及仍未覆盖的平台组合见下方发布记录。
+> v0.2.0 已发布；实际验收范围及仍未覆盖的平台组合见下方发布记录。
 > 实际代码、命令、结果与限制见本文件及对应专题的 Plan 文档。
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-go.mod 当前声明已发布的 GOUI v0.4.0，正在准备 SourceView v0.2.0；
-最新公开版本仍为 v0.1.0。历史联调和依赖失败保留为当时记录，
+go.mod 当前声明已发布的 GOUI v0.4.0，SourceView v0.2.0 已正式发布。
+历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
-## v0.2.0 发布准备（2026-10-26）
+## v0.2.0 发布（2026-10-26）
+
+### 公开发布结果
+
+- [x] v0.2.0 annotated tag 的源码提交为
+  `9ae7d29c60a5c22d8db17ff593d9c4614402c410`；远端 peeled SHA 一致。
+  标签对象为 `7428eb90af7348b24cdc9b8e4ff2bee60f83c3ac`，候选已推送到 main。
+  发布说明为该提交的 ReleaseV020.md，公开内容仅列变化、迁移和明确通过的验证。
+- [x] 冻结提交的 git archive 在仓库外关闭工作区再次验证：go mod verify、
+  go mod tidy -diff、go test -json ./... -count=1、go vet ./...、
+  go test -race ./... -count=1 全部通过；520 PASS、0 FAIL、0 SKIP。
+  CGO_ENABLED=0 的 Linux amd64／Windows amd64／macOS arm64 全仓构建通过，
+  LICENSE 与 GOUI v0.4.0 逐字节一致。源码与此前三端原生包测试候选相同。
+- [x] 创建并检查 Draft 后，于 2026-10-26 19:41:11（Asia/Shanghai）正式公开
+  [GOUI SourceView v0.2.0](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.2.0)，
+  Draft=false、Prerelease=false，Latest 指向 v0.2.0。发布 Go 库与源码示例，
+  无手工附件；不包含示例二进制、签名或公证产物。
+- [x] 通过 GOPROXY=https://proxy.golang.org、GOWORK=off 和全新 GOMODCACHE 下载
+  v0.2.0，Origin.Hash 与标签源码一致。模块校验值为
+  `h1:oEsMYSX3iJDAaCW9MHMEC/VWhjb0u96yQH32EoJ1Kw4=`。
+- [x] 新建无 replace、无本地工作区的消费模块，实际通过公开代理下载 v0.2.0 及
+  GOUI v0.4.0，go mod tidy、go mod verify、CGO_ENABLED=0 go run . 通过。
+  检查 root／language／scheme／ui 公开入口、声明式配置、默认快捷键和 CRLF 导出；
+  日志为 PASS public root/language/scheme/ui consumer and CRLF export。
+- [x] 公开验证后同步中英文 README 的 v0.2.0 安装命令。收尾文档提交不移动标签。
+  assistance／paragraph 的未提交试验修改、Doing.md 和用户 example/temp 均保留，
+  没有纳入发布或收尾提交。
+
+最终归档、测试及消费模块日志保留在 `/tmp/sourceview-v020-release.TdISTr`。
+以下为各阶段准备和诊断的历史记录，不将未定性的自动化现象视为已确认产品缺陷。
 
 ### 发布决定
 
