@@ -142,7 +142,7 @@ func run() error {
 		update()
 		win.SetFocusedWidget(editor)
 	}
-	group := widgets.NewCheckGroup()
+	group := widgets.NewCheckButtonGroup()
 	files := gui.NewWrapBox(layout.DirectionHorizontal)
 	files.SetSpacing(4)
 	files.SetLineSpacing(4)

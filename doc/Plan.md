@@ -9,6 +9,18 @@ go.mod 当前仍声明 GOUI v0.3.0，SourceView v0.1.0 已发布；当前开发�
 后续未发布的 GOUI 接口。各轮联调、独立依赖失败和平台缺口见下方记录，发布
 记录只代表当时验收，不把本地工作区通过视为当前版本可以独立构建。
 
+## CheckButtonGroup 使用方迁移（2026-10-26）
+
+- [x] 编辑器示例以 widgets.NewCheckButtonGroup 替代旧构造器，命令式 SetGroup
+  继续接收组对象，交互与选择逻辑保持原有实现。所需 GOUI 提交为 `8c7f104`；
+  go.mod 仍为 v0.3.0，继续通过不提交的 go.work 联调，独立发布验证待依赖更新。
+- [x] 仓库外源码副本在 Linux amd64／Go 1.25.8、macOS 15.7.7 arm64／Go 1.24.9、
+  Windows 10 amd64／Go 1.25.8 执行 go test ./... -count=1，各 519 PASS、0 SKIP、
+  0 FAIL，包含示例编译。原生组交互验收与远端桌面连接限制记录在 GOUI Plan，
+  不将其写成 SourceView 编辑器窗口的全面验收。
+
+原始日志及副本在 `/tmp/goui-button-groups-ddl7s1_4`，两仓迁移分别提交，未推送。
+
 ## GOUI 声明式契约同步（2026-10-26）
 
 - [x] SourceView 基线 `89f045e`，对照 GOUI `d65dc95` 引入的 View／ComposeView／
