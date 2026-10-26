@@ -457,7 +457,11 @@ func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Mod
 			key(events.KeyEnd, endMods)
 			key(events.KeyArrowLeft, 0)
 			must(win.CommitText("Z"))
-			if model.Len() != n || v.Selection().Caret != n {
+			// 较小文件可能已具备完整目标上下文，允许同一回调内正确完成；
+			// 尚未就绪时仍须保持原文，不能先在无关片段修改后再补导航。
+			pending := model.Len() == n && model.EqualText(source)
+			completed := matches(n+1, "Z"+tail)
+			if (!pending && !completed) || v.Selection().Caret != n {
 				panic(fmt.Sprintf("cold input used an unrelated window: bytes=%d selection=%v", model.Len(), v.Selection()))
 			}
 			stage = 0

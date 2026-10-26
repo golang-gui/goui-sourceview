@@ -504,7 +504,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 		// Snapshot reads cached geometry only: it must not shape text, recolor,
 		// emit callbacks or alter the viewport just to describe visible content.
 		p := v.cachedParagraph(firstDisplay)
-		if p != nil {
+		if p != nil && p.geometry.LineCount() > 0 {
 			origin := v.paragraphOrigin(firstDisplay, p)
 			pos := p.geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: -origin.Y})
 			anchor := v.displayRange(firstDisplay).Start + pos.Offset

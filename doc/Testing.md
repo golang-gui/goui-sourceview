@@ -83,7 +83,7 @@ GOUI 依赖版本，不以本地工作区成功代替。纯文档阶段以上命
 | 重入 | N 的通知不会用 N+1 文本布局；回调换文档/卸载不应用旧选区或旧分析 |
 | 资源 | 原生 layout 创建/销毁匹配；卸载后 Model/Root/Timer 无视图回调，重挂载可恢复 |
 | 搜索 | 全局 byte 范围、跨块/跨行、方向环绕、simple folding、WholeWord 和替换批次准确 |
-| 快照 | VisibleText 恰好等于 VisibleRange 的模型切片，长度上限和 UTF-8 边界正确，preedit 独立 |
+| 快照 | VisibleText 恰好等于 VisibleRange 的模型切片，长度上限和 UTF-8 边界正确，preedit 独立；只读取当前宽度的缓存，几何未就绪时不命中或触发测量 |
 
 随机编辑测试使用固定 seed 和小规模朴素字符串参考，保存最小复现输入。
 例如随机插入删除 LF、多字节字符、引号和注释标记后，检查行索引及分析状态。

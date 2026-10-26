@@ -154,7 +154,17 @@ func TestSnapshotDoesNotUseAnotherWidth(t *testing.T) {
 	v, ctx := widthCacheFixture(t)
 	v.Document().Model().SetText(strings.Repeat("a", 80000))
 	v.Document().engine.Advance(time.Time{})
-	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{X: 700000})
+	v.viewport = geometry.Size{Width: 220, Height: 200}
+	v.offset.X = 700000
+	// 直接准备当前宽度的已测片段，避免让不支持软折行的替身驱动分页。
+	// 缓存位置与全文起点相距足够远，以独立验证快照确实使用了它。
+	v.layouts[v.paragraphKey(0)] = &paragraph{
+		geometry: textedit.NewGeometry(
+			[]typography.TextLine{{Start: 70000, Length: 100, Width: 1000, Height: 20}},
+			[]typography.TextCluster{{Start: 70000, Length: 100, Width: 1000, Height: 20}},
+			80000, 20),
+		geometryX: 700000,
+	}
 	if v.Snapshot().TextEditing.VisibleRange.Start == 0 {
 		t.Fatal("fixture did not anchor its measured width")
 	}
@@ -164,6 +174,23 @@ func TestSnapshotDoesNotUseAnotherWidth(t *testing.T) {
 	created := ctx.created
 	if v.Snapshot().TextEditing.VisibleRange.Start != 0 || ctx.created != created {
 		t.Fatal("snapshot reused another width or shaped text")
+	}
+}
+
+func TestSnapshotWithPendingGeometryDoesNotMeasure(t *testing.T) {
+	v, ctx := widthCacheFixture(t)
+	v.Document().Model().SetText(strings.Repeat("a", 80000))
+	v.Document().engine.Advance(time.Time{})
+	v.viewport = geometry.Size{Width: 220, Height: 200}
+	// 分页尚未就绪时缓存条目已存在，但没有可命中的显示行。
+	v.layouts[v.paragraphKey(0)] = &paragraph{}
+	created := ctx.created
+	info := v.Snapshot().TextEditing
+	if info == nil || info.VisibleRange != (textedit.Range{End: 64 * 1024}) || info.VisibleText != strings.Repeat("a", 64*1024) {
+		t.Fatal("pending geometry lost the bounded text snapshot")
+	}
+	if ctx.created != created {
+		t.Fatal("snapshot measured pending geometry")
 	}
 }
 
