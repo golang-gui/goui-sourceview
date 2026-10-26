@@ -16,6 +16,12 @@
 
 普通界面由 GOUI gui / ui 提供。SourceView 只为需要源码编辑能力的区域增加依赖。
 
+当前 SourceViewView 按 GOUI 新声明契约只实现 WidgetView 的 Mount／Update／Unmount；
+自定义组合组件使用 ComposeView.Build(ctx)，不要给 WidgetView 添加 return self 的
+Build 占位方法。该 GOUI 契约从 `d65dc95` 起提供，本轮联调基线为 `6a2ae2f`；
+发布版本尚未更新，go.mod 仍声明 v0.3.0。先核对应用实际依赖，使用包含该提交
+的 GOUI 检出联调；本仓 go.work 通过不代表旧版本已提供新契约。
+
 ## 声明式最小接入
 
 这是一个完整 main.go。文档在 build 外创建，查找、替换和定位由 SourceView 内置管理。

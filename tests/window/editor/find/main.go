@@ -5,6 +5,7 @@
 // 选项、替换和撤销、只读、关闭、搜索背景、栏内拖选及其右键菜单与正文隔离。
 // 验证无关重建保留输入、多视图隔离、解除绑定后应用可收到按键、移除后取消旧交互、
 // 重挂载创建新子树、分块计数失效、回调更换文档及聚焦期间销毁窗口。
+// 首个编辑器通过 ComposeView 构建，验证组合 State 跨重建／空内容保留且不生成包装控件。
 // 模型和方法调用仅准备场景，不作为模拟输入捷径。按实际日志记录后端和缩放。
 // 不修改剪贴板、文件或系统设置；重启复位。成功自动关闭，提前关闭或断言失败以非零退出。
 // 真实 IME、系统拦截和混合 DPI 仍需手工验证。
@@ -58,6 +59,7 @@ func main() {
 	started, complete := false, false
 	var originalBar gui.Widget
 	var originalOwner *source.SourceView
+	var compositionState *editorCompositionState
 	var a, b *source.SourceView
 	baseControllers, otherControllers, fallback, errors := 0, 0, 0, 0
 	partialReset := false
@@ -103,6 +105,8 @@ func main() {
 				}
 				switch step {
 				case 0:
+					check(compositionState != nil && compositionState.builds > 0, "composition was not built")
+					check(app.FindWidget("main", "a-composition") == nil, "composition created or renamed a widget")
 					check(bar == nil, "closed editor eagerly created a find subtree")
 					originalOwner = a
 					baseControllers = len(a.EventControllers())
@@ -275,7 +279,7 @@ func main() {
 		}
 		return base.Window("main").Title("Built-in SourceView find / replace").Size(760, 500).Content(
 			base.VBox(
-				first,
+				composedEditor(first, &compositionState),
 				base.ScrollView(sourceui.SourceView().ID("b").Document(other).KeyBindings(bindingsB)).Style("source-view").ID("b-scroll").MainWeight(1),
 				newProbe(),
 			).CrossAlign(layout.CrossStretch))
@@ -283,10 +287,39 @@ func main() {
 	check(complete, "find verification aborted")
 }
 
+// 使用真实协调器覆盖第三方 WidgetView 的组合挂载，不用 BuildContext 替身模拟。
+type editorCompositionState struct{ builds int }
+
+type editorCompositionView struct {
+	base.ComposeBase[editorCompositionView]
+	child base.View
+	state **editorCompositionState
+}
+
+func composedEditor(child base.View, state **editorCompositionState) base.View {
+	v := &editorCompositionView{child: child, state: state}
+	v.Self = v
+	return v.ID("a-composition")
+}
+
+func (v *editorCompositionView) Build(ctx base.BuildContext) base.View {
+	if ctx.State() == nil {
+		ctx.SetState(&editorCompositionState{})
+	}
+	state := ctx.State().(*editorCompositionState)
+	if *v.state == nil {
+		*v.state = state
+	}
+	check(*v.state == state, "composition lost State across rebuild or empty content")
+	state.builds++
+	return v.child
+}
+
+var _ base.ComposeView = (*editorCompositionView)(nil)
+
 type probeView struct{ base.ViewBase[probeView] }
 
 func newProbe() base.View                                  { v := &probeView{}; v.Self = v; v.ID("probe"); return v }
-func (v *probeView) Build() base.View                      { return v }
 func (v *probeView) Mount(base.BuildContext) gui.Widget    { return &scaleProbe{} }
 func (v *probeView) Update(base.BuildContext, gui.Widget)  {}
 func (v *probeView) Unmount(base.BuildContext, gui.Widget) {}

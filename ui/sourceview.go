@@ -92,7 +92,6 @@ func (v *SourceViewView) ClearSearchRange() *SourceViewView {
 	v.searchRangeSet = true
 	return v
 }
-func (v *SourceViewView) Build() base.View { return v }
 
 func (v *SourceViewView) AutoPairs(enabled bool) *SourceViewView { v.autoPairs = &enabled; return v }
 func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {

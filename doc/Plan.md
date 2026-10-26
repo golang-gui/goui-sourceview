@@ -5,8 +5,40 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-当前依赖为 GOUI v0.3.0，已发布 v0.1.0。早期各切片中的未发布
-依赖及失败描述保留为当时记录，当前验证结果以发布记录为准。
+go.mod 当前仍声明 GOUI v0.3.0，SourceView v0.1.0 已发布；当前开发代码已使用
+后续未发布的 GOUI 接口。各轮联调、独立依赖失败和平台缺口见下方记录，发布
+记录只代表当时验收，不把本地工作区通过视为当前版本可以独立构建。
+
+## GOUI 声明式契约同步（2026-10-26）
+
+- [x] SourceView 基线 `89f045e`，对照 GOUI `d65dc95` 引入的 View／ComposeView／
+  ObjectView 契约，与已提交的 GOUI `6a2ae2f` 联调。SourceViewView 和窗口测试
+  探针移除 return-self Build，仅提供 WidgetView 的 Mount／Update／Unmount；
+  原有类型别名、构造器、Document 和信号管理保留。
+- [x] 检查声明式入口与所有示例。命令式编辑器仍使用组对象及 SetGroup，符合
+  GOUI 现有契约；没有需要迁移的声明式 Group 对象参数。设计与 AI 接入参考
+  标明新声明契约的提交条件，go.mod、go.sum 与本地 go.work 内容均未修改。
+- [x] 扩展现有 find 窗口用例，以 ComposeBase／ComposeView 构建首个编辑器，
+  明确断言组合 State 跨重建及空内容保留，声明 ID 不创建或重命名 Widget。
+  保留原有编辑器复用、查找状态、多视图隔离、移除／重挂载、信号与销毁断言。
+  通过正常 Window.DispatchEvent／CommitText 验证交互，没有语义动作捷径。
+- [x] Linux amd64／Go 1.25.8／Pango，在仓库外两仓已跟踪文件副本中，通过
+  临时 go.work 联调：`go test -json ./... -count=1` 为 519 PASS、0 FAIL、0 SKIP；
+  `go test -race ./ui -count=1` 与 `go vet ./...` 通过。Windows amd64／macOS
+  arm64 的 CGO=0 全仓交叉构建通过；未做两端原生运行、Direct2D、真实 IME
+  或混合 DPI 验收。
+- [x] 独立 Xvnc／Xfwm4、XMODIFIERS=@im=none：find 窗口程序在 Software
+  100%／150%、OpenGL 200% 三组均通过全部自动断言并正常退出；日志探针
+  记录实际图像资源和 PixelScale。该结果包含原生窗口与事件循环，不替代
+  系统输入法、系统保留快捷键或物理键盘的验收。
+- [ ] `GOWORK=off go test ./...` 未通过：GOUI v0.3.0 缺少已有 ParagraphLayout／
+  ParagraphGeometry、HeightIndex.Top64、Projection.Slice 等接口，新声明契约
+  也需要后续 GOUI 版本。没有提交机器专属 replace 或伪造已发布版本；待包含
+  所需能力的 GOUI 发布后，更新依赖并补独立验证。
+
+源码副本、日志和窗口程序位于 `/tmp/sourceview-view-contract-uu9yd0i8`。
+本轮适配、回归用例与文档一并提交，未推送；验证未修改 GOUI、用户 example/temp、
+剪贴板、用户文件或系统设置，独立显示与窗口管理器已关闭。
 
 ## 行尾拖选反馈（2026-10-24）
 
