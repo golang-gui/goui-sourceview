@@ -104,6 +104,50 @@ Mac `/private/tmp/sourceview-v020.bh738A`、Windows
 干净候选测试和 race 日志保留在 `/tmp/goui-sourceview-v020-ready.hXJCgF/logs`；
 此前远端日志位置见上一段，保留失败用于继续验证，不将临时产物作为 Release 附件。
 
+### v0.2.0 远端复验（2026-10-26）
+
+候选为 `4b002fa0512fc09c19d13dc515caf4c52b42aa55`。从 git archive 传输到两端，
+归档 SHA256 均为 `80c22359c51c2bc53d4a43e7538ab1dd86155b71b651478ac86d09bf5d65104d`。
+GOUI 为发布的 v0.4.0，GOWORK=off、GOTOOLCHAIN=local、CGO_ENABLED=0。
+
+- [x] macOS 15.7.7 arm64／Go 1.24.9／CoreText 与 Windows 10 19045 amd64／
+  Go 1.25.8／DirectWrite：重新执行 go mod verify、go test -json ./... -count=1、
+  go vet ./...，两端分别 520 PASS、0 FAIL、0 SKIP；窗口程序与示例原生构建通过。
+- [x] 在已连接的 Mac VNC／OpenGL 和 Windows RDP／Direct2D 桌面重跑 15 项候选矩阵。
+  查找 100%／150%、外框深色 150%、Modern 空白 150%／深色 200%、补全滚动亮暗
+  150%／导航 150%、宽度缓存 150%、4,800,014-byte 单行自动换行输入 150%、
+  不折行 End／左右导航／调整窗口 150% 在两端通过。Mac 的两项长行指针用例也通过。
+  Windows 使用 Diagnostics.Process 保存每个实际 ExitCode，已消除 null 退出码问题。
+- [ ] 本次矩阵的 Basic 场景首次因未创建 capture-dir 指定目录而提前退出，这是本次
+  启动参数错误，不能计作像素验证结果。创建目录后分别重跑旧二进制和测试调整版本：
+  Mac 旧采样为空，调整后是 2×1 像素，仍触发“至少 2×2”断言；单元宽约 3.33 DIP，
+  按当前半径规则圆点直径约 0.95 物理像素。Windows 旧采样为 1×2，调整后完整通过
+  空白显示、选择、CRLF／EOF 和定位断言。此证据支持重新检查采样及亚像素断言，
+  不代表已修改产品绘制；此次保留工作区测试草稿，没有提交或放宽断言。
+- [x] Windows 旧长行指针二进制再次分别以 exit 2 失败；工作区 paragraph 版本等待
+  三个事件循环中的光标像素及偏移稳定，再重新取 EOF 坐标，两项均 exit 0。Mac
+  对应两项也 exit 0。模型字节位置、正反向最后一字符选择、选区像素、视区内偏移
+  不变和最终光标位置断言均保留。此对照支持布局收敛期间使用旧屏幕坐标的时序解释；
+  工作区调整尚未提交，不能将候选旧用例标为通过。
+- [ ] Windows experience 用例首次报 menu keyboard selection missing；额外三次复跑
+  为 1 失败、2 通过，合计 2 失败／2 通过。Mac 首次及三次复跑均通过。失败尚未
+  确认为框架回归或菜单初始化与事件时序假设，不以重复运行中的成功覆盖失败记录。
+- [x] 通过远端普通键鼠，在两端原生 editor 示例做应用缩放 150% 的人工检查：
+  输入后撤销恢复 811 bytes／30 lines；Ctrl／Cmd+F 输入 editor 显示 Matches: 2；
+  Escape 关闭后 F2 打开补全，滚轮可移动列表；右键及 Windows Shift+F10 后 End
+  选中最后的 Unfold all。菜单边界完整，无意外横向滚动条。两端示例退出码均为 0。
+  Mac 输入时观察到系统拼音预编辑，Enter 后提交；这不是完整的真实 IME 验收。
+- [x] 本地 go test ./... 与 GOWORK=off go test ./... 通过。此次没有修改产品、依赖、
+  框架或两份既有测试草稿，只更新验收文档；用户 example/temp 保留。
+
+结果、实际退出码、完整日志、Basic 截图和桌面截图保留在本机
+`/tmp/sourceview-v020-remote.sY9Kp6/artifacts`；远端分别为此前目录下的 recheck。
+两端测试与示例窗口已关闭，Mac 本次打开的三个 Terminal 窗口已关闭，Windows 本次
+创建的 Recheck／Followup／Example 三个计划任务已删除；原有连接、会话和窗口保留。
+保留专用目录供失败排查；未改变剪贴板内容、用户文件或系统安全设置。
+正式发布仍需处理 Mac 亚像素检查、确认 Windows 间歇菜单失败，并将通过的测试调整
+纳入新候选重新冻结；真实 IME、混合 DPI 和全部后端组合仍未执行。
+
 
 ## CheckButtonGroup 使用方迁移（2026-10-26）
 

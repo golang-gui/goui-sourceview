@@ -51,9 +51,14 @@ Go 1.25.8／DirectWrite、macOS 15.7.7 arm64／Go 1.24.9／CoreText，
 
 macOS／CoreText／OpenGL 和 Windows／DirectWrite／Direct2D 已运行原生窗口矩阵，
 覆盖查找、外框、补全、宽度缓存、编辑和长行场景，应用缩放按场景为 100%／150%／200%。
-其中 macOS 与 Windows 的 Basic 100% 空白圆点检查失败；Windows 150% 的超长单行
-末字符指针选取和前向拖选检查也失败。其余矩阵场景的明确 PASS 已核对；失败原因与
-修正尚未完成复验，不能将本版本标记为全部发布门槛通过。
+已提交候选的 Basic 100% 空白圆点检查在两端失败；Windows 150% 的超长单行末字符
+指针选取和前向拖选检查也失败。单独复验工作区测试调整后，Windows 空白圆点和两端
+长行指针检查通过；macOS 的不足一物理像素直径圆点仍被最小 2×2 像素断言拒绝。
+Windows 编辑体验用例还出现菜单键盘选中状态的间歇性失败。测试调整尚未提交，
+这些结果不能作为已提交候选全部发布门槛通过的证明。
+
+两端 150% 示例的实际桌面操作确认输入与撤销、查找计数、补全滚轮和菜单 End 导航；
+示例均正常退出。人工操作通过不替代仍然失败的自动回归。
 
 候选源码、环境和检查项记录在 [发布准备](Plan.md)。真实 IME、混合 DPI 及全部
 Painter 组合尚未验收；正式发布前还需确认上述窗口失败、冻结候选并核对标签与
@@ -118,11 +123,18 @@ whitespace, frames, width caching, and editing/dragging in a 176 MiB single line
 
 Native window matrices ran on macOS / CoreText / OpenGL and Windows / DirectWrite /
 Direct2D, covering find, frames, completion, width caching, editing and long lines at
-application scales of 100%, 150% or 200%, depending on the case. Basic whitespace-dot
-checks failed at 100% on both platforms. On Windows at 150%, final-character pointer
-selection and forward dragging in a very long single line also failed. Explicit PASS
-results were checked for the remaining cases. The failing cases and proposed test
-adjustments still require verification; the release gates are not all satisfied.
+application scales of 100%, 150% or 200%, depending on the case. The committed candidate
+fails Basic whitespace-dot checks at 100% on both platforms, and final-character pointer
+selection and forward dragging in a very long line on Windows at 150%. Separately tested
+working-tree adjustments pass the Windows whitespace check and both platforms' long-line
+pointer checks. A subpixel-diameter dot on macOS still fails a minimum 2-by-2-pixel
+assertion. The Windows editor-experience check also intermittently fails menu keyboard
+selection. These test adjustments are uncommitted; the committed candidate's release
+gates are not all satisfied.
+
+Actual desktop input at 150% confirmed editing and undo, find counts, completion-wheel
+behavior and menu End navigation on both platforms. Both examples exited normally.
+These manual observations do not replace the failing automated regressions.
 
 Candidate source, environments and outstanding checks are recorded in the
 [release preparation log](Plan.md). Physical IME, mixed DPI and every painter
