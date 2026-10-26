@@ -83,11 +83,11 @@ FindBar 保留行为和外观两个文件；折叠及普通编辑辅助各自集
 SourceViewView 实现 GOUI WidgetView 的 Mount／Update／Unmount，不再提供
 返回自身的 Build 占位方法。组合应用组件使用 GOUI ComposeView.Build(ctx)，
 对象声明使用 ObjectView.Object／Release；这些通用机制由 GOUI 维护。
-该契约由 GOUI `d65dc95` 引入；本轮联调基线为 `6a2ae2f`。现有查找窗口用例
+该契约由 GOUI `d65dc95` 引入，已随 v0.4.0 发布。现有查找窗口用例
 通过真实 ComposeView 包装 SourceView，验证组合 State、无包装 Widget、重建、
 空内容与重新挂载。编辑器的 Document 和信号仍由原有 WidgetView 绑定管理；
-不增加对象声明或祖先关联机制。发布前继续用未提交的本地 go.work 联调，待
-包含该契约的 GOUI 版本发布后再更新 go.mod 并关闭工作区验证。
+不增加对象声明或祖先关联机制。go.mod 直接依赖已发布的 GOUI v0.4.0，
+独立构建使用 GOWORK=off；本地 go.work 只用于按需双仓开发。
 SourceView 的字段按文档与挂载、选区、原生资源、外观、布局、编辑辅助、
 输入、搜索和补全分组；分组不引入额外状态对象，也不改变资源所有者。
 

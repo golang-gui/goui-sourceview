@@ -18,9 +18,9 @@
 
 当前 SourceViewView 按 GOUI 新声明契约只实现 WidgetView 的 Mount／Update／Unmount；
 自定义组合组件使用 ComposeView.Build(ctx)，不要给 WidgetView 添加 return self 的
-Build 占位方法。该 GOUI 契约从 `d65dc95` 起提供，本轮联调基线为 `6a2ae2f`；
-发布版本尚未更新，go.mod 仍声明 v0.3.0。先核对应用实际依赖，使用包含该提交
-的 GOUI 检出联调；本仓 go.work 通过不代表旧版本已提供新契约。
+Build 占位方法。当前源码依赖已发布的 GOUI v0.4.0，其中包含新声明契约及
+长段落排版接口；无需相邻 GOUI 检出或本地工作区。旧版 SourceView 仍应参考
+对应版本的接口和示例，不能直接套用 main 的声明契约。
 
 ## 声明式最小接入
 

@@ -627,9 +627,11 @@ DIP 的路径。仅设置 clip 不能替代这个几何边界。新手工程序
 记录加载、真实输入、窗口分配、事件循环间隔及目标原生窗口实际光栅化就绪时间。
 日志和截图保留在仓库外，验收记录见 [实施记录](PlanIncrementalTextLayout.md)。
 
-这批代码依赖尚未发布的 GOUI ParagraphLayout 与 Projection.Slice。go.mod 保留可
-获取的 v0.3.0，双仓通过不提交的 go.work 联调；在包含该 GOUI 提交的版本发布前，
-关闭工作区的构建不具备这些 API，不能把工作区通过表述成独立发布验证通过。
+这批代码使用的 GOUI ParagraphLayout 与 Projection.Slice 已随 v0.4.0 发布。
+go.mod 直接依赖该版本，独立构建不需要本地 go.work；发布验证必须关闭工作区。
+
+语义快照只读取当前宽度缓存；分页尚未就绪、Geometry 没有显示行时，
+不调用命中计算，继续按既有 64 KiB 上限读取文本。快照不能为补齐度量触发原生排版。
 
 ### 16.1 水平长行的坐标与显示行（2026-10-24）
 
@@ -644,7 +646,7 @@ NoWrap 的相邻缓存窗口组成一条显示行，不将缓存边界当作软�
 已测水平窗口用实际宽度衔接，未测全局位置继续允许估计。源码语言、选择范围与
 文本历史的 byte offset 不因窗口或基准变化而修改。
 
-这批适配更新了尚未发布的 GOUI 段落 helper 契约，不修改 typography 或全仓几何
+这批适配使用已随 GOUI v0.4.0 发布的段落 helper 契约，不修改 typography 或全仓几何
 类型。ScrollView 现有 float32 全局偏移仍有小增量量化边界，局部选区修复不代表
 该边界已经消失。具体来源与验证见 [实施记录](PlanIncrementalTextLayout.md)。
 

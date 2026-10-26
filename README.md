@@ -12,7 +12,8 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer. GOUI v0.3.0 is downloaded automatically.
+Requires Go 1.24 or newer. The current source depends on GOUI v0.4.0;
+Go downloads the matching dependency for the version you install.
 
 ```sh
 go get github.com/golang-gui/goui-sourceview@v0.1.0

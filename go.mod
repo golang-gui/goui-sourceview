@@ -3,7 +3,7 @@ module github.com/golang-gui/goui-sourceview
 go 1.24
 
 require (
-	github.com/golang-gui/goui v0.3.0
+	github.com/golang-gui/goui v0.4.0
 	golang.org/x/text v0.22.0
 )
 

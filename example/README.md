@@ -9,10 +9,10 @@ The examples use Modern and request
 ## Setup / 环境准备
 
 Requires Go 1.24 or newer and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
-The module depends on GOUI v0.3.0; Go downloads it automatically. A separate GOUI
+The module depends on GOUI v0.4.0; Go downloads it automatically. A separate GOUI
 checkout or local workspace is not required to build or run these examples.
 
-需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块直接依赖 GOUI v0.3.0，由 Go
+需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块直接依赖 GOUI v0.4.0，由 Go
 自动下载；构建和运行示例无需另行检出 GOUI 或创建本地工作区。
 
 ## Run / 启动
