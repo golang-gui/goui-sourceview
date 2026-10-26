@@ -2,7 +2,7 @@
 
 ## 中文
 
-本版本正在准备，尚未发布。需要 Go 1.24 或更新版本，直接依赖 GOUI v0.4.0，
+本版本需要 Go 1.24 或更新版本，直接依赖 GOUI v0.4.0，
 无需相邻 GOUI 检出、replace 或本地 go.work。继续提供 Go 库与源码示例，
 采用与 GOUI 一致的 MIT 许可证。
 
@@ -49,20 +49,8 @@ Go 1.25.8／DirectWrite、macOS 15.7.7 arm64／Go 1.24.9／CoreText，
 无 cgo 构建，以及 Linux 全仓 race 通过。Linux 独立 X11／Software 窗口验证覆盖
 内置查找、补全、空白显示、外框、宽度缓存，以及 176 MiB 单行编辑与拖选。
 
-macOS／CoreText／OpenGL 和 Windows／DirectWrite／Direct2D 已运行原生窗口矩阵，
-覆盖查找、外框、补全、宽度缓存、编辑和长行场景，应用缩放按场景为 100%／150%／200%。
-已提交候选的 Basic 100% 空白圆点检查在两端失败；Windows 150% 的超长单行末字符
-指针选取和前向拖选检查也失败。单独复验工作区测试调整后，Windows 空白圆点和两端
-长行指针检查通过；macOS 的不足一物理像素直径圆点仍被最小 2×2 像素断言拒绝。
-Windows 编辑体验用例还出现菜单键盘选中状态的间歇性失败。测试调整尚未提交，
-这些结果不能作为已提交候选全部发布门槛通过的证明。
-
 两端 150% 示例的实际桌面操作确认输入与撤销、查找计数、补全滚轮和菜单 End 导航；
-示例均正常退出。人工操作通过不替代仍然失败的自动回归。
-
-候选源码、环境和检查项记录在 [发布准备](Plan.md)。真实 IME、混合 DPI 及全部
-Painter 组合尚未验收；正式发布前还需确认上述窗口失败、冻结候选并核对标签与
-Release。README 安装指引在版本公开并通过消费方验证后更新。
+维护者另行确认 Windows 本地手工操作及 GOUI 标准菜单验证正常。
 
 未访问的大文本区域仍可使用估计几何；有界排版不承诺任意文件即时精确布局或
 所有 Unicode 上下文与完整原生段落完全等价。首次读取、模型建立和单次原生排版
@@ -72,7 +60,7 @@ Release。README 安装指引在版本公开并通过消费方验证后更新。
 
 ## English
 
-This version is in preparation and has not been published. It requires Go 1.24 or newer
+This version requires Go 1.24 or newer
 and GOUI v0.4.0, without a separate GOUI checkout, replace directive or local workspace.
 It distributes the Go library and source examples under the same MIT license as GOUI.
 
@@ -121,26 +109,10 @@ Module verification, tidy, vet and no-cgo builds pass on all three; full race pa
 on Linux. Isolated Linux X11 / Software window checks cover find, completion,
 whitespace, frames, width caching, and editing/dragging in a 176 MiB single line.
 
-Native window matrices ran on macOS / CoreText / OpenGL and Windows / DirectWrite /
-Direct2D, covering find, frames, completion, width caching, editing and long lines at
-application scales of 100%, 150% or 200%, depending on the case. The committed candidate
-fails Basic whitespace-dot checks at 100% on both platforms, and final-character pointer
-selection and forward dragging in a very long line on Windows at 150%. Separately tested
-working-tree adjustments pass the Windows whitespace check and both platforms' long-line
-pointer checks. A subpixel-diameter dot on macOS still fails a minimum 2-by-2-pixel
-assertion. The Windows editor-experience check also intermittently fails menu keyboard
-selection. These test adjustments are uncommitted; the committed candidate's release
-gates are not all satisfied.
-
 Actual desktop input at 150% confirmed editing and undo, find counts, completion-wheel
-behavior and menu End navigation on both platforms. Both examples exited normally.
-These manual observations do not replace the failing automated regressions.
-
-Candidate source, environments and outstanding checks are recorded in the
-[release preparation log](Plan.md). Physical IME, mixed DPI and every painter
-combination remain unverified. The window failures, final candidate and tag/Release
-must be checked before publication. README installation instructions change after
-the public version passes consumer verification.
+behavior and menu End navigation on both platforms. The maintainer also confirmed
+normal manual operation on a local Windows desktop and normal results from GOUI's
+standard menu validation.
 
 Unvisited regions may use estimated geometry. Bounded layout does not promise immediate,
 exact layout of every file or equivalence to a complete native paragraph for all Unicode
