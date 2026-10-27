@@ -142,6 +142,8 @@ func (b configTokenizer) Scan(in Input, state State) (Result, error) {
 				switch strings.ToLower(word.text) {
 				case "application/json":
 					s.httpBody = JSON
+				case "application/jsonl", "application/x-ndjson":
+					s.httpBody = JSONLines
 				case "application/xml", "text/xml":
 					s.httpBody = XML
 				case "text/html":

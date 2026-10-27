@@ -14,6 +14,7 @@ const (
 	Plain      ID = ""
 	JSON       ID = "json"
 	JSONC      ID = "jsonc"
+	JSONLines  ID = "jsonlines"
 	XML        ID = "xml"
 	HTML       ID = "html"
 	TOML       ID = "toml"
@@ -86,6 +87,7 @@ var builtins = []Info{
 	{ID: Plain, Name: "Plain text", Extensions: []string{".txt"}, MIMETypes: []string{"text/plain"}},
 	{ID: JSON, Name: "JSON", Extensions: []string{".json"}, MIMETypes: []string{"application/json"}},
 	{ID: JSONC, Name: "JSON with comments", Extensions: []string{".jsonc"}, MIMETypes: []string{"application/jsonc"}},
+	{ID: JSONLines, Name: "JSON Lines", Extensions: []string{".jsonl", ".ndjson"}, MIMETypes: []string{"application/jsonl", "application/x-ndjson"}},
 	{ID: XML, Name: "XML", Extensions: []string{".xml", ".xhtml", ".svg", ".xsd", ".xsl"}, MIMETypes: []string{"application/xml", "text/xml", "image/svg+xml"}},
 	{ID: HTML, Name: "HTML", Extensions: []string{".html", ".htm"}, MIMETypes: []string{"text/html"}},
 	{ID: TOML, Name: "TOML", Extensions: []string{".toml"}, MIMETypes: []string{"application/toml"}},

@@ -23,6 +23,11 @@ Edit **Markdown**, select text, fold headings and search across lines.
 
 ## Embedded code
 
+```jsonl
+{"event":"opened","editable":true}
+{"event":"changed","lines":42}
+```
+
 ```go
 func greeting(name string) string {
     return "Hello, " + name

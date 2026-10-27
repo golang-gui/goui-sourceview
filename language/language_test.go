@@ -37,6 +37,8 @@ func TestGuess(t *testing.T) {
 		{"Makefile.debug", "", Makefile}, {"Dockerfile.dev", "", Dockerfile},
 		{"nginx.conf", "", Nginx}, {"site.nginx.conf", "", Nginx}, {"service.conf", "", Plain},
 		{"a.JSONC", "", JSONC}, {"request.rest", "", HTTP}, {"project.mk", "", Makefile},
+		{"events.JSONL", "", JSONLines}, {"events.ndjson", "true\nnull", JSONLines},
+		{"events.jsonl", "#!/bin/sh", JSONLines}, {"events.json", "true\nnull", JSON},
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -51,6 +53,53 @@ func TestGuess(t *testing.T) {
 func TestKind(t *testing.T) {
 	if KindInvalid.String() != "invalid" || Kind("bad key").Valid() {
 		t.Fatal("kind contract")
+	}
+}
+
+func TestJSONLinesRecordState(t *testing.T) {
+	l, ok := Builtin(JSONLines)
+	if !ok {
+		t.Fatal("missing JSON Lines definition")
+	}
+	if l.Folding() != nil || l.Editing().Comments != (Comments{}) {
+		t.Fatal("JSON Lines enabled multiline folding or comments")
+	}
+	scanner := l.Tokenizer()
+	initial := scanner.InitialState()
+	for _, text := range []string{"", "{", strings.Repeat("[", 1100), `"unfinished`, "-", "// invalid {", `{"key":true}`, "null"} {
+		in := Input{Text: text, Limit: len(text), LineEnd: true}
+		r, err := scanner.Scan(in, initial)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = ValidateResult(in, r); err != nil {
+			t.Fatal(err)
+		}
+		if !r.State.Equal(initial) {
+			t.Fatalf("record retained state: %q", text)
+		}
+		if !initial.Equal(scanner.InitialState()) {
+			t.Fatal("initial snapshot changed")
+		}
+	}
+	// 预读到了真实行尾，不代表本片已消费到行尾；软折行也不结束记录。
+	text := `{"key":1}`
+	in := Input{Text: text, Limit: 1, LineEnd: true}
+	r, err := scanner.Scan(in, initial)
+	if err != nil || r.Consumed != 1 || r.State.Equal(initial) {
+		t.Fatalf("partial record: %+v, %v", r, err)
+	}
+	partial := r.State
+	in = Input{Text: text[1:], Offset: 1, Limit: len(text) - 1, LineEnd: true}
+	r, err = scanner.Scan(in, partial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ValidateResult(in, r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Tokens) == 0 || r.Tokens[0].Kind != KindProperty || !r.State.Equal(initial) || partial.Equal(initial) {
+		t.Fatalf("fragment state: %+v", r)
 	}
 }
 
@@ -109,7 +158,7 @@ func TestBuiltinMarkdownAddedFences(t *testing.T) {
 	}
 	builtin, _ := Builtin(Markdown)
 	for _, l := range []*Language{builtin, custom} {
-		for name, id := range map[string]ID{"jsonc": JSONC, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS} {
+		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS} {
 			scanner := l.Tokenizer()
 			fence := "```" + name
 			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())

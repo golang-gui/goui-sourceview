@@ -141,3 +141,43 @@ TigerVNC 1.12.0、Xfwm4 compositor on，专用 `:87`，与用户桌面隔离。
 
 本次没有执行 macOS/Windows 原生窗口验收，也未测真实 IME、跨屏缩放或为性能改进作量化结论。
 语言方言、模板歧义和词法恢复的适用范围以设计文档为准；高亮不是语法校验或完整语言服务。
+
+## 2026-10-27：JSON Lines
+
+设计见 [JSON Lines](DesignHighlighting.md#31-json-lines)。新增 `language.JSONLines`，
+识别 `.jsonl/.ndjson`，与 JSON/JSONC 共用扫描核心，在真实逻辑行尾清空记录状态。
+JSON/JSONC 原有注释/编辑规则与跨行容器行为不变；JSON Lines 使用 JSON 的引用与词汇规则，
+不启用注释或跨记录折叠。Markdown 支持 `jsonlines/jsonl/ndjson` 围栏，HTTP 支持显式
+JSON Lines MIME 正文；新增 `events.jsonl` 原创样本，editor 共 22 份样本，中英文 README 同步。
+没有改动 GOUI 或依赖。
+
+回归覆盖根值类型、未闭合对象/字符串/超深容器的行隔离、注释拒绝、CRLF、转义 `\\n`、
+超长记录、最后一行无换行，以及 LF 插入/删除后的增量恢复。1/2/3/7/31 byte 和 16 KiB
+分片比较 token 与完整出状态；明确检查预读到行尾但未消费到行尾时不能提前重置。
+原生亮暗颜色用例将未闭合 `{` 后一行的根字符串与独立 String 色 TextLayout 比较，
+避免两条扫描路径同时把它误当 Property 也通过测试。
+
+扩充固定种子的随机输入时发现已有标记状态残留：
+`go test ./internal/highlight -run TestAddedLanguageMalformedFragments -count=1`
+最初失败，HTML token 相同，但完整/分片扫描的 `htmlAttr` 分别为 `"-&"` 和空。
+修正标签结束/新标签开始的状态清理，保留 script/style 类型判断所需的局部值；
+新增 XML/HTML 普通标签、自闭合标签、注释前缀的最小出状态断言。
+保留新增的全部随机输入与断言，修正后通过；该修正与 JSON Lines 分开提交。
+
+Ubuntu 22.04.5 amd64、Go 1.25.8、Pango 下通过：
+
+- `go test ./...`
+- `GOWORK=off go test ./...`（GOUI v0.4.0）
+- `go test -race ./...`
+- `go vet ./...`
+- 标记状态修正的独立暂存快照：`GOWORK=off go test ./language ./internal/highlight`
+
+专用 TigerVNC `:87` / Xfwm4 compositor on，使用关闭工作区构建的语言窗口程序：
+Software 浅色 1×、深色 1.5× 均通过正常事件路径的补全、接受和撤销断言。
+新增 JSON Lines 用例以不完整上一记录和下一行 `tr` 请求补全，检查接受 `true` 和撤销；
+全套原有语言、引用输入、括号、只读及语义状态断言一同通过。
+原生颜色断言使用 Pango/1× 的同字体独立位图比较；窗口比例验证不代替 1.5× 像素金图。
+未执行 macOS/Windows 原生验收或新增性能测量。
+
+日志和构建产物在 `/tmp/sourceview-jsonlines-L6LJ1q/`，没有向用户桌面发送输入或操作剪贴板。
+验收结束后关闭本次专用 X11 与窗口管理器会话，保留原有用户桌面。

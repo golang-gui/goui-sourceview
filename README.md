@@ -21,7 +21,7 @@ go get github.com/golang-gui/goui-sourceview@v0.2.0
 
 ## Features
 
-- **Syntax highlighting** for JSON/JSONC, XML, HTML, Markdown, TOML, YAML, Shell,
+- **Syntax highlighting** for JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell,
   HTTP, Protobuf, Makefile, CMake, Nginx, INI, Dockerfile, SQL, Go, Python,
   JavaScript, TypeScript and CSS.
 - **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.

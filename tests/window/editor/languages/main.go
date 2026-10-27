@@ -97,6 +97,7 @@ func main() {
 		{language.Shell, "pri", "printf"},
 		{language.JSON, "tr", "true"}, {language.XML, "<x xml:l", "<x xml:lang"}, {language.HTML, "<di", "<div"},
 		{language.JSONC, "tr", "true"}, {language.HTTP, "GE", "GET"},
+		{language.JSONLines, "{\ntr", "{\ntrue"},
 		{language.Makefile, "incl", "include"}, {language.CMake, "proj", "project"},
 		{language.Nginx, "serv", "server"}, {language.INI, "ye", "yes"},
 		{language.Dockerfile, "FRO", "FROM"}, {language.SQL, "SEL", "SELECT"},

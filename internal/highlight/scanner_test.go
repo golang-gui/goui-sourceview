@@ -295,6 +295,9 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Shell, "cat <<END\n$USER\nEND", "<<END", "<<'END'", "$USER", language.KindString},
 		{language.Shell, "cat <<END\nbody\nEND\nafter\nEND\necho done", "END\nafter", "miss\nafter", "after", language.KindString},
 		{language.JSONC, "/* open\n */ true", "*/", "", "true", language.KindComment},
+		{language.JSONLines, "{\n\"root\"\n{\"next\":true}", "{\n", "{", "root", language.KindProperty},
+		{language.JSONLines, "{\"key\":1}", "{", "{\n", "key", language.KindString},
+		{language.JSONLines, "{\"key\":1}\n\"root\"", "1}", "1", "root", language.KindString},
 		{language.CMake, "set(x [=[open\nbody\n]=])\nmessage(done)", "]=]", "", "message", language.KindString},
 		{language.Go, "/* open\n body\n */\nvar n=1", "/*", "//", "body", language.KindPlain},
 		{language.Python, "x = '''open\nbody\n'''\ny = True", "'''", "'", "body", language.KindPlain},
@@ -424,6 +427,11 @@ func TestAdditionalConfigurationKinds(t *testing.T) {
 		{language.JSONC, "{\"name\": 1, /* } */\n // note\n \"ok\": true,}", "name", language.KindProperty},
 		{language.JSONC, "/* multiline\n comment */ true", "comment", language.KindComment},
 		{language.JSONC, "// comment\ntrue", "true", language.KindKeyword},
+		{language.JSONLines, "{\n\"root\"", "root", language.KindString},
+		{language.JSONLines, "// comment\ntrue", "/", language.KindInvalid},
+		{language.JSONLines, "{\"key\":true}\n[1,null]\n42", "key", language.KindProperty},
+		{language.Markdown, "```jsonl\n{\n\"root\"\n```", "root", language.KindString},
+		{language.HTTP, "POST / HTTP/1.1\nContent-Type: application/x-ndjson\n\n{\n\"root\"", "root", language.KindString},
 		{language.JSON, "// comment", "comment", language.KindInvalid},
 		{language.CMake, "project(example LANGUAGES CXX)", "project", language.KindKeyword},
 		{language.CMake, "set(x [==[a\n${literal}]==])", "${literal}", language.KindString},
@@ -456,6 +464,7 @@ func TestAdditionalConfigurationKinds(t *testing.T) {
 func TestAdditionalConfigurationFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
 		language.JSONC:      {"{/*a\n b*/\"name\":\"value\",// }\n\"n\":1,}", "/* incomplete", "{\"long\":\"" + strings.Repeat("名", ChunkSize) + "\"}"},
+		language.JSONLines:  {"{\r\n\"root\"\r\ntrue\r\n[1,null]\r\n{\"key\":false}\r\n\n\"escaped\\ntext\"", "{\"long\":\"" + strings.Repeat("名", ChunkSize) + "\"}\n\"root\"\n42"},
 		language.CMake:      {"#[==[ comment\n${literal} ]==]\nset(x [=[hello\nworld]=])\nmessage(\"${x}\" $<CONFIG:Debug>)", "[" + strings.Repeat("=", 90) + "[text]" + strings.Repeat("=", 90) + "]"},
 		language.Makefile:   {".RECIPEPREFIX := >\nall: a \\\n b\n>echo $(patsubst %.c,%.o,$(SRC)) $$HOME $@\nifdef DEBUG\ninclude debug.mk\nendif"},
 		language.Nginx:      {"server {\n listen 8080;\n set $value \"hello ${host}\";\n location / { proxy_pass http://localhost; } # comment\n}"},
@@ -555,7 +564,7 @@ func TestCodeLanguageFragments(t *testing.T) {
 func TestAddedLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261027))
 	alphabet := []rune("abc012_'\"`\\$#&|><-+!?[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.JSONC, language.HTTP, language.Makefile, language.CMake, language.Nginx, language.INI, language.Dockerfile, language.SQL, language.Protobuf, language.Go, language.Python, language.JavaScript, language.TypeScript, language.CSS, language.HTML} {
+	for _, id := range []language.ID{language.JSONC, language.JSONLines, language.HTTP, language.Makefile, language.CMake, language.Nginx, language.INI, language.Dockerfile, language.SQL, language.Protobuf, language.Go, language.Python, language.JavaScript, language.TypeScript, language.CSS, language.HTML} {
 		for round := 0; round < 100; round++ {
 			var b strings.Builder
 			for n := random.Intn(400); n > 0; n-- {
@@ -565,7 +574,7 @@ func TestAddedLanguageMalformedFragments(t *testing.T) {
 			want, ws := scanAll(id, text, 1024)
 			got, gs := scanAll(id, text, 1+random.Intn(17))
 			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
-				t.Fatalf("%s malformed %q: got %v want %v states equal=%v", id, text, got, want, gs.Equal(ws))
+				t.Fatalf("%s malformed %q: got %v want %v states equal=%v\ngot state %#v\nwant state %#v", id, text, got, want, gs.Equal(ws), gs.raw, ws.raw)
 			}
 			previous := 0
 			for _, token := range got {

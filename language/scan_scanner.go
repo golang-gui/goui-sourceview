@@ -191,8 +191,14 @@ func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd boo
 	if id == Plain {
 		return nil, state, limit
 	}
-	if id == JSON || id == JSONC {
-		return scanJSON(state, input, limit, lineEnd, id == JSONC)
+	if id == JSON || id == JSONC || id == JSONLines {
+		tokens, next, n := scanJSON(state, input, limit, lineEnd, id == JSONC)
+		// A logical line is one record. Fragment and soft-wrap boundaries do
+		// not end a record; an unfinished container must not leak to the next.
+		if id == JSONLines && lineEnd && n == len(input) {
+			next = initialBuiltin()
+		}
+		return tokens, next, n
 	}
 	switch id {
 	case TOML:

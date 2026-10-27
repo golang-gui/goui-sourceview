@@ -857,6 +857,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Shell, "$HOME", "$HOME", 0, language.KindVariable},
 		{language.Shell, "cat <<END\n${HOME}\nEND", "${HOME}", 1, language.KindVariable},
 		{language.JSONC, "// note", "// note", 0, language.KindComment},
+		{language.JSONLines, "{\n\"root\"", "\"root\"", 1, language.KindString},
 		{language.HTTP, "GET", "GET", 0, language.KindKeyword},
 		{language.Makefile, "target", "target", 0, language.KindProperty},
 		{language.CMake, "project", "project", 0, language.KindKeyword},

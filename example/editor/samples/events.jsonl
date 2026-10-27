@@ -1,0 +1,7 @@
+{"event":"opened","document":"settings.json","editable":true}
+{"event":"changed","document":"guide.md","lines":42,"text":"Hello\nSourceView"}
+["JSON Lines","one complete JSON value per line"]
+"A record can also be a string"
+null
+true
+42

@@ -24,10 +24,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			out[info.ID] = l
 			continue
-		case JSON, JSONC:
+		case JSON, JSONC, JSONLines:
 			if info.ID == JSON {
 				d.Folding = foldJSON
-			} else {
+			} else if info.ID == JSONC {
 				d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
 			}
 			d.Editing.AutoClosingPairs = []Pair{{Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}, {Open: `"`, Close: `"`, NotInString: true, NotInComment: true}}
@@ -164,7 +164,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 			table[string(id)] = l
 		}
 	}
-	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile} {
+	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines} {
 		table[alias] = definitions[id]
 	}
 	return table

@@ -22,7 +22,7 @@ func sampleDocuments() []exampleDocument {
 	for _, name := range []string{
 		"settings.json", "layout.xml", "index.html", "config.toml", "config.yaml", "script.sh", "guide.md",
 		"settings.jsonc", "requests.http", "service.proto", "Makefile", "CMakeLists.txt", "nginx.conf", "settings.ini",
-		"Dockerfile", "query.sql", "hello.go", "hello.py", "app.js", "app.ts", "theme.css",
+		"Dockerfile", "query.sql", "hello.go", "hello.py", "app.js", "app.ts", "theme.css", "events.jsonl",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

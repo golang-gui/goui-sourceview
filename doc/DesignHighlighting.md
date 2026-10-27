@@ -6,7 +6,7 @@
 ## 1. 对外语言接口与 token 模型
 
 `language` 包公开不可变语言定义、Token/State/Tokenizer 和编辑规则，内置
-Plain、JSON、JSONC、XML、HTML、TOML、YAML、Shell、Markdown，以及下文的配置、构建与编程语言；任意定义直接传给 Document，
+Plain、JSON、JSONC、JSONLines、XML、HTML、TOML、YAML、Shell、Markdown，以及下文的配置、构建与编程语言；任意定义直接传给 Document，
 不使用全局注册。完整接口、样式/语义分离和扫描校验见 [扩展契约](DesignLanguageExtensions.md)。
 
 Document.SetLanguage(id) 是内置便利入口；SetLanguageDefinition(l) 按对象身份绑定。
@@ -78,6 +78,33 @@ Timer 属于现有 frameQueue，首次挂载创建；无待办时停止，最后
 
 测试必须含属性名与冒号分行、转义引号、截断转义、未闭合字符串后的合法新行、
 错误容器输入与删除开引号后的前向恢复。不通过“全文 JSON 解析失败即全 Plain”实现高亮。
+
+### 3.1 JSON Lines
+
+`language.JSONLines`（ID `jsonlines`）表示 [JSON Lines](https://jsonlines.org/)，
+自动识别 `.jsonl/.ndjson`。每个逻辑行是独立 JSON 值，根值可以是对象、数组、字符串、
+数字、布尔或 null；不是一个跨行数组，也不接受 JSONC 注释。
+
+JSON、JSONC 与 JSON Lines 共享 `scanJSON`：JSONC 开启注释；JSON Lines 在实际逻辑行尾
+且整个传入窗口已消费时恢复初始状态，包括容器栈和过深嵌套状态。
+片段末尾、预读范围和视觉折行都不能结束记录。即使上一行缺少结束括号或引号，
+下一行仍从根值开始，不能把根字符串误当上一对象的属性；插入/删除 LF 后按新记录边界增量重扫。
+JSON 原有的跨行容器和 JSONC 的跨行注释保持各自行为。
+
+配色、结构符与引用/补全规则复用 JSON；JSON Lines 不提供跨记录结构折叠或注释命令。
+Markdown 默认围栏支持 `jsonlines/jsonl/ndjson`，显式自定义围栏表仍由调用方决定。
+HTTP 正文显式声明 `application/jsonl` 或 `application/x-ndjson` 时使用同一定义；
+这些 MIME 字符串用作文件类型约定，不宣称为统一标准注册值。
+
+这是编辑期高亮，不新增 JSON Lines 校验器：空行、BOM、多个值或损坏记录仍可编辑，
+不把整个文档交给严格解码器后才显示。UTF-8、CRLF/LF 及最后一行无终止换行的文本处理
+沿用 Document/Model 契约；源码中的 `\\n` 转义不会产生新的逻辑行。
+
+2026-10-27 核对 [Monaco v0.52.2 JSON 配置](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/language/json/monaco.contribution.ts)
+的 `allowComments` 和 [Lexilla JSON lexer](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexJSON.cxx)
+的 `lexer.json.allow.comments`：两者均在 JSON 体系内提供变体配置，支持复用核心的选择；
+它们不是本项目按行恢复策略的依据，该策略直接来自 JSON Lines 的独立记录约束。
+不引入这些框架的解析、Schema 或原生依赖。
 
 ## 4. XML 扫描规格
 
