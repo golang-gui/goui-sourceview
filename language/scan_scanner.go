@@ -453,27 +453,33 @@ func startScript(text string) bool {
 	return asciiPrefix(text, "<script") && (len(text) == 7 || space(text[7]) || text[7] == '>' || text[7] == '/')
 }
 func (s *builtinState) finishTag(id ID) {
+	htmlType := s.htmlType
+	s.htmlAttr, s.htmlType = "", ""
 	s.mode = data
 	if id != HTML || s.closing {
+		*s = initialBuiltin()
 		return
 	}
 	switch s.tag {
 	case "script":
 		s.mode = scriptData
 		s.script = 0
-		mime, _, _ := strings.Cut(strings.TrimSpace(s.htmlType), ";")
+		mime, _, _ := strings.Cut(strings.TrimSpace(htmlType), ";")
 		if mime == "" || mime == "module" || mime == "text/javascript" || mime == "application/javascript" || mime == "text/ecmascript" || mime == "application/ecmascript" {
 			s.code = &codeState{id: JavaScript, canRegexp: true}
 		}
 	case "style", "xmp", "iframe", "noembed", "noframes":
 		s.mode = rawText
-		if s.tag == "style" && (strings.TrimSpace(s.htmlType) == "" || strings.TrimSpace(s.htmlType) == "text/css") {
+		if s.tag == "style" && (strings.TrimSpace(htmlType) == "" || strings.TrimSpace(htmlType) == "text/css") {
 			s.code = &codeState{id: CSS, canRegexp: true}
 		}
 	case "title", "textarea":
 		s.mode = rcdata
 	case "plaintext":
 		s.mode = plainText
+	}
+	if s.mode == data {
+		*s = initialBuiltin()
 	}
 }
 
@@ -565,6 +571,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool, of
 					s.code = nil
 					s.closing = true
 					s.tag = ""
+					s.htmlAttr, s.htmlType = "", ""
 					i += 2
 					emit(&out, start, i, KindDelimiter)
 				}
@@ -623,7 +630,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool, of
 			case strings.HasPrefix(input[i:], "/>"):
 				i += 2
 				emit(&out, start, i, KindDelimiter)
-				s.mode = data
+				s = initialBuiltin()
 			case b == '<':
 				s.mode = data
 			case b == '/':
@@ -742,6 +749,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool, of
 				i += 2
 				s.mode = tagName
 				s.tag = ""
+				s.htmlAttr, s.htmlType = "", ""
 				s.closing = true
 				emit(&out, start, i, KindDelimiter)
 			case b == '<' && i+1 < len(input):
@@ -751,7 +759,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool, of
 					s.mode = tagName
 					s.tag = ""
 					s.closing = false
-					s.htmlType = ""
+					s.htmlAttr, s.htmlType = "", ""
 					emit(&out, start, i, KindDelimiter)
 				} else {
 					i += n

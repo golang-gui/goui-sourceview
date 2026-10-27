@@ -125,6 +125,9 @@ XML NameStartChar / NameChar 使用该版范围规则，不能以 ASCII `\w` 或
 例如普通 ScriptData 中的 JavaScript 字符串 `"</script>"` 仍含 HTML 终结序列，
 而 escaped/double-escaped 模式需要各自规则；这正是“嵌入语言边界”与“JS 字符串”分离的原因。
 
+标签完成后释放其属性候选信息，普通结束标签和自闭合标签返回初始正文状态；
+新标签也重新建立属性上下文，避免分片恰好止于 `>` 时与一次完整扫描产生不同出状态。
+
 ## 6. 逻辑行元数据
 
 共享 lineStore 使用有累计 byte 长度/行数的分块平衡序列，目标叶块约 128 项，

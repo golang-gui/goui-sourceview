@@ -1,10 +1,49 @@
 package language_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/golang-gui/goui-sourceview/language"
 )
+
+// 标签属性只能属于当前标签，不能因分片位置不同而残留到后续标签或注释。
+func TestMarkupTagStateIsolation(t *testing.T) {
+	for _, id := range []language.ID{language.XML, language.HTML} {
+		for _, text := range []string{`<a x="v"><b`, `<a x="v"/><b`, `<a x="v"><!--open`} {
+			l, _ := language.Builtin(id)
+			scanner := l.Tokenizer()
+			whole, err := scanner.Scan(language.Input{Text: text, Limit: len(text), LineEnd: true}, scanner.InitialState())
+			if err != nil {
+				t.Fatal(err)
+			}
+			cut := strings.IndexByte(text, '>') + 1
+			part, err := scanner.Scan(language.Input{Text: text[:cut], Limit: cut}, scanner.InitialState())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tail := language.Input{Text: text[cut:], Offset: cut, Limit: len(text) - cut, LineEnd: true}
+			part, err = scanner.Scan(tail, part.State)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = language.ValidateResult(tail, part); err != nil {
+				t.Fatal(err)
+			}
+			if !part.State.Equal(whole.State) {
+				t.Fatalf("%s %q: fragment state differs", id, text)
+			}
+			c := part.State.Context()
+			if strings.Contains(text, "<!--") {
+				if !c.Comment {
+					t.Fatal("lost comment context")
+				}
+			} else if !c.Tag || c.Comment || c.String {
+				t.Fatal("lost tag context")
+			}
+		}
+	}
+}
 
 func TestDefinitionCopiesConfiguration(t *testing.T) {
 	pairs := []language.Pair{{Open: "<<", Close: ">>"}}
