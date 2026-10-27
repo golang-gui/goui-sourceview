@@ -18,8 +18,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		switch info.ID {
 		case Markdown:
 			table := map[string]*Language{}
-			for _, id := range []ID{JSON, XML, HTML, TOML, YAML, Shell} {
-				table[string(id)] = out[id]
+			for id, l := range out {
+				if id != Plain {
+					table[string(id)] = l
+				}
 			}
 			table["sh"] = out[Shell]
 			table["bash"] = out[Shell]
@@ -30,8 +32,12 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			out[info.ID] = l
 			continue
-		case JSON:
-			d.Folding = foldJSON
+		case JSON, JSONC:
+			if info.ID == JSON {
+				d.Folding = foldJSON
+			} else {
+				d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			}
 			d.Editing.AutoClosingPairs = []Pair{{Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}, {Open: `"`, Close: `"`, NotInString: true, NotInComment: true}}
 			d.Editing.SurroundingPairs = d.Editing.AutoClosingPairs
 			d.Editing.Brackets = d.Editing.Brackets[1:]
@@ -110,6 +116,16 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string {
 				return []string{"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function", "select", "time", "coproc", "echo", "printf", "export", "readonly", "local", "return", "exit", "unset", "set", "test", "source", "read", "trap", "shift", "getopts"}
 			}
+		case HTTP, Makefile, CMake, Nginx, INI, Dockerfile:
+			d.Tokenizer = configTokenizer{info.ID}
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Editing.Comments.Line = "#"
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '-' || r == '.' }
+			if info.ID == CMake {
+				d.Editing.Comments.Block = Pair{Open: "#[[", Close: "]]"}
+			}
+			vocabulary := configVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		l, err := New(d)
 		if err != nil {
@@ -128,6 +144,24 @@ func defaultEditing() EditingRules {
 	brackets := []Pair{{Open: "(", Close: ")", NotInString: true, NotInComment: true}, {Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}}
 	pairs := append(append([]Pair(nil), brackets...), Pair{Open: `"`, Close: `"`, NotInString: true, NotInComment: true}, Pair{Open: "'", Close: "'", NotInString: true, NotInComment: true})
 	return EditingRules{Word: IdentifierRune, AutoClosingPairs: pairs, SurroundingPairs: append([]Pair(nil), pairs...), Brackets: brackets, AutoCloseBefore: ")]},:;>"}
+}
+
+func configVocabulary(id ID) []string {
+	switch id {
+	case HTTP:
+		return strings.Fields("GET HEAD POST PUT DELETE CONNECT OPTIONS TRACE PATCH Content-Type Authorization Accept")
+	case Makefile:
+		return strings.Fields("include define endef ifdef ifndef ifeq ifneq else endif export override .PHONY")
+	case CMake:
+		return strings.Fields("cmake_minimum_required project add_executable add_library target_link_libraries target_include_directories set option if else endif foreach endforeach find_package include message")
+	case Nginx:
+		return strings.Fields("http server location listen server_name root index proxy_pass upstream include events worker_connections")
+	case Dockerfile:
+		return strings.Fields("ADD ARG CMD COPY ENTRYPOINT ENV EXPOSE FROM HEALTHCHECK LABEL ONBUILD RUN SHELL STOPSIGNAL USER VOLUME WORKDIR")
+	case INI:
+		return strings.Fields("true false yes no on off")
+	}
+	return nil
 }
 
 type builtinTokenizer struct{ id ID }

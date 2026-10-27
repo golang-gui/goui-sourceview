@@ -1,12 +1,12 @@
 # 语言、高亮与增量分析设计
 
-> 状态：实现规格。采用自有纯 Go 状态扫描器，支持 JSON、XML、HTML、TOML、YAML、Shell、Markdown。
+> 状态：实现规格。采用自有纯 Go 状态扫描器；内置语言及各自边界见本文专题。
 > 算法不创建 GUI/原生资源；调度由已挂载视图驱动。
 
 ## 1. 对外语言接口与 token 模型
 
 `language` 包公开不可变语言定义、Token/State/Tokenizer 和编辑规则，内置
-Plain、JSON、XML、HTML、TOML、YAML、Shell、Markdown；任意定义直接传给 Document，
+Plain、JSON、JSONC、XML、HTML、TOML、YAML、Shell、Markdown，以及下文的配置与构建语言；任意定义直接传给 Document，
 不使用全局注册。完整接口、样式/语义分离和扫描校验见 [扩展契约](DesignLanguageExtensions.md)。
 
 Document.SetLanguage(id) 是内置便利入口；SetLanguageDefinition(l) 按对象身份绑定。
@@ -260,3 +260,37 @@ token 的 16 MiB 预算不包含状态引用的 delimiter 拼写，此类状态�
 其参数，不把 `-u bash` 的变量名或 `--chdir bash` 的目录当解释器；未知选项保守返回 Plain。最多读取调用方的 4 KiB 样本，
 不 I/O、不执行 shebang。未知文件不凭 `key=value` 或 `key: value` 猜 TOML/YAML，
 `.env` 不自动视为 Shell；显式 SetLanguage 不受 Guess 影响。
+
+## 10. 配置、请求与构建文件
+
+JSONC、HTTP、Makefile、CMake、Nginx、INI、Dockerfile 复用现有 Token/State 协议，
+不引入外部词法库、运行工具链或新的 GOUI 接口。编辑规则提供注释、配对及静态词汇，
+不是配置校验、构建执行、请求发送或语义补全。
+
+| 语言 | 首次支持的词法范围与约束 |
+| --- | --- |
+| JSONC | 沿用严格 JSON 的属性、数字、字符串规则，额外接受 `//`、`/* */` 和尾逗号；不是 JSON5。JSON 保持原有严格规则。JSONC 暂不绑定严格 JSON 的折叠函数，避免把注释中的括号当结构。 |
+| HTTP | `.http/.rest` 请求文档：方法、URL、HTTP 版本、头名称、`@name` 与 `{{name}}` 变量。`###` 外层分隔请求；显式 Content-Type 为 JSON/XML/HTML 时复用对应正文扫描器。未知正文仅处理基础变量，不推测协议语义。 |
+| Makefile | 目标/赋值名称、指令、续行、`$()`/`${}`、自动变量与 `$$`。识别 TAB 和 `.RECIPEPREFIX` 配方入口，配方不按 Make 指令着色；不是完整 shell AST 或 Make 展开器。 |
+| CMake | 命令、`${}`/`$ENV{}`/`$CACHE{}`、生成器表达式、引用参数、长括号参数及注释。长括号使用等号数量与逐字符结束匹配，不截断 delimiter。 |
+| Nginx | 指令、参数、块、变量、引号与 `#` 注释。指令位置由 `{ } ;` 确定，不依赖安装了哪些模块。 |
+| INI | 通用编辑 profile：节名、键/值、引号、数字、整行 `;`/`#` 注释；不承诺某一程序的插值、转义、重复键或内联注释语义。 |
+| Dockerfile | 指令、选项、变量、引号、JSON 形式的结构、续行及 escape 指令；heredoc 复用 Shell 的不可变 delimiter 和队列，支持多个、引用及 TAB 剥离，不执行 shell。 |
+
+专用文件名先于扩展名：`CMakeLists.txt`、`Makefile/makefile/GNUmakefile/Makefile.*`、
+`Dockerfile/Dockerfile.*`、`nginx.conf/*.nginx.conf`；其余已知扩展名优先于内容。
+`.conf` 不普遍映射 Nginx，未知或含糊文件仍可显式选择语言。识别仍只读取调用方最多 4 KiB 样本。
+
+配置扫描器只共享流式词、引用与变量的机械处理；语句、物理行和正文切换分别维护。
+词只保留最多 128 byte 候选拼写与完整范围，超长 token 不积累整个字符串；
+后续确认分类通过当前行 ReplaceFrom 发布。状态不可变，Equal 比较完整语义值；
+Docker heredoc 的存储边界与 Shell 相同。Markdown 内置围栏表包含这些语言，无需注册。
+
+参考与取舍（2026-10-27 查阅）：[JSONC](https://jsonc.org/) 将尾逗号作为可选能力，
+本编辑 profile 接受；[REST Client](https://github.com/Huachao/vscode-restclient) 作为请求文档惯例，
+不是 HTTP 标准的文件格式承诺；[GNU Make](https://www.gnu.org/software/make/manual/make.html)、
+[CMake language](https://cmake.org/cmake/help/latest/manual/cmake-language.7.html)、
+[Dockerfile](https://docs.docker.com/reference/dockerfile/)、
+[Nginx 配置结构](https://nginx.org/en/docs/beginners_guide.html) 用于核对各自边界。
+沿用 [GtkSourceView 5 语言上下文](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/lang-reference.html)
+的状态分解思路，但使用本项目的 Go 扫描协议，不导入其语法资源或原生依赖。

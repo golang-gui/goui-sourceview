@@ -11,14 +11,21 @@ import (
 type ID string
 
 const (
-	Plain    ID = ""
-	JSON     ID = "json"
-	XML      ID = "xml"
-	HTML     ID = "html"
-	TOML     ID = "toml"
-	YAML     ID = "yaml"
-	Shell    ID = "shell"
-	Markdown ID = "markdown"
+	Plain      ID = ""
+	JSON       ID = "json"
+	JSONC      ID = "jsonc"
+	XML        ID = "xml"
+	HTML       ID = "html"
+	TOML       ID = "toml"
+	YAML       ID = "yaml"
+	Shell      ID = "shell"
+	HTTP       ID = "http"
+	Makefile   ID = "makefile"
+	CMake      ID = "cmake"
+	Nginx      ID = "nginx"
+	INI        ID = "ini"
+	Dockerfile ID = "dockerfile"
+	Markdown   ID = "markdown"
 )
 
 // Kind is an extensible style key. Lexical behavior uses Token.Class and Context.
@@ -71,11 +78,18 @@ type Info struct {
 var builtins = []Info{
 	{ID: Plain, Name: "Plain text", Extensions: []string{".txt"}, MIMETypes: []string{"text/plain"}},
 	{ID: JSON, Name: "JSON", Extensions: []string{".json"}, MIMETypes: []string{"application/json"}},
+	{ID: JSONC, Name: "JSON with comments", Extensions: []string{".jsonc"}, MIMETypes: []string{"application/jsonc"}},
 	{ID: XML, Name: "XML", Extensions: []string{".xml", ".xhtml", ".svg", ".xsd", ".xsl"}, MIMETypes: []string{"application/xml", "text/xml", "image/svg+xml"}},
 	{ID: HTML, Name: "HTML", Extensions: []string{".html", ".htm"}, MIMETypes: []string{"text/html"}},
 	{ID: TOML, Name: "TOML", Extensions: []string{".toml"}, MIMETypes: []string{"application/toml"}},
 	{ID: YAML, Name: "YAML", Extensions: []string{".yaml", ".yml"}, MIMETypes: []string{"application/yaml"}},
 	{ID: Shell, Name: "Shell", Extensions: []string{".sh", ".bash"}, MIMETypes: []string{"application/x-sh", "application/x-shellscript"}},
+	{ID: HTTP, Name: "HTTP requests", Extensions: []string{".http", ".rest"}, MIMETypes: []string{"application/http"}},
+	{ID: Makefile, Name: "Makefile", Extensions: []string{".mk", ".mak"}, MIMETypes: []string{"text/x-makefile"}},
+	{ID: CMake, Name: "CMake", Extensions: []string{".cmake"}, MIMETypes: []string{"text/x-cmake"}},
+	{ID: Nginx, Name: "Nginx", Extensions: []string{".nginx"}, MIMETypes: []string{"text/x-nginx-conf"}},
+	{ID: INI, Name: "INI", Extensions: []string{".ini", ".cfg"}, MIMETypes: []string{"text/x-ini"}},
+	{ID: Dockerfile, Name: "Dockerfile", Extensions: []string{".dockerfile"}, MIMETypes: []string{"text/x-dockerfile"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -94,6 +108,17 @@ func Lookup(id ID) (Info, bool) {
 // Guess examines an extension and at most 4 KiB of caller-supplied content.
 // It performs no I/O. Unknown or ambiguous input is plain text.
 func Guess(filename string, sample []byte) ID {
+	base := filepath.Base(filename)
+	switch {
+	case base == "CMakeLists.txt":
+		return CMake
+	case base == "Makefile" || base == "makefile" || base == "GNUmakefile" || strings.HasPrefix(base, "Makefile."):
+		return Makefile
+	case base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile."):
+		return Dockerfile
+	case base == "nginx.conf" || strings.HasSuffix(base, ".nginx.conf"):
+		return Nginx
+	}
 	ext := strings.ToLower(filepath.Ext(filename))
 	for _, info := range builtins {
 		for _, candidate := range info.Extensions {

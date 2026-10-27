@@ -400,6 +400,69 @@ func TestLongConfigurationLiterals(t *testing.T) {
 	}
 }
 
+func TestAdditionalConfigurationKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.JSONC, "{\"name\": 1, /* } */\n // note\n \"ok\": true,}", "name", language.KindProperty},
+		{language.JSONC, "/* multiline\n comment */ true", "comment", language.KindComment},
+		{language.JSONC, "// comment\ntrue", "true", language.KindKeyword},
+		{language.JSON, "// comment", "comment", language.KindInvalid},
+		{language.CMake, "project(example LANGUAGES CXX)", "project", language.KindKeyword},
+		{language.CMake, "set(x [==[a\n${literal}]==])", "${literal}", language.KindString},
+		{language.CMake, "#[=[ comment\n more ]=]\nset(x ${HOME})", "more", language.KindComment},
+		{language.CMake, "set(x $<IF:$<BOOL:${ON}>,yes,no>)", "$<IF", language.KindVariable},
+		{language.Makefile, "include common.mk\nall: build\n\techo $@ $(FLAGS)", "include", language.KindKeyword},
+		{language.Makefile, "all: build\n\techo $@ $(FLAGS)", "all", language.KindProperty},
+		{language.Makefile, "all: build\n\techo $@ $(FLAGS)", "$(FLAGS)", language.KindVariable},
+		{language.Nginx, "server {\n listen 8080;\n location / { proxy_pass http://$host; }\n}", "proxy_pass", language.KindKeyword},
+		{language.Nginx, "set $name \"hello $host\"; # note", "$host", language.KindVariable},
+		{language.INI, "[server]\nport = 8080\n; comment", "server", language.KindTag},
+		{language.INI, "[server]\nport = 8080\n; comment", "port", language.KindProperty},
+		{language.Dockerfile, "FROM alpine:3\nCOPY --from=build /app /app\nRUN echo $HOME", "COPY", language.KindKeyword},
+		{language.Dockerfile, "FROM alpine\nRUN <<'EOF'\n$literal\nEOF\nCMD [\"app\"]", "$literal", language.KindString},
+		{language.Dockerfile, "RUN <<EOF\n${HOME}\nEOF\nCMD [\"app\"]", "CMD", language.KindKeyword},
+		{language.HTTP, "@host = example.test\n### first\nPOST https://{{host}}/ HTTP/1.1\nContent-Type: application/json\n\n{\"enabled\":true}\n### next\nGET https://example.test/", "POST", language.KindKeyword},
+		{language.HTTP, "POST https://example.test/ HTTP/1.1\nContent-Type: application/json\n\n{\"enabled\":true}", "enabled", language.KindProperty},
+	} {
+		t.Run(string(tc.id)+tc.needle, func(t *testing.T) {
+			tokens, _ := scanAll(tc.id, tc.text, 7)
+			at := strings.Index(tc.text, tc.needle)
+			if got := kindAt(tokens, at); got != tc.kind {
+				t.Fatalf("%q: got %s want %s; %v", tc.text, got, tc.kind, tokens)
+			}
+		})
+	}
+}
+
+func TestAdditionalConfigurationFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+		language.JSONC:      {"{/*a\n b*/\"name\":\"value\",// }\n\"n\":1,}", "/* incomplete", "{\"long\":\"" + strings.Repeat("名", ChunkSize) + "\"}"},
+		language.CMake:      {"#[==[ comment\n${literal} ]==]\nset(x [=[hello\nworld]=])\nmessage(\"${x}\" $<CONFIG:Debug>)", "[" + strings.Repeat("=", 90) + "[text]" + strings.Repeat("=", 90) + "]"},
+		language.Makefile:   {".RECIPEPREFIX := >\nall: a \\\n b\n>echo $(patsubst %.c,%.o,$(SRC)) $$HOME $@\nifdef DEBUG\ninclude debug.mk\nendif"},
+		language.Nginx:      {"server {\n listen 8080;\n set $value \"hello ${host}\";\n location / { proxy_pass http://localhost; } # comment\n}"},
+		language.INI:        {"; note\n[section]\nkey = \"value\"\nnumber=123\nlong=" + strings.Repeat("a", ChunkSize*2)},
+		language.Dockerfile: {"# escape=`\nFROM alpine\nRUN echo hello `\n world\nCOPY --from=build /app /app\nRUN <<A <<-'B'\n${HOME}\nA\n\t$literal\n\tB\nCMD [\"app\"]"},
+		language.HTTP:       {"# comment\n@host=example.test\n### first\nPOST https://{{host}}/ HTTP/1.1\nContent-Type: application/json\n\n{\"ok\":true}\n### next\nGET https://example.test/\nAccept: */*"},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				if len(text) > ChunkSize && chunk < 31 {
+					continue
+				}
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens equal=%v state equal=%v\ngot %v\nwant %v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws), got, want)
+				}
+			}
+		}
+	}
+}
+
 func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 	for _, tc := range []struct {
 		id           language.ID

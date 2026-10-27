@@ -33,6 +33,11 @@ func TestGuess(t *testing.T) {
 	}{
 		{"a.JSON", "", JSON}, {"a.xhtml", "<html>", XML},
 		{"a.html", "<?xml", HTML}, {"", " \xef\xbb\xbf", Plain},
+		{"CMakeLists.txt", "", CMake}, {"Makefile", "", Makefile}, {"GNUmakefile", "", Makefile},
+		{"Makefile.debug", "", Makefile}, {"Dockerfile.dev", "", Dockerfile},
+		{"nginx.conf", "", Nginx}, {"site.nginx.conf", "", Nginx}, {"service.conf", "", Plain},
+		{"a.JSONC", "", JSONC}, {"request.rest", "", HTTP}, {"project.mk", "", Makefile},
+		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
 		{"", "words", Plain},

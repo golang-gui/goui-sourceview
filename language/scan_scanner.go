@@ -185,8 +185,8 @@ func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd boo
 	if id == Plain {
 		return nil, state, limit
 	}
-	if id == JSON {
-		return scanJSON(state, input, limit, lineEnd)
+	if id == JSON || id == JSONC {
+		return scanJSON(state, input, limit, lineEnd, id == JSONC)
 	}
 	switch id {
 	case TOML:
@@ -199,13 +199,21 @@ func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd boo
 	return scanMarkup(id, state, input, limit, lineEnd)
 }
 
-func scanJSON(s builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
+func scanJSON(s builtinState, input string, limit int, lineEnd, comments bool) ([]lexicalToken, builtinState, int) {
 	var out []lexicalToken
 	i := 0
 	for i < limit {
 		start := i
 		b := input[i]
 		switch s.mode {
+		case comment:
+			if s.quote == '*' && strings.HasPrefix(input[i:], "*/") {
+				i += 2
+				s.mode, s.quote = data, 0
+			} else {
+				i += runeSize(input, i)
+			}
+			emit(&out, start, i, KindComment)
 		case jsonString:
 			kind := KindString
 			if s.key {
@@ -270,6 +278,10 @@ func scanJSON(s builtinState, input string, limit int, lineEnd bool) ([]lexicalT
 			}
 		default:
 			switch {
+			case comments && (strings.HasPrefix(input[i:], "//") || strings.HasPrefix(input[i:], "/*")):
+				s.mode, s.quote = comment, input[i+1]
+				i += 2
+				emit(&out, start, i, KindComment)
 			case space(b):
 				i++
 			case b == '"':
@@ -338,6 +350,9 @@ func scanJSON(s builtinState, input string, limit int, lineEnd bool) ([]lexicalT
 	}
 	if s.mode != jsonNumber {
 		s.number = 0
+	}
+	if lineEnd && i == len(input) && s.mode == comment && s.quote == '/' {
+		s.mode, s.quote = data, 0
 	}
 	return out, s, i
 }
