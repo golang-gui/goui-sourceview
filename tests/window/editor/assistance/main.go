@@ -268,11 +268,22 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView,
 // 采样只包含实际空格单元，避开光标、字形、边框。比较同后端、不透明 sRGB 的
 // 前后 RGB 覆盖差（忽略 <=1 byte 的尾部量化），不依赖字体金图。圆点必须二维，
 // 包围盒宽高差最多 1 物理像素，中心距测量单元中心最多 1 像素；4×1 扁条必然失败。
-// 水平方向只取单元内侧完整像素，再留 1 像素，避免 ceil 扩张混入相邻 Tab 的边缘。
+// 水平方向只取完整落在单元中的像素。宽单元才各留 1 像素，避免边缘混入相邻
+// Tab；窄字体的空格可能只有两个完整像素，仍须保留它们来检查圆点。
 func checkDotShape(before, after image.Image, cell geometry.Rectangle, spaceWidth float32, scale float64) {
 	minX, minY, maxX, maxY := after.Bounds().Max.X, after.Bounds().Max.Y, -1, -1
+	left := int(math.Ceil(float64(cell.X) * scale))
+	right := int(math.Floor(float64(cell.X+cell.Width) * scale))
+	if right <= left {
+		left = int(math.Floor(float64(cell.X) * scale))
+		right = int(math.Ceil(float64(cell.X+cell.Width) * scale))
+	}
+	if right-left > 3 {
+		left++
+		right--
+	}
 	for y := int(math.Floor(float64(cell.Y) * scale)); y < int(math.Ceil(float64(cell.Y+cell.Height)*scale)); y++ {
-		for x := int(math.Ceil(float64(cell.X)*scale)) + 1; x < int(math.Floor(float64(cell.X+cell.Width)*scale))-1; x++ {
+		for x := left; x < right; x++ {
 			ar, ag, ab, _ := before.At(x, y).RGBA()
 			br, bg, bb, _ := after.At(x, y).RGBA()
 			delta := max(math.Abs(float64(ar>>8)-float64(br>>8)), math.Abs(float64(ag>>8)-float64(bg>>8)), math.Abs(float64(ab>>8)-float64(bb>>8)))
