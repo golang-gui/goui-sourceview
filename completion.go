@@ -245,12 +245,23 @@ func normalizeCompletions(items []Completion, c CompletionContext) []Completion 
 	var out []Completion
 	seen := map[string]bool{}
 	prefix := strings.ToLower(c.Prefix)
-	for _, item := range sanitizeCompletions(items) {
-		if !strings.HasPrefix(strings.ToLower(item.Label), prefix) || item.Text == c.Prefix || seen[item.Text] {
+	for _, candidate := range items {
+		if len(candidate.Label) > 512 || !strings.HasPrefix(strings.ToLower(textedit.Normalize(candidate.Label)), prefix) {
+			continue
+		}
+		clean := sanitizeCompletions([]Completion{candidate})
+		if len(clean) == 0 {
+			continue
+		}
+		item := clean[0]
+		if item.Text == c.Prefix || seen[item.Text] {
 			continue
 		}
 		seen[item.Text] = true
 		out = append(out, item)
+		if len(out) == 64 {
+			break
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Label < out[j].Label })
 	return out

@@ -54,6 +54,97 @@ func TestKind(t *testing.T) {
 	}
 }
 
+func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
+	for _, tc := range []struct {
+		id                    ID
+		text                  string
+		str, comment, literal bool
+	}{
+		{JSONC, "/* open", false, true, false}, {HTTP, "# note", false, true, false},
+		{Makefile, "# note", false, true, false}, {CMake, "[=[open", true, false, true},
+		{Nginx, `set $x "open`, true, false, false}, {INI, `key="open`, true, false, false},
+		{Dockerfile, "# note", false, true, false}, {SQL, "$tag$open", true, false, true},
+		{Protobuf, "/* open", false, true, false}, {Go, "`raw", true, false, true},
+		{Python, `f"{True`, false, false, false}, {JavaScript, "`text ${true", false, false, false},
+		{TypeScript, "/* open", false, true, false}, {CSS, `.x { content: "open`, true, false, false},
+	} {
+		t.Run(string(tc.id), func(t *testing.T) {
+			l, _ := Builtin(tc.id)
+			scanner := l.Tokenizer()
+			initial := scanner.InitialState()
+			input := Input{Text: tc.text, Limit: len(tc.text)}
+			r, err := scanner.Scan(input, initial)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = ValidateResult(input, r); err != nil {
+				t.Fatal(err)
+			}
+			c := r.State.Context()
+			if c.String != tc.str || c.Comment != tc.comment || c.Literal != tc.literal {
+				t.Fatalf("context %+v", c)
+			}
+			if !initial.Equal(scanner.InitialState()) {
+				t.Fatal("initial snapshot changed")
+			}
+			_, err = scanner.Scan(Input{Text: `suffix } */ "`, Offset: len(tc.text), Limit: 13, LineEnd: true}, r.State)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fresh, err := scanner.Scan(input, scanner.InitialState())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !r.State.Equal(fresh.State) {
+				t.Fatal("published snapshot changed")
+			}
+		})
+	}
+}
+
+func TestBuiltinMarkdownAddedFences(t *testing.T) {
+	custom, err := NewMarkdown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtin, _ := Builtin(Markdown)
+	for _, l := range []*Language{builtin, custom} {
+		for name, id := range map[string]ID{"jsonc": JSONC, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS} {
+			scanner := l.Tokenizer()
+			fence := "```" + name
+			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err = scanner.Scan(Input{Text: "x", Limit: 1}, r.State)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if child := r.State.Context().Embedded; child == nil || child.ID() != id {
+				t.Fatalf("%s: embedded %v", name, child)
+			}
+		}
+	}
+}
+
+func TestHTTPNestedBodyContext(t *testing.T) {
+	l, _ := Builtin(HTTP)
+	scanner := l.Tokenizer()
+	state := scanner.InitialState()
+	lines := []string{"POST / HTTP/1.1", "Content-Type: text/html", "", "<script>const text = `open"}
+	for i, line := range lines {
+		r, err := scanner.Scan(Input{Text: line, Limit: len(line), LineEnd: i < len(lines)-1}, state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state = r.State
+	}
+	c := state.Context()
+	if c.Embedded == nil || c.Embedded.ID() != JavaScript || !c.String {
+		t.Fatalf("nested body context: %+v", c)
+	}
+}
+
 func TestConfigurationAndShellDetection(t *testing.T) {
 	for _, tc := range []struct {
 		name, sample string
@@ -62,12 +153,16 @@ func TestConfigurationAndShellDetection(t *testing.T) {
 		{"Cargo.TOML", "", TOML}, {"config.YAML", "", YAML}, {".ci.yml", "", YAML},
 		{"run.sh", "", Shell}, {"run.bash", "", Shell}, {"/home/user/.bashrc", "", Shell}, {".profile", "", Shell},
 		{"script", "#!/bin/sh\necho hi", Shell}, {"script", "#!/usr/bin/env bash\n", Shell}, {"script", "#!/usr/bin/env -S bash -eu\n", Shell},
-		{"script", "#!/usr/bin/env -u bash python", Plain},
-		{"script", "#!/usr/bin/env --chdir bash python", Plain},
+		{"script", "#!/usr/bin/env -u bash python", Python},
+		{"script", "#!/usr/bin/env --chdir bash python", Python},
 		{"script", "#!/usr/bin/env -u NAME bash", Shell},
 		{"script", "#!/usr/bin/env -- bash", Shell},
 		{"script", "#!/usr/bin/env --unknown sh", Plain},
-		{"x.json", "#!/bin/sh", JSON}, {"unknown", "#!/usr/bin/env python\n", Plain},
+		{"x.json", "#!/bin/sh", JSON}, {"unknown", "#!/usr/bin/env python\n", Python},
+		{"script", "#!/usr/bin/env -S python3 -u", Python},
+		{"script", "#!/usr/bin/pythonic", Plain},
+		{"main.go", "", Go}, {"main.PYI", "", Python}, {"main.mjs", "", JavaScript},
+		{"main.cts", "", TypeScript}, {"style.css", "", CSS}, {"service.proto", "", Protobuf}, {"query.SQL", "", SQL},
 		{"unknown", " #!/bin/sh", Plain}, {".env", "NAME=value", Plain}, {"unknown", "name: value", Plain},
 		{"unknown", string(make([]byte, 4096)) + "#!/bin/sh", Plain},
 	} {

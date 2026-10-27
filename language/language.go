@@ -25,6 +25,13 @@ const (
 	Nginx      ID = "nginx"
 	INI        ID = "ini"
 	Dockerfile ID = "dockerfile"
+	SQL        ID = "sql"
+	Protobuf   ID = "protobuf"
+	Go         ID = "go"
+	Python     ID = "python"
+	JavaScript ID = "javascript"
+	TypeScript ID = "typescript"
+	CSS        ID = "css"
 	Markdown   ID = "markdown"
 )
 
@@ -90,6 +97,13 @@ var builtins = []Info{
 	{ID: Nginx, Name: "Nginx", Extensions: []string{".nginx"}, MIMETypes: []string{"text/x-nginx-conf"}},
 	{ID: INI, Name: "INI", Extensions: []string{".ini", ".cfg"}, MIMETypes: []string{"text/x-ini"}},
 	{ID: Dockerfile, Name: "Dockerfile", Extensions: []string{".dockerfile"}, MIMETypes: []string{"text/x-dockerfile"}},
+	{ID: SQL, Name: "SQL", Extensions: []string{".sql"}, MIMETypes: []string{"application/sql"}},
+	{ID: Protobuf, Name: "Protocol Buffers", Extensions: []string{".proto"}, MIMETypes: []string{"text/x-protobuf"}},
+	{ID: Go, Name: "Go", Extensions: []string{".go"}, MIMETypes: []string{"text/x-go"}},
+	{ID: Python, Name: "Python", Extensions: []string{".py", ".pyi", ".pyw"}, MIMETypes: []string{"text/x-python"}},
+	{ID: JavaScript, Name: "JavaScript", Extensions: []string{".js", ".mjs", ".cjs"}, MIMETypes: []string{"text/javascript", "application/javascript"}},
+	{ID: TypeScript, Name: "TypeScript", Extensions: []string{".ts", ".mts", ".cts"}, MIMETypes: []string{"text/typescript", "application/typescript"}},
+	{ID: CSS, Name: "CSS", Extensions: []string{".css"}, MIMETypes: []string{"text/css"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -105,7 +119,7 @@ func Lookup(id ID) (Info, bool) {
 	return Info{}, false
 }
 
-// Guess examines an extension and at most 4 KiB of caller-supplied content.
+// Guess examines a filename and at most 4 KiB of caller-supplied content.
 // It performs no I/O. Unknown or ambiguous input is plain text.
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
@@ -135,6 +149,11 @@ func Guess(filename string, sample []byte) ID {
 	if shellShebang(sample) {
 		return Shell
 	}
+	interpreter := shebangInterpreter(sample)
+	pythonVersion := strings.TrimPrefix(interpreter, "python")
+	if interpreter == "python" || pythonVersion != interpreter && len(pythonVersion) > 0 && digit(pythonVersion[0]) && strings.Trim(pythonVersion, "0123456789.") == "" {
+		return Python
+	}
 	sample = bytes.TrimSpace(bytes.TrimPrefix(sample, []byte{0xef, 0xbb, 0xbf}))
 	lower := bytes.ToLower(sample)
 	if bytes.HasPrefix(sample, []byte("<?xml")) {
@@ -151,13 +170,18 @@ func Guess(filename string, sample []byte) ID {
 
 // A shebang is recognized only at byte zero. No command is evaluated.
 func shellShebang(sample []byte) bool {
+	interpreter := shebangInterpreter(sample)
+	return interpreter == "sh" || interpreter == "bash"
+}
+
+func shebangInterpreter(sample []byte) string {
 	if !bytes.HasPrefix(sample, []byte("#!")) {
-		return false
+		return ""
 	}
 	line, _, _ := bytes.Cut(sample[2:], []byte("\n"))
 	fields := strings.Fields(string(line))
 	if len(fields) == 0 {
-		return false
+		return ""
 	}
 	interpreter := filepath.Base(fields[0])
 	if interpreter == "env" {
@@ -172,22 +196,22 @@ func shellShebang(sample []byte) bool {
 				fields = fields[1:]
 			case arg == "-u" || arg == "--unset" || arg == "-C" || arg == "--chdir":
 				if len(fields) < 2 {
-					return false
+					return ""
 				}
 				fields = fields[2:]
 			case strings.HasPrefix(arg, "--unset=") || strings.HasPrefix(arg, "--chdir=") || !strings.HasPrefix(arg, "-") && strings.Contains(arg, "="):
 				fields = fields[1:]
 			case strings.HasPrefix(arg, "-"):
-				return false
+				return ""
 			default:
 				goto interpreter
 			}
 		}
 	interpreter:
 		if len(fields) == 0 {
-			return false
+			return ""
 		}
 		interpreter = filepath.Base(fields[0])
 	}
-	return interpreter == "sh" || interpreter == "bash"
+	return interpreter
 }

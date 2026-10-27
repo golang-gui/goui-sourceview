@@ -48,21 +48,23 @@ type frame struct {
 // builtinState is an immutable snapshot. Stacks, queues and delimiter spellings
 // referenced by an earlier snapshot are never mutated.
 type builtinState struct {
-	mode       mode
-	back       mode
-	tag        string
-	closing    bool
-	quote      byte
-	depth      int
-	stack      *frame
-	key        bool
-	number     uint8
-	overflow   int
-	script     uint8
-	pendingTag bool
-	toml       *tomlState
-	yaml       *yamlState
-	shell      *shellState
+	mode               mode
+	back               mode
+	tag                string
+	closing            bool
+	quote              byte
+	depth              int
+	stack              *frame
+	key                bool
+	number             uint8
+	overflow           int
+	script             uint8
+	pendingTag         bool
+	toml               *tomlState
+	yaml               *yamlState
+	shell              *shellState
+	code               *codeState
+	htmlAttr, htmlType string
 }
 
 // Equal compares complete lexical context, not hashes or line numbers.
@@ -74,6 +76,10 @@ func (s builtinState) Equal(other State) bool {
 	if !equalTOML(s.toml, t.toml) || !equalYAML(s.yaml, t.yaml) || !equalShell(s.shell, t.shell) {
 		return false
 	}
+	if (s.code == nil) != (t.code == nil) || s.code != nil && !s.code.Equal(*t.code) {
+		return false
+	}
+	s.code, t.code = nil, nil
 	s.toml, t.toml = nil, nil
 	s.yaml, t.yaml = nil, nil
 	s.shell, t.shell = nil, nil
@@ -178,7 +184,7 @@ func (s *builtinState) close() {
 // Returned positions are relative to input. A negative start revises an earlier
 // span of this logical line (for example, a key confirmed by a later colon).
 // Callers apply tokens in order using appendToken, adding their line offset.
-func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
+func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd bool, offset int) ([]lexicalToken, builtinState, int) {
 	if limit < 0 || limit > len(input) {
 		panic("highlight: invalid scan limit")
 	}
@@ -196,7 +202,7 @@ func scanBuiltin(id ID, state builtinState, input string, limit int, lineEnd boo
 	case Shell:
 		return scanShell(state, input, limit, lineEnd)
 	}
-	return scanMarkup(id, state, input, limit, lineEnd)
+	return scanMarkup(id, state, input, limit, lineEnd, offset)
 }
 
 func scanJSON(s builtinState, input string, limit int, lineEnd, comments bool) ([]lexicalToken, builtinState, int) {
@@ -455,8 +461,15 @@ func (s *builtinState) finishTag(id ID) {
 	case "script":
 		s.mode = scriptData
 		s.script = 0
+		mime, _, _ := strings.Cut(strings.TrimSpace(s.htmlType), ";")
+		if mime == "" || mime == "module" || mime == "text/javascript" || mime == "application/javascript" || mime == "text/ecmascript" || mime == "application/ecmascript" {
+			s.code = &codeState{id: JavaScript, canRegexp: true}
+		}
 	case "style", "xmp", "iframe", "noembed", "noframes":
 		s.mode = rawText
+		if s.tag == "style" && (strings.TrimSpace(s.htmlType) == "" || strings.TrimSpace(s.htmlType) == "text/css") {
+			s.code = &codeState{id: CSS, canRegexp: true}
+		}
 	case "title", "textarea":
 		s.mode = rcdata
 	case "plaintext":
@@ -464,7 +477,7 @@ func (s *builtinState) finishTag(id ID) {
 	}
 }
 
-func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
+func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool, offset int) ([]lexicalToken, builtinState, int) {
 	var out []lexicalToken
 	i := 0
 	for i < limit {
@@ -533,6 +546,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 				s.mode = s.back
 			}
 		case rawText, rcdata, scriptData:
+			bodyStart := i
 			if s.mode == scriptData && strings.HasPrefix(input[i:], "<!--") && s.script == 0 {
 				s.script = 1
 				i += 4
@@ -548,6 +562,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 					i += len(s.tag) + 2
 				} else {
 					s.mode = tagName
+					s.code = nil
 					s.closing = true
 					s.tag = ""
 					i += 2
@@ -560,6 +575,28 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 				emit(&out, start, i, KindEntity)
 			} else {
 				i += n
+				if s.code != nil {
+					for i < limit && input[i] != '<' && !(s.mode == scriptData && strings.HasPrefix(input[i:], "-->")) {
+						i += runeSize(input, i)
+					}
+				}
+			}
+			if s.code != nil && i > bodyStart {
+				child := codeTokenizer{id: s.code.id}
+				end := i
+				for end < len(input) && input[end] != '<' && !(s.mode == scriptData && strings.HasPrefix(input[end:], "-->")) {
+					end += runeSize(input, end)
+				}
+				r, err := child.Scan(Input{Text: input[bodyStart:end], Offset: offset + bodyStart, Limit: i - bodyStart, LineEnd: lineEnd && end == len(input)}, *s.code)
+				if err != nil {
+					panic(err)
+				}
+				next := r.State.(codeState)
+				s.code = &next
+				i = bodyStart + r.Consumed
+				for _, t := range r.Tokens {
+					appendToken(&out, t.Start-offset, t.End-offset, t.Kind)
+				}
 			}
 		case tagName:
 			valid := nameRune(r)
@@ -594,9 +631,13 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 				emit(&out, start, i, KindInvalid)
 			default:
 				s.mode = attrName
+				s.htmlAttr = ""
 			}
 		case attrName:
 			if !space(b) && b != '=' && b != '>' && b != '/' && b != '<' {
+				if len(s.htmlAttr) < 16 {
+					s.htmlAttr += strings.ToLower(input[i : i+n])
+				}
 				i += n
 				emit(&out, start, i, KindAttribute)
 			} else {
@@ -606,6 +647,9 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 			if space(b) {
 				i++
 			} else if b == '=' {
+				if s.htmlAttr == "type" {
+					s.htmlType = ""
+				}
 				i++
 				emit(&out, start, i, KindDelimiter)
 				s.mode = beforeValue
@@ -637,11 +681,17 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 				emit(&out, start, i, KindString)
 				s.mode = tagInside
 			} else if b == '&' {
+				if s.htmlAttr == "type" {
+					s.htmlType = strings.Repeat("?", 65)
+				}
 				s.back = s.mode
 				s.mode = entity
 				i++
 				emit(&out, start, i, KindEntity)
 			} else {
+				if s.htmlAttr == "type" && len(s.htmlType) <= 64 {
+					s.htmlType += strings.ToLower(input[i : i+n])
+				}
 				i += n
 				emit(&out, start, i, KindString)
 			}
@@ -649,11 +699,17 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 			if space(b) || b == '>' || b == '<' {
 				s.mode = tagInside
 			} else if b == '&' {
+				if s.htmlAttr == "type" {
+					s.htmlType = strings.Repeat("?", 65)
+				}
 				s.back = s.mode
 				s.mode = entity
 				i++
 				emit(&out, start, i, KindEntity)
 			} else {
+				if s.htmlAttr == "type" && len(s.htmlType) <= 64 {
+					s.htmlType += strings.ToLower(input[i : i+n])
+				}
 				i += n
 				k := KindString
 				if id == XML {
@@ -695,6 +751,7 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 					s.mode = tagName
 					s.tag = ""
 					s.closing = false
+					s.htmlType = ""
 					emit(&out, start, i, KindDelimiter)
 				} else {
 					i += n
@@ -710,6 +767,17 @@ func scanMarkup(id ID, s builtinState, input string, limit int, lineEnd bool) ([
 		}
 	}
 	if lineEnd && i == len(input) {
+		if s.code != nil {
+			r, err := (codeTokenizer{id: s.code.id}).Scan(Input{Offset: offset + i, LineEnd: true}, *s.code)
+			if err != nil {
+				panic(err)
+			}
+			next := r.State.(codeState)
+			s.code = &next
+			for _, t := range r.Tokens {
+				appendToken(&out, t.Start-offset, t.End-offset, t.Kind)
+			}
+		}
 		switch s.mode {
 		case tagName:
 			s.mode = tagInside

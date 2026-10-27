@@ -3,6 +3,7 @@ package language
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -17,16 +18,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		}
 		switch info.ID {
 		case Markdown:
-			table := map[string]*Language{}
-			for id, l := range out {
-				if id != Plain {
-					table[string(id)] = l
-				}
-			}
-			table["sh"] = out[Shell]
-			table["bash"] = out[Shell]
-			table["yml"] = out[YAML]
-			l, err := newMarkdown(table)
+			l, err := newMarkdown(builtinFences(out))
 			if err != nil {
 				panic(err)
 			}
@@ -126,6 +118,35 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case SQL, Protobuf, Go, Python, JavaScript, TypeScript, CSS:
+			d.Tokenizer = codeTokenizer{info.ID}
+			d.AllowWordSuggestions = codeWordSuggestions
+			if info.ID == JavaScript || info.ID == TypeScript {
+				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
+			}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			if info.ID == Python {
+				d.Editing.Comments = Comments{Line: "#"}
+			}
+			if info.ID == SQL {
+				d.Editing.Comments.Line = "--"
+			}
+			if info.ID == CSS {
+				d.Editing.Comments.Line = ""
+				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '-' }
+			}
+			if info.ID == Go || info.ID == JavaScript || info.ID == TypeScript || info.ID == SQL {
+				p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+				d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+				d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			}
+			if info.ID == Python {
+				d.Editing.AllowPair = func(c PairContext) bool {
+					return c.Selected || c.Context.String || !(c.Typed == `"` || c.Typed == "'") || !strings.HasSuffix(c.Before, c.Typed+c.Typed)
+				}
+			}
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		l, err := New(d)
 		if err != nil {
@@ -136,6 +157,19 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 	return out
 })
 
+func builtinFences(definitions map[ID]*Language) map[string]*Language {
+	table := make(map[string]*Language)
+	for id, l := range definitions {
+		if id != Plain && id != Markdown {
+			table[string(id)] = l
+		}
+	}
+	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile} {
+		table[alias] = definitions[id]
+	}
+	return table
+}
+
 // Builtin returns an immutable built-in definition. Custom definitions are
 // passed directly to a document; no registration or name matching is needed.
 func Builtin(id ID) (*Language, bool) { l, ok := builtinLanguages()[id]; return l, ok }
@@ -144,6 +178,37 @@ func defaultEditing() EditingRules {
 	brackets := []Pair{{Open: "(", Close: ")", NotInString: true, NotInComment: true}, {Open: "[", Close: "]", NotInString: true, NotInComment: true}, {Open: "{", Close: "}", NotInString: true, NotInComment: true}}
 	pairs := append(append([]Pair(nil), brackets...), Pair{Open: `"`, Close: `"`, NotInString: true, NotInComment: true}, Pair{Open: "'", Close: "'", NotInString: true, NotInComment: true})
 	return EditingRules{Word: IdentifierRune, AutoClosingPairs: pairs, SurroundingPairs: append([]Pair(nil), pairs...), Brackets: brackets, AutoCloseBefore: ")]},:;>"}
+}
+
+func codeVocabulary(id ID) []string {
+	var table map[string]bool
+	switch id {
+	case Go:
+		table = goKeywords
+	case Python:
+		table = pythonKeywords
+	case JavaScript:
+		table = jsKeywords
+	case TypeScript:
+		table = tsKeywords
+	case Protobuf:
+		table = protoKeywords
+	case SQL:
+		table = sqlKeywords
+	case CSS:
+		return strings.Fields("color background background-color border border-radius display flex grid font-family font-size gap height margin padding position width var calc url @media @supports")
+	}
+	var out []string
+	for word := range table {
+		out = append(out, word)
+	}
+	if id == TypeScript {
+		for word := range jsKeywords {
+			out = append(out, word)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 func configVocabulary(id ID) []string {
@@ -181,7 +246,7 @@ func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
 	for limit < len(in.Text) && !utf8.RuneStart(in.Text[limit]) {
 		limit++
 	}
-	raw, next, n := scanBuiltin(b.id, s, in.Text, limit, in.LineEnd)
+	raw, next, n := scanBuiltin(b.id, s, in.Text, limit, in.LineEnd, in.Offset)
 	if (b.id == XML || b.id == HTML) && next.mode == data && n == in.Limit && n > 0 && in.Text[n-1] == '<' && (n == len(in.Text) || in.Text[n] == '>') && !(in.LineEnd && n == len(in.Text)) {
 		next.pendingTag = true
 	}
@@ -208,6 +273,11 @@ func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
 func codeWordSuggestions(c Context, known bool) bool { return known && !c.Comment && !c.String }
 
 func (s builtinState) Context() Context {
+	if s.code != nil {
+		c := s.code.Context()
+		c.Embedded, _ = Builtin(s.code.id)
+		return c
+	}
 	if t := s.toml; t != nil {
 		return Context{String: t.quote != 0, Comment: t.comment, Literal: t.quote == '\'', Value: !t.key}
 	}

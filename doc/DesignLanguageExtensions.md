@@ -27,7 +27,7 @@ Document 共享语言及文本，视图保留自己的选区、生成配对和�
 `SetLanguage(id)` 是内置语言便利入口；`language.Builtin(id)` 返回内置定义，
 可从其 Definition 副本出发调整规则后 New。nil 定义恢复 Plain。
 
-纯 Go 的 `language` 不依赖 GUI；六种内置扫描器也通过公开 Tokenizer 协议运行。
+纯 Go 的 `language` 不依赖 GUI；全部内置扫描器也通过公开 Tokenizer 协议运行。
 `internal/highlight` 保留行树、调度和缓存，`internal/editor` 保留命令计划：
 它们不是给其他编辑器承诺兼容的公共引擎。应用无需重用 SourceView 的窗口状态机。
 

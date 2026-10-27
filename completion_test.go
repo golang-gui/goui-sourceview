@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -168,6 +169,7 @@ func TestConfigurationAndShellCompletions(t *testing.T) {
 		text, want string
 	}{
 		{language.TOML, "enabled = tr", "true"}, {language.YAML, "enabled: nu", "null"}, {language.Shell, "pri", "printf"},
+		{language.SQL, "SEL", "SELECT"}, {language.Go, "pack", "package"}, {language.TypeScript, "interf", "interface"},
 	} {
 		v := NewSourceView()
 		v.document.model.SetText(tc.text)
@@ -203,6 +205,24 @@ func TestConfigurationAndShellCompletions(t *testing.T) {
 		if got := v.proposals(c); len(got) != 0 {
 			t.Fatal("suggestions inside literal", tc, got)
 		}
+	}
+}
+
+func TestDefaultCompletionFiltersBeforeLimit(t *testing.T) {
+	var candidates []Completion
+	for i := 0; i < 100; i++ {
+		candidates = append(candidates, Completion{Label: "unrelated"})
+	}
+	candidates = append(candidates, Completion{Label: "SELECT"}, Completion{Label: "SELECT"}, Completion{Label: "SET"})
+	got := normalizeCompletions(candidates, CompletionContext{Prefix: "SE"})
+	if len(got) != 2 || got[0].Label != "SELECT" || got[1].Label != "SET" {
+		t.Fatalf("late matches lost: %v", got)
+	}
+	for i := 0; i < 100; i++ {
+		candidates = append(candidates, Completion{Label: fmt.Sprintf("SELECT%d", i)})
+	}
+	if got := normalizeCompletions(candidates, CompletionContext{Prefix: "SE"}); len(got) != 64 {
+		t.Fatalf("candidate limit: %d", len(got))
 	}
 }
 

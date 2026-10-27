@@ -6,13 +6,13 @@
 ## 1. 对外语言接口与 token 模型
 
 `language` 包公开不可变语言定义、Token/State/Tokenizer 和编辑规则，内置
-Plain、JSON、JSONC、XML、HTML、TOML、YAML、Shell、Markdown，以及下文的配置与构建语言；任意定义直接传给 Document，
+Plain、JSON、JSONC、XML、HTML、TOML、YAML、Shell、Markdown，以及下文的配置、构建与编程语言；任意定义直接传给 Document，
 不使用全局注册。完整接口、样式/语义分离和扫描校验见 [扩展契约](DesignLanguageExtensions.md)。
 
 Document.SetLanguage(id) 是内置便利入口；SetLanguageDefinition(l) 按对象身份绑定。
 Guess(filename,sample) 是纯推测函数，不自动覆盖显式语言、不读取文件或下载语法。
 Lookup 返回内置元数据的独立切片副本；Builtin 返回不可变内置定义。
-Guess 最多检查 4 KiB，已知扩展名优先，未知再识别有限前缀；`.xhtml` 按 XML。
+Guess 最多检查 4 KiB，专用文件名优先于已知扩展名，未知再识别有限前缀；`.xhtml` 按 XML。
 
 Kind 为可扩展字符串样式键，内置 Plain、Property、String、Escape、Number、Keyword、
 Delimiter、Tag、Attribute、Entity、Comment、Meta、Invalid、Variable；不是 LSP semantic token。
@@ -114,8 +114,10 @@ XML NameStartChar / NameChar 使用该版范围规则，不能以 ASCII `\w` 或
   不让 JavaScript 字符串引号决定 HTML 是否退出 script。
 - 特殊正文退出时校验对应结束标签名称及后续边界，ASCII 忽略大小写；
   `</scriptx>` 不能结束 script。行尾不是自动退出条件。
-- 首版不在 script/style 正文内做完整 JS/CSS tokenization；正文用 Plain，
-  但必须保留正确的 HTML 结束边界。将来内层扫描器不能压制外层终结。
+- script/style 正文复用 JavaScript/CSS 扫描器；内层扫描窗口止于外层特殊标记，
+  即使结束标签位于内层字符串/注释中也退出。无 type、JS MIME 或 module 的 script
+  使用 JS，无 type 或 text/css 的 style 使用 CSS；其他显式 type 保持 Plain。
+  type 只保留最多 65 byte 候选信息，不积累任意属性值，也不解码实体猜测脚本类型。
 - SVG/MathML 命名空间、模板语法、完整实体表和解析错误报告不在此 profile 中；
   外来内容按已声明的保守标记策略呈现，不能称完整 HTML parser。
 
@@ -294,3 +296,43 @@ Docker heredoc 的存储边界与 Shell 相同。Markdown 内置围栏表包含�
 [Nginx 配置结构](https://nginx.org/en/docs/beginners_guide.html) 用于核对各自边界。
 沿用 [GtkSourceView 5 语言上下文](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/lang-reference.html)
 的状态分解思路，但使用本项目的 Go 扫描协议，不导入其语法资源或原生依赖。
+
+## 11. 编程语言与 CSS
+
+内置 `SQL`、`Protobuf`、`Go`、`Python`、`JavaScript`、`TypeScript`、`CSS` 常量与元数据。
+这些语言使用带明确词法模式的 Go 扫描器；JS/TS 共享机械逻辑、分别维护词汇。
+不复制原生编辑器对象，不引入解释器、编译器、AST 或 LSP 依赖。
+
+| 语言 | 词法范围 |
+| --- | --- |
+| Go | 关键字、预声明类型/常量、常见数值（含基数、指数、虚数）、rune、转义字符串、反引号原始字符串、两种注释。 |
+| Protobuf | proto2/proto3/edition 声明词汇、类型、字段序号、数值、单双引号字符串、两种注释；不解析引用类型或验证字段编号。 |
+| Python | 关键字及常用软关键字、数值、装饰器、字符串前缀、单双/三引号、raw/bytes/f/t 字符串；插值表达式使用代码状态，支持嵌套引用与双花括号。格式规格部分不构造完整 Python 格式语法树。 |
+| JavaScript | 关键字、数值、字符串、模板及嵌套 `${}` 表达式、注释、正则及字符类/转义/flags。正则/除法使用表达式起点和控制语句圆括号上下文，不承诺错误源码或所有 ASI/对象字面量歧义的完整语法解析结果。 |
+| TypeScript | JS 词法加类型/声明关键字；类型推断、泛型语义、JSX/TSX 不在此 profile 中，`.tsx/.jsx` 不自动映射。 |
+| SQL | 通用大小写不敏感词汇、数值、单双引号、反引号/方括号引用、参数、`--`、嵌套块注释和 PostgreSQL 风格 dollar quote。是综合编辑 profile，不声称完整实现任一数据库方言，也不执行或校验查询。 |
+| CSS | 选择器、at-rule、声明属性和值、数值/单位/颜色、自定义属性、函数、引用及块注释；group rule 保持嵌套块上下文，不按 SCSS/Less 插值规则处理。 |
+
+每次只扫描驱动提供的有界窗口，标识符只保留 128 byte 候选拼写及完整范围。
+短引号、块注释、正则字符类、模板插值、SQL dollar quote 各有状态；只有真实行尾
+执行行尾恢复。模板/控制圆括号/CSS 块使用不可变节点，Equal 比较内容而非节点地址。
+SQL dollar delimiter 采用不可变拼写片段，结束后形成匹配拼写，存储随 delimiter 长度增长，
+不将完整正文放入状态。编辑后仍由既有行入/出状态失效传播，不重新整篇扫描才能显示。
+ClassString/ClassComment 与颜色独立，插值表达式恢复代码上下文；编辑、配对及补全
+使用同一词法上下文。新增语言默认提供词汇建议和适用的注释/引用规则，未新增通用折叠器。
+
+自动识别 `.sql/.proto/.go/.py/.pyi/.pyw/.js/.mjs/.cjs/.ts/.mts/.cts/.css`；
+Python 另识别 byte 0 的 `python` 或带数字版本的 shebang，沿用 Shell 的 env 参数解析。
+Markdown 的默认围栏表包含全部内置非 Markdown 语言及 `js/ts/py/golang/proto/make/docker` 等别名；
+`NewMarkdown(nil)` 与内置 Markdown 共用同一表，显式非 nil 表仍只使用调用方的映射。
+
+依据与取舍（2026-10-27 查阅）：[Monaco v0.52.2 JS](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/javascript/javascript.ts)
+复用 [TS tokenizer](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/typescript/typescript.ts)，
+支持本项目共享 JS/TS 扫描器但分离词汇的选择；其词法状态不是完整 TS parser。
+[Lexilla Python 源码](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexPython.cxx)
+用于核对引用与插值需要独立状态，未复制词法表或源码。
+语言边界分别核对 [Go spec](https://go.dev/ref/spec#Lexical_elements)、
+[Python lexical analysis](https://docs.python.org/3/reference/lexical_analysis.html)、
+[Protobuf spec](https://protobuf.dev/reference/protobuf/proto3-spec/)、
+[PostgreSQL 17 lexical structure](https://www.postgresql.org/docs/17/sql-syntax-lexical.html)、
+[CSS Syntax Level 3](https://www.w3.org/TR/css-syntax-3/)。SQL 参考 PG 的引用机制，但不把整个综合 profile 宣称为 PG 兼容解析器。

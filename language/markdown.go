@@ -20,18 +20,11 @@ const (
 )
 
 // NewMarkdown creates a Markdown profile with an explicit fence-name table.
-// The map is copied. A nil table uses built-in markup/configuration languages;
+// The map is copied. A nil table uses the built-in languages and fence aliases;
 // an empty non-nil table disables embedded languages. No global registration.
 func NewMarkdown(embedded map[string]*Language) (*Language, error) {
 	if embedded == nil {
-		embedded = map[string]*Language{}
-		for _, id := range []ID{JSON, XML, HTML, TOML, YAML, Shell} {
-			l, _ := Builtin(id)
-			embedded[string(id)] = l
-		}
-		embedded["sh"] = embedded["shell"]
-		embedded["bash"] = embedded["shell"]
-		embedded["yml"] = embedded["yaml"]
+		embedded = builtinFences(builtinLanguages())
 	}
 	return newMarkdown(embedded)
 }

@@ -59,7 +59,9 @@ func (s configState) Context() Context {
 	}
 	if s.id == HTTP && s.httpStage == 2 && s.httpBody != Plain {
 		c := s.body.Context()
-		c.Embedded, _ = Builtin(s.httpBody)
+		if c.Embedded == nil {
+			c.Embedded, _ = Builtin(s.httpBody)
+		}
 		return c
 	}
 	return Context{String: s.mode == configQuote || s.mode == configBracket && !s.bracketComment,
@@ -101,7 +103,7 @@ func (b configTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 	}
 	if b.id == HTTP && s.httpStage == 2 && s.httpBody != Plain {
-		raw, next, n := scanBuiltin(s.httpBody, s.body, text, limit, in.LineEnd)
+		raw, next, n := scanBuiltin(s.httpBody, s.body, text, limit, in.LineEnd, in.Offset)
 		s.body = next
 		for _, t := range raw {
 			add(t.Start, t.End, t.Kind, lexicalClass(t.Kind))

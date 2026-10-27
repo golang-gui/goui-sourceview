@@ -79,8 +79,9 @@ func TestLexicalFixtures(t *testing.T) {
 		{language.HTML, "<INPUT disabled value=ok>", "disabled", language.KindAttribute},
 		{language.HTML, "<INPUT disabled value=ok>", "ok", language.KindString},
 		{language.HTML, "<script>\"</script>\"<b>yes</b>", "b", language.KindTag},
-		{language.HTML, "<script>x</scriptx> <b> y </script><p>z</p>", "b", language.KindPlain},
-		{language.HTML, "<style><b>not a tag</b></STYLE><p>x</p>", "b", language.KindPlain},
+		// 内嵌内容现在由 JS/CSS 着色；这些字符仍不开始 HTML 标签。
+		{language.HTML, "<script>x</scriptx> <b> y </script><p>z</p>", "b", language.KindString},
+		{language.HTML, "<style><b>not a tag</b></STYLE><p>x</p>", "b", language.KindTag},
 		{language.XML, "<x a='line\ncontinued'>z</x>", "continued", language.KindString},
 	} {
 		tokens, _ := scanAll(tc.id, tc.text, 16384)
@@ -169,6 +170,11 @@ func Scan(id language.ID, s State, text string, limit int, lineEnd bool) ([]Toke
 		panic(err)
 	}
 	tokens := result.Tokens
+	// 显式撤回也可能没有替代 token（例如未知 Docker 指令恢复 Plain）。
+	// 旧夹具适配器用零长度 Plain 操作复用 appendStyled 的范围截断。
+	if result.ReplaceFrom != nil {
+		tokens = append([]Token{{Start: *result.ReplaceFrom, End: *result.ReplaceFrom}}, tokens...)
+	}
 	for i := range tokens {
 		tokens[i].Start -= s.offset
 		tokens[i].End -= s.offset
@@ -288,12 +294,21 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.YAML, "key: |\n  body\nnext: true", "|", "plain", "body", language.KindPlain},
 		{language.Shell, "cat <<END\n$USER\nEND", "<<END", "<<'END'", "$USER", language.KindString},
 		{language.Shell, "cat <<END\nbody\nEND\nafter\nEND\necho done", "END\nafter", "miss\nafter", "after", language.KindString},
+		{language.JSONC, "/* open\n */ true", "*/", "", "true", language.KindComment},
+		{language.CMake, "set(x [=[open\nbody\n]=])\nmessage(done)", "]=]", "", "message", language.KindString},
+		{language.Go, "/* open\n body\n */\nvar n=1", "/*", "//", "body", language.KindPlain},
+		{language.Python, "x = '''open\nbody\n'''\ny = True", "'''", "'", "body", language.KindPlain},
+		{language.JavaScript, "const x = `open\nbody\n`;\nlet y=1", "`", "\"", "body", language.KindPlain},
+		{language.SQL, "SELECT $tag$open\nbody\n$tag$;", "$tag$", "'", "body", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
 		e.SetLanguage(tc.id)
 		drain(t, e)
 		at := strings.Index(tc.text, tc.old)
+		if at < 0 {
+			t.Fatalf("missing edit fixture %q", tc.old)
+		}
 		change := textedit.Change{}
 		m.ConnectChange(func(c textedit.Change) { change = c; e.Change(c) })
 		if err := m.Replace(textedit.Range{Start: at, End: at + len(tc.old)}, tc.replacement); err != nil {
@@ -417,6 +432,7 @@ func TestAdditionalConfigurationKinds(t *testing.T) {
 		{language.Makefile, "include common.mk\nall: build\n\techo $@ $(FLAGS)", "include", language.KindKeyword},
 		{language.Makefile, "all: build\n\techo $@ $(FLAGS)", "all", language.KindProperty},
 		{language.Makefile, "all: build\n\techo $@ $(FLAGS)", "$(FLAGS)", language.KindVariable},
+		{language.Makefile, ".RECIPEPREFIX := >\nall:\n>include recipe-argument", "include", language.KindPlain},
 		{language.Nginx, "server {\n listen 8080;\n location / { proxy_pass http://$host; }\n}", "proxy_pass", language.KindKeyword},
 		{language.Nginx, "set $name \"hello $host\"; # note", "$host", language.KindVariable},
 		{language.INI, "[server]\nport = 8080\n; comment", "server", language.KindTag},
@@ -458,6 +474,105 @@ func TestAdditionalConfigurationFragments(t *testing.T) {
 				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
 					t.Fatalf("%s chunk %d: tokens equal=%v state equal=%v\ngot %v\nwant %v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws), got, want)
 				}
+			}
+		}
+	}
+}
+
+func TestCodeLanguageKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.Go, "package main\nvar value = `raw\ntext` // note", "package", language.KindKeyword},
+		{language.Go, "x := 0x1.fp+2i; r := '\\n'", "0x1", language.KindNumber},
+		{language.Go, "var x = `raw\ntext`", "text", language.KindString},
+		{language.Protobuf, "syntax = \"proto3\";\nmessage Item { optional string name = 1; }", "optional", language.KindKeyword},
+		{language.Python, "@decorator\nasync def hello(name):\n return f\"Hello {name.upper()}!\"", "@decorator", language.KindMeta},
+		{language.Python, "x = r'''raw\ntext'''\ny=True", "text", language.KindString},
+		{language.Python, "x = f\"{True} {{literal}}\"", "True", language.KindKeyword},
+		{language.JavaScript, "const pattern = /[/]+\\w/gu; let ratio = 10 / 2;", "/[/]", language.KindString},
+		{language.JavaScript, "if (ready) /ok/.test(value);", "/ok/", language.KindString},
+		{language.JavaScript, "const x = `hello ${true ? `nested ${1}` : name}`;", "true", language.KindKeyword},
+		{language.JavaScript, "let ratio = 10 / 2;", "/", language.KindDelimiter},
+		{language.TypeScript, "interface Item<T> { readonly value: T; }\ntype Name = string;", "readonly", language.KindKeyword},
+		{language.JavaScript, "let interfaceName = 1; interface", "interface", language.KindPlain},
+		{language.SQL, "select \"name\" from items where id = :id AND title = 'it''s fine'", "select", language.KindKeyword},
+		{language.SQL, "SELECT $tag$first\n'raw' /* text */\n$tag$;", "/* text", language.KindString},
+		{language.SQL, "/* nested /* comment */ still */ SELECT 1;", "still", language.KindComment},
+		{language.SQL, "SELECT value::text, :name FROM items", "text", language.KindKeyword},
+		{language.CSS, "@media (min-width: 600px) { .card:hover { --accent: #ffaa00; color: var(--accent); margin: -10px; } }", "@media", language.KindMeta},
+		{language.CSS, ".card { border-radius: 6px; color: #ffaa00; }", "border-radius", language.KindProperty},
+		{language.CSS, ".card { --accent: #ffaa00; }", "--accent", language.KindVariable},
+		{language.CSS, ".card { margin: -10px; }", "-10px", language.KindNumber},
+		{language.HTML, "<script>const n = 42; // note\nlet x = `hi ${true}`;</script><style>.x { color: red; }</style>", "const", language.KindKeyword},
+		{language.HTML, "<script>const s = \"</script>\";<p>outside</p>", "outside", language.KindPlain},
+		{language.HTML, "<style>.x { color: red; }</style>", "color", language.KindProperty},
+		{language.HTML, "<script type='application/json'>true</script>", "true", language.KindPlain},
+		{language.HTML, "<script TYPE=module>const n=1</script>", "const", language.KindKeyword},
+	} {
+		t.Run(string(tc.id)+tc.needle, func(t *testing.T) {
+			tokens, _ := scanAll(tc.id, tc.text, 3)
+			at := strings.Index(tc.text, tc.needle)
+			if tc.needle == "interface" {
+				at = strings.LastIndex(tc.text, tc.needle)
+			}
+			if got := kindAt(tokens, at); got != tc.kind {
+				t.Fatalf("%q: got %s want %s; %v", tc.text, got, tc.kind, tokens)
+			}
+		})
+	}
+}
+
+func TestCodeLanguageFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+		language.Go:         {"package main\n/* block\n comment */\nfunc main(){var x=0x1.fp-2i; s:=`raw\ntext`;r:='\\u1234'}"},
+		language.Protobuf:   {"syntax='proto3';\n// note\nmessage 名 { repeated string value=1; /*c*/ }"},
+		language.Python:     {"@decorator\nasync def hi(name):\n return rf'''raw\n{name + f\"{True}\"} {{literal}}''' # note\nx=0xFF + 1.2e-3j", "x='''" + strings.Repeat("名", ChunkSize) + "'''\ny=True"},
+		language.JavaScript: {"const pattern=/[/]+\\w/gu; let x=42 / 2;\nif (ready) /a/.test(x);\nconst text=`outer ${true ? `inner ${1}` : name} end`; /*x\ny*/", "const " + strings.Repeat("x", ChunkSize*2) + "=true;"},
+		language.TypeScript: {"interface Item<T> { readonly value: T; }\nconst x: string = `hi ${true}`; type X = keyof Item<number>;"},
+		language.SQL:        {"SELECT \"name\", [column], `other`, 'it''s fine', $tag$raw\n${literal} 'quotes'\n$tag$ FROM items WHERE id=:id AND n=$1; /* outer /*inner*/ end */", "SELECT $" + strings.Repeat("x", 90) + "$body$" + strings.Repeat("x", 90) + "$;"},
+		language.CSS:        {"@media (min-width: 600px) { .card:hover { --accent: #ffaa00; color: var(--accent); margin: -10px; background: url(https://example.test/a); } } /*c\nd*/"},
+		language.HTML:       {"<script>const s=`a ${true}`; /* block\n comment */\nlet x=1 / 2; if(x) /a/.test(s);</script><style>@media (width>1px){.x{color:red}}</style>", "<script>\"</script>\"<p>x</p>", "<script><!--\nvar n=1;\n<script>double</script>\n-->\n</script>"},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				if len(text) > ChunkSize && chunk < 31 {
+					continue
+				}
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens equal=%v state equal=%v\ngot %v\nwant %v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws), got, want)
+				}
+			}
+		}
+	}
+}
+
+func TestAddedLanguageMalformedFragments(t *testing.T) {
+	random := rand.New(rand.NewSource(20261027))
+	alphabet := []rune("abc012_'\"`\\$#&|><-+!?[]{}():,;=/ \t\n你好")
+	for _, id := range []language.ID{language.JSONC, language.HTTP, language.Makefile, language.CMake, language.Nginx, language.INI, language.Dockerfile, language.SQL, language.Protobuf, language.Go, language.Python, language.JavaScript, language.TypeScript, language.CSS, language.HTML} {
+		for round := 0; round < 100; round++ {
+			var b strings.Builder
+			for n := random.Intn(400); n > 0; n-- {
+				b.WriteRune(alphabet[random.Intn(len(alphabet))])
+			}
+			text := b.String()
+			want, ws := scanAll(id, text, 1024)
+			got, gs := scanAll(id, text, 1+random.Intn(17))
+			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+				t.Fatalf("%s malformed %q: got %v want %v states equal=%v", id, text, got, want, gs.Equal(ws))
+			}
+			previous := 0
+			for _, token := range got {
+				if token.Start < previous || token.End > len(text) || token.Start >= token.End || !utf8.ValidString(text[token.Start:token.End]) {
+					t.Fatalf("%s invalid span %v in %q", id, token, text)
+				}
+				previous = token.End
 			}
 		}
 	}
