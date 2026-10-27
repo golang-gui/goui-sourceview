@@ -118,6 +118,56 @@ func must(err error) {
 	}
 }
 
+// 以实际渲染出的专用洋红光标为准，而不是假定 End 的初次排版已经稳定。
+// 超长行在不同原生后端上可能需要后续事件循环轮次来收敛可表示的 ScrollX。
+type tailCaretSample struct {
+	point  geometry.Point
+	offset float32
+}
+
+func sampleTailCaret(widget gui.Widget, scroll *gui.ScrollView) (tailCaretSample, bool) {
+	img, err := gui.RenderWidget(widget, 0)
+	must(err)
+	if widget.Rect().Width <= 0 {
+		return tailCaretSample{}, false
+	}
+	scale := float64(img.Bounds().Dx()) / float64(widget.Rect().Width)
+	left, top, bottom := img.Bounds().Dx(), img.Bounds().Dy(), -1
+	for y := 0; y < min(img.Bounds().Dy(), int(64*scale)); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
+				left = min(left, x)
+				top = min(top, y)
+				bottom = max(bottom, y)
+			}
+		}
+	}
+	if bottom < 0 {
+		return tailCaretSample{}, false
+	}
+	return tailCaretSample{
+		point:  geometry.Point{X: float32(float64(left) / scale), Y: float32(float64(top+bottom) / 2 / scale)},
+		offset: scroll.ScrollX(),
+	}, true
+}
+
+// 连续三个事件循环观察到同一光标像素和偏移，才将该位置用于后续真实指针输入。
+func stableTailCaret(widget gui.Widget, scroll *gui.ScrollView, previous *tailCaretSample, stable *int) (tailCaretSample, bool) {
+	current, ok := sampleTailCaret(widget, scroll)
+	if !ok {
+		*stable = 0
+		return tailCaretSample{}, false
+	}
+	if *stable == 0 || current != *previous {
+		*previous = current
+		*stable = 1
+		return current, false
+	}
+	*stable++
+	return current, *stable >= 3
+}
+
 func main() {
 	runtime.LockOSThread()
 	windowWidth := flag.Float64("width", 1000, "initial window width in DIP")
@@ -568,74 +618,91 @@ func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Mod
 
 // 从真实光标像素取得局部停靠点，再走正常按下／拖动／释放路径。
 func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
-	var advance func()
 	stage := 0
 	deadline := time.Now().Add(30 * time.Second)
+	var end, previous geometry.Point
+	var tailDelta float32
+	var sample tailCaretSample
+	stable := 0
+	waitUntil := time.Time{}
 	pointer := func(kind events.EventType, p geometry.Point) {
 		r := widget.Snapshot().Bounds
-		must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: geometry.Point{X: r.X + p.X, Y: r.Y + p.Y}, Button: events.PointerButtonLeft}))
+		event := events.PointerEvent{EventType: kind, Position: geometry.Point{X: r.X + p.X, Y: r.Y + p.Y}, Button: events.PointerButtonLeft}
+		if kind == events.PointerMove {
+			event.Buttons = events.PointerButtonLeftDown
+		}
+		must(win.DispatchEvent(event))
 	}
 	return func() {
 		if !time.Now().Before(deadline) {
 			panic(fmt.Sprintf("pointer verification timeout stage=%d selection=%v", stage, widget.Snapshot().TextEditing.Selection))
 		}
-		if advance != nil {
-			advance()
-			return
-		}
-		if stage == 0 {
+		switch stage {
+		case 0:
 			for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 				must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: events.KeyEnd}))
 			}
-			stage++
+			stage = 1
 			return
-		}
-		img, err := gui.RenderWidget(widget, 0)
-		must(err)
-		scale := float64(img.Bounds().Dx()) / float64(widget.Rect().Width)
-		left, top, bottom := img.Bounds().Dx(), img.Bounds().Dy(), -1
-		for y := 0; y < min(img.Bounds().Dy(), int(64*scale)); y++ {
-			for x := 0; x < img.Bounds().Dx(); x++ {
-				r, g, b, a := img.At(x, y).RGBA()
-				if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
-					left = min(left, x)
-					top = min(top, y)
-					bottom = max(bottom, y)
-				}
-			}
-		}
-		if bottom < 0 {
-			return
-		}
-		end := geometry.Point{X: float32(float64(left) / scale), Y: float32(float64(top+bottom) / 2 / scale)}
-		offset := scroll.ScrollX()
-		previous := end
-		pointer(events.PointerDown, end)
-		found := false
-		for x := end.X - .5; x > max(0, end.X-64); x -= .5 {
-			previous.X = x
-			pointer(events.PointerMove, previous)
-			got := widget.Snapshot().TextEditing.Selection
-			if got.Caret != model.Len() {
-				if got.Anchor != model.Len() || got.Caret != model.Len()-1 {
-					panic(fmt.Sprintf("cold pointer skipped final character: got=%v end=%v previous=%v scroll=%g", got, end, previous, scroll.ScrollX()))
-				}
-				found = true
-				break
-			}
-		}
-		pointer(events.PointerUp, previous)
-		if !found {
-			panic(fmt.Sprintf("cannot select final character: end=%v previous=%v selection=%v", end, previous, widget.Snapshot().TextEditing.Selection))
-		}
-		// 等待双击时间窗过去，再验证反向的普通拖动。
-		ready := time.Now().Add(450 * time.Millisecond)
-		advance = func() {
-			if time.Now().Before(ready) {
+		case 1:
+			var ready bool
+			sample, ready = stableTailCaret(widget, scroll, &sample, &stable)
+			if !ready {
 				return
 			}
-
+			end = sample.point
+			previous = end
+			pointer(events.PointerDown, end)
+			found := false
+			for x := end.X - .5; x > max(0, end.X-64); x -= .5 {
+				previous.X = x
+				pointer(events.PointerMove, previous)
+				got := widget.Snapshot().TextEditing.Selection
+				if got.Caret != model.Len() {
+					if got.Anchor != model.Len() || got.Caret != model.Len()-1 {
+						panic(fmt.Sprintf("cold pointer skipped final character: got=%v end=%v previous=%v scroll=%g", got, end, previous, scroll.ScrollX()))
+					}
+					found = true
+					break
+				}
+			}
+			pointer(events.PointerUp, previous)
+			if !found {
+				panic(fmt.Sprintf("cannot select final character: end=%v previous=%v selection=%v", end, previous, widget.Snapshot().TextEditing.Selection))
+			}
+			tailDelta = end.X - previous.X
+			if tailDelta <= 0 {
+				panic(fmt.Sprintf("invalid final character hit distance: end=%v previous=%v", end, previous))
+			}
+			// 先用正常按键折叠回 EOF，再等待布局完成。反向选区时光标在字符左侧，
+			// 不能把它误当成 EOF 的后续正向拖选坐标。
+			for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
+				must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: events.KeyArrowRight}))
+			}
+			if got := widget.Snapshot().TextEditing.Selection; got.Anchor != model.Len() || got.Caret != model.Len() {
+				panic(fmt.Sprintf("cannot restore EOF after backward pointer selection: %v", got))
+			}
+			waitUntil = time.Now().Add(450 * time.Millisecond)
+			stable = 0
+			stage = 2
+			return
+		case 2:
+			if time.Now().Before(waitUntil) {
+				return
+			}
+			var ready bool
+			sample, ready = stableTailCaret(widget, scroll, &sample, &stable)
+			if !ready {
+				return
+			}
+			end = sample.point
+			// 同一字形边界的屏幕距离由真实第一次命中得到，而不是假设字体 advance。
+			previous = geometry.Point{X: end.X - tailDelta, Y: end.Y}
+			offset := scroll.ScrollX()
 			pointer(events.PointerDown, previous)
+			if got := widget.Snapshot().TextEditing.Selection; got.Anchor != model.Len()-1 || got.Caret != model.Len()-1 {
+				panic(fmt.Sprintf("forward pointer did not start on final character: got=%v end=%v previous=%v", got, end, previous))
+			}
 			pointer(events.PointerMove, end)
 			pointer(events.PointerUp, end)
 			got := widget.Snapshot().TextEditing.Selection
@@ -647,8 +714,9 @@ func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollVi
 			}
 			selected, err := gui.RenderWidget(widget, 0)
 			must(err)
+			scale := float64(selected.Bounds().Dx()) / float64(widget.Rect().Width)
 			green := 0
-			for y := max(0, top); y <= bottom; y++ {
+			for y := max(0, int(float64(end.Y-16)*scale)); y < min(selected.Bounds().Dy(), int(float64(end.Y+16)*scale)); y++ {
 				for x := max(0, int(float64(previous.X-2)*scale)); x < min(selected.Bounds().Dx(), int(float64(end.X+2)*scale)); x++ {
 					r, g, b, a := selected.At(x, y).RGBA()
 					if a == 65535 && g > 64000 && r < 1000 && b < 1000 {
@@ -664,7 +732,6 @@ func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollVi
 			fmt.Println("PASS cold End final character pointer selection in both directions")
 			win.Destroy()
 		}
-
 	}
 }
 
@@ -673,6 +740,8 @@ func forwardVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollVi
 	stage := 0
 	deadline := time.Now().Add(30 * time.Second)
 	var start, end, point geometry.Point
+	var sample tailCaretSample
+	stable := 0
 	var offset float32
 	anchor, length := 0, 0
 	pointer := func(kind events.EventType, p geometry.Point) {
@@ -697,27 +766,15 @@ func forwardVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollVi
 			return
 		}
 		if stage == 1 {
-			img, err := gui.RenderWidget(widget, 0)
-			must(err)
-			scale := float64(img.Bounds().Dx()) / float64(widget.Rect().Width)
-			left, top, bottom := img.Bounds().Dx(), img.Bounds().Dy(), -1
-			for y := 0; y < min(img.Bounds().Dy(), int(64*scale)); y++ {
-				for x := 0; x < img.Bounds().Dx(); x++ {
-					r, g, b, a := img.At(x, y).RGBA()
-					if a == 65535 && r > 64000 && b > 64000 && g < 58000 {
-						left = min(left, x)
-						top = min(top, y)
-						bottom = max(bottom, y)
-					}
-				}
-			}
-			if bottom < 0 {
+			var ready bool
+			sample, ready = stableTailCaret(widget, scroll, &sample, &stable)
+			if !ready {
 				return
 			}
-			end = geometry.Point{X: float32(float64(left) / scale), Y: float32(float64(top+bottom) / 2 / scale)}
+			end = sample.point
 			start = geometry.Point{X: end.X - 150, Y: end.Y}
 			point = start
-			offset = scroll.ScrollX()
+			offset = sample.offset
 			length = model.Len()
 			pointer(events.PointerDown, start)
 			anchor = widget.Snapshot().TextEditing.Selection.Anchor
