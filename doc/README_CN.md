@@ -19,7 +19,8 @@ go get github.com/golang-gui/goui-sourceview@v0.2.0
 
 ## 主要能力
 
-- **语法高亮：** 支持 JSON、XML、HTML、Markdown、TOML、YAML、Shell。
+- **语法高亮：** 支持 JSON/JSONC、XML、HTML、Markdown、TOML、YAML、Shell、HTTP、Protobuf、
+  Makefile、CMake、Nginx、INI、Dockerfile、SQL、Go、Python、JavaScript、TypeScript、CSS。
 - **折叠与导航：** 结构化标记、Markdown 标题及围栏代码折叠，行列跳转。
 - **编辑辅助：** 智能缩进、空白标记、缩进线及列标尺。
 - **源码编辑：** Unicode 选区、剪贴板、撤销/重做、缩进和整行操作。
@@ -60,7 +61,7 @@ AI 会按[安装说明](../skills/INSTALL.md)使用当前工具的原生技能�
 go run ./example/editor
 ```
 
-示例可以编辑 JSON、XML、HTML、Markdown、TOML、YAML、Shell，体验查找与补全，并切换亮暗外观。
+示例包含所有内置语言的可编辑样本，可以体验查找与补全，并切换亮暗外观。
 另提供[声明式示例](../example/declarative)和[自定义 Markdown 编辑器](../example/markdown)。
 
 ## 许可证

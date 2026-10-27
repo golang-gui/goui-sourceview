@@ -1,0 +1,10 @@
+{
+  // Editor preferences allow comments and trailing commas.
+  "editor": {
+    "fontFamily": "monospace",
+    "tabSize": 4,
+    "wordWrap": true,
+  },
+  /* Syntax colors remain visible in selections. */
+  "theme": "Modern",
+}

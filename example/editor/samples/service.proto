@@ -1,0 +1,14 @@
+syntax = "proto3";
+package example.editor;
+
+// A small document service.
+message Document {
+  string title = 1;
+  repeated string tags = 2;
+  optional bool editable = 3;
+  map<string, string> properties = 4;
+}
+
+service Documents {
+  rpc Save(Document) returns (Document);
+}

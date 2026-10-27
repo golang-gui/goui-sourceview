@@ -856,6 +856,20 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.YAML, "text: |\n  body\nnext: true", "  body", 1, language.KindString},
 		{language.Shell, "$HOME", "$HOME", 0, language.KindVariable},
 		{language.Shell, "cat <<END\n${HOME}\nEND", "${HOME}", 1, language.KindVariable},
+		{language.JSONC, "// note", "// note", 0, language.KindComment},
+		{language.HTTP, "GET", "GET", 0, language.KindKeyword},
+		{language.Makefile, "target", "target", 0, language.KindProperty},
+		{language.CMake, "project", "project", 0, language.KindKeyword},
+		{language.Nginx, "server", "server", 0, language.KindKeyword},
+		{language.INI, "[section]", "[section]", 0, language.KindTag},
+		{language.Dockerfile, "FROM", "FROM", 0, language.KindKeyword},
+		{language.SQL, "SELECT", "SELECT", 0, language.KindKeyword},
+		{language.Protobuf, "message", "message", 0, language.KindKeyword},
+		{language.Go, "package", "package", 0, language.KindKeyword},
+		{language.Python, "True", "True", 0, language.KindKeyword},
+		{language.JavaScript, "const", "const", 0, language.KindKeyword},
+		{language.TypeScript, "interface", "interface", 0, language.KindKeyword},
+		{language.CSS, ".name", ".name", 0, language.KindTag},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

@@ -1,7 +1,7 @@
 package main
 
 import (
-	_ "embed"
+	"embed"
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
@@ -9,26 +9,8 @@ import (
 
 // Original samples are embedded so the binary can run from any directory.
 //
-//go:embed samples/settings.json
-var jsonSample string
-
-//go:embed samples/layout.xml
-var xmlSample string
-
-//go:embed samples/index.html
-var htmlSample string
-
-//go:embed samples/config.toml
-var tomlSample string
-
-//go:embed samples/config.yaml
-var yamlSample string
-
-//go:embed samples/script.sh
-var shellSample string
-
-//go:embed samples/guide.md
-var markdownSample string
+//go:embed samples/*
+var samples embed.FS
 
 type exampleDocument struct {
 	name     string
@@ -37,23 +19,20 @@ type exampleDocument struct {
 
 func sampleDocuments() []exampleDocument {
 	var documents []exampleDocument
-	for _, sample := range []struct {
-		name, text string
-		language   language.ID
-	}{
-		{"settings.json", jsonSample, language.JSON},
-		{"layout.xml", xmlSample, language.XML},
-		{"index.html", htmlSample, language.HTML},
-		{"config.toml", tomlSample, language.TOML},
-		{"config.yaml", yamlSample, language.YAML},
-		{"script.sh", shellSample, language.Shell},
-		{"guide.md", markdownSample, language.Markdown},
+	for _, name := range []string{
+		"settings.json", "layout.xml", "index.html", "config.toml", "config.yaml", "script.sh", "guide.md",
+		"settings.jsonc", "requests.http", "service.proto", "Makefile", "CMakeLists.txt", "nginx.conf", "settings.ini",
+		"Dockerfile", "query.sql", "hello.go", "hello.py", "app.js", "app.ts", "theme.css",
 	} {
-		doc := source.NewDocument(sample.text)
-		if err := doc.SetLanguage(sample.language); err != nil {
+		text, err := samples.ReadFile("samples/" + name)
+		if err != nil {
+			panic(err)
+		}
+		doc := source.NewDocument(string(text))
+		if err := doc.SetLanguage(language.Guess(name, text)); err != nil {
 			panic(err) // Embedded language IDs are fixed, not user input.
 		}
-		documents = append(documents, exampleDocument{sample.name, doc})
+		documents = append(documents, exampleDocument{name, doc})
 	}
 	return documents
 }

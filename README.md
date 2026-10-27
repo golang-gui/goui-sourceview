@@ -21,7 +21,9 @@ go get github.com/golang-gui/goui-sourceview@v0.2.0
 
 ## Features
 
-- **Syntax highlighting** for JSON, XML, HTML, Markdown, TOML, YAML and Shell.
+- **Syntax highlighting** for JSON/JSONC, XML, HTML, Markdown, TOML, YAML, Shell,
+  HTTP, Protobuf, Makefile, CMake, Nginx, INI, Dockerfile, SQL, Go, Python,
+  JavaScript, TypeScript and CSS.
 - **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.
 - **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
 - **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.
@@ -64,7 +66,7 @@ the development environment, then run from the repository root:
 go run ./example/editor
 ```
 
-The example lets you edit JSON, XML, HTML, Markdown, TOML, YAML and Shell, try search and completion, and switch
+The example includes editable samples for every built-in language, search and completion, and lets you switch
 between light and dark appearances. A [declarative example](example/declarative) and a [custom Markdown editor](example/markdown) are also available.
 
 ## License

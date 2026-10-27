@@ -1,0 +1,18 @@
+:root {
+  --accent: #3b82f6;
+  --surface: #f8fafc;
+}
+
+/* Selectors, properties, units and custom properties. */
+.editor:hover {
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 0.5rem 12px;
+  font-family: "Fira Code", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --surface: #18181b; }
+}

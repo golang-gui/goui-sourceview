@@ -1,7 +1,7 @@
-// TOML/YAML/Shell integration verification. Requires a desktop/window manager,
+// Built-in language integration verification. Requires a desktop/window manager,
 // native typography and fonts. Run: go run ./tests/window/editor/languages
 // [-dark]. Linux without IME service: XMODIFIERS=@im=none. Starts one editable
-// view, switches six documents, requests builtin completion, accepts it by
+// view, switches documents, requests builtin completion, accepts it by
 // Enter, checks undo and types quotes/brackets through the normal input path.
 // Checks readonly and semantic text/selection, then closes automatically.
 // Color correctness has independent native bitmap tests; this program does not
@@ -19,6 +19,7 @@ import (
 	"log"
 	"runtime"
 	"time"
+	"unicode/utf8"
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
@@ -74,7 +75,7 @@ func main() {
 	scroll.SetMainWeight(1)
 	box := gui.NewLinearBox(layout.DirectionVertical)
 	box.SetCrossAlign(layout.CrossStretch)
-	box.AddChild(gui.NewLabel("TOML · YAML · Shell — completion, quotes and history"))
+	box.AddChild(gui.NewLabel("Built-in languages — completion, quotes and history"))
 	box.AddChild(scroll)
 	probe := &scaleProbe{}
 	box.AddChild(probe)
@@ -95,6 +96,13 @@ func main() {
 		{language.YAML, "enabled: nu", "enabled: null"},
 		{language.Shell, "pri", "printf"},
 		{language.JSON, "tr", "true"}, {language.XML, "<x xml:l", "<x xml:lang"}, {language.HTML, "<di", "<div"},
+		{language.JSONC, "tr", "true"}, {language.HTTP, "GE", "GET"},
+		{language.Makefile, "incl", "include"}, {language.CMake, "proj", "project"},
+		{language.Nginx, "serv", "server"}, {language.INI, "ye", "yes"},
+		{language.Dockerfile, "FRO", "FROM"}, {language.SQL, "SEL", "SELECT"},
+		{language.Protobuf, "mes", "message"}, {language.Go, "pack", "package"},
+		{language.Python, "whil", "while"}, {language.JavaScript, "cons", "const"},
+		{language.TypeScript, "interf", "interface"}, {language.CSS, ".x { backg", ".x { background"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -121,7 +129,7 @@ func main() {
 			info := completionInfo(win.Popovers()[0].Widget().Snapshot())
 			found := -1
 			for i, row := range info.Children {
-				if row.Text == tc.want[len(tc.text)-len(completionPrefix(tc.id)):] {
+				if row.Text == tc.want[len(tc.text)-len(completionPrefix(tc.id, tc.text)):] {
 					found = i
 					break
 				}
@@ -144,6 +152,8 @@ func main() {
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},
 		{language.Shell, "echo ", "'\\'", "echo '\\'"},
+		{language.Python, "text = ", `"""`, `text = """`},
+		{language.Go, "text := ", "`raw`", "text := `raw`"},
 	} {
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)
@@ -199,19 +209,18 @@ func main() {
 	app.Run()
 	check(complete, "language integration aborted")
 }
-func completionPrefix(id language.ID) string {
-	switch id {
-	case language.TOML, language.JSON:
-		return "tr"
-	case language.YAML:
-		return "nu"
-	case language.Shell:
-		return "pri"
-	case language.XML:
-		return "xml:l"
-	default:
-		return "di"
+func completionPrefix(id language.ID, text string) string {
+	l, ok := language.Builtin(id)
+	check(ok, "unknown language")
+	at := len(text)
+	for at > 0 {
+		r, n := utf8.DecodeLastRuneInString(text[:at])
+		if !l.IsWord(r) {
+			break
+		}
+		at -= n
 	}
+	return text[at:]
 }
 
 type scaleProbe struct {
