@@ -6,14 +6,34 @@ import (
 	"testing"
 
 	"github.com/golang-gui/goui-sourceview/scheme"
+	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
+	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
+
+// 四边 Padding 迁移保持原先的等边留白，不依赖桌面和原生字体度量。
+func TestCompanionControlsKeepUniformPadding(t *testing.T) {
+	find := newFindBar()
+	if find.find.Padding() != geometry.UniformInsets(4) || find.replacement.Padding() != geometry.UniformInsets(4) {
+		t.Fatal("查找或替换输入框的四边留白不一致")
+	}
+	if find.close.Padding() != geometry.UniformInsets(3) || find.matchCase.Padding() != geometry.UniformInsets(2) {
+		t.Fatal("查找操作或选项按钮的四边留白不一致")
+	}
+	goTo := newGoToBar()
+	if goTo.input.Padding() != geometry.UniformInsets(4) || goTo.close.Padding() != geometry.UniformInsets(3) {
+		t.Fatal("跳转栏输入框或关闭按钮的四边留白不一致")
+	}
+	if goTo.surface.LayoutManager().(*layout.LinearLayout).Padding != geometry.UniformInsets(12) {
+		t.Fatal("跳转栏初始容器留白改变")
+	}
+}
 
 func TestDetachedFindBarBorrowsTargetWithoutSubscriptions(t *testing.T) {
 	a, b := NewSourceView(), NewSourceView()

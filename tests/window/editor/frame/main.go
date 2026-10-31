@@ -78,7 +78,7 @@ func main() {
 	row := gui.NewLinearBox(layout.DirectionHorizontal)
 	row.SetCrossAlign(layout.CrossStretch)
 	row.SetSpacing(16)
-	row.SetPadding(12)
+	row.SetPadding(geometry.UniformInsets(12))
 	row.SetMainWeight(1)
 	for i, host := range hosts {
 		host.SetStyleName([]string{"text-view", "source-view"}[i])
@@ -266,8 +266,8 @@ func main() {
 		case 14:
 			r := plain.Snapshot().Bounds
 			// 两行均为同一 ASCII 字体，按实际内容高度取第二行中心，不能假定 20-DIP 行高。
-			lineHeight := (plain.ContentSize().Height - 2*plain.Padding()) / 2
-			p := geometry.Point{X: r.X + 15, Y: r.Y + plain.Padding() + 1.5*lineHeight}
+			lineHeight := (plain.ContentSize().Height - plain.Padding().Vertical()) / 2
+			p := geometry.Point{X: r.X + 15, Y: r.Y + plain.Padding().Top + 1.5*lineHeight}
 			outside = geometry.Point{X: r.X + r.Width + 80, Y: p.Y}
 			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Button: events.PointerButtonLeft, Position: p}))
 			check(plain.Selection().Caret >= 20_001 && plain.Selection().Caret < 20_006, "TextView pointer missed the short second line")
@@ -281,8 +281,8 @@ func main() {
 			}
 			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: outside}))
 			r := plain.Snapshot().Bounds
-			lineHeight := (plain.ContentSize().Height - 2*plain.Padding()) / 2
-			p := geometry.Point{X: r.X + 15, Y: r.Y + plain.Padding() + lineHeight/2}
+			lineHeight := (plain.ContentSize().Height - plain.Padding().Vertical()) / 2
+			p := geometry.Point{X: r.X + 15, Y: r.Y + plain.Padding().Top + lineHeight/2}
 			outside = geometry.Point{X: r.X + r.Width + 80, Y: p.Y}
 			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerDown, Button: events.PointerButtonLeft, Position: p}))
 			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Buttons: events.PointerButtonLeftDown, Position: outside}))

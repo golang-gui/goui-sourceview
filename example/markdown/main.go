@@ -83,7 +83,7 @@ func main() {
 		return b
 	}
 	tools := gui.NewLinearBox(layout.DirectionHorizontal)
-	tools.SetPadding(8)
+	tools.SetPadding(geometry.UniformInsets(8))
 	tools.SetSpacing(8)
 	tools.SetCrossAlign(layout.CrossCenter)
 	tools.AddChild(button("Undo", func() { editor.Undo() }))
@@ -104,7 +104,7 @@ func main() {
 	tools.AddChild(button("Light / Dark", func() { *dark = !*dark; applyTheme() }))
 	header := gui.NewHeaderBar()
 	title := gui.NewLabel("Markdown  ·  Custom language, editing rules and completion")
-	header.SetPadding(12)
+	header.SetPadding(geometry.UniformInsets(12))
 	header.SetChild(title)
 	content := gui.NewLinearBox(layout.DirectionVertical)
 	content.SetCrossAlign(layout.CrossStretch)

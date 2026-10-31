@@ -43,7 +43,7 @@ func newGoToBar() *goToBar {
 	b.AddEventController(b.pointer)
 	b.surface = &gotoSurface{bar: b}
 	l := layout.NewLinearLayout(layout.DirectionVertical)
-	l.Padding = 12
+	l.Padding = geometry.UniformInsets(12)
 	l.Spacing = 4
 	l.CrossAlign = layout.CrossStretch
 	b.surface.SetLayoutManager(l)
@@ -53,13 +53,13 @@ func newGoToBar() *goToBar {
 	b.row.SetSpacing(4)
 	b.input = gui.NewTextInput()
 	b.input.SetStyleName("sourceview.find.input")
-	b.input.SetPadding(4)
+	b.input.SetPadding(geometry.UniformInsets(4))
 	b.input.SetMainWeight(1)
 	b.input.ConnectText(func(string) { b.refresh() })
 	b.input.ConnectSubmit(b.submit)
 	b.close = gui.NewButton()
 	b.close.SetStyleName("sourceview.find.action")
-	b.close.SetPadding(3)
+	b.close.SetPadding(geometry.UniformInsets(3))
 	icon := gui.NewIcon(findIcons["close"])
 	icon.SetStyleName("sourceview.find.icon")
 	b.close.SetChild(icon)
@@ -301,7 +301,7 @@ func (s *gotoSurface) Measure(c layout.Constraint) layout.Measurement {
 		return layout.Measurement{}
 	}
 	s.inset = max(1, boxOf(gui.ResolveWidgetStyle(s, "sourceview.find", "", style.Normal)).outset()+1)
-	s.LayoutManager().(*layout.LinearLayout).Padding = s.inset + 6
+	s.LayoutManager().(*layout.LinearLayout).Padding = geometry.UniformInsets(s.inset + 6)
 	width := min(float32(360), c.Max.Width)
 	c.Min.Width = width
 	c.Max.Width = width

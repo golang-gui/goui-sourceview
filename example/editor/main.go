@@ -146,7 +146,7 @@ func run() error {
 	files := gui.NewWrapBox(layout.DirectionHorizontal)
 	files.SetSpacing(4)
 	files.SetLineSpacing(4)
-	files.SetPadding(8)
+	files.SetPadding(geometry.UniformInsets(8))
 	files.SetCrossAlign(layout.CrossCenter)
 	for i, d := range documents {
 		choice := widgets.NewCheckButton()
@@ -235,7 +235,7 @@ func run() error {
 	tools.AddChild(hint)
 
 	header := gui.NewHeaderBar()
-	header.SetPadding(8)
+	header.SetPadding(geometry.UniformInsets(8))
 	title := row(12, 0)
 	title.AddChild(gui.NewLabel("GOUI SourceView"))
 	subtitle := gui.NewLabel("A code editor for Go")
@@ -285,7 +285,7 @@ func button(text string, clicked func()) *gui.Button {
 func row(spacing, padding float32) *gui.LinearBox {
 	b := gui.NewLinearBox(layout.DirectionHorizontal)
 	b.SetSpacing(spacing)
-	b.SetPadding(padding)
+	b.SetPadding(geometry.UniformInsets(padding))
 	b.SetCrossAlign(layout.CrossCenter)
 	return b
 }
