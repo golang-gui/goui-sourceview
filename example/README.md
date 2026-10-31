@@ -9,10 +9,10 @@ The examples use Modern and request
 ## Setup / 环境准备
 
 Requires Go 1.24 or newer and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
-The module depends on GOUI v0.4.0; Go downloads it automatically. A separate GOUI
+The module depends on the GOUI commit recorded in `go.mod`; Go downloads it automatically. A separate GOUI
 checkout or local workspace is not required to build or run these examples.
 
-需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块直接依赖 GOUI v0.4.0，由 Go
+需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块依赖 `go.mod` 指定的 GOUI 提交，由 Go
 自动下载；构建和运行示例无需另行检出 GOUI 或创建本地工作区。
 
 ## Run / 启动
@@ -92,6 +92,13 @@ Use Ctrl/Cmd+F to open the built-in find UI; editing uses the same widget as the
 
 `declarative` 展示最小声明式组合及稳定 Document，样式随系统设置重建。
 Ctrl/Cmd+F 打开查找栏；编辑行为由同一个命令式控件提供。
+
+Selection uses a stable `ui.State` with `BindSelection`. The footer updates in
+its own `ui.Build`; moving the caret does not rebuild the editor. Go to start
+changes the state, applying only the editor's selection property.
+
+选区使用稳定的 `ui.State` 和 `BindSelection` 双向绑定。底部 `ui.Build` 单独更新，
+移动光标不重建编辑器；Go to start 修改状态，只应用编辑器的选区属性。
 
 Configuration types, document construction and key bindings use `sourceui` directly;
 GOUI key constants use `base`. This example explicitly inserts real Tabs and shows

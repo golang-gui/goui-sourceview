@@ -1,5 +1,9 @@
 # GOUI 接入与最小扩展设计
 
+> 当前源码接入基线：GOUI `b5d8421`，依赖版本为
+> `v0.4.1-0.20261031020841-b5d8421e9a94`；四边 Padding 和局部选区绑定见第 9 节。
+> 以下较早的版本、提案及验收记录按各自日期保留，不代表当前最低依赖。
+
 > 实施状态：G1/G2/G3 及后续所需扩展已随 GOUI v0.2.0 发布，本模块直接声明该版本；下文保留设计与验收门槛，实际签名、范围和验证见 [Implementation](Implementation.md)。
 > 下文第 1–5 节保留初始提案的事实与拟新增契约；实施结果以当前公开接口及 Implementation 为准，样式注册见 [本轮验收](PlanStyles.md)。
 > 初始设计的历史基线：GOUI HEAD `4167bb79823efffbea43e00558260448959536b0`，2026-10-16；
@@ -162,3 +166,41 @@ TextLayout 继续提供同步排版／度量／渲染，上层复制普通度量
 helper 时放 gui，不放 typography，也不加入 SourceView 特例。
 设计见 [布局第 11 节](DesignLayout.md#11-片段缓存接入规格实施中)及相邻 GOUI
 [通用片段设计](../../goui/doc/DesignIncrementalTextLayout.md)。
+
+## 9. GOUI 当前接口适配（2026-10-31）
+
+本轮只修改 SourceView，复用 GOUI 已有公开接口，不增加通用框架能力。
+`go.mod` 使用公开代理可解析的上述伪版本；不依赖尚未发布的 v0.5.0 标签。
+本地 `go.work` 继续只用于联调，关闭工作区的测试是独立依赖验收。
+随 GOUI 一并采用其 nanovgo v0.0.10、oksvg/rasterx/scanFT v0.1.0 依赖。
+
+### 四边 Padding
+
+命令式控件和 `layout.LinearLayout.Padding` 接收 `geometry.Insets`。
+查找／替换／定位输入、按钮和示例容器用 `geometry.UniformInsets` 保留已有等边尺寸，
+不改变 SourceView 正文自己的布局模型。窗口测试计算 TextView 内容行高时减去
+`Padding().Vertical()`，计算首行位置时使用 `Padding().Top`，避免把总留白当成单边。
+声明式已有的 `Padding(float32)` 仍为等边简写，无需迁移。
+
+### 选区属性绑定
+
+`ui.SourceView().BindSelection(source)` 保存稳定的 `ui.BindState[TextSelection]` 指针，
+声明时不调用 Get，不让父 ComposeView 意外收集整棵编辑器子树的依赖。
+Update 中通过 GOUI `ui.BindValue(ctx, "selection", source, apply)` 注册属性绑定。
+后续源通知仅应用选区，不重放 Document、ReadOnly、Scheme、Search 或其他声明，
+也不重建父视图。属性应用期间阻断声明式信号连接，避免回写或通知业务回调。
+订阅的切换、失效、转移和销毁均交给 GOUI 协调器管理。
+
+修饰方法按 GOUI TextView 的规则处理：
+
+- BindSelection：设置读绑定和生成的 OnSelection 回写；nil 为无操作。
+- OnSelection：替换回写，保留读绑定。
+- Selection：取消读绑定及生成的回写，保留用户显式设置的 OnSelection。
+- 重建时未声明选区：交给控件自身维护；旧读绑定由协调器移除。
+
+无需创建独立的状态订阅系统。SourceView 的语法、搜索、完成项样式仍显式解析
+已命名部件；已有 Basic／Modern 注册和 StyleChanged 继续复用。
+本轮不改变代码配色、缓存键、文本模型或渲染后端。
+
+回归覆盖放在 `controls_test.go`、`ui/sourceview_test.go`，真实协调和事件循环验证位于
+`tests/window/editor/binding`。实际执行结果和平台缺口见 [Plan](Plan.md)。

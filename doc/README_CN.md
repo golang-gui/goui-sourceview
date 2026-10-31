@@ -12,6 +12,8 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 ## 安装
 
 需要 Go 1.24 或更新版本。SourceView v0.2.0 依赖 GOUI v0.4.0，由 Go 自动下载。
+开发分支为适配四边 Padding 和局部选区绑定，依赖 `go.mod` 指定的较新 GOUI 提交，
+同样可直接下载，无需本地检出 GOUI；不改变已发布 v0.2.0 的依赖条件。
 
 ```sh
 go get github.com/golang-gui/goui-sourceview@v0.2.0

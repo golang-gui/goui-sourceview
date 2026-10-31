@@ -18,9 +18,14 @@
 
 当前 SourceViewView 按 GOUI 新声明契约只实现 WidgetView 的 Mount／Update／Unmount；
 自定义组合组件使用 ComposeView.Build(ctx)，不要给 WidgetView 添加 return self 的
-Build 占位方法。当前源码依赖已发布的 GOUI v0.4.0，其中包含新声明契约及
-长段落排版接口；无需相邻 GOUI 检出或本地工作区。旧版 SourceView 仍应参考
+Build 占位方法。当前开发源码依赖 `go.mod` 指定的 GOUI 提交，包含四边 Padding、
+局部选区绑定及长段落排版接口；无需相邻 GOUI 检出或本地工作区。
+已发布的 SourceView v0.2.0 仍依赖 GOUI v0.4.0。旧版 SourceView 应参考
 对应版本的接口和示例，不能直接套用 main 的声明契约。
+
+命令式 SetPadding 接受 `geometry.Insets`，等边使用 `geometry.UniformInsets(n)`；
+声明式 Padding(n) 仍是等边简写。选区状态在构建外持有，用 BindSelection 进行局部
+双向同步；OnSelection 替换回写，Selection 取消绑定，避免为了光标变化重建整个应用。
 
 ## 声明式最小接入
 

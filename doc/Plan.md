@@ -5,9 +5,43 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-go.mod 当前声明已发布的 GOUI v0.4.0，SourceView v0.2.0 已正式发布。
+go.mod 当前声明 GOUI `v0.4.1-0.20261031020841-b5d8421e9a94`；
+SourceView v0.2.0 已正式发布，其发布依赖仍为 GOUI v0.4.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
+
+## GOUI 当前接口适配（2026-10-31）
+
+设计见 [接入设计第 9 节](DesignGOUIIntegration.md#9-goui-当前接口适配2026-10-31)。
+
+- [x] 迁移查找／替换／跳转栏、命令式示例和 frame 窗口验证的四边 Padding。
+- [x] BindSelection 使用 BindValue 局部属性更新，并对齐 Selection／OnSelection 的覆盖顺序。
+- [x] 增加不依赖桌面的声明顺序、延迟读取和 Padding 回归；新增 binding 窗口程序验证
+  真实协调器、正常键盘输入、切换来源、卸载、重挂载和文档历史。
+- [x] 声明式示例展示稳定选区状态和局部状态栏，更新接入文档及公开可获取依赖。
+- [x] Linux amd64／Go 1.25.8：本地工作区 `go test ./...`、关闭工作区后的
+  `GOWORK=off go test ./... -count=1`、`go test -race ./... -count=1`、`go vet ./...`、
+  `go mod verify`、`go mod tidy -diff` 通过；后三类 Go 命令同样关闭工作区。
+- [x] `GOWORK=off CGO_ENABLED=0` 的 Windows amd64／macOS arm64 全仓构建、
+  `go test -exec=true ./...` 通过；仅为编译验收，未在这两个系统执行测试或窗口程序。
+- [x] Ubuntu 22.04.5 amd64／Pango／独立 Xvnc :111、:112／Xfwm4 4.16.1，
+  窗口正常 DispatchEvent／CommitText 自动断言通过：
+  binding 为 Software 1x、OpenGL 1x／2x；find 为 Software 1x；
+  find_appearance 为 Software 1x／2x（高倍实际测得约 2.00077）；
+  frame 为 OpenGL 1x、Software 2x。
+
+适配前 `go test ./...` 因旧式 Padding 无法编译。窗口回归的首次 binding 断言曾错误要求
+声明式卸载立即 Destroy；按公开生命周期契约修正为检查 Root 脱离、有效订阅释放、旧控件
+不再触发声明回调，并增加带有效绑定卸载和重新挂载验证；修正后上述三组均通过。
+验证会话与应用已退出；没有操作用户桌面、剪贴板、文件内容或系统设置。
+
+额外尝试 `GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...` 失败：
+GOUI `platform/linux/libs/libc/syscall_linux.go` 使用 arm64 不提供的 `syscall.SYS_PIPE`、
+`syscall.SYS_POLL`。已核对 GOUI v0.4.0 也有相同引用，因此这是上游既有适配缺口，
+本轮未修改 GOUI。Windows/macOS 原生运行、真实 IME 和混合 DPI 未执行；
+不将交叉编译和模拟事件验收描述为这些场景通过。
+
+命令日志与窗口验证产物保留在 `/tmp/sourceview-goui-compat-yxpjmauq`。
 
 ## v0.2.0 发布（2026-10-26）
 

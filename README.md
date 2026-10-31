@@ -19,6 +19,10 @@ which Go downloads automatically.
 go get github.com/golang-gui/goui-sourceview@v0.2.0
 ```
 
+The development branch uses a newer GOUI commit recorded in `go.mod` for
+four-sided padding and local selection bindings. Go downloads this dependency
+without requiring a local GOUI checkout; the released v0.2.0 requirements above are unchanged.
+
 ## Features
 
 - **Syntax highlighting** for JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell,

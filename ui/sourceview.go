@@ -4,6 +4,7 @@ package ui
 import (
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/scheme"
+	"github.com/golang-gui/goui/core/bits"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
 	base "github.com/golang-gui/goui/ui"
@@ -19,6 +20,8 @@ type SourceViewView struct {
 	document                                                             *Document
 	readOnly, acceptsTab                                                 bool
 	selection                                                            *TextSelection
+	selectionSource                                                      base.BindState[TextSelection]
+	fields                                                               bits.Bitmap[uint8]
 	indent                                                               *IndentOptions
 	wrap                                                                 *WrapMode
 	lineNumbers                                                          *bool
@@ -37,11 +40,22 @@ type SourceViewView struct {
 	onFoldingChanged                                                     func()
 }
 
-func SourceView() *SourceViewView                                   { v := &SourceViewView{}; v.Self = v; return v }
-func (v *SourceViewView) Document(d *Document) *SourceViewView      { v.document = d; return v }
-func (v *SourceViewView) ReadOnly(b bool) *SourceViewView           { v.readOnly = b; return v }
-func (v *SourceViewView) AcceptsTab(b bool) *SourceViewView         { v.acceptsTab = b; return v }
-func (v *SourceViewView) Selection(s TextSelection) *SourceViewView { v.selection = &s; return v }
+func SourceView() *SourceViewView                              { v := &SourceViewView{}; v.Self = v; return v }
+func (v *SourceViewView) Document(d *Document) *SourceViewView { v.document = d; return v }
+func (v *SourceViewView) ReadOnly(b bool) *SourceViewView      { v.readOnly = b; return v }
+func (v *SourceViewView) AcceptsTab(b bool) *SourceViewView    { v.acceptsTab = b; return v }
+
+// Selection declares UTF-8 byte endpoints. It removes a prior read binding and
+// its generated writeback, while preserving an explicit OnSelection callback.
+func (v *SourceViewView) Selection(s TextSelection) *SourceViewView {
+	v.selection = &s
+	v.selectionSource = nil
+	if v.fields.Check(writeSelection) {
+		v.onSelection = nil
+		v.fields.Set(writeSelection, false)
+	}
+	return v
+}
 func (v *SourceViewView) IndentOptions(o IndentOptions) *SourceViewView {
 	v.indent = &o
 	return v
@@ -71,12 +85,19 @@ func (v *SourceViewView) OnChange(fn func(TextChange)) *SourceViewView {
 }
 func (v *SourceViewView) OnSelection(fn func(TextSelection)) *SourceViewView {
 	v.onSelection = fn
+	v.fields.Set(writeSelection, false)
 	return v
 }
 func (v *SourceViewView) OnError(fn func(error)) *SourceViewView { v.onError = fn; return v }
+
+// BindSelection updates the widget locally when the source changes and writes
+// user selection changes back. OnSelection replaces writeback; Selection
+// removes the binding. nil is a no-op. The source must be a stable pointer.
 func (v *SourceViewView) BindSelection(s base.BindState[TextSelection]) *SourceViewView {
 	if s != nil {
-		v.Selection(s.Get()).OnSelection(s.Set)
+		v.selectionSource = s
+		v.onSelection = s.Set
+		v.fields.Set(writeSelection, true)
 	}
 	return v
 }
@@ -146,6 +167,8 @@ type state struct {
 	handles          signal.Handles
 	onFoldingChanged func()
 }
+
+const writeSelection = 0
 
 func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 	w := source.NewSourceView()
@@ -252,7 +275,15 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 			panic(err)
 		}
 	}
-	if v.selection != nil && w.Selection() != *v.selection {
+	if v.selectionSource != nil {
+		base.BindValue(ctx, "selection", v.selectionSource, func(selection TextSelection) {
+			s.handles.Block()
+			defer s.handles.Unblock()
+			if w.Selection() != selection {
+				w.SetSelection(selection)
+			}
+		})
+	} else if v.selection != nil && w.Selection() != *v.selection {
 		w.SetSelection(*v.selection)
 	}
 	s.onChange = v.onChange

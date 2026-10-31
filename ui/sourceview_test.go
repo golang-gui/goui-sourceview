@@ -126,3 +126,45 @@ func TestUncontrolledWhitespaceSurvivesDeclarativeUpdate(t *testing.T) {
 		t.Fatal("explicit false or retained mode ignored")
 	}
 }
+
+// 绑定声明不读取状态，避免在父 ComposeView 中错误建立整个子树的读取依赖。
+func TestSelectionBindingDefersReadsAndHonorsModifierOrder(t *testing.T) {
+	s := &selectionState{value: TextSelection{Caret: 2}}
+	v := SourceView().BindSelection(s)
+	if s.reads != 0 || v.selectionSource != s {
+		t.Fatal("绑定声明提前读取了状态")
+	}
+	v.onSelection(TextSelection{Caret: 3})
+	if s.value.Caret != 3 || s.writes != 1 {
+		t.Fatal("绑定未回写用户选区")
+	}
+	v.Selection(TextSelection{Caret: 1})
+	if v.selectionSource != nil || v.onSelection != nil || v.selection.Caret != 1 {
+		t.Fatal("Selection 未取消读绑定和生成的回写")
+	}
+	callbacks := 0
+	v.BindSelection(s).OnSelection(func(TextSelection) { callbacks++ })
+	if v.selectionSource != s || v.fields.Check(writeSelection) {
+		t.Fatal("OnSelection 应只替换回写，保留读绑定")
+	}
+	v.Selection(TextSelection{}).onSelection(TextSelection{})
+	if callbacks != 1 || s.writes != 1 {
+		t.Fatal("Selection 覆盖了显式回调或残留回写")
+	}
+	v.BindSelection(s).BindSelection(nil)
+	if v.selectionSource != s || s.reads != 0 {
+		t.Fatal("nil 绑定应为无操作，且声明阶段不能读取状态")
+	}
+}
+
+type selectionState struct {
+	base.State[TextSelection]
+	value         TextSelection
+	reads, writes int
+}
+
+func (s *selectionState) Get() TextSelection { s.reads++; return s.value }
+func (s *selectionState) Set(value TextSelection) {
+	s.writes++
+	s.value = value
+}
