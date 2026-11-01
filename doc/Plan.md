@@ -5,10 +5,46 @@
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
-go.mod 当前声明 GOUI `v0.4.1-0.20261031020841-b5d8421e9a94`；
+go.mod 当前声明 GOUI v0.5.0；
 SourceView v0.2.0 已正式发布，其发布依赖仍为 GOUI v0.4.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
+
+## GOUI v0.5.0 发行版接入（2026-11-01）
+
+设计见 [接入设计第 10 节](DesignGOUIIntegration.md#10-goui-v050-正式版2026-11-01)。
+
+- [x] 从模块代理获取 GOUI v0.5.0，标签提交为 `14b394d94227cc0a9d5a9bc9a95e8a711330b333`；
+  移除旧伪版本的 go.sum 条目，保持 Go 1.24 和其余已有库版本。
+- [x] 新增间接依赖 `godbus/dbus/v5 v5.2.4`，由 GOUI 的 Linux Portal 实现引入；
+  模块要求 Go 1.20，BSD-2-Clause 许可。SourceView 不直接管理 D-Bus 连接或原生模态状态。
+- [x] 核对四边 Padding、局部选区绑定、ScrollView 和显式窗口最小尺寸契约，
+  核心控件不需要新的适配层；同步中英文 README、示例和接入技能的当前版本说明。
+- [x] 同步本机既有未跟踪 `example/temp`：OpenFile 传入 `"main"`，提供有名称的筛选器，
+  区分请求分发错误与完成错误，在回调结束前关闭所有 FileAccess。该目录保持原有未跟踪状态。
+- [x] Linux amd64 / Ubuntu 22.04.5 / Go 1.25.8：`go test ./...`、
+  `GOWORK=off go test ./...`、`GOWORK=off go test -race ./...`、
+  `GOWORK=off go vet ./...`、`GOWORK=off go mod verify`、`GOWORK=off go mod tidy -diff` 通过。
+- [x] `GOWORK=off CGO_ENABLED=0 go build ./...` 的 Windows amd64 / macOS arm64
+  交叉构建通过；没有运行这两个系统的原生测试或窗口程序。
+- [x] 独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software，关闭工作区构建：
+  binding 1×、frame 深色 1.5×、completion scroll 1.5×、find 1× 全部通过已有自动断言。
+  覆盖局部更新和解绑、双滚动条拖动、窗口重排及内容缩短、补全滚轮/拖动/接受/撤销、
+  查找替换和声明式重建隔离。
+- [x] 同一会话内，通过真实 X11 输入打开本机示例的 Portal/GTK 文件选择器，
+  WM_TRANSIENT_FOR 指向所属主窗口，存在模态状态；读取本仓 README 后呈现 Markdown 高亮。
+  Cancel 按钮取消后保留原文；编辑输入与撤销由上述 find/completion 窗口断言另行覆盖。
+- [x] `skill-creator` 的 quick_validate 通过；未修改技能发现或权限规则。
+
+初次工作区编译只有本地 `example/temp` 仍调用旧 OpenFile 签名而失败；迁移后全仓通过。
+实际选取时也发现旧筛选器未提供显示名称，Portal 返回 `invalid filter: name is empty`；
+补齐名称后读取成功。快速 Escape 尝试时原生服务曾返回 response 2，示例按完成错误报告，
+原文与输入能力保留；不将该次操作算作正常取消验收，正常取消以上述 Cancel 按钮为准。
+
+日志、二进制与观察截图位于 `/tmp/sourceview-goui050-y5sP2j/`。没有写回所选文件或操作剪贴板，
+文件选择器按桌面服务自身机制维护最近文件。未修改 GOUI 仓库、go.work、全局 Go 环境或系统设置。
+验证应用与本轮专用 X11 / D-Bus 会话已退出，保留原有用户桌面。
+未验证真实 IME、跨屏缩放、远端文件选择器或作出性能改进结论。
 
 ## GOUI 当前接口适配（2026-10-31）
 

@@ -1,11 +1,13 @@
 github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/ISU=
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+github.com/godbus/dbus/v5 v5.2.4 h1:F2gUCy++NMIxGmo9J+z5le/+ZC8W1OgeR51P4i9ZB/U=
+github.com/godbus/dbus/v5 v5.2.4/go.mod h1:3AAv2+hPq5rdnr5txxxRwiGjPXamgoIHgz9FPBfOp3c=
 github.com/goexlib/cgo v0.1.1 h1:DdgwNGJc+SYz1/kniociF6ztU/3SDxJYBVKs63M63UE=
 github.com/goexlib/cgo v0.1.1/go.mod h1:7SF33pMm1GILhbtKQgyIrrAmy4oth8OW4/jAA3eH3Os=
 github.com/goexlib/mathx v0.0.1 h1:6BWbJW+UYM6K5LrqnY8wK3wLobyO+71wEXGIur9hwmY=
 github.com/goexlib/mathx v0.0.1/go.mod h1:YifTEUIIVf2VJaclxuiRJENt24Njb0onUKjkjinit38=
-github.com/golang-gui/goui v0.4.1-0.20261031020841-b5d8421e9a94 h1:J6r+C8oXHknQ36WmLODyQy04R63ZNUhM8v6RUjWge4A=
-github.com/golang-gui/goui v0.4.1-0.20261031020841-b5d8421e9a94/go.mod h1:7JdFI/m8SjJYkrrM7ACUUJzDlOoNVi/vaVbe6+MaUSc=
+github.com/golang-gui/goui v0.5.0 h1:REiujYKUngnuMMrysjZBy2ktJDq2HPNLBokbJ7aOyI8=
+github.com/golang-gui/goui v0.5.0/go.mod h1:9osZK10vkqAup4a+QDOSURLPmIgPtY++WWNtMDgBAqA=
 github.com/golang-gui/nanovgo v0.0.10 h1:JplfFc2omFnVVXZiHr/2mtvKqCGQjbfs4Hgq36C6UmM=
 github.com/golang-gui/nanovgo v0.0.10/go.mod h1:a4771IpfgcWEFQfKXuA7sQ2GvsYPDxpohrU8lzeymUo=
 github.com/golang-gui/oksvg v0.1.0 h1:ox8xVGvW2VvczIL3WaN+hUHt/RN3uuwicIQfdH6SCSU=

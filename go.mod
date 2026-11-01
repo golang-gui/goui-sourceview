@@ -3,12 +3,13 @@ module github.com/golang-gui/goui-sourceview
 go 1.24
 
 require (
-	github.com/golang-gui/goui v0.4.1-0.20261031020841-b5d8421e9a94
+	github.com/golang-gui/goui v0.5.0
 	golang.org/x/text v0.22.0
 )
 
 require (
 	github.com/ebitengine/purego v0.10.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.4 // indirect
 	github.com/goexlib/cgo v0.1.1 // indirect
 	github.com/goexlib/mathx v0.0.1 // indirect
 	github.com/golang-gui/nanovgo v0.0.10 // indirect

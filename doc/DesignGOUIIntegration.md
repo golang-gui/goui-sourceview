@@ -1,7 +1,7 @@
 # GOUI 接入与最小扩展设计
 
-> 当前源码接入基线：GOUI `b5d8421`，依赖版本为
-> `v0.4.1-0.20261031020841-b5d8421e9a94`；四边 Padding 和局部选区绑定见第 9 节。
+> 当前源码接入基线：GOUI v0.5.0（`14b394d94227cc0a9d5a9bc9a95e8a711330b333`）；
+> 四边 Padding、局部选区绑定和文件对话框适配见第 9–10 节。
 > 以下较早的版本、提案及验收记录按各自日期保留，不代表当前最低依赖。
 
 > 实施状态：G1/G2/G3 及后续所需扩展已随 GOUI v0.2.0 发布，本模块直接声明该版本；下文保留设计与验收门槛，实际签名、范围和验证见 [Implementation](Implementation.md)。
@@ -170,7 +170,7 @@ helper 时放 gui，不放 typography，也不加入 SourceView 特例。
 ## 9. GOUI 当前接口适配（2026-10-31）
 
 本轮只修改 SourceView，复用 GOUI 已有公开接口，不增加通用框架能力。
-`go.mod` 使用公开代理可解析的上述伪版本；不依赖尚未发布的 v0.5.0 标签。
+该轮 `go.mod` 使用公开代理可解析的 `v0.4.1-0.20261031020841-b5d8421e9a94`；当时 v0.5.0 尚未发布。
 本地 `go.work` 继续只用于联调，关闭工作区的测试是独立依赖验收。
 随 GOUI 一并采用其 nanovgo v0.0.10、oksvg/rasterx/scanFT v0.1.0 依赖。
 
@@ -204,3 +204,24 @@ Update 中通过 GOUI `ui.BindValue(ctx, "selection", source, apply)` 注册属�
 
 回归覆盖放在 `controls_test.go`、`ui/sourceview_test.go`，真实协调和事件循环验证位于
 `tests/window/editor/binding`。实际执行结果和平台缺口见 [Plan](Plan.md)。
+
+## 10. GOUI v0.5.0 正式版（2026-11-01）
+
+依赖从上述伪版本切换到可直接获取的 v0.5.0，保持 Go 1.24 要求。
+SourceView 的四边 Padding、`ui.BindValue` 局部属性绑定、文本排版与 Basic/Modern
+注册继续使用现有公开契约，不增加兼容层或要求本地 GOUI 检出。
+
+声明式文件对话框改为 `OpenFile(windowID, options, callback) error`，
+OpenDirectory/SaveFile 同样显式指定窗口 ID。使用者通过已声明的窗口 ID
+关联所属窗口，不在缺少所属窗口时改用无主对话框。返回错误表示请求未被派发；
+回调报告已接受请求的完成错误，空结果且无错误表示取消。
+使用者在本地文件读取结束后关闭所有返回的 FileAccess，包括错误和提前返回分支。
+文件筛选器显式提供非空显示名称和匹配模式，以符合 Linux Portal 的筛选器约定。
+所属窗口的模态输入、焦点和销毁处理交给 GOUI，不在 SourceView 重复维护模态状态。
+
+v0.5.0 的窗口最小尺寸由应用显式声明，不再从内容测量自动生成。
+现有 editor/frame/interaction 的显式最小尺寸保留；控件测量仍只表达控件布局约束。
+ScrollView 的已分配视口和滚动几何由其 Arrange/LayoutVisible 流程维护，
+SourceView 继续报告内容范围与延迟布局结果，不在 Measure 阶段另行提交滚动几何。
+
+实际接入以独立模块测试和正常窗口事件验证为准，记录见 [Plan](Plan.md)。
