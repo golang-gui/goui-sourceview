@@ -902,6 +902,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.GoWork, "use", "use", 0, language.KindKeyword},
 		{language.GoSum, "path", "path", 0, language.KindString},
 		{language.Dotenv, "NAME='first\nbody\nlast'", "body", 1, language.KindString},
+		{language.Properties, "key=value\\\nbody", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

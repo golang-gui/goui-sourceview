@@ -17,6 +17,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Properties:
+			d.Tokenizer = propTokenizer{}
+			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '.' || r == '-' }, Comments: Comments{Line: "#"}}
+			d.AllowWordSuggestions = codeWordSuggestions
 		case Dotenv:
 			d.Tokenizer = envTokenizer{}
 			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}, AutoClosingPairs: []Pair{{Open: `"`, Close: `"`, NotInString: true, NotInComment: true}, {Open: "'", Close: "'", NotInString: true, NotInComment: true}, {Open: "`", Close: "`", NotInString: true, NotInComment: true}}}

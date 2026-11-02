@@ -575,3 +575,11 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，独立 TigerVNC :87 / Xfwm4 compositor on / P
 `GOWORK=off go test ./...` 复跑和 Pango 亮暗多行正文颜色断言通过。
 独立浅色 1× 的 -language dotenv 通过 export 建议接受/撤销、路径引用输入和公共断言。
 Node.js 源码引用行为及未闭合引用的编辑恢复边界已记录，没有环境修改或 shell 执行。
+
+### Java Properties
+
+新增文件/围栏、逻辑行和转义状态、基础编辑与 messages.properties，示例共 53 份。
+独立预期覆盖键的转义分隔符、奇偶反斜杠、键/值续行、续行注释字符、注释不续行、
+续行前后的可选分隔符、Unicode 转义及 CRLF；长词/值和极小分片通过。
+`GOWORK=off go test ./...`、Pango 亮暗续行正文颜色断言通过。
+独立浅色 1× 的 -language properties 通过引号原样输入及公共断言；没有把引号解释为引用配对。

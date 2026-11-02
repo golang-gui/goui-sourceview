@@ -99,6 +99,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Less,
 		language.GoMod, language.GoWork, language.GoSum,
 		language.Dotenv,
+		language.Properties,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

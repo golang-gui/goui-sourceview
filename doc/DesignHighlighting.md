@@ -890,3 +890,16 @@ GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.
 和 [v24.11.0 node_dotenv.cc](https://github.com/nodejs/node/blob/v24.11.0/src/node_dotenv.cc)
 （读取 2026-11-02；文档页面 v26.13.0，反引号与闭合行为另按该版本源码核对）。
 采用现有配置语言的状态分解，不执行赋值、修改环境或引入 dotenv 库。
+
+## 33. Java Properties
+
+新增 .properties、properties 围栏及独立逻辑行状态。键在未转义的空白、= 或 : 处分隔；
+值不解释引号，# / ! 只在新逻辑行的首个非空白位置开始注释。
+奇数个尾部反斜杠延续当前键/值，续行前导空白忽略，注释本身不续行。
+转义与四位 Unicode 数字保留各自的键/值 Class，不进行 Java 源码的预先 Unicode 翻译。
+编辑使用 # 注释，关闭结构/引用自动配对，值保持 Literal 文本。
+输入沿用组件 UTF-8 文本契约，字节编码转换由调用方完成，不将 ISO-8859-1 读取行为放入高亮器。
+
+依据 [Java SE 25 Properties.load(Reader)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Properties.html#load(java.io.Reader))
+（读取 2026-11-02），对照 [Lexilla LexProps.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexProps.cxx)
+的键/值分类。保留 Java 逻辑行语义，不套用该通用 lexer 的 INI 节或分号注释规则。

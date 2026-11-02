@@ -63,6 +63,7 @@ const (
 	GoWork       ID = "gowork"
 	GoSum        ID = "gosum"
 	Dotenv       ID = "dotenv"
+	Properties   ID = "properties"
 	Markdown     ID = "markdown"
 )
 
@@ -166,6 +167,7 @@ var builtins = []Info{
 	{ID: GoWork, Name: "Go Workspace", MIMETypes: []string{"text/x-go-work"}},
 	{ID: GoSum, Name: "Go Checksums", MIMETypes: []string{"text/x-go-sum"}},
 	{ID: Dotenv, Name: "Dotenv", Extensions: []string{".env"}, MIMETypes: []string{"text/x-dotenv"}},
+	{ID: Properties, Name: "Java Properties", Extensions: []string{".properties"}, MIMETypes: []string{"text/x-java-properties"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

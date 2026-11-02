@@ -655,6 +655,15 @@ func TestSixthBatchKinds(t *testing.T) {
 		text, needle string
 		kind         language.Kind
 	}{
+		{language.Properties, `key\ with\:colon = literal # !`, "# !", language.KindString},
+		{language.Properties, "key=value\\\n  #continued\n!comment", "#continued", language.KindString},
+		{language.Properties, "key=value\\\\\n  #comment", "#comment", language.KindComment},
+		{language.Properties, "key\\\n  !continued=value", "!continued", language.KindProperty},
+		{language.Properties, `key=\u0041\ntext`, "0041", language.KindEscape},
+		{language.Properties, "! comment\\\nnext=value", "next", language.KindProperty},
+		{language.Properties, "key=value\\\r\n  #continued", "#continued", language.KindString},
+		{language.Properties, "key \\\n = value", "=", language.KindDelimiter},
+		{language.Properties, "\\\n #comment", "#comment", language.KindComment},
 		{language.Dotenv, `export NAME="literal ${HOME} # text" # note`, "export", language.KindKeyword},
 		{language.Dotenv, `export NAME="literal ${HOME} # text" # note`, "HOME", language.KindString},
 		{language.Dotenv, "NAME='first\n# literal\nlast'\nOTHER=value # note", "# literal", language.KindString},
@@ -681,10 +690,11 @@ func TestSixthBatchKinds(t *testing.T) {
 
 func TestSixthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
-		language.Dotenv: {"export NAME=\"literal ${HOME} # text\\nline\" # note\nMULTI='first\n# literal\nlast'\nOTHER=value #note\nexport=valid-key\nBAD-KEY=value", "LONG='" + strings.Repeat("字", ChunkSize) + "'\n" + strings.Repeat("K", ChunkSize) + "=value"},
-		language.GoMod:  {"module example.org/x\ngo 1.24.0\nrequire (\n example.org/x v1.2.3 // indirect\n)\nreplace a => `../path//literal`\nretract [v1.0.0, v1.0.1]", "module " + strings.Repeat("字", ChunkSize) + "\nrequire a v1.2.3"},
-		language.GoWork: {"go 1.24.0\nuse (\n ./editor\n \"./path with spaces\"\n)\nreplace a => b v1.0.0"},
-		language.GoSum:  {"example.org/x v1.2.3/go.mod h1:" + strings.Repeat("ab+/=", ChunkSize)},
+		language.Properties: {"# note\nkey\\ with\\:colon : text # !\ncontinued=value\\\n  # literal\\\n  tail\nkey\\\n !name=value\nnext=\\u0041\\ntext\n!comment\\\nnew=value", strings.Repeat("k", ChunkSize) + "=" + strings.Repeat("字", ChunkSize) + "\\\n continued", "key=value\\\r\n  #continued\r\nnew=value"},
+		language.Dotenv:     {"export NAME=\"literal ${HOME} # text\\nline\" # note\nMULTI='first\n# literal\nlast'\nOTHER=value #note\nexport=valid-key\nBAD-KEY=value", "LONG='" + strings.Repeat("字", ChunkSize) + "'\n" + strings.Repeat("K", ChunkSize) + "=value"},
+		language.GoMod:      {"module example.org/x\ngo 1.24.0\nrequire (\n example.org/x v1.2.3 // indirect\n)\nreplace a => `../path//literal`\nretract [v1.0.0, v1.0.1]", "module " + strings.Repeat("字", ChunkSize) + "\nrequire a v1.2.3"},
+		language.GoWork:     {"go 1.24.0\nuse (\n ./editor\n \"./path with spaces\"\n)\nreplace a => b v1.0.0"},
+		language.GoSum:      {"example.org/x v1.2.3/go.mod h1:" + strings.Repeat("ab+/=", ChunkSize)},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {

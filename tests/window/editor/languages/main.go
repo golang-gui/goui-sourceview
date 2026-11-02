@@ -211,6 +211,7 @@ func main() {
 		{language.GoMod, "replace a => ", "`../dir`", "replace a => `../dir`"},
 		{language.GoWork, "use ", `"./dir"`, `use "./dir"`},
 		{language.GoSum, "path v1.0.0 h1:", "{", "path v1.0.0 h1:{"},
+		{language.Properties, "key=", `"`, `key="`},
 		{language.Dotenv, "NAME=", `"C:\"`, `NAME="C:\"`},
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
 		{language.GraphQL, "", `"""`, `"""`},
