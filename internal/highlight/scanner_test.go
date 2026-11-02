@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.EditorConfig, "key=one #body", "=one", " one", "body", language.KindProperty},
 		{language.Gettext, "# msgid \"body\"", "# ", "", "msgid", language.KindKeyword},
 		{language.BibTeX, "@book{x,title={first\nbody\n}}", "{first", "first", "body", language.KindVariable},
 		{language.LaTeX, "\\begin{verbatim}\n%body\n\\end{verbatim}", "verbatim", "text", "body", language.KindComment},
@@ -410,6 +411,10 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.EditorConfig, "[src/**.{go,mod}]", "src", language.KindMeta},
+	{language.EditorConfig, "indent_size = 4 # literal ; body", "body", language.KindString},
+	{language.EditorConfig, "; comment", "comment", language.KindComment},
+	{language.EditorConfig, "[file[0-9].txt]", "0-9", language.KindMeta},
 	{language.Gettext, "msgid_plural \"files\"\nmsgstr[0] \"文件\"", "msgid_plural", language.KindKeyword},
 	{language.Gettext, "msgstr[12] \"files\"", "12", language.KindNumber},
 	{language.Gettext, "msgstr \"\"\n\"body\\n\"\n\"next\"", "body", language.KindString},

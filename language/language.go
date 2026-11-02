@@ -89,6 +89,7 @@ const (
 	LaTeX            ID = "latex"
 	BibTeX           ID = "bibtex"
 	Gettext          ID = "po"
+	EditorConfig     ID = "editorconfig"
 	Markdown         ID = "markdown"
 )
 
@@ -218,6 +219,7 @@ var builtins = []Info{
 	{ID: LaTeX, Name: "TeX/LaTeX", Extensions: []string{".tex", ".ltx", ".sty", ".cls", ".dtx", ".ins"}},
 	{ID: BibTeX, Name: "BibTeX", Extensions: []string{".bib"}},
 	{ID: Gettext, Name: "gettext PO/POT", Extensions: []string{".po", ".pot"}},
+	{ID: EditorConfig, Name: "EditorConfig", Extensions: []string{".editorconfig"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -238,6 +240,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == ".editorconfig":
+		return EditorConfig
 	case base == "Jenkinsfile":
 		return Groovy
 	case base == "BUILD" || base == "WORKSPACE":

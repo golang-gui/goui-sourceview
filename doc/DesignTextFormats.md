@@ -71,3 +71,11 @@ verb 与 verbatim/verbatim*、lstlisting、minted 正文使用原样字符串规
 只提供双引号配对，不解释复数表达式、不编译 MO、不改变翻译内容。
 
 依据 [GNU gettext PO File Entries](https://www.gnu.org/software/gettext/manual/html_node/PO-File-Entries.html) 和 [Plural Forms](https://www.gnu.org/software/gettext/manual/html_node/Entries-with-Plural-Forms.html)。
+
+## EditorConfig
+
+识别 .editorconfig 及 editorconfig 围栏。采用独立状态：节正文是 glob，允许内部方括号与花括号，不按 INI 第一个 ] 提前结束。
+键值仅以 = 分隔；# 和 ; 只在首个非空白位置开启注释，值中的引号、反斜杠及行尾 #/; 都是普通文本。
+不加载或应用配置、不执行 glob 匹配，结构标记不自动配对，提供常用属性名建议。
+
+依据 [EditorConfig Specification 0.17.2](https://spec.editorconfig.org/)（No inline comments、Glob Expressions）。

@@ -1,0 +1,13 @@
+# This sample is displayed as .editorconfig syntax.
+root = true
+
+[*.{go,mod}]
+indent_style = tab
+indent_size = 4
+insert_final_newline = true
+
+[docs/**.{md,rst}]
+indent_style = space
+indent_size = 2
+# Inline # and ; characters belong to the value:
+custom_value = literal # and ; text
