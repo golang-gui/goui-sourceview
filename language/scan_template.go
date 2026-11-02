@@ -7,19 +7,20 @@ import (
 	"unicode/utf8"
 )
 
-// NewGoTemplate creates a template with an explicit plain-text or HTML host.
+// NewGoTemplate creates a template with an explicit plain-text, HTML, XML, YAML
+// or TOML host.
 // Nil selects plain text. The host's markup tag matching and folding are disabled.
 func NewGoTemplate(host *Language) (*Language, error) { return newTemplate(GoTemplate, host) }
 
 // NewJinja2 creates a template using Jinja's default delimiters and an explicit
-// plain-text or HTML host. Nil selects plain text.
+// plain-text, HTML, XML, YAML or TOML host. Nil selects plain text.
 func NewJinja2(host *Language) (*Language, error) { return newTemplate(Jinja2, host) }
 
 func newTemplate(id ID, host *Language) (*Language, error) {
 	if host != nil && host.Tokenizer() != nil {
 		b, ok := host.Tokenizer().(builtinTokenizer)
-		if !ok || b.id != HTML {
-			return nil, fmt.Errorf("language: template host must use the plain-text or HTML tokenizer")
+		if !ok || b.id != HTML && b.id != XML && b.id != YAML && b.id != TOML {
+			return nil, fmt.Errorf("language: template host must use a plain-text, HTML, XML, YAML or TOML tokenizer")
 		}
 		d := host.Definition()
 		d.Editing.Tags, d.Folding = nil, nil
@@ -73,6 +74,49 @@ type templateState struct {
 	depth                      int
 	word                       scanWord
 	wordOn                     bool
+}
+
+func (s *templateState) hostOffset(at int) {
+	if s.host == nil || s.host.Tokenizer() == nil {
+		return
+	}
+	if b, ok := s.host.Tokenizer().(builtinTokenizer); ok && b.id == YAML {
+		y := yamlState{lineStart: true, keyIndent: -1}
+		if s.body.yaml != nil {
+			y = *s.body.yaml
+		}
+		y.offset = at
+		s.body.yaml = &y
+	}
+}
+
+// A host token cannot span a template hole: later host classification must
+// never retract template colors. Keep quote/comment/structural state intact.
+func (s *templateState) hostBoundary(at int, w *tokenWriter) {
+	s.hostOffset(at)
+	if s.body.code != nil && s.body.code.wordOn {
+		v := *s.body.code
+		finishCodeWord(&v, w, at)
+		s.body.code = &v
+	}
+	if s.body.yaml != nil {
+		v := *s.body.yaml
+		if v.scalarOn {
+			w.add(at-v.scalar.n, at, v.scalar.yamlKind(), 0)
+		}
+		v.scalar, v.scalarOn = atom{}, false
+		if v.lineStart {
+			v.beginContent('{')
+		}
+		v.previous = '}'
+		s.body.yaml = &v
+	}
+	if s.body.toml != nil && s.body.toml.valueOn {
+		v := *s.body.toml
+		w.add(at-v.value.n, at, v.value.tomlKind(), 0)
+		v.value, v.valueOn = atom{}, false
+		s.body.toml = &v
+	}
 }
 
 func (s templateState) Equal(other State) bool {
@@ -137,12 +181,7 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == 0 {
 			open := strings.HasPrefix(text[i:], "{{") || s.id == Jinja2 && (strings.HasPrefix(text[i:], "{%") || strings.HasPrefix(text[i:], "{#"))
 			if open && (!s.raw || strings.HasPrefix(text[i:], "{%")) {
-				// Complete a suspended JS/CSS word before publishing template tokens.
-				if s.body.code != nil && s.body.code.wordOn {
-					v := *s.body.code
-					finishCodeWord(&v, &w, in.Offset+i)
-					s.body.code = &v
-				}
+				s.hostBoundary(in.Offset+i, &w)
 				s.mode, s.first, s.rawEnd = text[i+1], true, false
 				add(i, i+2, KindMeta, 0)
 				i += 2
@@ -154,7 +193,9 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			used := min(end-i, limit-i)
 			if s.host != nil && s.host.Tokenizer() != nil {
-				part := Input{Text: text[i:end], Offset: in.Offset + i, Limit: used, LineEnd: in.LineEnd && end == len(text), DocumentEnd: in.DocumentEnd && end == len(text)}
+				s.hostOffset(in.Offset + i)
+				// The physical line is finalized once, after all template pieces.
+				part := Input{Text: text[i:end], Offset: in.Offset + i, Limit: used}
 				result, e := s.host.Tokenizer().Scan(part, s.body)
 				if e != nil {
 					return Result{}, e
@@ -280,6 +321,7 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 	if in.LineEnd && i == len(text) {
 		finish(in.Offset + i)
 		if s.host != nil && s.host.Tokenizer() != nil {
+			s.hostOffset(in.Offset + i)
 			end := Input{Offset: in.Offset + i, LineEnd: true, DocumentEnd: in.DocumentEnd}
 			r, e := s.host.Tokenizer().Scan(end, s.body)
 			if e != nil {

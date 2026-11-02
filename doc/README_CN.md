@@ -24,6 +24,7 @@ go get github.com/golang-gui/goui-sourceview@v0.2.0
   Makefile、CMake、Nginx、INI、Dockerfile、SQL、Go、Python、JavaScript、TypeScript、JSX、TSX、CSS、C、C++、Java、Rust、C#、Lua、PowerShell、Ruby、PHP、
   Kotlin、Swift、Dart、R、Zig、Objective-C、Objective-C++、Scala、Perl、Diff/Patch、Windows Batch、HCL/Terraform、GraphQL、SCSS、Less、Dotenv、Java Properties、Git Ignore/Attributes、Starlark、Groovy、
   Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq、PromQL、F#、Elixir、Erlang、Julia、Clojure、Haskell、OCaml、CSV、TSV、AsciiDoc、reStructuredText、TeX/LaTeX、BibTeX、gettext PO/POT、EditorConfig、JSON5、EDN、Git config、SSH config、crontab、Mermaid、Graphviz DOT，以及 Go 模块、工作区和校验文件。
+- **混合文档：** Markdown 前置元数据和代码围栏高亮，以及 HTML、XML、YAML、TOML 模板宿主组合。
 - **折叠与导航：** 结构化标记、Markdown 标题及围栏代码折叠，行列跳转。
 - **编辑辅助：** 智能缩进、空白标记、缩进线及列标尺。
 - **源码编辑：** Unicode 选区、剪贴板、撤销/重做、缩进和整行操作。

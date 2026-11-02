@@ -286,6 +286,92 @@ func TestTemplateHosts(t *testing.T) {
 	}
 }
 
+func TestStructuredTemplateHosts(t *testing.T) {
+	for _, makeTemplate := range []func(*Language) (*Language, error){NewGoTemplate, NewJinja2} {
+		for _, tc := range []struct {
+			host         ID
+			text, needle string
+			kind         Kind
+		}{
+			{YAML, "title: \"{{true}}\"\nnext: false", "true", KindKeyword},
+			{YAML, "title: \"{{true}}\"\nnext: false", "next", KindProperty},
+			{YAML, "key: tr{{true}}ue\nnext: false", "tr", KindPlain},
+			{YAML, "key: tr{{true}}ue\nnext: false", "true", KindKeyword},
+			{YAML, "value: |\n  {{true}}tail\nnext: false", "tail", KindString},
+			{YAML, "# {{true}}\nnext: false", "next", KindProperty},
+			{TOML, "title=\"{{true}}\"\nnext=false", "title", KindProperty},
+			{TOML, "value=tr{{true}}ue\nnext=false", "true", KindKeyword},
+			{TOML, "value=tr{{true}}suffix\nnext=false", "suffix", KindInvalid},
+			{TOML, "title=\"\"\"{{true}}\nbody\n\"\"\"\nnext=false", "body", KindString},
+			{XML, "<x title=\"{{true}}\">text</x>", "title", KindAttribute},
+			{XML, "<!-- {{true}}\nbody -->\n<x/>", "body", KindComment},
+		} {
+			host, _ := Builtin(tc.host)
+			l, err := makeTemplate(host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reference State
+			for _, chunk := range []int{1, 3, 31, 4096} {
+				state := l.Tokenizer().InitialState()
+				position := 0
+				found := false
+				for _, line := range strings.Split(tc.text, "\n") {
+					w := tokenWriter{}
+					for at := 0; ; {
+						n := min(chunk, len(line)-at)
+						for at+n < len(line) && !utf8.RuneStart(line[at+n]) {
+							n++
+						}
+						end := min(len(line), at+n+32)
+						for end < len(line) && !utf8.RuneStart(line[end]) {
+							end++
+						}
+						in := Input{Text: line[at:end], Offset: at, Limit: n, LineEnd: end == len(line)}
+						r, e := l.Tokenizer().Scan(in, state)
+						if e != nil {
+							t.Fatal(e)
+						}
+						if e = ValidateResult(in, r); e != nil {
+							t.Fatal(e)
+						}
+						w.merge(r)
+						state = r.State
+						at += r.Consumed
+						if at == len(line) {
+							break
+						}
+					}
+					target := strings.Index(tc.text, tc.needle) - position
+					if target >= 0 && target < len(line) {
+						got := KindPlain
+						for _, tok := range w.tokens {
+							if tok.Start <= target && target < tok.End {
+								got = tok.Kind
+							}
+						}
+						if got != tc.kind {
+							t.Fatalf("%s/%s chunk %d %q: %s, want %s; %v", l.ID(), tc.host, chunk, tc.needle, got, tc.kind, w.tokens)
+						}
+						found = true
+					}
+					position += len(line) + 1
+				}
+				if !found {
+					t.Fatal("missing fixture target")
+				}
+				if reference != nil && !state.Equal(reference) {
+					t.Fatal("chunk-dependent host state")
+				}
+				reference = state
+				if c := state.Context(); c.Embedded == nil || c.Embedded.ID() != tc.host {
+					t.Fatal("host context not restored")
+				}
+			}
+		}
+	}
+}
+
 func TestSeventhBatchFences(t *testing.T) {
 	md, _ := Builtin(Markdown)
 	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2, "systemd": Systemd, "desktop": DesktopEntry, "nix": Nix, "jq": JQ, "promql": PromQL, "fsharp": FSharp, "f#": FSharp, "elixir": Elixir, "erlang": Erlang, "julia": Julia, "clojure": Clojure, "clj": Clojure, "haskell": Haskell, "ocaml": OCaml} {

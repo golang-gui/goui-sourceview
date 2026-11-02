@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<editor name="{{ .Name }}">
+  {{ if .Enabled }}
+  <document readOnly="false">{{ .Text }}</document>
+  {{ end }}
+  <!-- {{ .Comment }} is a template inside an XML comment. -->
+</editor>

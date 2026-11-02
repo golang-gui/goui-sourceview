@@ -30,6 +30,7 @@ The development branch depends on GOUI v0.5.0, which Go downloads automatically.
   HCL/Terraform, GraphQL, SCSS, Less, Dotenv, Java Properties, Git Ignore/Attributes,
   Starlark, Groovy, Go Template, Jinja2, systemd unit, Desktop Entry, Nix, jq, PromQL,
   F#, Elixir, Erlang, Julia, Clojure, Haskell, OCaml, CSV, TSV, AsciiDoc, reStructuredText, TeX/LaTeX, BibTeX, gettext PO/POT, EditorConfig, JSON5, EDN, Git config, SSH config, crontab, Mermaid, Graphviz DOT and Go module/workspace/checksum files.
+- **Mixed documents** with highlighted Markdown metadata and code fences, plus HTML, XML, YAML and TOML template hosts.
 - **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.
 - **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
 - **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.

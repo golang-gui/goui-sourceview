@@ -413,6 +413,37 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 	}
 }
 
+func TestTemplateHostIncrementalRecovery(t *testing.T) {
+	host, _ := language.Builtin(language.YAML)
+	for _, makeTemplate := range []func(*language.Language) (*language.Language, error){language.NewGoTemplate, language.NewJinja2} {
+		l, err := makeTemplate(host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := textedit.NewModel("key: \"{{true}}\"\n# body\nnext: false")
+		e := NewWithLanguage(m, l)
+		drain(t, e)
+		m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+		if err := m.Replace(textedit.Range{Start: 5, End: 6}, ""); err != nil {
+			t.Fatal(err)
+		}
+		drain(t, e)
+		tokens, _, ready := e.Tokens(1)
+		if !ready || kindAt(tokens, 2) != language.KindString {
+			t.Fatalf("host state after edit: %v", tokens)
+		}
+		fresh := NewWithLanguage(m, l)
+		drain(t, fresh)
+		for row := 0; row < e.LineCount(); row++ {
+			a, _, _ := e.Tokens(row)
+			b, _, _ := fresh.Tokens(row)
+			if !reflect.DeepEqual(a, b) || !e.Line(row).out.Equal(fresh.Line(row).out) {
+				t.Fatalf("row %d did not recover", row)
+			}
+		}
+	}
+}
+
 // 每个预期来自格式规则，另检查极小分片、UTF-8 边界及不可变快照。
 var textFormatCases = []struct {
 	id           language.ID

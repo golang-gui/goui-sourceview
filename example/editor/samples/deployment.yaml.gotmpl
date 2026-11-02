@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Name }}"
+data:
+  enabled: "{{ .Enabled }}"
+  description: |
+    {{ .Description }}
+    Template expressions keep their own colors.
+{{ if .Enabled }}
+active: true
+{{ end }}

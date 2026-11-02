@@ -1,5 +1,6 @@
 // 内置语言集成验证，需要桌面、窗口管理器、原生排版及字体。
 // 启动：go run ./tests/window/editor/languages [-dark] [-language ID]。
+// -template-host yaml|toml|xml 显式验证两种模板的宿主组合；其他语言仍使用原定义。
 // Linux 无 IME 服务时设置 XMODIFIERS=@im=none；-language 省略时验收全部场景，
 // 未匹配场景时失败。Diff、GoSum、Properties、GitIgnore 检查原样输入；
 // 其余语言检查建议与引用，新增语言不需要提供无意义的静态建议。
@@ -59,6 +60,7 @@ func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "Modern dark appearance")
 	filter := flag.String("language", "", "run completion and quote cases for one language ID")
+	templateHost := flag.String("template-host", "", "explicit template host: yaml, toml or xml")
 	flag.Parse()
 	app, err := gui.NewApplication("org.golanggui.SourceViewLanguages")
 	must(err)
@@ -158,6 +160,32 @@ func main() {
 	var pendingViewport func() bool
 	var viewportDeadline time.Time
 	matched := 0
+	bind := func(d *source.Document, id language.ID) {
+		must(d.SetLanguage(id))
+		if *templateHost != "" && (id == language.GoTemplate || id == language.Jinja2) {
+			host, ok := language.Builtin(language.ID(*templateHost))
+			check(ok, "unknown template host")
+			makeTemplate := language.NewGoTemplate
+			if id == language.Jinja2 {
+				makeTemplate = language.NewJinja2
+			}
+			l, err := makeTemplate(host)
+			must(err)
+			d.SetLanguageDefinition(l)
+		}
+	}
+	if *templateHost == "yaml" || *templateHost == "toml" {
+		for _, id := range []language.ID{language.GoTemplate, language.Jinja2} {
+			prefix := "enabled: tr"
+			if *templateHost == "toml" {
+				prefix = "enabled = tr"
+			}
+			fixtures = append(fixtures, struct {
+				id         language.ID
+				text, want string
+			}{id, prefix, prefix + "ue"})
+		}
+	}
 	for _, tc := range fixtures {
 		if *filter != "" && string(tc.id) != *filter {
 			continue
@@ -165,7 +193,7 @@ func main() {
 		matched++
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.text)
-			must(d.SetLanguage(tc.id))
+			bind(d, tc.id)
 			v.SetDocument(d)
 			v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
 			win.SetFocusedWidget(v)
@@ -290,7 +318,7 @@ func main() {
 		matched++
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)
-			must(d.SetLanguage(tc.id))
+			bind(d, tc.id)
 			v.SetDocument(d)
 			v.SetSelection(textedit.Selection{Anchor: len(tc.prefix), Caret: len(tc.prefix)})
 		})

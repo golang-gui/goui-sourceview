@@ -49,6 +49,18 @@ func (a atom) yamlKind() Kind {
 func yamlSep(s string, i int) bool {
 	return i >= len(s) || space(s[i]) || strings.ContainsRune(",[]{}", rune(s[i]))
 }
+
+func (s *yamlState) beginContent(c byte) {
+	s.lineStart = false
+	if s.block {
+		if s.blockIndent == 0 && c != '\r' && s.indent > s.blockBase {
+			s.blockIndent = s.indent
+		}
+		if !(s.indent > s.blockBase && (s.blockIndent == 0 || s.indent >= s.blockIndent)) {
+			s.block, s.blockIndent = false, 0
+		}
+	}
+}
 func scanYAML(state builtinState, input string, limit int, lineEnd bool) ([]lexicalToken, builtinState, int) {
 	s := yamlState{lineStart: true, keyIndent: -1}
 	if state.yaml != nil {
@@ -76,16 +88,7 @@ func scanYAML(state builtinState, input string, limit int, lineEnd bool) ([]lexi
 				i++
 				continue
 			}
-			s.lineStart = false
-			if s.block {
-				if s.blockIndent == 0 && c != '\r' && s.indent > s.blockBase {
-					s.blockIndent = s.indent
-				}
-				if !(s.indent > s.blockBase && (s.blockIndent == 0 || s.indent >= s.blockIndent)) {
-					s.block = false
-					s.blockIndent = 0
-				}
-			}
+			s.beginContent(c)
 		}
 		if s.block && !s.blockHeader {
 			n := limit

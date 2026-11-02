@@ -975,3 +975,62 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		}
 	}
 }
+
+// 混合语言也使用同字体/布局的独立前景色预期；复制借用像素，RGBA 零误差。
+func TestNativeTemplateHostColors(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ctx, err := nativeContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Destroy()
+	for _, tc := range []struct {
+		host language.ID
+		text string
+	}{
+		{language.YAML, "key: \"first {{true}}\nbody\nlast\""},
+		{language.TOML, "key=\"\"\"first {{true}}\nbody\nlast\"\"\""},
+		{language.XML, "<x value=\"{{true}}\nbody\nlast\"/>"},
+	} {
+		host, _ := language.Builtin(tc.host)
+		for _, makeTemplate := range []func(*language.Language) (*language.Language, error){language.NewGoTemplate, language.NewJinja2} {
+			l, err := makeTemplate(host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
+				func() {
+					v := NewSourceView()
+					v.SetScheme(colors)
+					v.Document().Model().SetText(tc.text)
+					v.Document().SetLanguageDefinition(l)
+					v.mounted = true
+					v.Document().acquire(v)
+					defer func() { v.dropLayouts(); v.Document().release(v); v.mounted = false }()
+					v.context = ctx
+					v.Document().engine.Advance(time.Time{})
+					v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
+					p := v.paragraph(1)
+					fresh, err := ctx.NewTextLayout("body", typography.TextFormat{Font: v.font, TextColor: colors.Color(language.KindString), TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}, 1<<20, 1<<24)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer fresh.Destroy()
+					got, err := p.layout.Rasterize(1, rasterRegion(p.layout, 1), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					pixels := bytes.Clone(got.Pixels)
+					want, err := fresh.Rasterize(1, rasterRegion(fresh, 1), nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got.Width != want.Width || got.Height != want.Height || got.Stride != want.Stride || !bytes.Equal(pixels, want.Pixels) {
+						t.Fatalf("%s/%s/%s: host string color differs", l.ID(), tc.host, colors.Definition().Name)
+					}
+				}()
+			}
+		}
+	}
+}

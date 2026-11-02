@@ -72,6 +72,7 @@ func sampleDocuments() []exampleDocument {
 		"graph.dot",
 		"View.xaml", "Cargo.lock",
 		"page-yaml.md", "page-toml.md",
+		"deployment.yaml.gotmpl", "deployment.yaml.j2", "settings.toml.j2", "view.xml.gotmpl",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
@@ -90,21 +91,39 @@ func sampleDocuments() []exampleDocument {
 	return documents
 }
 
-// Compound filenames choose the example's explicit HTML host.
+// Compound filenames choose an explicit supported host for this example.
 func setTemplateHost(doc *source.Document, name string) error {
 	name = strings.ToLower(name)
 	var makeTemplate func(*language.Language) (*language.Language, error)
+	stem := name
+	hostID := language.Plain
 	if strings.HasSuffix(name, ".gohtml") {
 		makeTemplate = language.NewGoTemplate
+		hostID = language.HTML
 	}
-	if strings.HasSuffix(name, ".html.j2") || strings.HasSuffix(name, ".html.jinja") || strings.HasSuffix(name, ".html.jinja2") {
-		makeTemplate = language.NewJinja2
+	if strings.HasSuffix(name, ".gotmpl") {
+		makeTemplate = language.NewGoTemplate
+		stem = strings.TrimSuffix(name, ".gotmpl")
+	}
+	for _, suffix := range []string{".j2", ".jinja", ".jinja2"} {
+		if strings.HasSuffix(name, suffix) {
+			makeTemplate = language.NewJinja2
+			stem = strings.TrimSuffix(name, suffix)
+		}
 	}
 	if makeTemplate == nil {
 		return nil
 	}
-	html, _ := language.Builtin(language.HTML)
-	l, err := makeTemplate(html)
+	if hostID == language.Plain {
+		hostID = language.Guess(stem, nil)
+	}
+	switch hostID {
+	case language.HTML, language.XML, language.YAML, language.TOML:
+	default:
+		return nil
+	}
+	host, _ := language.Builtin(hostID)
+	l, err := makeTemplate(host)
 	if err != nil {
 		return err
 	}

@@ -862,3 +862,46 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，通过 `go test ./...`（工作区 GOUI b4904
 GOWORK=off go test ./... 与原生亮暗颜色断言通过；独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的
 -language markdown 通过 YAML/TOML 建议接受/撤销、YAML 引用逐字符输入与公共编辑断言。
 未执行 Windows/macOS 原生验证；本项不修改 GOUI。
+
+### 结构化模板宿主（2026-11-02）
+
+扩展 NewGoTemplate/NewJinja2 的显式宿主到 XML/YAML/TOML，保留原有 SQL/任意 tokenizer 拒绝边界。
+完成宿主待定 token、YAML 源列同步及每物理行一次结束通知；未执行或猜测模板输出。
+新增多宿主分片独立预期、编辑后恢复、原生亮暗字符串颜色断言与四份样本，示例共 94 份。
+GOWORK=off go test ./... 通过；独立 X11 / Xfwm4 / Pango / Software 浅色 1× 验证
+两种模板配 XML/YAML/TOML 宿主的正常事件输入，并检查 YAML/TOML 宿主建议接受/撤销。
+Windows/macOS 原生场景未运行；没有修改 GOUI、模块依赖或全局设置。
+
+### 本批最终验收
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8；独立依赖 GOUI v0.5.0，工作区 GOUI b49049d。通过：
+
+- `go test ./...`
+- `GOWORK=off go test ./...`
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+新格式与 Markdown 增加 1,920 组固定随机畸形输入分片对照；同时保留独立 Kind 预期、
+UTF-8 边界、不可变快照、增量编辑后恢复和原生 Pango 亮暗颜色断言，RGBA 零误差。
+JSON5 的悬空 / 无进展、BibTeX 条目起始建议被注释上下文阻挡等问题已修正并验证；
+颜色样本均比较完整物理行，没有删除断言或放宽容差。额外检查了 AsciiDoc 的尾空白/CRLF 边界、
+Mermaid 跨行 Markdown 标签结束符，以及 JSON5 数据配对和 TSV 字面上下文。
+
+独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software：浅色 1× 完整窗口程序通过
+86 种语言配置、81 组建议接受/撤销、79 组引用输入及公共只读/语义/配对断言。
+深色 1.5× 通过本批十五种格式、Markdown 元数据，以及两种模板配 XML/YAML/TOML 的六种组合。
+浅色 1× 的六种模板宿主组合另行通过。所有程序使用 Window.DispatchEvent/CommitText，无 DevServer。
+
+独立 :88 中运行 Integrated editor，实际用 Sample 下拉列表选择本批十五份格式样本、
+XML/TOML 关联样本和六份新增混合文档样本；检查代表性的正文着色、边界恢复与工具栏布局。
+深色 1.5× 复查元数据、JSON5 和下拉列表，未观察到正文或工具栏裁切；
+截图用于外观检查，颜色及编辑正确性仍由独立断言验证。示例共 94 份，全部通过读取/语言识别测试。
+
+源代码按每种格式及文件关联、前置元数据、模板宿主三项能力分别提交，共 18 条；
+边界修正合并回对应提交，拆分前后文件树核对一致。二进制、日志、截图位于
+`/tmp/sourceview-textformats-RdvXRY/`，没有放入源码目录。
+结束时关闭本次 editor、专用 X11/窗口管理器，保留原有 X110/X3/X42/X78 桌面。
+没有运行样本、安装配置、操作剪贴板或修改全局设置；原有未跟踪 doc/Doing.md、example/temp/ 未纳入提交。
+Windows/macOS 仅交叉构建，未原生运行；真实 IME 未执行。SRT/WebVTT、iCalendar/vCard 按场景后置。

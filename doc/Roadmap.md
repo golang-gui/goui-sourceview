@@ -51,7 +51,7 @@
 4. Zig、Objective-C、Objective-C++、Scala、Perl：已有词法、编辑规则及示例。
 5. Diff/Patch、Windows Batch、HCL/Terraform、GraphQL、SCSS、Less：已有词法、相应编辑规则及示例。
 6. Go Modules、Dotenv、Properties、Git Ignore/Attributes、Starlark、Groovy：已有独立语言配置、词法、相应编辑规则及示例。
-7. Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq、PromQL、F#、Elixir、Erlang、Julia、Clojure、Haskell、OCaml：已有独立词法、编辑规则及示例；两种模板可显式组合 HTML 宿主。
+7. Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq、PromQL、F#、Elixir、Erlang、Julia、Clojure、Haskell、OCaml：已有独立词法、编辑规则及示例；两种模板可显式组合 HTML/XML/YAML/TOML 宿主。
 
 各批语言的验收状态见语言验证记录。优先复用现有 token、上下文和
 分片协议，新增语言不以引入解析器框架或语言服务为前置。
@@ -85,3 +85,5 @@
 - Mermaid：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
 
 - Graphviz DOT：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
+
+- Markdown 已支持 YAML/TOML 前置元数据；字幕 SRT/WebVTT、iCalendar/vCard 交换格式按实际场景后置。
