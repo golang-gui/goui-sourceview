@@ -24,6 +24,7 @@ func sampleDocuments() []exampleDocument {
 		"settings.jsonc", "requests.http", "service.proto", "Makefile", "CMakeLists.txt", "nginx.conf", "settings.ini",
 		"Dockerfile", "query.sql", "hello.go", "hello.py", "app.js", "app.ts", "theme.css", "events.jsonl",
 		"hello.c", "hello.cpp", "Hello.java", "hello.rs", "Hello.cs", "hello.lua",
+		"hello.ps1",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

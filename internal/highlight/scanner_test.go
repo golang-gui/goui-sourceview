@@ -313,6 +313,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.CSharp, "var x = \"\"\"\nbody\n\"\"\";\nreturn;", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.CSharp, `var s=$$"""raw {{true}}""";`, "$$", "$$$", "true", language.KindString},
 		{language.Lua, "local x=[=[open\nbody\n]=]\nreturn x", "]=]", "]==]", "return", language.KindString},
+		{language.PowerShell, "$x=@'\nbody\n'@\nfunction f {}", "'@", " '@", "function", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -658,6 +659,17 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.Lua, "local x='a\\z \n  b'\nreturn x", "b", language.KindString},
 		{language.Lua, "local n=0x1.fp+2; return n", "0x1", language.KindNumber},
 		{language.Lua, "local x=1..2; return x", "..", language.KindDelimiter},
+		{language.PowerShell, "FuNcTiOn Test { param($Name) if ($Name -eq 'x') {} }", "FuNcTiOn", language.KindKeyword},
+		{language.PowerShell, "if ($n -eq 1) { Write-Output -Name $env:PATH }", "-eq", language.KindKeyword},
+		{language.PowerShell, "Write-Output -Name $env:PATH", "-Name", language.KindAttribute},
+		{language.PowerShell, "Write-Output -Name $env:PATH", "$env:PATH", language.KindVariable},
+		{language.PowerShell, "$x=\"hello $name$(if ($true) { \"nested $value\" })\"", "if", language.KindKeyword},
+		{language.PowerShell, "$x=@'\n$name $(if)\n'@", "$name", language.KindString},
+		{language.PowerShell, "$x=@\"\n$name $(if ($true) { 1 })\n\"@", "if", language.KindKeyword},
+		{language.PowerShell, "$x=@'\n '@\nstill\n'@", "still", language.KindString},
+		{language.PowerShell, "<# outer <# inner #> function f {}", "function", language.KindKeyword},
+		{language.PowerShell, "$x='first\nsecond'; function f {}", "second", language.KindString},
+		{language.PowerShell, "Write-Output ‘foo#bar’; function f {}", "foo", language.KindString},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -680,6 +692,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 		language.CSharp: {"#nullable enable\nclass Demo { string s=$@\"Hi {true ? $\"{1}\" : @\"x\"}!\"; string r=$$\"\"\"literal {brace} {{{true}}}\"\"\"; }", "var s=\"\"\"\"\nraw \"\"\" text\n\"\"\"\"; var @class = @\"a\"\"b\";", "var s=$\"{1:0.00} {true ? 1 : 0}\";", "var s=" + strings.Repeat("$", 90) + strings.Repeat("\"", 100) + "raw " + strings.Repeat("{", 90) + "true" + strings.Repeat("}", 90) + strings.Repeat("\"", 100) + ";"},
 		language.Lua:    {"local x=[==[raw ]=] text\n]==]\n--[=[ comment\n]=]\nlocal s='a\\z \n b'; return 0x1.fp+2", "local x=[" + strings.Repeat("=", ChunkSize*2) + "[body]" + strings.Repeat("=", ChunkSize*2) + "]; return x"},
 	}
+	fixtures[language.PowerShell] = []string{"function Greet { param($name) \"hi $name$($(\"nested\")) ${env:PATH}\"; if ($true -AND $false) { 1..3 } }\n$x=@\"\nbody $env:PATH $(if (1) { \"x\" })\n\"@\n$x=@'\nliteral $name\n '@\n'@", "$x=‘it’’s’\n<# a <# b #> function f {}\n$x=\"a`\"b\"", "$x=@'\n" + strings.Repeat("字", ChunkSize) + "\n'@"}
 	for id, texts := range fixtures {
 		for _, text := range texts {
 			want, ws := scanAll(id, text, ChunkSize*8)
@@ -696,7 +709,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

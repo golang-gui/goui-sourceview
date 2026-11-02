@@ -45,6 +45,8 @@ func TestGuess(t *testing.T) {
 		{"main.rs", "", Rust}, {"Program.cs", "", CSharp}, {"script.csx", "", CSharp}, {"init.lua", "", Lua},
 		{"script", "#!/usr/bin/env lua5.4", Lua}, {"script", "#!/usr/bin/luajit", Lua},
 		{"script", "#!/usr/bin/luatic", Plain}, {"script.c", "#!/bin/lua", C},
+		{"run.PS1", "", PowerShell}, {"module.psm1", "", PowerShell}, {"data.psd1", "", PowerShell},
+		{"script", "#!/usr/bin/env pwsh", PowerShell},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
 		{"", "words", Plain},
@@ -129,6 +131,8 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{CSharp, `$$"""{{`, false, false, false}, {CSharp, `"""`, true, false, true},
 		{CSharp, `$"outer {$"inner {`, false, false, false},
 		{Lua, `[==[raw`, true, false, true}, {Lua, `--[=[comment`, false, true, false},
+		{PowerShell, `"hello $name`, true, false, false}, {PowerShell, `'literal`, true, false, true},
+		{PowerShell, `"hello $(if`, false, false, false}, {PowerShell, `<# comment`, false, true, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -171,7 +175,7 @@ func TestBuiltinMarkdownAddedFences(t *testing.T) {
 	}
 	builtin, _ := Builtin(Markdown)
 	for _, l := range []*Language{builtin, custom} {
-		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp, "java": Java, "rust": Rust, "rs": Rust, "csharp": CSharp, "cs": CSharp, "c#": CSharp, "lua": Lua} {
+		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp, "java": Java, "rust": Rust, "rs": Rust, "csharp": CSharp, "cs": CSharp, "c#": CSharp, "lua": Lua, "powershell": PowerShell, "ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell} {
 			scanner := l.Tokenizer()
 			fence := "```" + name
 			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -210,6 +214,9 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{CSharp, `$"{1:0.00}"`, "0.00", ClassString},
 		{Lua, `[=[{ literal }]=]`, "{", ClassString},
 		{Lua, `--[=[{ comment }]=]`, "{", ClassComment},
+		{PowerShell, `"hello $(if ($true) { 1 })"`, "if", 0},
+		{PowerShell, `"hello $name"`, "$name", ClassString},
+		{PowerShell, `<# { comment } #>`, "{", ClassComment},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {

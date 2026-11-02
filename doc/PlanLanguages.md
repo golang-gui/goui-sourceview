@@ -227,3 +227,22 @@ Java/C# 三引号、Rust 生命周期输入及原有引用、括号、只读、�
 没有向用户桌面发送输入或操作剪贴板。验证后关闭本次示例及专用桌面会话。
 本次未执行 macOS/Windows 原生窗口、真实 IME 或性能基准；交叉构建不等于原生场景验收。
 条件编译、完整语法检查和语言服务不在本批范围，词法 profile 的恢复边界以设计为准。
+
+## 2026-11-02：第二批语言
+
+### PowerShell
+
+新增语言、文件/shebang 识别、powershell/ps1/pwsh/ps 围栏、基础编辑规则与关键词建议；
+新增原创 hello.ps1，示例共 29 份，中英文说明同步。设计见高亮设计第 13 节。
+回归覆盖大小写、普通引用跨行、弯引号、反引号、作用域变量、相邻变量/插值、
+嵌套 `$()`、here-string 伪结束、非嵌套块注释、长正文、分片状态、Class、快照与增量恢复。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8 / Pango：`go test ./...`、
+`GOWORK=off go test ./...`、`GOWORK=off go test -race ./language ./internal/highlight` 通过。
+原生亮暗颜色沿用同字体、同后端、1× 的整行预乘 RGBA 零误差位图断言，新增 here-string 正文用例。
+独立 TigerVNC :87 / Xfwm4 compositor on / Software 浅色 1× 通过语言窗口程序：
+28 种静态建议语言的补全、接受、撤销，以及 PowerShell 重复单引号输入和全部原有断言通过。
+输入均经 Window.DispatchEvent / CommitText，无 DevServer、剪贴板或文件写入。
+关闭工作区构建窗口程序使用 GOUI v0.5.0；工作区联调用相邻 GOUI b49049d。
+本组未单独进行 macOS/Windows 原生运行；最终批次再记录其余组合验证。
+日志和构建位于 `/tmp/sourceview-language-batch2-JqwBCh/`，独立会话供本批后续组继续验证。

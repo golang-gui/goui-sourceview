@@ -104,6 +104,7 @@ func main() {
 		{language.C, "retu", "return"}, {language.Cpp, "conste", "constexpr"},
 		{language.Java, "synch", "synchronized"}, {language.Rust, "matc", "match"},
 		{language.CSharp, "namesp", "namespace"}, {language.Lua, "funct", "function"},
+		{language.PowerShell, "funct", "function"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -158,6 +159,7 @@ func main() {
 		{language.Java, "String text = ", `"""`, `String text = """`},
 		{language.CSharp, "var text = ", `"""`, `var text = """`},
 		{language.Rust, "fn get<", "'a", "fn get<'a"},
+		{language.PowerShell, "$x = ", "'it''s'", "$x = 'it''s'"},
 	} {
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)

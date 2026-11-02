@@ -444,3 +444,29 @@ Lua 提供 `--` 与 `--[[ ]]` 注释规则；其余使用 `//` 与 `/* */`。
 [Lua 5.4 §3.1](https://www.lua.org/manual/5.4/manual.html#3.1)。
 文档定义语法边界，参考源码帮助选择状态；本项目的正确性还需独立预期、分片、增量与窗口测试验证，
 实际结果记录于 [语言验证](PlanLanguages.md)，不把参考编辑器的能力当成本项目已验证能力。
+
+## 13. PowerShell
+
+新增 `language.PowerShell`，识别 `.ps1/.psm1/.psd1` 及 pwsh/powershell shebang；
+Markdown 默认支持 powershell/ps1/pwsh/ps 围栏。沿用既有公开语言与编辑接口、配色和增量驱动。
+`scan_powershell.go` 单独维护代码、普通引用、here-string 开头/正文、两种注释、变量和数值状态。
+
+关键字和已知文字运算符按大小写不敏感匹配；命名参数按 Attribute，变量按 Variable，
+不根据运行环境猜测 cmdlet、模块或类型。单双引号和弯引号分组处理；普通字符串允许跨行，
+单引号以重复引号转义，双引号额外处理反引号转义、变量和 `$()`。
+子表达式用不可变引用恢复栈及圆括号深度，字符串/注释中的圆括号不影响外层结束。
+here-string 开头后只允许空白和真正行尾；关闭标记必须在物理行开头，缩进后的伪结束不关闭正文。
+块注释不嵌套，在首个 `#>` 结束；只有实际消费到行尾才清理行注释和普通变量尾部。
+
+字词拼写保留至多 128 byte，正文不保存在状态；引用栈随嵌套深度增长，逐节点比较内容，
+不共享文档间可变状态。没有整行正则、运行时执行、完整参数模式解析或类型推断。
+编辑规则提供 `#`/`<# #>`、结构和引用配对、适用的词边界及关键词建议；不预设补全快捷键。
+
+2026-11-02 核对 [PowerShell 7.5 引用规则](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules?view=powershell-7.5)、
+[注释规则](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comments?view=powershell-7.5)
+及 [v7.5.0 tokenizer.cs](https://github.com/PowerShell/PowerShell/blob/v7.5.0/src/System.Management.Automation/engine/parser/tokenizer.cs)
+的 ScanAfterHereStringHeader/ScanPossibleHereStringFooter/SkipBlockComment；
+参考 [Monaco v0.52.2 PowerShell](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/powershell/powershell.ts)
+分离普通引用和 here-string 的状态，但自行实现片段与插值栈，不复制其正则或依赖。
+保留 [GtkSourceView 5.22.1](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/lang-reference.html)
+按词法上下文组织语言的思路，最终仍遵守本项目 Tokenizer/State 契约。

@@ -877,6 +877,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Rust, "/* outer /* inner */\nstill\n*/", "still", 1, language.KindComment},
 		{language.CSharp, "var x=\"\"\"\nbody\n\"\"\";", "body", 1, language.KindString},
 		{language.Lua, "local x=[=[\nbody\n]=]", "body", 1, language.KindString},
+		{language.PowerShell, "$x=@'\nbody\n'@", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

@@ -39,6 +39,7 @@ const (
 	Rust       ID = "rust"
 	CSharp     ID = "csharp"
 	Lua        ID = "lua"
+	PowerShell ID = "powershell"
 	Markdown   ID = "markdown"
 )
 
@@ -118,6 +119,7 @@ var builtins = []Info{
 	{ID: Rust, Name: "Rust", Extensions: []string{".rs"}, MIMETypes: []string{"text/x-rust"}},
 	{ID: CSharp, Name: "C#", Extensions: []string{".cs", ".csx"}, MIMETypes: []string{"text/x-csharp"}},
 	{ID: Lua, Name: "Lua", Extensions: []string{".lua"}, MIMETypes: []string{"text/x-lua"}},
+	{ID: PowerShell, Name: "PowerShell", Extensions: []string{".ps1", ".psm1", ".psd1"}, MIMETypes: []string{"application/x-powershell"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -168,6 +170,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "pwsh" || interpreter == "powershell" {
+		return PowerShell
+	}
 	pythonVersion := strings.TrimPrefix(interpreter, "python")
 	if interpreter == "python" || pythonVersion != interpreter && len(pythonVersion) > 0 && digit(pythonVersion[0]) && strings.Trim(pythonVersion, "0123456789.") == "" {
 		return Python
