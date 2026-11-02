@@ -77,3 +77,5 @@
 - EDN：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
 
 - Git config：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
+
+- SSH config：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。

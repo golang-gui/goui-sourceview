@@ -171,3 +171,122 @@ func (gitConfigTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	return w.result(limit, s), nil
 }
+
+type sshTokenizer struct{}
+type sshState struct {
+	valueStart                                bool
+	phase                                     byte
+	quote, escape, comment, variable, percent bool
+}
+
+func (s sshState) Equal(other State) bool { t, ok := other.(sshState); return ok && s == t }
+func (s sshState) Context() Context {
+	return Context{String: s.phase == 2, Value: s.phase == 2, Comment: s.comment}
+}
+func (sshTokenizer) InitialState() State { return sshState{} }
+
+var sshWords = strings.Fields("Host Match HostName User Port IdentityFile IdentitiesOnly ProxyJump ProxyCommand ForwardAgent ServerAliveInterval ServerAliveCountMax StrictHostKeyChecking UserKnownHostsFile Include AddKeysToAgent ControlMaster ControlPath ControlPersist")
+
+func (sshTokenizer) Scan(in Input, previous State) (Result, error) {
+	s, ok := previous.(sshState)
+	if !ok {
+		return Result{}, fmt.Errorf("language: foreign SSH config state")
+	}
+	limit, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	i := 0
+	for i < limit {
+		c, n := in.Text[i], runeSize(in.Text, i)
+		at := in.Offset + i
+		if s.comment {
+			w.add(at, at+n, KindComment, ClassComment)
+			i += n
+			continue
+		}
+		if s.phase == 0 {
+			if space(c) {
+				i += n
+				continue
+			}
+			if c == '#' {
+				s.comment = true
+				continue
+			}
+			s.phase = 1
+		}
+		if s.phase == 1 {
+			if space(c) || c == '=' {
+				s.phase = 2
+				s.valueStart = c != '='
+				if c == '=' {
+					w.add(at, at+n, KindDelimiter, 0)
+				}
+			} else {
+				w.add(at, at+n, KindKeyword, 0)
+			}
+			i += n
+			continue
+		}
+		if s.valueStart {
+			if space(c) {
+				i += n
+				continue
+			}
+			s.valueStart = false
+			if c == '=' {
+				w.add(at, at+n, KindDelimiter, 0)
+				i += n
+				continue
+			}
+		}
+		if s.escape {
+			w.add(at, at+n, KindEscape, ClassString)
+			s.escape = false
+			i += n
+			continue
+		}
+		if s.variable {
+			w.add(at, at+n, KindVariable, ClassString)
+			if c == '}' {
+				s.variable = false
+			}
+			i += n
+			continue
+		}
+		if s.percent {
+			w.add(at, at+n, KindVariable, ClassString)
+			s.percent = false
+			i += n
+			continue
+		}
+		if !s.quote && c == '#' {
+			s.comment = true
+			continue
+		}
+		if c == '"' {
+			s.quote = !s.quote
+		}
+		kind := KindString
+		if c == '\\' {
+			s.escape, kind = true, KindEscape
+		}
+		if c == '%' {
+			s.percent, kind = true, KindVariable
+		}
+		if strings.HasPrefix(in.Text[i:], "${") {
+			s.variable = true
+			w.add(at, at+2, KindVariable, ClassString)
+			i += 2
+			continue
+		}
+		w.add(at, at+n, kind, ClassString)
+		i += n
+	}
+	if in.LineEnd && i == len(in.Text) {
+		s = sshState{}
+	}
+	return w.result(i, s), nil
+}

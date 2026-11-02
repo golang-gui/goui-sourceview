@@ -1,0 +1,13 @@
+# OpenSSH client configuration
+Host dev-*
+    HostName example.invalid
+    User contributor
+    Port 2222
+    IdentityFile ~/.ssh/id_ed25519
+    ControlPath ~/.ssh/control-%r@%h:%p
+    ProxyCommand "ssh -W %h:%p jump # literal"
+
+Match host dev-* user contributor
+    ServerAliveInterval 30
+
+Include "${HOME}/.ssh/config.d/*.conf"

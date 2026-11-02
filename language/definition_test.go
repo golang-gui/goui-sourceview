@@ -108,6 +108,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Systemd, language.DesktopEntry,
 		language.Nix, language.JQ, language.PromQL,
 		language.FSharp, language.Elixir, language.Erlang, language.Julia, language.Clojure, language.Haskell, language.OCaml,
+		language.SSHConfig,
 		language.GitConfig,
 		language.EDN,
 		language.JSON5,

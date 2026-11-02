@@ -66,6 +66,7 @@ func sampleDocuments() []exampleDocument {
 		"settings.json5",
 		"data.edn",
 		"settings.gitconfig",
+		"ssh_config",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

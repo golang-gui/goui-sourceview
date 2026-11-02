@@ -106,3 +106,12 @@ EDN 使用独立 ID、词汇和编辑规则，复用 Clojure 扫描设施中的�
 支持常用变量名建议，配置正文不自动插入代码括号；不读 include、不访问 Git 仓库或应用配置。
 
 依据 [git-config Syntax](https://git-scm.com/docs/git-config#_syntax)（页面 2.56.0）。
+
+## SSH config
+
+识别 ssh_config、ssh_config.*、.ssh/config 和 .sshconfig，sshconfig/ssh-config 围栏。
+指令名不区分大小写，支持空白或 = 分隔、双引号、引号外 # 注释、% token 及 ${ENV}。
+Host/Match 模式与远端命令保持参数文本，单引号不承担配置引用语义，不把 ProxyCommand 送入 Shell tokenizer。
+提供指令建议，不读取 Include、不执行 Match exec、不连接远端或应用配置。
+
+依据 [OpenBSD ssh_config(5)](https://man.openbsd.org/ssh_config)。

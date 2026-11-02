@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.SSHConfig, "User=\"name #body\"", "\"", "", "body", language.KindComment},
 		{language.GitConfig, "key=one\\\nbody", "\\", "", "body", language.KindProperty},
 		{language.EDN, "#_(\nbody\n) true", "#_", "", "body", language.KindPlain},
 		{language.JSON5, "/* first\nbody */ true", "/*", "", "body", language.KindInvalid},
@@ -414,6 +415,12 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.SSHConfig, "ProxyCommand echo a=b", "=", language.KindString},
+	{language.SSHConfig, "hOsT dev-*", "hOsT", language.KindKeyword},
+	{language.SSHConfig, "User = contributor # note", "note", language.KindComment},
+	{language.SSHConfig, "ProxyCommand \"echo # literal\"", "literal", language.KindString},
+	{language.SSHConfig, "ControlPath %r@%h:%p", "%r", language.KindVariable},
+	{language.SSHConfig, "IdentityFile \"${HOME}/key\"", "${HOME}", language.KindVariable},
 	{language.GitConfig, "[remote \"my origin\"]", "origin", language.KindString},
 	{language.GitConfig, "url=\"https://host/#value\"; comment", "value", language.KindString},
 	{language.GitConfig, "url=\"https://host/#value\"; comment", "comment", language.KindComment},
