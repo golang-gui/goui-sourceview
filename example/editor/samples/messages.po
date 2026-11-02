@@ -1,0 +1,18 @@
+# Translator comment
+#. Shown in the editor toolbar
+#: example/editor/main.go:1
+#, fuzzy
+#| msgid "Previous title"
+msgctxt "toolbar"
+msgid "Editor"
+msgstr "编辑器"
+
+msgid "One document"
+msgid_plural "Many documents"
+msgstr[0] "一个文档"
+msgstr[1] ""
+"多个文档\n"
+"Ready to edit"
+
+#~ msgid "Obsolete"
+#~ msgstr "旧文本"

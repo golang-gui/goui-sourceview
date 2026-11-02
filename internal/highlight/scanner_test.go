@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.Gettext, "# msgid \"body\"", "# ", "", "msgid", language.KindKeyword},
 		{language.BibTeX, "@book{x,title={first\nbody\n}}", "{first", "first", "body", language.KindVariable},
 		{language.LaTeX, "\\begin{verbatim}\n%body\n\\end{verbatim}", "verbatim", "text", "body", language.KindComment},
 		{language.ReStructuredText, "Example::\n\n    body\nafter", "::", ":", "body", language.KindPlain},
@@ -409,6 +410,12 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.Gettext, "msgid_plural \"files\"\nmsgstr[0] \"文件\"", "msgid_plural", language.KindKeyword},
+	{language.Gettext, "msgstr[12] \"files\"", "12", language.KindNumber},
+	{language.Gettext, "msgstr \"\"\n\"body\\n\"\n\"next\"", "body", language.KindString},
+	{language.Gettext, "#: file.go:1", "file.go", language.KindMeta},
+	{language.Gettext, "#~ msgid \"old\"", "msgid", language.KindComment},
+	{language.Gettext, "msgid \"a\\n\"", "\\n", language.KindEscape},
 	{language.BibTeX, "@book{key,title={A {Nested} title},year=2026}", "title", language.KindProperty},
 	{language.BibTeX, "@book{key,title={A {Nested} title},year=2026}", "Nested", language.KindString},
 	{language.BibTeX, "@book{key,title=\"A {\\\"} protected quote\nbody\",year=2026}", "body", language.KindString},

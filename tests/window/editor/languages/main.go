@@ -97,6 +97,7 @@ func main() {
 	}{
 		{language.LaTeX, "\\sect", "\\section"},
 		{language.BibTeX, "@art", "@article"},
+		{language.Gettext, "msgi", "msgid"},
 		{language.TOML, "enabled = tr", "enabled = true"},
 		{language.YAML, "enabled: nu", "enabled: null"},
 		{language.Shell, "pri", "printf"},
@@ -199,6 +200,7 @@ func main() {
 		{language.ReStructuredText, "", "``code``", "``code``"},
 		{language.LaTeX, "", "\\section{Title}", "\\section{Title}"},
 		{language.BibTeX, "", "@book{x,title={Hi}}", "@book{x,title={Hi}}"},
+		{language.Gettext, "msgid ", "\"text\"", "msgid \"text\""},
 		{language.GoTemplate, "{{printf ", "\"hello\"}}", "{{printf \"hello\"}}"},
 		{language.Jinja2, "{% raw %}", "{{true}}", "{% raw %}{{true}}"},
 		{language.Systemd, "Description=", "\"text\"", "Description=\"text\""},

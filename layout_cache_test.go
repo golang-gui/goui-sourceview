@@ -852,6 +852,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		row        int
 		kind       language.Kind
 	}{
+		{language.Gettext, "msgstr \"\"\n\"body\"", "\"body\"", 1, language.KindString},
 		{language.BibTeX, "@book{x,title={first\nbody\n}}", "body", 1, language.KindString},
 		{language.LaTeX, "\\begin{verbatim}\nbody\n\\end{verbatim}", "body", 1, language.KindString},
 		{language.ReStructuredText, "Example::\n\n    body", "    body", 2, language.KindCode},

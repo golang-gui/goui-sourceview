@@ -17,6 +17,12 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Gettext:
+			d.Tokenizer = poTokenizer{}
+			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}, AutoClosingPairs: []Pair{{Open: "\"", Close: "\"", NotInString: true, NotInComment: true}}}
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Suggest = func(Context) []string { return poWords }
 		case BibTeX:
 			d.Tokenizer = bibTokenizer{}
 			d.Editing = defaultEditing()
@@ -544,6 +550,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"pot":              Gettext,
+		"gettext":          Gettext,
 		"bib":              BibTeX,
 		"tex":              LaTeX,
 		"rest":             ReStructuredText,

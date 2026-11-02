@@ -62,3 +62,12 @@ verb 与 verbatim/verbatim*、lstlisting、minted 正文使用原样字符串规
 不执行样式、解析宏值或加载引用数据库；不把 .bst 的专用语言当作 .bib。
 
 依据 [BibTeX 0.99e](https://ctan.org/pkg/bibtex) 与 [bibtex.web 的 scan_balanced_braces](https://github.com/TeX-Live/texlive-source/blob/trunk/texk/web2c/bibtex.web)。
+
+## gettext PO/POT
+
+识别 .po/.pot，po/pot/gettext 围栏。支持 msgctxt/msgid/msgid_plural/msgstr、复数索引及多行消息的逐行字符串。
+引用按 PO 的 C 风格转义处理；引用不会跨越未转义的物理换行，连续消息片段由各行独立闭合。
+区分译者/提取注释、来源引用、标志、前一消息和废弃消息；特殊元数据保留 Comment Class，不误启用补全/代码配对。
+只提供双引号配对，不解释复数表达式、不编译 MO、不改变翻译内容。
+
+依据 [GNU gettext PO File Entries](https://www.gnu.org/software/gettext/manual/html_node/PO-File-Entries.html) 和 [Plural Forms](https://www.gnu.org/software/gettext/manual/html_node/Entries-with-Plural-Forms.html)。
