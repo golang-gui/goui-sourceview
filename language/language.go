@@ -51,6 +51,7 @@ const (
 	Zig          ID = "zig"
 	ObjectiveC   ID = "objective-c"
 	ObjectiveCpp ID = "objective-cpp"
+	Scala        ID = "scala"
 	Markdown     ID = "markdown"
 )
 
@@ -142,6 +143,7 @@ var builtins = []Info{
 	{ID: Zig, Name: "Zig", Extensions: []string{".zig"}, MIMETypes: []string{"text/x-zig"}},
 	{ID: ObjectiveC, Name: "Objective-C", Extensions: []string{".m"}, MIMETypes: []string{"text/x-objcsrc"}},
 	{ID: ObjectiveCpp, Name: "Objective-C++", Extensions: []string{".mm"}, MIMETypes: []string{"text/x-objc++src"}},
+	{ID: Scala, Name: "Scala", Extensions: []string{".scala", ".sbt"}, MIMETypes: []string{"text/x-scala"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -208,6 +210,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "scala" || interpreter == "scala-cli" {
+		return Scala
+	}
 	if interpreter == "Rscript" {
 		return R
 	}

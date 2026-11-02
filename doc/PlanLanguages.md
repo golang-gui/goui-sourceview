@@ -422,3 +422,12 @@ Unicode/十六进制转义、成员/级联点号、指数与十六进制数。
 C++ 原始字符串与 @ 语法混合、长引用、模板词汇、真实行尾状态恢复和分片对照通过。
 `GOWORK=off go test ./...` 与原生 Pango 亮暗 1× 原始引用正文颜色断言通过。
 同本批独立浅色 1× 会话，`-language objective-cpp` 建议接受/撤销、对象引用输入和公共断言通过。
+
+### Scala
+
+新增 Scala、文件/shebang/围栏识别、编辑规则及 hello.scala，示例共 41 份。
+独立预期覆盖普通引用不插值、嵌套插值、raw 的反斜杠/美元边界、美元转义引用、
+代码引用与字符/symbol 区分、反引号及嵌套注释；长正文、连续闭合引号和随机分片通过。
+`GOWORK=off go test ./...`、`GOWORK=off go test -race ./language ./internal/highlight` 通过，
+Pango 亮暗 1× 三引号正文 RGBA 断言通过。独立浅色 1× 的 `-language scala` 通过
+关键词建议、三引号输入、代码引用的结构配对及公共断言，没有生成多余的闭合单引号。

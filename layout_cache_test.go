@@ -889,6 +889,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Zig, "const s=\n\\\\body\n;", "\\\\body", 1, language.KindString},
 		{language.ObjectiveC, "@interface", "@interface", 0, language.KindKeyword},
 		{language.ObjectiveCpp, "auto s=R\"tag(\nbody\n)tag\";", "body", 1, language.KindString},
+		{language.Scala, "val s=s\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

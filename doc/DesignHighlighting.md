@@ -717,3 +717,23 @@ Objective-C++ 使用独立 ID objective-cpp，`.mm` 直接识别；围栏接受
 objective-cpp/objective-c++/objcpp/objc++。同一 C 扫描器选择 C++ 基础规则，
 在正常代码状态增加上述 Objective-C 语法，保留 C++ 原始引用及预处理。
 原始引用正文中的 @ 指令不进入代码状态；两种语言身份的状态不能互换。
+
+## 23. Scala
+
+新增 Scala、`.scala/.sbt`、scala/scala-cli shebang 和 scala 围栏；有歧义的 `.sc` 需脚本特征或显式选择。
+独立状态支持 Scala 2.13/3 常用关键词合集、注解、反引号名称、字符、旧 symbol 写法、
+Scala 3 的 `'{…}` / `'[…]` 代码引用、普通/三引号及 s/f/raw/自定义名称前缀的插值。
+代码引用的单引号不是字符串边界；默认不自动闭合单引号，字符引用仍可手工输入/包围选区。
+嵌套块注释和插值栈保持不可变；字符串与注释内的括号不结束外层插值。
+三引号结束时整段连续引号归于同一引用，计数状态不缓存正文。
+
+普通字符串不插值，名称紧邻双引号才启用；支持短名称、`${…}`、`$$` 和 `$"`。
+插值正文中反斜杠不屏蔽紧随的 `$`；普通插值中的 `\"` 仍保护闭合边界。
+raw 普通插值的反斜杠保持正文色，但 Context.Literal 不开启，以保留其引号边界语义；三引号为 Literal。
+不执行 StringContext、自定义插值器或类型推断，不展开已废弃的多行 Unicode 预转换。
+本批不启用 Scala XML 混合语言模式；关键词合集也不作为某个编译器版本的语法校验器。
+
+依据 [Scala 2.13 词法规格](https://www.scala-lang.org/files/archive/spec/2.13/01-lexical-syntax.html)、
+[Scala 2.13.16 Scanners.scala](https://github.com/scala/scala/blob/v2.13.16/src/compiler/scala/tools/nsc/ast/parser/Scanners.scala#L1003)
+的 getStringPart/isTripleQuote，及 [Scala 3 代码引用](https://docs.scala-lang.org/scala3/reference/metaprogramming/macros.html)
+（读取 2026-11-02，Scala 3 页面为 3.10.0）。沿用既有语言的上下文分解与显示快照，不增加解析器或依赖。

@@ -26,7 +26,7 @@ The development branch depends on GOUI v0.5.0, which Go downloads automatically.
 - **Syntax highlighting** for JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell,
   HTTP, Protobuf, Makefile, CMake, Nginx, INI, Dockerfile, SQL, Go, Python,
   JavaScript, TypeScript, JSX, TSX, CSS, C, C++, Java, Rust, C#, Lua, PowerShell, Ruby, PHP,
-  Kotlin, Swift, Dart, R, Zig, Objective-C and Objective-C++.
+  Kotlin, Swift, Dart, R, Zig, Objective-C, Objective-C++ and Scala.
 - **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.
 - **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
 - **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.

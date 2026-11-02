@@ -639,6 +639,13 @@ func TestFourthBatchKinds(t *testing.T) {
 	}{
 		{language.Zig, `const x: u4096 = @intCast(1);`, "u4096", language.KindKeyword},
 		{language.ObjectiveC, `@interface Demo : NSObject @end`, "@interface", language.KindKeyword},
+		{language.Scala, `val s="literal $name";`, "$name", language.KindString},
+		{language.Scala, `val s=s"hello $name ${if (true) s"${1}" else "no"}"`, "if", language.KindKeyword},
+		{language.Scala, `val s=raw"\${false}";`, "false", language.KindKeyword},
+		{language.Scala, `val s=s"quote $" dollar $$"; val x=1`, "val x", language.KindKeyword},
+		{language.Scala, "val symbol='name; val c='字'; val code='{true}", "true", language.KindKeyword},
+		{language.Scala, "val `class`=1; /* outer /* inner */ still */", "class", language.KindVariable},
+		{language.Scala, "/* outer /* inner */ still */ val x=1", "still", language.KindComment},
 		{language.ObjectiveCpp, `template<class T> id box(T x){return @(x);} auto s=R"tag(@interface literal)tag";`, "template", language.KindKeyword},
 		{language.ObjectiveCpp, `auto s=R"tag(@interface literal)tag"; @implementation Demo @end`, "literal", language.KindString},
 		{language.ObjectiveCpp, `auto s=R"tag(@interface literal)tag"; @implementation Demo @end`, "@implementation", language.KindKeyword},
@@ -664,6 +671,7 @@ func TestFourthBatchKinds(t *testing.T) {
 
 func TestFourthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.Scala:        {"@deprecated(\"note\")\n/* outer /* nested */ still */\nval s=s\"hi $name ${if (true) s\"${1}\" else raw\"\\${false}\"}\"; val t=s\"\"\"\n${List(1,2)} $$ $\"\n\"\"\"\"\"; val `type`='symbol; val ch='字'; val code='{true}", "val s=custom\"\"\"" + strings.Repeat("字\\", ChunkSize) + "${true}" + strings.Repeat("\"", 50) + "; val x=42.toString"},
 		language.ObjectiveCpp: {"#import <Foundation/Foundation.h>\n#include <vector>\ntemplate<class T> id box(T x){return @(x);} auto s=u8R\"tag(raw\n@interface fake )wrong\" still)tag\"; @interface Real : NSObject @end", "auto s=R\"0123456789abcdef(" + strings.Repeat("字@\"", ChunkSize) + ")0123456789abcdef\"; @end"},
 		language.ObjectiveC:   {"#import <Foundation/Foundation.h>\n@interface Demo : NSObject\n@property(copy) NSString *name;\n@end\n@implementation Demo\n- (id)value { @autoreleasepool { return @{ @\"key\": @[@42,@-1,@YES,@(1+2)] }; } }\n@end", "id s=@\"" + strings.Repeat("字\\n", ChunkSize) + "\"; /* comment */ return nil;"},
 		language.Zig:          {"//! module\nconst @\"name 字\"=\\\\body ${raw} \\n\n\\\\continued\nconst n:u12=0x1.fp+2; const c='\\u{1234}'; const s=\"\\x41\";", "const s=\\\\" + strings.Repeat("字\\{}", ChunkSize) + "\nconst yes=true;"},
@@ -859,7 +867,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig, language.ObjectiveC} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig, language.ObjectiveC, language.ObjectiveCpp, language.Scala} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

@@ -118,6 +118,19 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case Scala:
+			d.Tokenizer = scalaTokenizer{}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
+			p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+			d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+			d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return c.Selected || c.Context.String || c.Typed != "'" && (c.Typed != `"` || !strings.HasSuffix(c.Before, `""`))
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case ObjectiveC, ObjectiveCpp:
 			d.Tokenizer = cTokenizer{info.ID}
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '@' }
@@ -371,6 +384,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case Scala:
+		table = scalaKeywords
 	case ObjectiveC, ObjectiveCpp:
 		out := codeVocabulary(cBaseID(id))
 		for word := range objcKeywords {
