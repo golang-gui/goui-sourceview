@@ -18,7 +18,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		}
 		switch info.ID {
 
-		case Nix:
+		case Nix, JQ:
 			d.Tokenizer = queryTokenizer{info.ID}
 			d.Editing.Comments.Line = "#"
 			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: "\"", Close: "\"", NotInString: true, NotInComment: true})

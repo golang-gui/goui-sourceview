@@ -73,6 +73,7 @@ const (
 	Systemd       ID = "systemd"
 	DesktopEntry  ID = "desktop"
 	Nix           ID = "nix"
+	JQ            ID = "jq"
 
 	Markdown ID = "markdown"
 )
@@ -187,6 +188,7 @@ var builtins = []Info{
 	{ID: Systemd, Name: "systemd unit", Extensions: []string{".service", ".socket", ".device", ".mount", ".automount", ".swap", ".target", ".path", ".timer", ".slice", ".scope"}},
 	{ID: DesktopEntry, Name: "Desktop Entry", Extensions: []string{".desktop", ".directory"}, MIMETypes: []string{"application/x-desktop"}},
 	{ID: Nix, Name: "Nix", Extensions: []string{".nix"}},
+	{ID: JQ, Name: "jq", Extensions: []string{".jq"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
@@ -267,6 +269,8 @@ func Guess(filename string, sample []byte) ID {
 	}
 	interpreter := shebangInterpreter(sample)
 	switch interpreter {
+	case "jq":
+		return JQ
 
 	}
 	if interpreter == "groovy" {

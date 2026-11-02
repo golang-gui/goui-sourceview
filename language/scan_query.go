@@ -52,12 +52,14 @@ type queryTokenizer struct{ id ID }
 func (b queryTokenizer) InitialState() State { return queryState{id: b.id} }
 
 var nixWords = words("if then else assert with let in rec inherit or true false null import builtins derivation")
+var jqWords = words("def as if then elif else end reduce foreach try catch label break module import include and or true false null empty select map map_values keys values length type tostring tonumber sort sort_by group_by unique unique_by add any all has in del path paths getpath setpath error debug halt first last limit range inputs input")
 
 func queryWords(id ID) map[string]bool {
 	switch id {
 	case Nix:
 		return nixWords
-
+	case JQ:
+		return jqWords
 	default:
 		return nil
 	}
@@ -71,7 +73,7 @@ func sortedQueryWords(id ID) []string {
 	return out
 }
 func queryName(id ID, r rune) bool {
-	return IdentifierRune(r) || (r == '-' || r == '\'')
+	return IdentifierRune(r) || id == Nix && (r == '-' || r == '\'')
 }
 func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 	s, ok := state.(queryState)
@@ -122,7 +124,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 				s.escape = false
 				continue
 			}
-			if s.indent && strings.HasPrefix(text[i:], "''") {
+			if s.id == Nix && s.indent && strings.HasPrefix(text[i:], "''") {
 				if i+2 < len(text) && (text[i+2] == '\'' || text[i+2] == '$' || text[i+2] == '\\') {
 					add(i, i+3, KindEscape, ClassString)
 					s.escape = text[i+2] == '\\'
@@ -140,9 +142,11 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 				s.mode, s.quote = queryCode, 0
 				continue
 			}
-			if strings.HasPrefix(text[i:], "$"+"{") {
+			if s.id == Nix && strings.HasPrefix(text[i:], "$"+"{") || s.id == JQ && strings.HasPrefix(text[i:], "\\(") {
 				close := byte('}')
-
+				if s.id == JQ {
+					close = ')'
+				}
 				s.expr = &queryFrame{parent: s.expr, mode: s.mode, quote: s.quote, indent: s.indent, close: close}
 				add(i, i+2, KindDelimiter, ClassDelimiter)
 				i += 2
@@ -179,12 +183,12 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = queryCode
 		}
 		if s.wordOn {
-			if queryName(s.id, r) {
+			if queryName(s.id, r) || s.id == JQ && strings.ContainsRune("$:", r) {
 				s.word.add(text[i : i+n])
 				i += n
 				continue
 			}
-			if c == '/' && i+1 < len(text) && !space(text[i+1]) && text[i+1] != '/' {
+			if s.id == Nix && c == '/' && i+1 < len(text) && !space(text[i+1]) && text[i+1] != '/' {
 				w.add(s.word.start, in.Offset+i, KindString, ClassString)
 				s.word, s.wordOn = scanWord{}, false
 				s.mode = queryPath
@@ -201,15 +205,15 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = queryLineComment
 			continue
 		}
-		if strings.HasPrefix(text[i:], "/*") {
+		if s.id == Nix && strings.HasPrefix(text[i:], "/*") {
 			s.mode = queryBlockComment
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
-		if c == '"' || strings.HasPrefix(text[i:], "''") {
+		if c == '"' || s.id == Nix && strings.HasPrefix(text[i:], "''") {
 			s.mode, s.quote = queryString, c
-			s.indent = c == '\''
+			s.indent = s.id == Nix && c == '\''
 			size := 1
 			if s.indent {
 				size = 2
@@ -218,7 +222,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			i += size
 			continue
 		}
-		if strings.HasPrefix(text[i:], "./") || strings.HasPrefix(text[i:], "../") || strings.HasPrefix(text[i:], "~/") || c == '/' && i+1 < len(text) && !space(text[i+1]) && text[i+1] != '/' || c == '<' && i+1 < len(text) && queryName(Nix, rune(text[i+1])) {
+		if s.id == Nix && (strings.HasPrefix(text[i:], "./") || strings.HasPrefix(text[i:], "../") || strings.HasPrefix(text[i:], "~/") || c == '/' && i+1 < len(text) && !space(text[i+1]) && text[i+1] != '/' || c == '<' && i+1 < len(text) && queryName(Nix, rune(text[i+1]))) {
 			s.mode = queryPath
 			if c == '<' {
 				s.quote = '>'
@@ -233,7 +237,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			i++
 			continue
 		}
-		if queryName(s.id, r) {
+		if queryName(s.id, r) || s.id == JQ && (c == '$' || c == '@') {
 			k := KindPlain
 			if s.member {
 				k = KindProperty
@@ -276,7 +280,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			class = ClassDelimiter
 		}
 		add(i, i+n, KindDelimiter, class)
-		s.member = false
+		s.member = s.id == JQ && c == '.'
 		i += n
 	}
 	if in.LineEnd && i == len(text) {

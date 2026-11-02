@@ -347,6 +347,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Systemd, "Description=one\\\nbody\nType=simple", "\\", "", "body", language.KindProperty},
 		{language.DesktopEntry, "Name=one\n#body", "#", "", "body", language.KindProperty},
 		{language.Nix, "let x=''\nbody\n''", "''", "0", "body", language.KindPlain},
+		{language.JQ, "\"open\\(\ntrue\n)\"", "\\(", "", "true", language.KindString},
 
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
@@ -645,6 +646,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Systemd, "ExecStart=tool \\", "--flag"},
 		{language.DesktopEntry, "Name=first", "Name=second"},
 		{language.Nix, "let x=\"outer ${\"inner ${", "true}\"}"},
+		{language.JQ, "\"outer \\(\"inner \\(", "true)\")\""},
 
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
@@ -701,6 +703,9 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.Nix, "let x = ''literal ''${name} ${true}''; in x", "true", language.KindKeyword},
 		{language.Nix, "import ./modules/editor.nix { source = <nixpkgs>; }", "editor.nix", language.KindString},
 		{language.Nix, "let source = modules/editor.nix; in source", "modules/editor", language.KindString},
+		{language.JQ, ".items[] | map(select(.enabled)) | .[] as $item | \"id=\\($item.id)\"", "$item", language.KindVariable},
+		{language.JQ, "\"literal \\(if true then \"yes\" else \"no\" end)\"", "true", language.KindKeyword},
+		{language.JQ, ".items | @json # note", "@json", language.KindMeta},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -716,6 +721,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 		language.Systemd:      {"[Service]\nExecStart=/bin/tool %n $NAME \\\n# skipped\n --flag\nRestart=on-failure\nDescription=\"value #literal\"", "Description=" + strings.Repeat("字", ChunkSize) + "\nExecStart=tool %% ${NAME}"},
 		language.DesktopEntry: {"[Desktop Entry]\nName[zh_CN]=编辑器\nExec=tool %U\nCategories=Utility;Development;\nComment=literal #value\nName=one\\\nNext=two", "Name=" + strings.Repeat("字", ChunkSize) + "\nExec=tool"},
 		language.Nix:          {"let path=modules/editor.nix; source=<nixpkgs>; in { x=\"hello ${if true then \"${1}\" else \"no\"}\"; body=''literal ''${name} ${true}''; } /* note */", "let x=''" + strings.Repeat("字", ChunkSize) + " ${true}''; in x"},
+		language.JQ:           {".items[] | map(select(.enabled)) | .[] as $item | \"id=\\($item.id)\" # note", "\"" + strings.Repeat("字", ChunkSize) + "\\(if true then \"\\(1)\" else \"no\" end)\""},
 
 		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
 		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
@@ -736,7 +742,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {
