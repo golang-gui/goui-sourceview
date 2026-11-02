@@ -345,6 +345,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.GoTemplate, "{{/*open\nbody\n*/}}", "/*", "", "body", language.KindPlain},
 		{language.Jinja2, "{% raw %}\n{{true}}\n{% endraw %}", "raw", "if", "true", language.KindKeyword},
 		{language.Systemd, "Description=one\\\nbody\nType=simple", "\\", "", "body", language.KindProperty},
+		{language.DesktopEntry, "Name=one\n#body", "#", "", "body", language.KindProperty},
 
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
@@ -641,6 +642,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.GoTemplate, "{{printf \"open", "body\"}}"},
 		{language.Jinja2, "{% raw %}{{true", "}}{% endraw %}"},
 		{language.Systemd, "ExecStart=tool \\", "--flag"},
+		{language.DesktopEntry, "Name=first", "Name=second"},
 
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
@@ -687,6 +689,11 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.Systemd, "ExecStart=/bin/tool \\\n# skipped\n --flag\nRestart=on-failure", "--flag", language.KindString},
 		{language.Systemd, "Description=literal $NAME # value", "$NAME", language.KindString},
 		{language.Systemd, "ExecStart=tool \\\r\n# skipped\r\n --flag\r\nType=simple", "--flag", language.KindString},
+		{language.DesktopEntry, "[Desktop Entry]\nName[zh_CN]=编辑器\nExec=tool %U\nCategories=Utility;Development;", "zh_CN", language.KindProperty},
+		{language.DesktopEntry, "Exec=tool %U", "%U", language.KindVariable},
+		{language.DesktopEntry, "Name=literal %U $HOME\nExec=tool", "%U", language.KindString},
+		{language.DesktopEntry, "Name=one\\\nName=two", "Name=two", language.KindProperty},
+		{language.DesktopEntry, "Name=one\\\r\nNext=two", "Next", language.KindProperty},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -699,7 +706,8 @@ func TestSeventhBatchKinds(t *testing.T) {
 
 func TestSeventhBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
-		language.Systemd: {"[Service]\nExecStart=/bin/tool %n $NAME \\\n# skipped\n --flag\nRestart=on-failure\nDescription=\"value #literal\"", "Description=" + strings.Repeat("字", ChunkSize) + "\nExecStart=tool %% ${NAME}"},
+		language.Systemd:      {"[Service]\nExecStart=/bin/tool %n $NAME \\\n# skipped\n --flag\nRestart=on-failure\nDescription=\"value #literal\"", "Description=" + strings.Repeat("字", ChunkSize) + "\nExecStart=tool %% ${NAME}"},
+		language.DesktopEntry: {"[Desktop Entry]\nName[zh_CN]=编辑器\nExec=tool %U\nCategories=Utility;Development;\nComment=literal #value\nName=one\\\nNext=two", "Name=" + strings.Repeat("字", ChunkSize) + "\nExec=tool"},
 
 		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
 		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
@@ -720,7 +728,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {

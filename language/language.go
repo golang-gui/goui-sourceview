@@ -71,6 +71,7 @@ const (
 	GoTemplate    ID = "gotemplate"
 	Jinja2        ID = "jinja2"
 	Systemd       ID = "systemd"
+	DesktopEntry  ID = "desktop"
 
 	Markdown ID = "markdown"
 )
@@ -183,6 +184,7 @@ var builtins = []Info{
 	{ID: GoTemplate, Name: "Go Template", Extensions: []string{".gotmpl", ".gohtml"}},
 	{ID: Jinja2, Name: "Jinja2", Extensions: []string{".j2", ".jinja", ".jinja2"}},
 	{ID: Systemd, Name: "systemd unit", Extensions: []string{".service", ".socket", ".device", ".mount", ".automount", ".swap", ".target", ".path", ".timer", ".slice", ".scope"}},
+	{ID: DesktopEntry, Name: "Desktop Entry", Extensions: []string{".desktop", ".directory"}, MIMETypes: []string{"application/x-desktop"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }

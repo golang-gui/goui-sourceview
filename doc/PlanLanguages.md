@@ -666,3 +666,9 @@ editor 浅色 1× 实际点击九个新样本，深色 1× 检查 Groovy、Doten
 分节、键值、跳过注释行的续行、转义、% specifier 及 Exec 变量。
 同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 editor.service 样本。
 本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+
+### Desktop Entry
+
+本地化键、值转义、分号列表与 Exec 字段代码；保持与 systemd 续行规则的区别。
+同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 editor.desktop 样本。
+本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。

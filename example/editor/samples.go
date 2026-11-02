@@ -52,7 +52,8 @@ func sampleDocuments() []exampleDocument {
 		"rules.bzl",
 		"build.gradle",
 		"page.gohtml", "page.html.j2",
-		"editor.service"} {
+		"editor.service", "editor.desktop",
+	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
 			panic(err)

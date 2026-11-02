@@ -1,0 +1,16 @@
+# Original Desktop Entry sample for SourceView.
+[Desktop Entry]
+Type=Application
+Name=SourceView Editor
+Name[zh_CN]=源码编辑器
+Comment=A native code editor
+Exec=sourceview-editor %F
+Icon=accessories-text-editor
+Terminal=false
+Categories=Development;Utility;
+Keywords=code;editor;
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=New Window
+Exec=sourceview-editor --new-window

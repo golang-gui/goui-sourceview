@@ -25,9 +25,10 @@ func (s unitState) Context() Context {
 }
 func (b unitTokenizer) InitialState() State { return unitState{id: b.id} }
 func unitWords(id ID) []string {
-
-	return strings.Fields("Unit Service Install Socket Timer Path Mount Automount Swap Target Slice Scope Description Documentation After Before Wants Requires Type ExecStart ExecStop ExecReload WorkingDirectory Environment EnvironmentFile User Group Restart RestartSec WantedBy RequiredBy OnCalendar OnBootSec OnUnitActiveSec Persistent")
-
+	if id == Systemd {
+		return strings.Fields("Unit Service Install Socket Timer Path Mount Automount Swap Target Slice Scope Description Documentation After Before Wants Requires Type ExecStart ExecStop ExecReload WorkingDirectory Environment EnvironmentFile User Group Restart RestartSec WantedBy RequiredBy OnCalendar OnBootSec OnUnitActiveSec Persistent")
+	}
+	return strings.Fields("Desktop Entry Desktop Action Type Version Name GenericName Comment Icon Exec TryExec Path Terminal Categories Keywords MimeType Actions StartupNotify StartupWMClass NoDisplay Hidden OnlyShowIn NotShowIn DBusActivatable URL")
 }
 func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 	s, ok := state.(unitState)
@@ -46,7 +47,7 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 			return
 		}
 		k := KindString
-		if s.word.text == "true" || s.word.text == "false" || wordsBoolean[s.word.text] {
+		if s.word.text == "true" || s.word.text == "false" || s.id == Systemd && wordsBoolean[s.word.text] {
 			k = KindKeyword
 		} else if s.word.text != "" && digit(s.word.text[0]) {
 			k = KindNumber
@@ -67,7 +68,7 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 				i += n
 				continue
 			}
-			if c == '#' || c == ';' {
+			if c == '#' || s.id == Systemd && c == ';' {
 				s.comment = true
 				continue
 			}
@@ -149,25 +150,27 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.escape {
 			k := KindEscape
 			allowed := "sntr\\;"
-
-			allowed = "abfnrtv\\\"'sxuU01234567"
-
+			if s.id == Systemd {
+				allowed = "abfnrtv\\\"'sxuU01234567"
+			} else if s.key == "Exec" {
+				allowed += "\"$\x60"
+			}
 			if !strings.ContainsRune(allowed, r) {
 				k = KindInvalid
 			}
 			add(i, i+n, k, ClassString)
-
-			switch c {
-			case 'x':
-				s.escapeLeft = 2
-			case 'u':
-				s.escapeLeft = 4
-			case 'U':
-				s.escapeLeft = 8
-			case '0', '1', '2', '3', '4', '5', '6', '7':
-				s.escapeLeft, s.octal = 2, true
+			if s.id == Systemd {
+				switch c {
+				case 'x':
+					s.escapeLeft = 2
+				case 'u':
+					s.escapeLeft = 4
+				case 'U':
+					s.escapeLeft = 8
+				case '0', '1', '2', '3', '4', '5', '6', '7':
+					s.escapeLeft, s.octal = 2, true
+				}
 			}
-
 			s.escape = false
 			s.last = c
 			i += n
@@ -198,7 +201,7 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 			i++
 			continue
 		}
-		if c == '%' && i+1 < len(text) {
+		if c == '%' && (s.id == Systemd || s.key == "Exec") && i+1 < len(text) {
 			k := KindVariable
 			if text[i+1] == '%' {
 				k = KindEscape
@@ -209,7 +212,7 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 			i = z
 			continue
 		}
-		if c == '$' && strings.HasPrefix(s.key, "Exec") {
+		if c == '$' && s.id == Systemd && strings.HasPrefix(s.key, "Exec") {
 			z := i + 1
 			if z < len(text) && text[z] == '$' {
 				add(i, z+1, KindEscape, ClassString)
@@ -227,15 +230,15 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 			s.last = c
 			continue
 		}
-
-		if s.quote != 0 {
-			if c == s.quote {
-				s.quote = 0
+		if s.id == Systemd || s.key == "Exec" {
+			if s.quote != 0 {
+				if c == s.quote {
+					s.quote = 0
+				}
+			} else if c == '"' || s.id == Systemd && c == '\'' {
+				s.quote = c
 			}
-		} else if c == '"' || c == '\'' {
-			s.quote = c
 		}
-
 		if IdentifierRune(r) {
 			s.word = scanWord{start: in.Offset + i}
 			s.wordOn = true
@@ -245,7 +248,9 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		k := KindString
-
+		if c == ';' && s.id == DesktopEntry {
+			k = KindDelimiter
+		}
 		add(i, i+n, k, ClassString)
 		s.last = c
 		i += n
@@ -253,7 +258,7 @@ func (b unitTokenizer) Scan(in Input, state State) (Result, error) {
 	if in.LineEnd && i == len(text) {
 		finish(in.Offset + i)
 		if !s.comment {
-			s.continued = s.value && s.last == '\\'
+			s.continued = s.id == Systemd && s.value && s.last == '\\'
 			if !s.continued {
 				s.value = false
 				s.key = ""
