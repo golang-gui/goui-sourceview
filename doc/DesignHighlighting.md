@@ -1007,3 +1007,9 @@ slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复�
 字符/类型变量、逐字/三引号、多美元插值及嵌套注释。
 保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
 参考[官方规范/源码](https://github.com/dotnet/fsharp/blob/v13.9.201/src/Compiler/lex.fsl)（读取 2026-11-02）。
+
+### Elixir
+
+atom、heredoc、单 ASCII 字母 sigil 及嵌套插值，非 ASCII 输入保持完整 UTF-8。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://github.com/elixir-lang/elixir/blob/v1.18.4/lib/elixir/src/elixir_tokenizer.erl)（读取 2026-11-02）。

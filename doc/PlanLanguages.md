@@ -696,3 +696,9 @@ editor 浅色 1× 实际点击九个新样本，深色 1× 检查 Groovy、Doten
 字符/类型变量、逐字/三引号、多美元插值及嵌套注释。
 同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.fsx 样本。
 本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+
+### Elixir
+
+atom、heredoc、单 ASCII 字母 sigil 及嵌套插值，非 ASCII 输入保持完整 UTF-8。
+同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.ex 样本。
+本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。

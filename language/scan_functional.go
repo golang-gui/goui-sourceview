@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -21,9 +21,9 @@ const (
 // These dialects share bounded words and persistent literal/comment frames,
 // while punctuation, reader forms and literal prefixes remain language policy.
 type fnLiteral struct {
-	quote                             byte
+	quote, open                       byte
 	triple, raw, interpolate, comment bool
-	arity                             int
+	arity, nesting                    int
 }
 type fnExpr struct {
 	parent         *fnExpr
@@ -61,7 +61,7 @@ func (s fnState) Equal(other State) bool {
 }
 func (s fnState) Context() Context {
 	return Context{String: s.mode == fnString,
-		Literal: s.mode == fnString && s.literal.raw,
+		Literal: s.mode == fnString && s.literal.raw && s.id != Elixir,
 		Comment: s.mode == fnLineComment || s.mode == fnBlockComment || s.literal.comment}
 }
 
@@ -71,6 +71,7 @@ func (b functionalTokenizer) InitialState() State { return fnState{id: b.id} }
 
 var functionalWords = map[ID]map[string]bool{
 	FSharp: words("abstract and as assert base begin class default delegate do done downcast downto elif else end exception extern false finally fixed for fun function global if in inherit inline interface internal lazy let match member module mutable namespace new not null of open or override private public rec return select sig static struct then to true try type upcast use val void when while with yield async task seq"),
+	Elixir: words("after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end false fn for if import in nil not or quote raise receive require rescue super true try unless unquote unquote_splicing use when with"),
 }
 
 func functionalVocabulary(id ID) []string {
@@ -87,16 +88,20 @@ func functionalEditing(id ID) EditingRules {
 	case FSharp:
 		d.Comments = Comments{Line: "", Block: Pair{Open: "(*", Close: "*)"}}
 
+	case Elixir:
+		d.Comments.Line = "#"
+
+	}
+	if id == FSharp {
+		d.Comments.Line = "//"
 	}
 
-	d.Comments.Line = "//"
-
-	d.Word = func(r rune) bool { return fnName(id, r) }
+	d.Word = func(r rune) bool { return fnName(id, r) || id == Elixir && r == ':' }
 	d.AllowPair = func(c PairContext) bool {
 		if c.Selected || c.Context.String {
 			return true
 		}
-		if c.Typed == "'" {
+		if c.Typed == "'" && (id == FSharp) {
 			return false
 		}
 		return c.Typed != "\"" || !strings.HasSuffix(c.Before, "\"\"")
@@ -111,7 +116,8 @@ func fnName(id ID, r rune) bool {
 
 	case FSharp:
 		return r == '\''
-
+	case Elixir:
+		return r == '!' || r == '?'
 	}
 	return false
 }
@@ -128,6 +134,8 @@ func fnLine(id ID) string {
 	case FSharp:
 		return "//"
 
+	case Elixir:
+		return "#"
 	}
 	return ""
 }
@@ -233,7 +241,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				}
 				continue
 			}
-			if c == '"' {
+			if (s.id == FSharp) && c == '"' {
 				s.mode = fnString
 				s.literal = fnLiteral{quote: c, comment: true}
 				add(i, i+1, KindComment, ClassComment)
@@ -291,35 +299,39 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				s.escape = false
 				continue
 			}
-			if s.literal.raw && !s.literal.triple && strings.HasPrefix(text[i:], "\"\"") {
+			if s.id == FSharp && s.literal.raw && !s.literal.triple && strings.HasPrefix(text[i:], "\"\"") {
 				add(i, i+2, KindEscape, class)
 				i += 2
 				continue
 			}
 			if s.literal.interpolate && !s.literal.comment {
 				size, close := 0, byte('}')
-
-				if s.literal.arity == 1 && (strings.HasPrefix(text[i:], "{{") || strings.HasPrefix(text[i:], "}}")) {
-					add(i, i+2, KindEscape, class)
-					i += 2
-					continue
+				if s.id == Elixir && strings.HasPrefix(text[i:], "#{") {
+					size = 2
 				}
-				if c == '{' {
-					if s.braces == 0 {
-						s.braceStart = in.Offset + i
-					}
-					s.braces++
-					add(i, i+1, KindString, ClassString)
-					i++
-					if s.braces < s.literal.arity {
+
+				if s.id == FSharp {
+					if s.literal.arity == 1 && (strings.HasPrefix(text[i:], "{{") || strings.HasPrefix(text[i:], "}}")) {
+						add(i, i+2, KindEscape, class)
+						i += 2
 						continue
 					}
-					w.add(s.braceStart, in.Offset+i, KindDelimiter, ClassDelimiter)
-					size = -1
-				} else {
-					s.braces = 0
+					if c == '{' {
+						if s.braces == 0 {
+							s.braceStart = in.Offset + i
+						}
+						s.braces++
+						add(i, i+1, KindString, ClassString)
+						i++
+						if s.braces < s.literal.arity {
+							continue
+						}
+						w.add(s.braceStart, in.Offset+i, KindDelimiter, ClassDelimiter)
+						size = -1
+					} else {
+						s.braces = 0
+					}
 				}
-
 				if size != 0 {
 					s.expr = &fnExpr{parent: s.expr, literal: s.literal, close: close}
 					if size > 0 {
@@ -330,9 +342,19 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 					continue
 				}
 			}
-
+			if s.literal.open != 0 && c == s.literal.open {
+				s.literal.nesting++
+				add(i, i+n, k, class)
+				i += n
+				continue
+			}
 			if c == s.literal.quote {
-
+				if s.literal.nesting > 0 {
+					s.literal.nesting--
+					add(i, i+n, k, class)
+					i += n
+					continue
+				}
 				size := 1
 				if s.literal.triple {
 					if !strings.HasPrefix(text[i:], strings.Repeat(string(c), 3)) {
@@ -347,7 +369,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				endString()
 				continue
 			}
-			if c == '\\' && (!s.literal.raw) {
+			if c == '\\' && (!s.literal.raw || s.id == Elixir) {
 				if !s.literal.raw {
 					k = KindEscape
 				}
@@ -401,14 +423,45 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 
-		if c == '$' || c == '@' {
+		if s.id == FSharp && (c == '$' || c == '@') {
 			s.mode = fnPrefix
 			s.prefix = 0
 			s.literal = fnLiteral{}
 			continue
 		}
 
-		if c == '\'' {
+		if s.id == Elixir && c == '~' && i+2 < len(text) && text[i+1] < utf8.RuneSelf && unicode.IsLetter(rune(text[i+1])) && strings.ContainsRune("/|\"'([{<", rune(text[i+2])) {
+			d := text[i+2]
+			close := d
+			paired := byte(0)
+			if pos := strings.IndexByte("([{<", d); pos >= 0 {
+				paired = d
+				close = ")]}>"[pos]
+			}
+			s.literal = fnLiteral{quote: close, open: paired, raw: unicode.IsUpper(rune(text[i+1])), interpolate: unicode.IsLower(rune(text[i+1])), arity: 1}
+			size := 3
+			if (d == '"' || d == '\'') && strings.HasPrefix(text[i+2:], strings.Repeat(string(d), 3)) {
+				s.literal.triple = true
+				size = 5
+			}
+			s.mode = fnString
+			add(i, i+size, KindString, ClassString)
+			i += size
+			continue
+		}
+
+		if s.id == Elixir && c == '?' && i+1 < len(text) {
+			z := i + 1 + runeSize(text, i+1)
+			if text[i+1] == '\\' && z < len(text) {
+				z += runeSize(text, z)
+			}
+			add(i, z, KindString, ClassString)
+			i = z
+			s.value = true
+			continue
+		}
+
+		if c == '\'' && (s.id == FSharp) {
 			if size := fnCharacter(text[i:]); size > 0 {
 				add(i, i+size, KindString, ClassString)
 				i += size
@@ -417,11 +470,11 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 		}
-		if c == '"' {
+		if c == '"' || c == '\'' && (s.id == Elixir) {
 			s.mode = fnString
-			s.literal = fnLiteral{quote: c, arity: 1, interpolate: false}
-			s.literal.triple = strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
-			if s.literal.triple {
+			s.literal = fnLiteral{quote: c, arity: 1, interpolate: s.id == Elixir}
+			s.literal.triple = (s.id == FSharp || s.id == Elixir) && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
+			if s.id == FSharp && s.literal.triple {
 				s.literal.raw = true
 			}
 			size := 1
@@ -438,8 +491,17 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i++
 			continue
 		}
-		if fnName(s.id, r) {
+		if fnName(s.id, r) || s.id == Elixir && (c == ':' || c == '@') {
 			k := KindPlain
+			if s.id == Elixir && c == ':' {
+				k = KindProperty
+			}
+			if s.id == Elixir && c == '@' {
+				k = KindMeta
+			}
+			if s.id == Elixir && unicode.IsUpper(r) {
+				k = KindMeta
+			}
 
 			s.word = scanWord{start: in.Offset + i, kind: k}
 			s.wordOn = true
@@ -506,7 +568,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 
 		}
 
-		if s.mode == fnString && !s.literal.triple && !s.literal.comment {
+		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp) {
 			endString()
 		}
 		s.last, s.escape, s.value = 0, false, false
