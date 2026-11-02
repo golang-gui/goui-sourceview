@@ -957,83 +957,82 @@ slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复�
 
 ## 38. 第七批语言接入
 
-按每种语言单独提交，复用现有分片、不可变状态、Context 和编辑规则，不修改 GOUI 或引入运行依赖。
-共享扫描设施随实际语言需求逐步扩展；只将已经接入的语言加入文件识别、内置列表及 README。
+本批按模板、系统配置、查询 DSL、编程语言四组接入，共十四种独立语言配置：
+Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq、PromQL、
+F#、Elixir、Erlang、Julia、Clojure、Haskell、OCaml。
+复用 Tokenizer/State/Context、分片预算和不可变快照；不修改 GOUI，不引入解释器、语法包或运行依赖。
+每种语言分别提交，完成情况及实际验证结果在 PlanLanguages 记录，未验收的范围不写入 README。
 
-### Go Template
+### 模板
 
-动作、变量、管道、裁剪、引用和块注释；显式纯文本/HTML 宿主。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/golang/go/blob/go1.25.0/src/text/template/parse/lex.go)（读取 2026-11-02）。
+GoTemplate/Jinja2 的内置配置使用纯文本宿主，明确后缀分别为 .gotmpl/.gohtml 与 .j2/.jinja/.jinja2。
+NewGoTemplate/NewJinja2 接受显式宿主，首轮支持纯文本和现有 HTML tokenizer；
+不使用通用 .tpl 识别，不根据正文猜测宿主，也不把 HTML 专用的标签匹配/折叠用于含模板的源文档。
+模板状态保留暂停的宿主状态、表达式引用/注释及括号深度；宿主的 JS/CSS 待定单词必须在模板边界终结，
+避免后续分类覆盖模板 token。正文 Context 指向宿主，表达式使用模板自己的编辑与建议规则。
+Go 动作支持管道、变量、点访问、裁剪标记及块注释；Jinja 支持表达式、语句、注释、过滤器和 raw/endraw。
+只支持默认定界符，不推断用户环境的自定义 delimiter、line statement 或扩展。
 
-### Jinja2
+依据 Go text/template 的 doc.go 与 parse/lex.go、Jinja 3.1 的 templates 文档及 lexer.py；
+参考现有 PHP 混合语言和 Markdown 子语言的暂停/恢复方式，不增加中心语言注册或宿主推断体系。
 
-表达式、语句、注释、过滤器和 raw/endraw；显式纯文本/HTML 宿主。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/pallets/jinja/blob/3.1.6/src/jinja2/lexer.py)（读取 2026-11-02）。
+### 系统配置
 
-### systemd unit
+systemd unit 与 Desktop Entry 各自使用 ID 和状态。前者识别 unit 的明确后缀，
+处理跳过注释行的反斜杠续行、分节、键值、引用和 % specifier；Exec 的美元变量仅在适用字段着色。
+后者识别 .desktop/.directory，处理本地化键、分组、分号列表、值转义及 Exec 的字段代码，
+Exec 使用 Desktop Entry 的规则，不作为 shell 脚本解析。普通 .conf 不据后缀识别为 systemd。
 
-分节、键值、跳过注释行的续行、转义、% specifier 及 Exec 变量。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://www.freedesktop.org/software/systemd/man/latest/systemd.syntax.html)（读取 2026-11-02）。
+依据 systemd 262 的 systemd.syntax/systemd.unit/systemd.service，
+以及 freedesktop Desktop Entry Specification 1.5；共用键值基础设施，分离续行和转义语义。
 
-### Desktop Entry
+### 查询与声明式 DSL
 
-本地化键、值转义、分号列表与 Exec 字段代码；保持与 systemd 续行规则的区别。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://specifications.freedesktop.org/desktop-entry/latest-single/)（读取 2026-11-02）。
+Nix 保留双引号/缩进字符串、特殊转义、嵌套插值、路径和注释状态；
+jq 保留过滤器、变量、格式操作、字符串插值及注释；
+PromQL 保留指标/标签、匹配运算符、时长/范围、修饰词、字符串与注释。
+这些是词法分类和编辑辅助，不执行表达式，不检查 schema、外部名称或服务器版本可用性。
 
-### Nix
+### 编程语言
 
-双引号/缩进字符串、特殊转义、路径和嵌套插值。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/NixOS/nix/blob/2.24.0/src/libexpr/lexer.l)（读取 2026-11-02）。
+各语言独立词汇和编辑规则，共享经过验证的扫描小设施；不将其当作相近语言的别名。
+F#/OCaml 区分字符和类型变量，F# 处理逐字/三引号及插值，OCaml 处理命名引用；
+Haskell 处理嵌套注释、pragma 和字符/标识符撇号；Elixir/Erlang 分离 atom、变量和引用语义；
+Julia 区分字符与转置，处理宏、三引号、非标准字符串及插值；Clojure 处理读取器形式和 #_ 丢弃。
+嵌套结构使用不可变帧，正文不累计完整副本；只有动态定界符保存实际匹配所需的信息。
 
-### jq
+### 验证
 
-过滤器、变量、格式操作与字符串插值。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/jqlang/jq/blob/jq-1.8.1/src/lexer.l)（读取 2026-11-02）。
+独立预期覆盖识别、词法 Kind/Class、Context、围栏和编辑策略；增加极小分片、
+长行、畸形输入、快照隔离、编辑后重新同步和宿主边界场景。
+原生颜色沿用相同布局/字体的独立前景色断言。
+独立 X11 验证亮暗/缩放、正常事件输入、补全/撤销与示例；跨平台编译与原生执行分别记录。
 
-### PromQL
+### 参考与适用边界（读取 2026-11-02）
 
-指标/标签、匹配运算符、时长/范围、修饰词和跨行原始引用。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/prometheus/prometheus/blob/v3.7.0/promql/parser/lex.go)（读取 2026-11-02）。
-
-### F#
-
-字符/类型变量、逐字/三引号、多美元插值及嵌套注释。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/dotnet/fsharp/blob/v13.9.201/src/Compiler/lex.fsl)（读取 2026-11-02）。
-
-### Elixir
-
-atom、heredoc、单 ASCII 字母 sigil 及嵌套插值，非 ASCII 输入保持完整 UTF-8。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/elixir-lang/elixir/blob/v1.18.4/lib/elixir/src/elixir_tokenizer.erl)（读取 2026-11-02）。
-
-### Erlang
-
-atom、变量、字符、基数数值与三引号；与 Elixir 保持独立词汇/引用规则。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/erlang/otp/blob/OTP-28.0/lib/stdlib/src/erl_scan.erl)（读取 2026-11-02）。
-
-### Julia
-
-宏、三引号、非标准字符串、插值、嵌套注释及字符/转置区别。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/JuliaLang/julia/blob/v1.11.7/src/julia-parser.scm)（读取 2026-11-02）。
-
-### Clojure
-
-读取器形式及完整 #_ 丢弃，包括嵌套丢弃、metadata、tagged literal 与 reader conditional。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://github.com/clojure/clojure/blob/clojure-1.12.0/src/jvm/clojure/lang/LispReader.java)（读取 2026-11-02）。
-
-### Haskell
-
-嵌套注释、pragma、标识符撇号及长连字符后的 ASCII/Unicode 符号判断。
-保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
-参考[官方规范/源码](https://www.haskell.org/onlinereport/haskell2010/haskellch2.html)（读取 2026-11-02）。
+- [Go 1.25 parse/lex.go](https://github.com/golang/go/blob/go1.25.0/src/text/template/parse/lex.go)、
+  [Jinja 3.1.6 lexer.py](https://github.com/pallets/jinja/blob/3.1.6/src/jinja2/lexer.py)：
+  核对默认动作/表达式/注释边界、引用保护及 raw。HTML 宿主不推导执行结果；动态标签名称不参与结构联动。
+- [systemd 语法](https://www.freedesktop.org/software/systemd/man/latest/systemd.syntax.html)（页面 262）、
+  [Desktop Entry 1.5](https://specifications.freedesktop.org/desktop-entry/latest-single/)：
+  续行、列首注释、局部化键、引用/转义和字段代码分开实现。值颜色不验证每个指令或桌面键的取值类型。
+- [Nix 2.24 lexer.l](https://github.com/NixOS/nix/blob/2.24.0/src/libexpr/lexer.l)、
+  [jq 1.8.1 lexer.l](https://github.com/jqlang/jq/blob/jq-1.8.1/src/lexer.l)、
+  [Prometheus 3.7 lex.go](https://github.com/prometheus/prometheus/blob/v3.7.0/promql/parser/lex.go)：
+  核对字符串/路径/插值状态及字面量边界，不调用求值器，也不向远端服务发起查询。
+- [F# Compiler 13.9.201 lex.fsl](https://github.com/dotnet/fsharp/blob/v13.9.201/src/Compiler/lex.fsl)、
+  [OCaml 5.3 lexer.mll](https://github.com/ocaml/ocaml/blob/5.3/parsing/lexer.mll)：
+  核对嵌套注释、字符/类型变量、逐字/多美元插值及命名引用。F# 格式说明符保持普通表达式颜色，
+  OCaml 扩展节点及 F# quotation 不做语法树分析；普通后缀之外的 literate/生成器输入不冒充普通代码。
+- [Elixir 1.18.4 tokenizer](https://github.com/elixir-lang/elixir/blob/v1.18.4/lib/elixir/src/elixir_tokenizer.erl)、
+  [Erlang OTP 28 scanner](https://github.com/erlang/otp/blob/OTP-28.0/lib/stdlib/src/erl_scan.erl)：
+  分开处理 sigil、atom、变量、字符和 heredoc。Elixir 首轮识别单 ASCII 字母 sigil 名，
+  不加载自定义 sigil；引用后修饰字符保留普通代码颜色。
+- [Julia 1.11.7 parser](https://github.com/JuliaLang/julia/blob/v1.11.7/src/julia-parser.scm)、
+  [Clojure 1.12 Reader](https://github.com/clojure/clojure/blob/clojure-1.12.0/src/jvm/clojure/lang/LispReader.java)、
+  [Haskell 2010 词法](https://www.haskell.org/onlinereport/haskell2010/haskellch2.html)：
+  保留 Julia 字符/转置及字符串宏的区别；Clojure #_ 按完整读取形式跳过，包括嵌套丢弃、metadata 和 tagged literal；
+  Haskell 长连字符要等待后续符号后才能判定注释。Julia 的转置歧义参考前一 token，不做完整表达式解析。
+- [Lexilla LexHaskell.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexHaskell.cxx)：
+  核对 inDashes、嵌套注释与行间状态的处理方式。沿用本项目已有分片、不可变快照和 GUI 分离方式，
+  不引入 Lexilla、原生语言运行时或外部语法资源；代码为本项目实现。

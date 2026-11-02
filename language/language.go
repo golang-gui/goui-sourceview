@@ -81,8 +81,8 @@ const (
 	Julia         ID = "julia"
 	Clojure       ID = "clojure"
 	Haskell       ID = "haskell"
-
-	Markdown ID = "markdown"
+	OCaml         ID = "ocaml"
+	Markdown      ID = "markdown"
 )
 
 // Kind is an extensible style key. Lexical behavior uses Token.Class and Context.
@@ -203,7 +203,7 @@ var builtins = []Info{
 	{ID: Julia, Name: "Julia", Extensions: []string{".jl"}},
 	{ID: Clojure, Name: "Clojure", Extensions: []string{".clj", ".cljs", ".cljc"}},
 	{ID: Haskell, Name: "Haskell", Extensions: []string{".hs", ".hs-boot"}},
-
+	{ID: OCaml, Name: "OCaml", Extensions: []string{".ml", ".mli"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -295,7 +295,8 @@ func Guess(filename string, sample []byte) ID {
 		return Clojure
 	case "runghc", "runhaskell":
 		return Haskell
-
+	case "ocaml":
+		return OCaml
 	case "fsharpi":
 		return FSharp
 	}

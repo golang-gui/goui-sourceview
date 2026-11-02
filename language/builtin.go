@@ -17,7 +17,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
-		case FSharp, Elixir, Erlang, Julia, Clojure, Haskell:
+		case FSharp, Elixir, Erlang, Julia, Clojure, Haskell, OCaml:
 			d.Tokenizer = functionalTokenizer{info.ID}
 			d.Editing = functionalEditing(info.ID)
 			d.AllowWordSuggestions = codeWordSuggestions
@@ -511,7 +511,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 	}
 	for alias, id := range map[string]ID{
 		"f#": FSharp, "fs": FSharp, "ex": Elixir, "erl": Erlang, "jl": Julia,
-		"clj": Clojure, "cljs": Clojure, "cljc": Clojure, "hs": Haskell,
+		"clj": Clojure, "cljs": Clojure, "cljc": Clojure, "hs": Haskell, "ml": OCaml,
 		"systemd-unit": Systemd, "desktop-entry": DesktopEntry,
 		"gotmpl": GoTemplate, "go-html-template": GoTemplate, "jinja": Jinja2, "j2": Jinja2,
 		"gvy": Groovy, "gradle": Groovy,

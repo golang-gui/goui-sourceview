@@ -647,82 +647,66 @@ editor 浅色 1× 实际点击九个新样本，深色 1× 检查 Groovy、Doten
 
 ## 第七批语言（2026-11-02）
 
-按每种语言单独提交，最终验收汇总随后记录。
+按每种语言单独提交；实现范围和参考版本见高亮设计第 38 节。
 
-### Go Template
+### 模板
 
-动作、变量、管道、裁剪、引用和块注释；显式纯文本/HTML 宿主。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 page.gohtml 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+新增 GoTemplate/Jinja2、明确后缀和围栏、动作/表达式/注释/raw 状态、相应编辑规则与两份样本。
+NewGoTemplate/NewJinja2 显式接受纯文本或 HTML 宿主；混合源禁用纯标记的标签联动和折叠。
+独立预期检查 HTML 属性、动作、script 行注释跨行恢复，以及被模板分开的 JS 单词不重新合并。
+编辑器对 .gohtml 和 HTML 的 Jinja 复合后缀显式选择 HTML 宿主；通用 .tpl 保持普通文本。
+分片、状态、编辑恢复、原生颜色断言与窗口输入/建议通过。
 
-### Jinja2
+### 系统配置
 
-表达式、语句、注释、过滤器和 raw/endraw；显式纯文本/HTML 宿主。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 page.html.j2 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+新增 Systemd/DesktopEntry、unit 后缀和 .desktop/.directory、分节/键值与对应建议、两份样本。
+验证 systemd 跳过注释行的续行、% specifier、Exec 美元变量、转义和 CRLF；
+Desktop Entry 验证本地化键、分号、Exec 字段代码、普通值原样文本及不续行的区别。
+分片、独立分类、编辑恢复、原生颜色与正常窗口输入/建议通过；没有安装 unit 或 Desktop Entry。
 
-### systemd unit
+### 查询 DSL
 
-分节、键值、跳过注释行的续行、转义、% specifier 及 Exec 变量。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 editor.service 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+新增 Nix/JQ/PromQL、后缀/围栏、独立词汇、编辑与三份样本。
+检查 Nix 相对/绝对/查找路径、缩进引用特殊转义与嵌套插值；
+jq 过滤器、变量/格式与字符串插值；PromQL 标签、时长、修饰词和跨行反引号引用。
+分片、独立 Kind/Class、快照、编辑恢复、原生颜色与窗口输入/建议通过，没有求值或网络查询。
 
-### Desktop Entry
+### 编程语言
 
-本地化键、值转义、分号列表与 Exec 字段代码；保持与 systemd 续行规则的区别。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 editor.desktop 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+新增 FSharp/Elixir/Erlang/Julia/Clojure/Haskell/OCaml、后缀/适用 shebang/围栏、独立词汇和七份样本。
+检查 F# 逐字/三引号/多美元插值，Elixir sigil、Erlang atom/变量/字符，
+Julia 非标准引用/插值/转置，Clojure 完整 #_ 形式（含嵌套丢弃、metadata、tagged literal 和 reader conditional），
+Haskell 连字符后续符号（含 Unicode）与嵌套注释，OCaml 字符/类型变量、命名引用及注释内引用。
+长命名定界符不按正文每字符重新拼接；不可变帧和片段引用不累计完整字符串正文。
+原生颜色断言发现 F# 普通三引号漏入跨行状态，已修正并增加独立预期；
+随机畸形输入发现 Elixir 将非 ASCII 字符当作 sigil 定界符而拆分 UTF-8，已修正并保留定向回归。
+分片、独立分类/Context、快照、编辑恢复、原生颜色及窗口输入/建议通过。
 
-### Nix
+### 验证与交付
 
-双引号/缩进字符串、特殊转义、路径和嵌套插值。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 default.nix 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+Ubuntu 22.04.5 amd64 / Go 1.25.8，通过：
 
-### jq
+- `go test ./...`（工作区 GOUI b49049d）
+- `GOWORK=off go test ./...`（独立依赖 GOUI v0.5.0）
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
 
-过滤器、变量、格式操作与字符串插值。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 filter.jq 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+十四种语言增加 4,200 组固定随机畸形输入分片对照；独立预期、长行/长定界符、
+极小 UTF-8 分片、Class/Context、围栏、不可变快照和增量编辑后恢复均通过。
+原生 Pango 浅色/深色 1× 颜色断言使用同布局、同字体独立前景色预期，RGBA 零误差。
 
-### PromQL
+关闭工作区构建窗口程序与 editor，独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software：
+浅色 1×、深色 1.5× 完整语言程序均通过 70 种语言配置、68 组建议接受/撤销、63 组引用/配对输入，
+以及公共只读、语义和结构配对断言。最终重编译后的 Haskell 场景另行通过。
+输入走 Window.DispatchEvent/CommitText，没有 DevServer 或动作捷径。
+既有着色稳定性回归两组均通过 127 帧、60 次输入/删除与撤销重做。
 
-指标/标签、匹配运算符、时长/范围、修饰词和跨行原始引用。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 query.promql 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
-
-### F#
-
-字符/类型变量、逐字/三引号、多美元插值及嵌套注释。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.fsx 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
-
-### Elixir
-
-atom、heredoc、单 ASCII 字母 sigil 及嵌套插值，非 ASCII 输入保持完整 UTF-8。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.ex 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
-
-### Erlang
-
-atom、变量、字符、基数数值与三引号；与 Elixir 保持独立词汇/引用规则。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.erl 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
-
-### Julia
-
-宏、三引号、非标准字符串、插值、嵌套注释及字符/转置区别。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.jl 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
-
-### Clojure
-
-读取器形式及完整 #_ 丢弃，包括嵌套丢弃、metadata、tagged literal 与 reader conditional。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.clj 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
-
-### Haskell
-
-嵌套注释、pragma、标识符撇号及长连字符后的 ASCII/Unicode 符号判断。
-同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 Main.hs 样本。
-本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+editor 使用 Integrated chrome（日志 mode=1 enabled=true），浅色 1× 实际点击十四份新样本；
+深色 1× 检查 Jinja2、systemd、Nix、F#、Clojure、OCaml，71 个样本按钮完整换行，未观察到工具栏/正文裁切。
+截图仅作外观观察；颜色与编辑结果由独立断言验证。
+二进制、参考源码、截图与日志放在 `/tmp/sourceview-language-batch7-UB7CDu/`，没有生成源码目录产物。
+没有运行语言样本、安装配置、读写剪贴板或更改全局设置；真实 IME 和 Windows/macOS 原生运行未执行，
+交叉构建仅证明可编译。本批不修改 GOUI 或依赖，保留原有未跟踪 doc/Doing.md、example/temp/。
+结束时关闭本次 editor、窗口验证程序、专用 X11 和窗口管理器，保留原有桌面。

@@ -355,7 +355,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Julia, "#= open\nbody\n=#", "#=", "", "body", language.KindPlain},
 		{language.Clojure, "#_(\nbody\n)", "#_", "", "body", language.KindPlain},
 		{language.Haskell, "{- open\nbody\n-}", "{-", "", "body", language.KindPlain},
-
+		{language.OCaml, "{tag|first\nbody\n|tag}", "{tag|", "1", "body", language.KindPlain},
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
 	} {
@@ -661,7 +661,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Julia, "text=\"outer $(\"inner $(", "true)\")\""},
 		{language.Clojure, "#_(#_ ignored", "also-ignored) (def real true)"},
 		{language.Haskell, "{- outer {- inner", "-} body -}"},
-
+		{language.OCaml, "let s={long", "label|body|longlabel}"},
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
 		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
@@ -755,6 +755,9 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.Haskell, "foo' = 'x'\nmain = putStrLn \"hello\" -- note", "note", language.KindComment},
 		{language.Haskell, "value --> other", "-->", language.KindDelimiter},
 		{language.Haskell, "value --⊕ other", "⊕", language.KindDelimiter},
+		{language.OCaml, "(* quoted \"*)\" (* inner *) body *) let value = true", "body", language.KindComment},
+		{language.OCaml, "let text = {tag|body \" *) |tag}\nlet real = true", "real", language.KindPlain},
+		{language.OCaml, "let f (x:'a) = x\nlet char = '\\''", "'a", language.KindPlain},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -778,9 +781,9 @@ func TestSeventhBatchFragments(t *testing.T) {
 		language.Julia:        {"#= outer #= inner =# body =#\nfunction hello(name)\n \"hello $(true ? \"yes\" : \"no\")\"\nend\nrawtext=raw\"literal $name\"; result=matrix'", "text=\"\"\"" + strings.Repeat("字", ChunkSize) + " $(true)\"\"\""},
 		language.Clojure:      {"#_ #_ ignored also-ignored\n#_(defn ignored [x] (str \"x\" x))\n#_ ^:meta target\n#_ #inst \"2020\"\n(defn hello [x] {:name x :pattern #\"[a-z]\"})", "(#_ [" + strings.Repeat("word ", ChunkSize) + "] (def real true))"},
 		language.Haskell:      {"{-# LANGUAGE OverloadedStrings #-}\n{- outer {- inner -} body -}\nmodule Main where\nfoo' = '\\''\nmain = putStrLn \"hello\" -- note", "x " + strings.Repeat("-", ChunkSize) + "> y\n-- " + strings.Repeat("字", ChunkSize)},
-
-		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
-		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
+		language.OCaml:        {"(* quoted \"*)\" (* inner *) body *)\nlet f (x:'a) = x\nlet text={tag|body \" *) |tag}\nlet char='\\''", "let s={" + strings.Repeat("a", ChunkSize) + "|" + strings.Repeat("字", ChunkSize) + "|" + strings.Repeat("a", ChunkSize) + "}"},
+		language.GoTemplate:   {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
+		language.Jinja2:       {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
@@ -798,7 +801,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp, language.Elixir, language.Erlang, language.Julia, language.Clojure, language.Haskell} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp, language.Elixir, language.Erlang, language.Julia, language.Clojure, language.Haskell, language.OCaml} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {

@@ -39,21 +39,26 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 
 ## Editor
 
-`editor` embeds 70 original language samples, so the binary can run from any
+`editor` embeds 71 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and gets its own file selector. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目 70 份原创语言样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目 71 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并增加对应选择按钮，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
 
 Samples cover JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell, HTTP, Protobuf,
 Makefile, CMake, Nginx, INI, Dockerfile, SQL, Go, Python, JavaScript, TypeScript, CSS,
-C, C++, Java, Rust, C#, Lua, PowerShell, Ruby, PHP, JSX, TSX, Kotlin, Swift, Dart, R, Zig, Objective-C, Objective-C++, Scala, Perl, Diff/Patch, Windows Batch, HCL/Terraform, GraphQL, SCSS, Less, Dotenv, Java Properties, Git Ignore/Attributes, Starlark, Groovy, Go Template, Jinja2, systemd unit, Desktop Entry, Nix, jq, PromQL, F#, Elixir, Erlang, Julia, Clojure, Haskell and Go module/workspace/checksum files.
+C, C++, Java, Rust, C#, Lua, PowerShell, Ruby, PHP, JSX, TSX, Kotlin, Swift, Dart, R, Zig, Objective-C, Objective-C++, Scala, Perl, Diff/Patch, Windows Batch, HCL/Terraform, GraphQL, SCSS, Less, Dotenv, Java Properties, Git Ignore/Attributes, Starlark, Groovy, Go Template, Jinja2, systemd unit, Desktop Entry, Nix, jq, PromQL, F#, Elixir, Erlang, Julia, Clojure, Haskell, OCaml and Go module/workspace/checksum files.
 HTML script/style bodies and Markdown code fences reuse the supported child languages.
+
+The Go Template and Jinja2 samples explicitly use an HTML host. Compound HTML
+template filenames passed to this example select the same host; language.Guess
+identifies the template language itself. NewGoTemplate/NewJinja2 also accept nil
+for plain-text templates. Samples are displayed and edited; they are never executed.
 
 样本覆盖上述标记、配置、构建及编程语言；HTML 的 script/style 正文与 Markdown 代码围栏
 复用对应内嵌语言。语法高亮是编辑期词法分析，不执行这些样本或调用编译器。
@@ -162,5 +167,3 @@ use $1/${name} in replacements, or capture the current editor selection as scope
 
 查找栏支持多行查询及替换；Alt+Enter 输入换行，Enter/Shift+Enter 导航。
 .* 启用 Go 正则，替换使用 $1/${name}；选区按钮捕获当前编辑器范围，结果导航不改变查询范围。
-
-Template samples explicitly select their HTML host; nil selects plain text.

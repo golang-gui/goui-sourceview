@@ -15,7 +15,8 @@ const (
 	fnBlockComment
 	fnNumber
 	fnVariable
-
+	fnRawOpen
+	fnRawBody
 	fnPrefix
 	fnDash
 )
@@ -47,6 +48,10 @@ type fnState struct {
 	commentDepth, braces, prefix               int
 	escape, wordOn, wordPrefix, value, atStart bool
 	word                                       scanWord
+	rawCapture                                 *scanText
+	rawLabel                                   string
+	rawStart, rawMatch                         int
+	rawComment                                 bool
 }
 
 func (s fnState) Equal(other State) bool {
@@ -64,16 +69,18 @@ func (s fnState) Equal(other State) bool {
 			return false
 		}
 	}
-
+	if s.rawCapture != t.rawCapture && captureText(s.rawCapture) != captureText(t.rawCapture) {
+		return false
+	}
 	s.expr, t.expr = nil, nil
 	s.discard, t.discard = nil, nil
-
+	s.rawCapture, t.rawCapture = nil, nil
 	return s == t
 }
 func (s fnState) Context() Context {
-	return Context{String: s.mode == fnString || s.mode == fnVariable,
-		Literal: s.mode == fnString && s.literal.raw && s.id != Julia && s.id != Elixir,
-		Comment: s.mode == fnLineComment || s.mode == fnBlockComment || s.literal.comment || s.discard != nil}
+	return Context{String: s.mode == fnString || s.mode == fnRawBody || s.mode == fnVariable,
+		Literal: s.mode == fnRawBody || s.mode == fnString && s.literal.raw && s.id != Julia && s.id != Elixir,
+		Comment: s.mode == fnLineComment || s.mode == fnBlockComment || s.literal.comment || s.rawComment || s.discard != nil}
 }
 
 type functionalTokenizer struct{ id ID }
@@ -87,6 +94,7 @@ var functionalWords = map[ID]map[string]bool{
 	Julia:   words("abstract baremodule begin break catch const continue do else elseif end export false finally for function global if import in isa let local macro module mutable primitive public quote return struct true try using where while type"),
 	Clojure: words("def defn defn- defmacro defonce defmulti defmethod defrecord deftype defprotocol fn fn* let letfn loop recur if if-not if-let when when-not when-let cond condp case do doseq dotimes for lazy-seq binding with-open try catch finally throw new set! ns in-ns require import quote var nil true false and or not"),
 	Haskell: words("case class data default deriving do else foreign if import in infix infixl infixr instance let module newtype of then type where qualified as hiding forall mdo family role pattern stock anyclass via safe unsafe interruptible"),
+	OCaml:   words("and as assert asr begin class constraint do done downto else end exception external false for fun function functor if in include inherit initializer land lazy let lor lsl lsr lxor match method mod module mutable new nonrec object of open or private rec sig struct then to true try type val virtual when while with effect perform continue"),
 }
 
 func functionalVocabulary(id ID) []string {
@@ -100,7 +108,7 @@ func functionalVocabulary(id ID) []string {
 func functionalEditing(id ID) EditingRules {
 	d := defaultEditing()
 	switch id {
-	case FSharp:
+	case FSharp, OCaml:
 		d.Comments = Comments{Line: "", Block: Pair{Open: "(*", Close: "*)"}}
 	case Haskell:
 		d.Comments = Comments{Line: "--", Block: Pair{Open: "{-", Close: "-}"}}
@@ -122,7 +130,7 @@ func functionalEditing(id ID) EditingRules {
 		if c.Selected || c.Context.String {
 			return true
 		}
-		if c.Typed == "'" && (id == FSharp || id == Julia || id == Haskell || id == Clojure) {
+		if c.Typed == "'" && (id == FSharp || id == OCaml || id == Julia || id == Haskell || id == Clojure) {
 			return false
 		}
 		return c.Typed != "\"" || !strings.HasSuffix(c.Before, "\"\"")
@@ -136,7 +144,7 @@ func fnName(id ID, r rune) bool {
 	switch id {
 	case Clojure:
 		return strings.ContainsRune("*+!_?-./:$%&=<>", r)
-	case FSharp, Haskell:
+	case FSharp, OCaml, Haskell:
 		return r == '\''
 	case Elixir:
 		return r == '!' || r == '?'
@@ -145,7 +153,7 @@ func fnName(id ID, r rune) bool {
 }
 func fnComment(id ID) (string, string) {
 	switch id {
-	case FSharp:
+	case FSharp, OCaml:
 		return "(*", "*)"
 	case Haskell:
 		return "{-", "-}"
@@ -208,7 +216,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 	w := tokenWriter{base: in.Offset}
 	text, i := in.Text, 0
 	add := func(a, z int, k Kind, c Class) {
-		if s.discard != nil {
+		if s.discard != nil || s.rawComment {
 			k, c = KindComment, ClassComment
 		}
 		w.add(in.Offset+a, in.Offset+z, k, c)
@@ -259,7 +267,13 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			formDone()
 		}
 	}
-
+	var captured strings.Builder
+	flushCapture := func() {
+		if captured.Len() > 0 {
+			s.rawCapture = &scanText{previous: s.rawCapture, text: captured.String()}
+			captured.Reset()
+		}
+	}
 	for i < limit {
 		c := text[i]
 		r, n := utf8.DecodeRuneInString(text[i:])
@@ -304,18 +318,84 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				}
 				continue
 			}
-			if (s.id == FSharp) && c == '"' {
+			if (s.id == OCaml || s.id == FSharp) && c == '"' {
 				s.mode = fnString
 				s.literal = fnLiteral{quote: c, comment: true}
 				add(i, i+1, KindComment, ClassComment)
 				i++
 				continue
 			}
-
+			if s.id == OCaml && c == '{' {
+				s.mode = fnRawOpen
+				s.rawComment = true
+				s.rawStart = in.Offset + i
+				add(i, i+1, KindComment, ClassComment)
+				i++
+				continue
+			}
 			add(i, i+n, KindComment, ClassComment)
 			i += n
 			continue
-
+		case fnRawOpen:
+			if c >= 'a' && c <= 'z' || c == '_' {
+				captured.WriteByte(c)
+				add(i, i+1, KindString, ClassString)
+				i++
+				continue
+			}
+			flushCapture()
+			if c == '|' {
+				s.rawLabel = "|" + captureText(s.rawCapture) + "}"
+				s.rawCapture = nil
+				s.mode = fnRawBody
+				s.rawMatch = 0
+				k, class := KindString, ClassString
+				if s.rawComment {
+					k, class = KindComment, ClassComment
+				}
+				w.add(s.rawStart, in.Offset+i+1, k, class)
+				i++
+				continue
+			}
+			label := captureText(s.rawCapture)
+			s.rawCapture = nil
+			if s.rawComment {
+				s.mode = fnBlockComment
+				s.rawComment = false
+				continue
+			}
+			w.add(s.rawStart, s.rawStart+1, KindDelimiter, ClassDelimiter)
+			s.mode = fnCode
+			s.word = scanWord{start: s.rawStart + 1}
+			s.word.add(label)
+			s.wordOn = len(label) > 0
+			continue
+		case fnRawBody:
+			k, class := KindString, ClassString
+			if s.rawComment {
+				k, class = KindComment, ClassComment
+			}
+			add(i, i+n, k, class)
+			i += n
+			close := s.rawLabel
+			if c == close[s.rawMatch] {
+				s.rawMatch++
+			} else if c == '|' {
+				s.rawMatch = 1
+			} else {
+				s.rawMatch = 0
+			}
+			if s.rawMatch == len(close) {
+				wasComment := s.rawComment
+				s.mode = fnCode
+				s.rawLabel, s.rawMatch, s.rawComment = "", 0, false
+				if wasComment {
+					s.mode = fnBlockComment
+				} else {
+					formDone()
+				}
+			}
+			continue
 		case fnPrefix:
 			if c == '$' {
 				s.prefix++
@@ -568,7 +648,13 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			s.literal = fnLiteral{}
 			continue
 		}
-
+		if s.id == OCaml && c == '{' {
+			s.mode = fnRawOpen
+			s.rawStart = in.Offset + i
+			add(i, i+1, KindDelimiter, ClassDelimiter)
+			i++
+			continue
+		}
 		if s.id == Elixir && c == '~' && i+2 < len(text) && text[i+1] < utf8.RuneSelf && unicode.IsLetter(rune(text[i+1])) && strings.ContainsRune("/|\"'([{<", rune(text[i+2])) {
 			d := text[i+2]
 			close := d
@@ -619,7 +705,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += n
 			continue
 		}
-		if c == '\'' && (s.id == FSharp || s.id == Haskell || s.id == Julia) {
+		if c == '\'' && (s.id == FSharp || s.id == OCaml || s.id == Haskell || s.id == Julia) {
 			if size := fnCharacter(text[i:]); size > 0 && (s.id != Julia || !s.value) {
 				add(i, i+size, KindString, ClassString)
 				i += size
@@ -738,7 +824,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		s.value = strings.ContainsRune(")]}", r) || s.id == Julia && c == '\''
 		s.atStart = false
 	}
-
+	flushCapture()
 	if in.LineEnd && i == len(text) {
 		if s.mode == fnDash {
 			w.add(s.word.start, in.Offset+i, KindComment, ClassComment)
@@ -756,7 +842,15 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == fnVariable {
 			s.mode = fnString
 		}
-
+		if s.mode == fnRawOpen {
+			if s.rawComment {
+				s.mode = fnBlockComment
+			} else {
+				s.mode = fnCode
+				w.add(s.rawStart, in.Offset+i, KindPlain, 0)
+			}
+			s.rawCapture, s.rawComment = nil, false
+		}
 		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp || s.id == Haskell) {
 			endString()
 		}

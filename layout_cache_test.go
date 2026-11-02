@@ -920,6 +920,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Julia, "text=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 		{language.Clojure, "#_(\nbody\n)", "body", 1, language.KindComment},
 		{language.Haskell, "{-\nbody\n-}", "body", 1, language.KindComment},
+		{language.OCaml, "let s={tag|\nbody\n|tag}", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {
