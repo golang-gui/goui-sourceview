@@ -322,6 +322,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Kotlin, "val s=\"\"\"open\nbody\n\"\"\"\nval n=1", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.Swift, "let s=#\"\"\"\nbody\n\"\"\"#\nlet n=1", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.Dart, "var s=r'''\nbody\n''';\nvar n=1", "'''", "'", "body", language.KindPlain},
+		{language.R, "x <- r\"(body)\"\nreturn(1)", ")\"", ")-\"", "return", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -619,6 +620,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Kotlin, `val s="outer ${"inner ${`, "true}"},
 		{language.Swift, `let s="outer \("inner \(`, "true)"},
 		{language.Dart, `var s='outer ${"inner ${`, "true}"},
+		{language.R, `x <- r"--[open`, "body]--\""},
 	} {
 		_, before := scanAll(tc.id, tc.prefix, 3)
 		_, _, _ = Scan(tc.id, before, tc.next, len(tc.next), true)
@@ -752,6 +754,14 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.Dart, "/* outer /* inner */ still */ var n=1", "still", language.KindComment},
 		{language.Dart, "var n=42.toString(); var x=0x2e+3;", "toString", language.KindPlain},
 		{language.Dart, "var n=42.toString(); var x=0x2e+3;", "+", language.KindDelimiter},
+		{language.R, "x <- r\"--[raw ]-\" still]--\"; if (TRUE) x", "still", language.KindString},
+		{language.R, "x <- R'---{raw}---'; if (TRUE) x", "if", language.KindKeyword},
+		{language.R, "`if` <- 1L; T <- FALSE", "if", language.KindVariable},
+		{language.R, "T <- FALSE", "T", language.KindPlain},
+		{language.R, "values %in% c(1, NA_real_, Inf)", "NA_real_", language.KindKeyword},
+		{language.R, "x %custom[op]% y |> f()", "custom", language.KindDelimiter},
+		{language.R, "x <- 0x1.fp+2 + 3i", "0x1.fp+2", language.KindNumber},
+		{language.R, `x <- "\u{1234}" # comment`, "1234", language.KindEscape},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -767,6 +777,7 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 
 func TestProgrammingLanguageFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.R:      {"# comment\nf <- function(x) { `a b` <- r\"--[body ]-\" \\n\n]--\"; y=R'({raw})'; x %custom[op]% y |> sum(); NA_integer_ }", "x <- r\"" + strings.Repeat("-", ChunkSize*2) + "(" + strings.Repeat("字", ChunkSize) + ")" + strings.Repeat("-", ChunkSize*2) + "\"; if (TRUE) 1L", "x <- '\\x41 \\123'; y <- \"\\u{1234} \\U0001F600\"; x=0x1.fp+2 + 2i"},
 		language.Dart:   {"@override void main(){ var s='Hi $name ${true ? \"nested ${1}\" : r\"raw\"}'; var t=r'''\n${false} \\n\n'''; /* outer /* inner */ still */ var sym=#library.name; var n=1..toString(); }", "var s='''" + strings.Repeat("字", ChunkSize) + "${{'name': 'value'}}''';", "var s='\\u{1F600} \\u1234 \\x4A'; var x=0x2e+3;"},
 		language.C:      {"#include <stdio.h>\n#define SUM(a,b) \\\n ((a)+(b))\n// note \\\\\nstill\nconst char *x=u8\"abc\\n\"; wchar_t ch=L'字';", "/*" + strings.Repeat("字", ChunkSize) + "*/ int n;"},
 		language.Cpp:    {"template<class T> concept Value = requires(T t) { t.x; };\nauto x=u8R\"0123456789abcdef(raw\n)wrong\" )0123456789abcdef\"; return 1'000ULL;", "auto x=R\"(" + strings.Repeat("\"\\字", ChunkSize) + ")\";"},
@@ -798,7 +809,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

@@ -633,3 +633,25 @@ Swift 使用独立不可变状态，支持 `.swift`、文本 `.swiftinterface` �
 （读取 2026-11-02；数字分隔符要求 Dart 3.6+），并参考
 [Monaco v0.52.2 Dart](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/dart/dart.ts)
 的词法呈现边界。所有样本为本项目原创，没有复制第三方规则资源或增加依赖。
+
+## 20. R
+
+新增 `.r/.R/.Rscript`、`.Rprofile`、Rscript shebang、r/R 围栏；不猜测 `.Rmd/.qmd`
+混合文档或 `.RData` 二进制内容。单双引号字符串、带转义的反引号名称、注释和
+原始 `r/R` 引用分别保留状态。原始引用允许单双引号、`() / [] / {}` 定界符，
+以及任意数量的匹配短横线；前缀、闭合候选只保存计数，不缓存引用正文。
+普通字符串允许跨物理行；未完成的原始前缀按普通引用保守恢复，不阻塞后续扫描。
+
+关键词包括保留字和 NA/Inf/NaN/NULL 等常量，T/F 是可赋值名称，不当作保留字。
+数字支持十六进制浮点、指数、L/i 后缀；`%…%` 作为完整运算符处理，其内部括号不参与配对。
+赋值和 `|>` 管道按代码运算符呈现；不从函数调用名字推断内置函数或包导出。
+词边界支持点号及 Unicode 标识符字符，不调用 R 运行时或依赖进程 locale。
+注释、括号、普通引用与反引号提供基础编辑规则；动态原始引用定界符由用户完整输入。
+
+参考 [R Quotes](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Quotes.html)
+（读取页面标记 base 4.6.0，2026-11-02）及
+[R 源码 RawStringValue](https://github.com/wch/r-source/blob/R-4-4-branch/src/main/gram.y)
+核对单双引号原始前缀；原始字符串自 R 4.0 起支持。
+[Lexilla LexR.cxx](https://github.com/ScintillaOrg/lexilla/blob/4b654f6c86f2129cc646b0c4a1e65c8d0c8ce8a7/lexers/LexR.cxx)
+也使用匹配字符与短横线计数，采用此有限状态思路，不复制其源码或规则资源。
+本批继续使用已有 token/Class/增量协议，没有公共分词器契约或 GOUI 改动。

@@ -361,3 +361,33 @@ Unicode/十六进制转义、成员/级联点号、指数与十六进制数。
 `GOWORK=off go test -race ./language ./internal/highlight` 通过。
 独立 X11 / Pango / Software / 浅色 1× 通过 Dart 建议接受/撤销、单三引号和原始尾反斜杠输入，
 以及全部旧语言与最终断言。日志 dart-test.log、dart-window.log 位于本批临时目录。
+
+### R 与批次完成验证
+
+新增 R、文件/启动文件/shebang/围栏识别、编辑规则与 hello.R，示例共 37 份。
+独立预期覆盖单双原始引用、匹配短横线和括号、误匹配后的正文、反引号名称、
+保留常量与可赋值 T/F 的差别、Unicode 转义、十六进制浮点、运算符中的非结构括号。
+32 KiB 前缀/闭合、长正文、跨行字符串、随机畸形输入、极小分片、增量、快照、Class、围栏通过。
+新增四种语言的原生亮暗 1× 正文颜色继续使用同字体/同 Pango 布局的 RGBA 零误差预期。
+
+批次最终在 Ubuntu 22.04.5 amd64、Go 1.25.8 下通过：
+
+- `go test ./...`（工作区相邻 GOUI b49049d）
+- `GOWORK=off go test ./...`（独立依赖 GOUI v0.5.0）
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+关闭工作区构建最终语言窗口程序与 editor，独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software：
+浅色 1×、深色 1.5× 都通过 36 种语言的 38 组建议接受/撤销断言与 22 组引用输入，
+含新增四语言、JSX/TSX 标签建议、只读拒绝、括号、语义文本/选区和 PowerShell 中间光标断言。
+均经正常事件路径，不使用 DevServer。editor 浅色 1× 实际点击四个新样本，深色 1× 检查 Swift/R，
+37 个样本按钮完整换行，窗口 ChromeInfo 确认 Integrated enabled，未见正文或工具栏裁切。
+截图是外观观察，不能代替上述独立颜色/文本/光标断言。
+
+本批日志、二进制和截图在 `/tmp/sourceview-language-batch3-Yg4xpq/`，未写入源码目录。
+结束时关闭本次 editor、专用 X11 和窗口管理器，保留原有用户桌面；未操作剪贴板或执行语言样本。
+没有真实 IME、macOS/Windows 原生场景或性能量化结论；交叉构建仅证明可编译。
+各语言词法近似与动态引用编辑边界见设计，不承诺编译器/语言服务能力。
+未修改 GOUI 或依赖，原有未跟踪 doc/Doing.md、example/temp/ 保留，不纳入提交。

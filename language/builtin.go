@@ -118,6 +118,19 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case R:
+			d.Tokenizer = rTokenizer{}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '.' }
+			d.Editing.Comments.Line = "#"
+			p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+			d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+			d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return c.Selected || c.Context.String || c.Typed != `"` && c.Typed != "'" || !rRawQuotePrefix(c.Before)
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Dart:
 			d.Tokenizer = dartTokenizer{}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -349,6 +362,8 @@ func codeVocabulary(id ID) []string {
 		table = swiftKeywords
 	case Dart:
 		table = dartKeywords
+	case R:
+		table = rKeywords
 	case PowerShell:
 		table = psKeywords
 	case Ruby:

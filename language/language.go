@@ -47,6 +47,7 @@ const (
 	Kotlin     ID = "kotlin"
 	Swift      ID = "swift"
 	Dart       ID = "dart"
+	R          ID = "r"
 	Markdown   ID = "markdown"
 )
 
@@ -134,6 +135,7 @@ var builtins = []Info{
 	{ID: Kotlin, Name: "Kotlin", Extensions: []string{".kt", ".kts"}, MIMETypes: []string{"text/x-kotlin"}},
 	{ID: Swift, Name: "Swift", Extensions: []string{".swift", ".swiftinterface"}, MIMETypes: []string{"text/x-swift"}},
 	{ID: Dart, Name: "Dart", Extensions: []string{".dart"}, MIMETypes: []string{"text/x-dart"}},
+	{ID: R, Name: "R", Extensions: []string{".r", ".rscript"}, MIMETypes: []string{"text/x-r-source"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -154,6 +156,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == ".Rprofile":
+		return R
 	case base == "CMakeLists.txt":
 		return CMake
 	case base == "Makefile" || base == "makefile" || base == "GNUmakefile" || strings.HasPrefix(base, "Makefile."):
@@ -186,6 +190,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "Rscript" {
+		return R
+	}
 	if interpreter == "dart" {
 		return Dart
 	}

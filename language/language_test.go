@@ -53,6 +53,9 @@ func TestGuess(t *testing.T) {
 		{"hello.swift", "", Swift}, {"API.swiftinterface", "", Swift}, {"script", "#!/usr/bin/env swift", Swift},
 		{"binary.swiftmodule", "", Plain},
 		{"hello.dart", "", Dart}, {"script", "#!/usr/bin/env dart", Dart},
+		{"hello.R", "", R}, {"hello.r", "", R}, {"hello.Rscript", "", R}, {".Rprofile", "", R},
+		{"script", "#!/usr/bin/env -S Rscript --vanilla", R},
+		{"report.Rmd", "", Plain}, {"report.qmd", "", Plain}, {"data.RData", "", Plain}, {"build.gradle", "", Plain},
 		{"hello.rb", "", Ruby}, {"Gemfile", "", Ruby}, {"Rakefile", "", Ruby}, {"app.gemspec", "", Ruby}, {"config.ru", "", Ruby}, {"script", "#!/usr/bin/env ruby", Ruby},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -147,6 +150,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Kotlin, `val s="""raw`, true, false, true}, {Kotlin, `val s=$$"hi $${if`, false, false, false},
 		{Swift, `let s=##"raw`, true, false, true}, {Swift, `let s="hi \(true`, false, false, false},
 		{Dart, `var s=r'''raw`, true, false, true}, {Dart, `var s='hi ${true`, false, false, false},
+		{R, `x <- r"--(raw`, true, false, true}, {R, "`a b", true, false, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -243,6 +247,7 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{Swift, `let s=#"hi \#(true)"#`, "true", 0}, {Swift, `let n=10 / 2`, "/", 0},
 		{Swift, `let r=#/[(]/#`, "[(]", ClassString},
 		{Dart, `var s=r'${true}';`, "{true}", ClassString}, {Dart, `var s='${true}';`, "true", 0},
+		{R, `x <- r"--[{raw}]--";`, "{raw}", ClassString}, {R, "x %[% y", "[", 0},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -410,6 +415,7 @@ func TestThirdBatchFences(t *testing.T) {
 			{"kotlin", Kotlin, "fun"}, {"kt", Kotlin, "val"}, {"kts", Kotlin, "class"},
 			{"swift", Swift, "func"},
 			{"dart", Dart, "void"},
+			{"r", R, "function"}, {"R", R, "TRUE"},
 		} {
 			scanner := md.Tokenizer()
 			fence := "```" + tc.name

@@ -885,6 +885,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Kotlin, "val s=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 		{language.Swift, "let s=#\"\"\"\nbody\n\"\"\"#", "body", 1, language.KindString},
 		{language.Dart, "var s=r'''\nbody\n''';", "body", 1, language.KindString},
+		{language.R, "x <- r\"--[\nbody\n]--\"", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

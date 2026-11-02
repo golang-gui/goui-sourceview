@@ -2,7 +2,8 @@
 // 启动：go run ./tests/window/editor/languages [-dark]；Linux 无 IME 服务时设置
 // XMODIFIERS=@im=none。初始为一个可编辑视图，程序自动切换文档，经正常事件路径
 // 触发补全、方向键选中、Enter 接受、撤销，再输入引用与括号并断言文本和光标。
-// Java/C# 三引号不能多插闭合引用，Rust 生命周期不能被自动补成字符引用。
+// Java/C#/Kotlin/Swift/Dart 三引号不能多插闭合引用，Rust 生命周期不能补成字符引用。
+// Swift/R 动态原始引用手工输入完整定界符，Dart 原始引用尾反斜杠不转义闭合引号。
 // 另检查只读拒绝、语义文本/选区；全部断言完成后自动关闭，提前关闭或失败则非零退出。
 // 补全逐个等待已分配的可视区域，最多 8 秒；Show 返回不能代替布局完成。
 // 记录实际 typography/painter/scale；颜色另有原生位图断言，不能用窗口启动代替像素验收。
@@ -112,6 +113,7 @@ func main() {
 		{language.Kotlin, "overr", "override"},
 		{language.Swift, "filepr", "fileprivate"},
 		{language.Dart, "requi", "required"},
+		{language.R, "funct", "function"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -176,6 +178,8 @@ func main() {
 		{language.Swift, "let s = #", `"raw"#`, `let s = #"raw"#`},
 		{language.Dart, "var s = ", "'''", "var s = '''"},
 		{language.Dart, "var s = ", "r'\\'", "var s = r'\\'"},
+		{language.R, "x <- ", `r"--(raw)--"`, `x <- r"--(raw)--"`},
+		{language.R, "x <- ", "'it\\'s'", "x <- 'it\\'s'"},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
