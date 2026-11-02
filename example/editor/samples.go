@@ -60,6 +60,7 @@ func sampleDocuments() []exampleDocument {
 		"guide.adoc",
 		"guide.rst",
 		"paper.tex",
+		"references.bib",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

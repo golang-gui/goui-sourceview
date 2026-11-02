@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.BibTeX, "@book{x,title={first\nbody\n}}", "{first", "first", "body", language.KindVariable},
 		{language.LaTeX, "\\begin{verbatim}\n%body\n\\end{verbatim}", "verbatim", "text", "body", language.KindComment},
 		{language.ReStructuredText, "Example::\n\n    body\nafter", "::", ":", "body", language.KindPlain},
 		{language.AsciiDoc, "----\nbody\n----\nafter", "----", "text", "body", language.KindPlain},
@@ -408,6 +409,11 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.BibTeX, "@book{key,title={A {Nested} title},year=2026}", "title", language.KindProperty},
+	{language.BibTeX, "@book{key,title={A {Nested} title},year=2026}", "Nested", language.KindString},
+	{language.BibTeX, "@book{key,title=\"A {\\\"} protected quote\nbody\",year=2026}", "body", language.KindString},
+	{language.BibTeX, "@string{name = \"a\" # other}", "other", language.KindVariable},
+	{language.BibTeX, "outside\n@article{key,year=2026}", "outside", language.KindComment},
 	{language.LaTeX, "\\section{Title}", "section", language.KindKeyword},
 	{language.LaTeX, "text $a+b$ after", "a+b", language.KindNumber},
 	{language.LaTeX, "\\begin{equation}\nx+y\n\\end{equation}\nafter", "x+y", language.KindNumber},

@@ -207,3 +207,113 @@ func (texTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	return w.result(i, s), nil
 }
+
+type bibTokenizer struct{}
+type bibState struct {
+	head, entry, key, value, quoted bool
+	close                           byte
+	depth                           int
+	word                            scanWord
+}
+
+func (s bibState) Equal(other State) bool { t, ok := other.(bibState); return ok && s == t }
+func (s bibState) Context() Context {
+	// Entry suggestions must remain available before the leading @. Free text
+	// is styled as a comment, but is not a syntactic comment context.
+	return Context{String: s.quoted || s.depth > 0, Literal: s.quoted || s.depth > 0, Data: s.head || s.entry}
+}
+func (bibTokenizer) InitialState() State { return bibState{} }
+
+var bibWords = strings.Fields("@article @book @inproceedings @incollection @misc @online @string @preamble @comment author title year journal volume number pages publisher editor booktitle doi url")
+
+func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
+	s, ok := previous.(bibState)
+	if !ok {
+		return Result{}, fmt.Errorf("language: foreign BibTeX state")
+	}
+	limit, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	i := 0
+	for i < limit {
+		c, n := in.Text[i], runeSize(in.Text, i)
+		at := in.Offset + i
+		if s.head {
+			if c == '{' || c == '(' {
+				name := strings.ToLower(s.word.text)
+				s.head, s.word = false, scanWord{}
+				if name == "comment" {
+					w.add(at, at+n, KindComment, ClassComment)
+				} else {
+					s.entry, s.key, s.value = true, name != "string" && name != "preamble", name == "preamble"
+					s.close = '}'
+					if c == '(' {
+						s.close = ')'
+					}
+					w.add(at, at+n, KindDelimiter, ClassDelimiter)
+				}
+			} else {
+				if !space(c) {
+					s.word.add(in.Text[i : i+n])
+				}
+				w.add(at, at+n, KindKeyword, 0)
+			}
+			i += n
+			continue
+		}
+		if !s.entry {
+			if c == '@' {
+				s.head = true
+				s.word = scanWord{}
+				w.add(at, at+n, KindKeyword, 0)
+			} else {
+				w.add(at, at+n, KindComment, ClassComment)
+			}
+			i += n
+			continue
+		}
+		if s.quoted || s.depth > 0 {
+			w.add(at, at+n, KindString, ClassString)
+			if c == '{' {
+				s.depth++
+			}
+			if c == '}' && s.depth > 0 {
+				s.depth--
+			}
+			if c == '"' && s.quoted && s.depth == 0 {
+				s.quoted = false
+			}
+			i += n
+			continue
+		}
+		kind, class := KindPlain, Class(0)
+		switch {
+		case c == s.close:
+			kind, class, s.entry = KindDelimiter, ClassDelimiter, false
+		case c == ',':
+			kind, s.key, s.value = KindDelimiter, false, false
+		case c == '=':
+			kind, s.value = KindDelimiter, true
+		case s.value && c == '{':
+			kind, class, s.depth = KindString, ClassString, 1
+		case s.value && c == '"':
+			kind, class, s.quoted = KindString, ClassString, true
+		case s.value && c == '#':
+			kind = KindDelimiter
+		case space(c):
+		case s.key:
+			kind = KindTag
+		case !s.value:
+			kind = KindProperty
+		case digit(c):
+			kind = KindNumber
+		default:
+			kind = KindVariable
+		}
+		w.add(at, at+n, kind, class)
+		i += n
+	}
+	return w.result(i, s), nil
+}

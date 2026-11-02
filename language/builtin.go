@@ -17,6 +17,15 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case BibTeX:
+			d.Tokenizer = bibTokenizer{}
+			d.Editing = defaultEditing()
+			d.Editing.AllowPair = func(c PairContext) bool { return c.Selected || c.Context.Data == true }
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '@' || r == '-' }
+			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: "\"", Close: "\"", NotInString: true, NotInComment: true})
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Suggest = func(Context) []string { return bibWords }
 		case LaTeX:
 			d.Tokenizer = texTokenizer{}
 			d.Editing = defaultEditing()
@@ -535,6 +544,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"bib":              BibTeX,
 		"tex":              LaTeX,
 		"rest":             ReStructuredText,
 		"restructuredtext": ReStructuredText,

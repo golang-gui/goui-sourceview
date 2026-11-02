@@ -53,3 +53,12 @@ verb 与 verbatim/verbatim*、lstlisting、minted 正文使用原样字符串规
 仅结构括号自动配对；不把排版引号当作程序字符串，不解释宏、catcode、include 或第三方包定义。
 
 依据 [LaTeX 文档](https://www.latex-project.org/help/documentation/)、[ltmiscen.dtx](https://github.com/latex3/latex2e/blob/develop/base/ltmiscen.dtx)（2025/04/28 v1.2h）和 [ltmath.dtx](https://github.com/latex3/latex2e/blob/develop/base/ltmath.dtx)（2026/06/01 v1.2p）。
+
+## BibTeX
+
+识别 .bib 及 bibtex/bib 围栏。区分条目类型、引用键、字段名、数字/宏值、# 拼接和跨行引用/花括号字段；
+引用内花括号保护双引号，反斜杠本身不改变 BibTeX 的引用闭合规则，不能直接套用程序字符串。
+支持 @string/@preamble；@comment 与条目外文字按非条目注释处理。正文仅保存层数，不累计完整字段。
+不执行样式、解析宏值或加载引用数据库；不把 .bst 的专用语言当作 .bib。
+
+依据 [BibTeX 0.99e](https://ctan.org/pkg/bibtex) 与 [bibtex.web 的 scan_balanced_braces](https://github.com/TeX-Live/texlive-source/blob/trunk/texk/web2c/bibtex.web)。

@@ -87,6 +87,7 @@ const (
 	AsciiDoc         ID = "asciidoc"
 	ReStructuredText ID = "rst"
 	LaTeX            ID = "latex"
+	BibTeX           ID = "bibtex"
 	Markdown         ID = "markdown"
 )
 
@@ -214,6 +215,7 @@ var builtins = []Info{
 	{ID: AsciiDoc, Name: "AsciiDoc", Extensions: []string{".adoc", ".asciidoc", ".asc"}},
 	{ID: ReStructuredText, Name: "reStructuredText", Extensions: []string{".rst", ".rest"}},
 	{ID: LaTeX, Name: "TeX/LaTeX", Extensions: []string{".tex", ".ltx", ".sty", ".cls", ".dtx", ".ins"}},
+	{ID: BibTeX, Name: "BibTeX", Extensions: []string{".bib"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

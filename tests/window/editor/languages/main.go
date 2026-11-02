@@ -96,6 +96,7 @@ func main() {
 		text, want string
 	}{
 		{language.LaTeX, "\\sect", "\\section"},
+		{language.BibTeX, "@art", "@article"},
 		{language.TOML, "enabled = tr", "enabled = true"},
 		{language.YAML, "enabled: nu", "enabled: null"},
 		{language.Shell, "pri", "printf"},
@@ -197,6 +198,7 @@ func main() {
 		{language.AsciiDoc, "", "`raw` *text*", "`raw` *text*"},
 		{language.ReStructuredText, "", "``code``", "``code``"},
 		{language.LaTeX, "", "\\section{Title}", "\\section{Title}"},
+		{language.BibTeX, "", "@book{x,title={Hi}}", "@book{x,title={Hi}}"},
 		{language.GoTemplate, "{{printf ", "\"hello\"}}", "{{printf \"hello\"}}"},
 		{language.Jinja2, "{% raw %}", "{{true}}", "{% raw %}{{true}}"},
 		{language.Systemd, "Description=", "\"text\"", "Description=\"text\""},
