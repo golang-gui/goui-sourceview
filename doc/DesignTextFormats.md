@@ -19,3 +19,10 @@ SRT/WebVTT、iCalendar/vCard 后置，当前不声明支持。
 不自动插入引号/括号，不从首行猜测标题，不要求相同列数，不读取或执行数据。
 
 依据 [RFC 4180 §2](https://www.rfc-editor.org/rfc/rfc4180)（Informational，2005）。
+
+## TSV
+
+识别 .tsv、tsv 围栏及 text/tab-separated-values。Tab 分隔单行字段，引号和反斜杠均是普通字段文本；
+不沿用 CSV 的引用、转义或跨行字段，不猜测字段类型/标题，不校验列数。关闭代码自动配对和建议。
+
+依据 [IANA text/tab-separated-values 定义](https://www.iana.org/assignments/media-types/text/tab-separated-values)。

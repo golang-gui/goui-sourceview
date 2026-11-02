@@ -2,6 +2,34 @@ package language
 
 import "fmt"
 
+type tsvTokenizer struct{}
+type tsvState struct{}
+
+func (tsvState) Equal(other State) bool { _, ok := other.(tsvState); return ok }
+func (tsvState) Context() Context       { return Context{String: true, Literal: true} }
+
+func (tsvTokenizer) InitialState() State { return tsvState{} }
+func (tsvTokenizer) Scan(in Input, state State) (Result, error) {
+	if _, ok := state.(tsvState); !ok {
+		return Result{}, fmt.Errorf("language: foreign TSV state")
+	}
+	limit, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	for i := 0; i < limit; {
+		n := runeSize(in.Text, i)
+		kind, class := KindString, ClassString
+		if in.Text[i] == '\t' {
+			kind, class = KindDelimiter, 0
+		}
+		w.add(in.Offset+i, in.Offset+i+n, kind, class)
+		i += n
+	}
+	return w.result(limit, state), nil
+}
+
 type csvTokenizer struct{}
 type csvState struct {
 	quoted, pending, fieldStart bool

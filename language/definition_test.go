@@ -108,6 +108,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Systemd, language.DesktopEntry,
 		language.Nix, language.JQ, language.PromQL,
 		language.FSharp, language.Elixir, language.Erlang, language.Julia, language.Clojure, language.Haskell, language.OCaml,
+		language.TSV,
 		language.CSV,
 	} {
 		l, ok := language.Builtin(id)
@@ -160,5 +161,13 @@ func TestCompletionTriggersBelongToDefinition(t *testing.T) {
 	}
 	if derived.CompletionTriggers() != "[" || builtin.CompletionTriggers() != "<" {
 		t.Fatal("trigger configuration was not isolated")
+	}
+}
+
+func TestTSVLiteralContext(t *testing.T) {
+	l, _ := language.Builtin(language.TSV)
+	ctx := l.Tokenizer().InitialState().Context()
+	if !ctx.String || !ctx.Literal || ctx.Comment {
+		t.Fatal("TSV fields must remain literal data")
 	}
 }

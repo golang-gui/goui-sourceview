@@ -56,6 +56,7 @@ func sampleDocuments() []exampleDocument {
 		"default.nix", "filter.jq", "query.promql",
 		"hello.fsx", "hello.ex", "hello.erl", "hello.jl", "hello.clj", "Main.hs", "hello.ml",
 		"export.csv",
+		"export.tsv",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

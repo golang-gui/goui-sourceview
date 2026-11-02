@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.TSV, "name\tvalue", "\t", ",", ",", language.KindString},
 		{language.CSV, "\"first\nbody,x\",end", "\"", "", ",", language.KindDelimiter},
 		{language.TOML, "s = \"\"\"open\ntext\nend\nnext = true", `"""`, `"`, "next", language.KindProperty},
 		{language.YAML, "key: |\n  body\nnext: true", "|", "plain", "body", language.KindPlain},
@@ -404,6 +405,9 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.TSV, "name\tvalue", "\t", language.KindDelimiter},
+	{language.TSV, "\"raw\tvalue\"\nnext\ttrue", "\"raw", language.KindString},
+	{language.TSV, "\"raw\tvalue\"\nnext\ttrue", "true", language.KindString},
 	{language.CSV, "name,\"a,b\",next", ",", language.KindDelimiter},
 	{language.CSV, "\"first\nbody\",\"a\"\"b\"", "body", language.KindString},
 	{language.CSV, "\"a\"\"b\",next", "\"\"", language.KindEscape},

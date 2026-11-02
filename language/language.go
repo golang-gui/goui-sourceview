@@ -83,6 +83,7 @@ const (
 	Haskell       ID = "haskell"
 	OCaml         ID = "ocaml"
 	CSV           ID = "csv"
+	TSV           ID = "tsv"
 	Markdown      ID = "markdown"
 )
 
@@ -206,6 +207,7 @@ var builtins = []Info{
 	{ID: Haskell, Name: "Haskell", Extensions: []string{".hs", ".hs-boot"}},
 	{ID: OCaml, Name: "OCaml", Extensions: []string{".ml", ".mli"}},
 	{ID: CSV, Name: "CSV", Extensions: []string{".csv"}, MIMETypes: []string{"text/csv"}},
+	{ID: TSV, Name: "TSV", Extensions: []string{".tsv"}, MIMETypes: []string{"text/tab-separated-values"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
