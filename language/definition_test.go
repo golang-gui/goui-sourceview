@@ -93,6 +93,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Kotlin, language.Swift, language.Dart, language.R, language.Zig, language.ObjectiveC, language.ObjectiveCpp, language.Scala, language.Perl,
 		language.Diff,
 		language.Batch,
+		language.HCL,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

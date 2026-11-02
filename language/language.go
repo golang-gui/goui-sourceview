@@ -55,6 +55,7 @@ const (
 	Perl         ID = "perl"
 	Diff         ID = "diff"
 	Batch        ID = "bat"
+	HCL          ID = "hcl"
 	Markdown     ID = "markdown"
 )
 
@@ -150,6 +151,7 @@ var builtins = []Info{
 	{ID: Perl, Name: "Perl", Extensions: []string{".pl", ".pm"}, MIMETypes: []string{"text/x-perl"}},
 	{ID: Diff, Name: "Diff", Extensions: []string{".diff", ".patch"}, MIMETypes: []string{"text/x-diff", "text/x-patch"}},
 	{ID: Batch, Name: "Windows Batch", Extensions: []string{".bat", ".cmd"}, MIMETypes: []string{"application/x-bat"}},
+	{ID: HCL, Name: "HCL / Terraform", Extensions: []string{".hcl", ".tf", ".tfvars"}, MIMETypes: []string{"text/x-hcl"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

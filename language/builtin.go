@@ -17,6 +17,15 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case HCL:
+			d.Tokenizer = hcTokenizer{}
+			d.Editing.Comments = Comments{Line: "#", Block: Pair{Open: "/*", Close: "*/"}}
+			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: `"`, Close: `"`, NotInString: true, NotInComment: true})
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '-' }
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Batch:
 			d.Tokenizer = batTokenizer{}
 			d.Editing.Comments.Line = "REM"
@@ -381,6 +390,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 	for alias, id := range map[string]ID{
 		"patch": Diff,
 		"batch": Batch, "cmd": Batch,
+		"terraform": HCL, "tf": HCL,
 		"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
 		"proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines,
 		"c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp,
@@ -410,6 +420,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case HCL:
+		table = hcKeywords
 	case Batch:
 		table = batKeywords
 	case Perl:

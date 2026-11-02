@@ -627,6 +627,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Scala, `val s=s"outer ${s"inner ${`, "true}"},
 		{language.Perl, "print <<A, <<'B';\nbody", "A"},
 		{language.Perl, "my $x=<<'long", "tail'"},
+		{language.HCL, `value="outer ${"inner ${`, "true}"},
 		{language.Swift, `let s="outer \("inner \(`, "true)"},
 		{language.Dart, `var s='outer ${"inner ${`, "true}"},
 		{language.R, `x <- r"--[open`, "body]--\""},
@@ -663,6 +664,15 @@ func TestFifthBatchKinds(t *testing.T) {
 		{language.Batch, "for %%i in (*) do echo %%~fi %~dp0 %1 %*", "%%~fi", language.KindVariable},
 		{language.Batch, "for %%i in (*) do echo %%~fi %~dp0 %1 %*", "%~dp0", language.KindVariable},
 		{language.Batch, "echo \"unclosed\nrem actual", "actual", language.KindComment},
+		{language.HCL, `resource "local_file" "x" { content = "${true ? "yes" : "no"}" }`, "content", language.KindProperty},
+		{language.HCL, `value="${true ? "yes" : "no"}"`, "true", language.KindKeyword},
+		{language.HCL, `value="$${true} %%{if false}"`, "true", language.KindString},
+		{language.HCL, `value="%{ if true }yes%{ endif }"`, "endif", language.KindKeyword},
+		{language.HCL, "value=<<END\n\\n $${true}\nEND\nresource real {}", "true", language.KindString},
+		{language.HCL, "value=<<END\n\\n $${true}\nEND\nresource real {}", "resource", language.KindKeyword},
+		{language.HCL, "value=<<-END\n${jsonencode({x=true})}\n  END  \nresource real {}", "true", language.KindKeyword},
+		{language.HCL, "value=<<-END\n${jsonencode({x=true})}\n  END  \nresource real {}", "resource", language.KindKeyword},
+		{language.HCL, "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "resource", language.KindKeyword},
 	} {
 		for _, chunk := range []int{1, 3, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -675,6 +685,7 @@ func TestFifthBatchKinds(t *testing.T) {
 
 func TestFifthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.HCL:   {"resource \"local_file\" \"x\" {\nname-with-dash = \"${true ? \"${1}\" : \"no\"}\"\nbody = <<-END\n$${literal} %{ if true ~}\n${jsonencode({a=\"b\"})}\n%{ endif }\n END\n}\n/* end */", "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "value=<<" + strings.Repeat("字", ChunkSize) + "\n${true}\n" + strings.Repeat("字", ChunkSize) + "\nresource real {}", strings.Repeat("k", ChunkSize) + " = \"" + strings.Repeat("字", ChunkSize) + "${true}\""},
 		language.Batch: {"@echo off\nsetlocal EnableDelayedExpansion\nREM note\n:build\n:: note\nfor %%i in (*.txt) do (\n echo \"%%~fi %~dp0 %NAME:~1,2% !count!\"\n)\necho ^\nrem continuation\nrem actual", "echo \"" + strings.Repeat("字", ChunkSize) + "%NAME%\"\n" + strings.Repeat("r", ChunkSize) + " argument\nrem final"},
 		language.Diff:  {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@ function\n--- old\n+++ new\n same\n--- a/b\n+++ b/b\n@@ -0,0 +1 @@\n+new\n\\ No newline at end of file", "@@ -1 +1 @@ " + strings.Repeat("字", ChunkSize) + "\n-" + strings.Repeat("x", ChunkSize*2) + "\n+new", "@@ -1," + strings.Repeat("9", ChunkSize) + " +1 @@\n+new"},
 	}

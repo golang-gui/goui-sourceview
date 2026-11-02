@@ -490,3 +490,12 @@ Windows Batch、HCL/Terraform、GraphQL、SCSS、Less 继续依次实现。
 `GOWORK=off go test ./...`、Pango 亮暗 REM 原生颜色断言通过。
 同本批独立 X11 / Software / 浅色 1×，`-language bat` 通过 setlocal 建议接受/撤销、
 反斜杠结尾路径的引用输入及公共断言。没有执行批处理或依赖 Windows 命令解释器。
+
+### HCL / Terraform
+
+新增 HCL/Terraform 文件/围栏、属性和模板状态、基础编辑/建议与 main.tf，示例共 45 份。
+独立断言覆盖属性、嵌套插值、模板指令、字面起始标记、普通与缩进 heredoc、
+嵌套 heredoc 及闭合后恢复代码；超长 Unicode 闭合名、长词/正文、极小分片和快照通过。
+`GOWORK=off go test ./...`、Pango 亮暗 heredoc 正文 RGBA 断言通过。
+同本批独立浅色 1×，`-language hcl` 通过 resource 建议接受/撤销、插值引用输入与公共断言。
+闭合前后空白按 HCL 2.24.0 扫描器源码处理，文档与源码区别已记录；没有加载 Terraform 或 provider。

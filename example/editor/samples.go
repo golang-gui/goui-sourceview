@@ -39,6 +39,7 @@ func sampleDocuments() []exampleDocument {
 		"hello.pl",
 		"change.diff",
 		"build.cmd",
+		"main.tf",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

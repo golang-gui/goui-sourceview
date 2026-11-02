@@ -797,3 +797,21 @@ REM 与命令起点使用词法启发式，不承诺 CMD 的所有 IF、重定�
 （读取 2026-11-02，页面适用于 Windows 10/11、Server 2016–2025）及
 [Lexilla LexBatch.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexBatch.cxx)
 的命令/标签/变量区分，采用独立有界状态，不复制实现或调用 cmd.exe。
+
+## 27. HCL / Terraform
+
+HCL ID 同时支持 `.hcl/.tf/.tfvars`、hcl/terraform/tf 围栏；`.tfvars.json` 继续按 JSON 处理。
+独立状态支持属性、常见 Terraform 构造、布尔/null、数字、三种注释、双引号和 heredoc 模板。
+`${…}` / `%{…}` 进入代码上下文，允许嵌套对象、字符串及 heredoc，闭合后恢复外层引用；
+不可变表达式帧只保存外层引用描述和括号深度。`$${` / `%%{` 保持字面文本，普通引用解释反斜杠转义，
+heredoc 不解释反斜杠，闭合名称单独保存、不保存正文。普通词候选保持有界。
+
+按 HCL 2.24.0 扫描器对整行闭合标记 trim-space 的实际行为处理前后空白，包括普通 <<；
+<<- 的正文缩进移除属于求值语义，高亮不修改文本。闭合候选只在 heredoc 正文的完整行成立，
+插值表达式中的同名行不能结束外层 heredoc。编辑提供 #/块注释、结构和双引号配对及关键词建议。
+不加载 provider/schema，不执行 Terraform，不把 `.tftpl` 当作从代码状态开始的 HCL 文件。
+
+2026-11-02 核对 [Terraform 字符串与模板](https://developer.hashicorp.com/terraform/language/expressions/strings)
+（页面 v1.17.x）和 [HCL v2.24.0 scan_tokens.rl](https://github.com/hashicorp/hcl/blob/v2.24.0/hclsyntax/scan_tokens.rl)
+的 heredocLiteralEOL、beginTemplateInterp/Control 及表达式返回栈。
+采用既有 Shell/Ruby 等语言的分片和状态隔离方式，不导入 HCL/Terraform 解析器或复制第三方源码。
