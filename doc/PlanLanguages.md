@@ -284,3 +284,36 @@ Ruby 非插值短引用仍允许转义结束符，Context.Literal 不将这类�
 `GOWORK=off go test -race ./language ./internal/highlight` 通过，原生亮暗 1× 的 nowdoc 正文颜色通过。
 独立 Software 浅色 1× 窗口通过 30 种语言建议、接受和撤销，PHP 转义引用与原有全部断言通过。
 本组环境、依赖和日志目录同前，未单独运行 macOS/Windows；没有新增第三方依赖或 GOUI 改动。
+
+### JSX / TSX 与批次完成验证
+
+新增 JSX/TSX、文件识别、默认围栏及别名、适用的配对和建议；新增 app.jsx/app.tsx，示例共 33 份。
+独立断言覆盖标签/属性/实体/正文 Class、fragment、自闭合、展开属性、嵌套 JSX、
+对象/引用/注释/正则/模板中的括号、比较与除法、TypeScript 词汇、泛型箭头函数、
+extends 属性、32 KiB 空白后的泛型判别、编辑后的传播以及状态快照不变性。
+新增语言继续参加 1/2/3/7/31 byte / 16 KiB 分片、300 轮固定种子随机输入、Class 和默认围栏测试。
+原生颜色新增 JSX 多行属性引用与 TSX 关键词的亮暗 1× 位图断言，沿用同字体/同后端 RGBA 零误差条件。
+
+批次最终在 Ubuntu 22.04.5 amd64、Go 1.25.8 下通过：
+
+- `go test ./...`（工作区相邻 GOUI b49049d）
+- `GOWORK=off go test ./...`（已发布 GOUI v0.5.0）
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+关闭工作区构建最终语言窗口程序，独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software：
+浅色 1× 与深色 1.5× 都通过 32 种有静态建议语言的补全、接受和撤销；
+另检查 JSX 标签建议、TSX className 属性建议、JSX 属性引用的字面反斜杠、正文中的单独引号，
+以及全部旧引用、括号、只读、语义文本和 PowerShell 转义中间光标断言。
+按正常 Window.DispatchEvent/CommitText 输入，不使用 DevServer 或旁路语义动作。
+
+editor 请求 1120×780 Integrated 窗口，ChromeInfo 日志确认 enabled；33 个样本按钮完整换行显示。
+独立会话真实点击 PHP 浅色与 TSX 深色，观察混合语言、heredoc、泛型和标签表达式，未见正文或工具栏裁切。
+截图仅作观察，不代替独立颜色/语义断言；本批没有性能量化结论、真实 IME 或 macOS/Windows 原生运行。
+JSX/TSX 的词法歧义和标签/正文注释辅助边界详见设计，不将交叉构建视为原生场景验收。
+
+最终日志、二进制和截图位于 `/tmp/sourceview-language-batch2-JqwBCh/`，没有写入源码目录，
+没有向用户桌面发送输入、操作剪贴板或执行样本。验证结束后关闭本次示例和专用 X11/窗口管理器会话，
+保留原有用户桌面。原有未跟踪 doc/Doing.md 和 example/temp/ 不纳入语言功能提交。

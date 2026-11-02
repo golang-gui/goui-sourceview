@@ -537,3 +537,36 @@ heredoc 保存完整标识符，按片段比较行首空白后的候选；标识
 不宣称是某个 PHP 发行版的完整编译器或按环境探测语法配置。
 源码另核对 [php-src 8.4.0 zend_language_scanner.l](https://github.com/php/php-src/blob/php-8.4.0/Zend/zend_language_scanner.l)
 的 ST_HEREDOC、ST_IN_SCRIPTING 和插值状态；不移植其解析器，也不执行 PHP。
+
+## 16. JSX / TSX
+
+新增 `language.JSX/TSX`、`.jsx/.tsx`、jsx/tsx 及 javascriptreact/typescriptreact 默认围栏。
+普通 `.js/.ts` 的识别和规则不改变。JSX/TSX 分别复用 JavaScript/TypeScript 的代码词汇、
+引用、模板、正则、注释和控制圆括号状态；`scan_jsx.go` 维护标签/属性/正文/实体及恢复栈。
+只增加私有 codeTokenizer.scan 边界暂停能力，普通公开 Scan 不返回非空输入零消费；
+JSX 包装器处理边界字符后继续推进，没有向公开 Tokenizer 增加策略接口。
+
+仅在代码表达式起点进入 JSX，普通比较 `a < b` 保持代码；标签支持组件名、点/冒号/连字符、
+布尔属性、引用属性、展开属性、自闭合与 fragment。正文按 Plain 前景和 ClassString，
+属性引用按 String，实体单独着色；正文不按 HTML script/style 或注释模式重新解释，
+属性引用中的反斜杠不转义结束引号。`{}` 内恢复代码，允许对象、字符串、注释、正则、
+模板及再次嵌套 JSX；关闭子表达式或根元素时恢复父代码/标记状态与深度。
+
+TSX 为同一物理行中可确认的 `<T,>`、`<T=...>` 和 `<T extends ...>` 回到 TypeScript；
+候选名只保留有界拼写与范围，可以跨多个工作片段处理长空白，不依赖固定 32 byte 猜测。
+已发布的候选 Tag/Attribute 通过 ReplaceFrom 改回代码颜色；物理换行后不跨行回写，
+未确认的头按 JSX 继续。`<T extends={true}/>` 的 extends 仍是属性。
+泛型/标签及错误输入有语法歧义，本 profile 不承诺完整 TypeScript parser 的裁决，
+特别是跨行后才出现判别符的候选与泛型约束/布尔属性歧义；普通明确写法设独立回归。
+
+编辑规则仍只匹配 `()[]{}`，不自动成对插入尖括号，不绑定 HTML 的空元素或标签联动规则。
+标记引用仅在属性值位置自动闭合；正文不触发代码配对/关键词建议，表达式恢复代码规则。
+建议提供代码词汇及已知 HTML 标签/属性和 className/htmlFor/key/ref，不推断 React 组件类型或 props。
+注释命令提供 JS/TS 代码区的标记；JSX 正文注释需要显式写在 `{}` 内，本批不提供按位置自动包裹正文注释的命令。
+缓存、状态与原生资源所有权不变，未新增样式键、解析依赖、语言服务或 GOUI 改动。
+
+2026-11-02 核对 [TypeScript JSX 手册](https://www.typescriptlang.org/docs/handbook/jsx.html)，
+其中 JSX/TSX 的词法场景与普通 TS 尖括号断言有不同约束。
+[Monaco v0.52.2 TypeScript tokenizer](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/typescript/typescript.ts)
+作为现有 JS/TS 基础状态的参考，不将其 basic-languages 文件当成完整 TSX parser。
+保持 GtkSourceView 上下文分解的思路，混合语法以本项目自己的独立分类、分片及编辑测试验收。

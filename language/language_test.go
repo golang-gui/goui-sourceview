@@ -48,6 +48,7 @@ func TestGuess(t *testing.T) {
 		{"run.PS1", "", PowerShell}, {"module.psm1", "", PowerShell}, {"data.psd1", "", PowerShell},
 		{"script", "#!/usr/bin/env pwsh", PowerShell},
 		{"index.PHP", "", PHP}, {"page.phtml", "", PHP}, {"", "<?php echo 1;", PHP}, {"", "<?= 1 ?>", PHP}, {"", "<?phpfoo", Plain},
+		{"app.jsx", "", JSX}, {"app.TSX", "", TSX}, {"app.js", "<A/>", JavaScript}, {"app.ts", "<T,>(x:T)=>x", TypeScript},
 		{"hello.rb", "", Ruby}, {"Gemfile", "", Ruby}, {"Rakefile", "", Ruby}, {"app.gemspec", "", Ruby}, {"config.ru", "", Ruby}, {"script", "#!/usr/bin/env ruby", Ruby},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -137,6 +138,8 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{PowerShell, `"hello $(if`, false, false, false}, {PowerShell, `<# comment`, false, true, false},
 		{Ruby, `%q{literal`, true, false, false}, {Ruby, `"hi #{if`, false, false, false}, {Ruby, `%Q{outer #{%Q{inner #{`, false, false, false},
 		{PHP, `<?php "hello $name`, true, false, false}, {PHP, `<?php "{$row['key']`, false, false, false}, {PHP, `<?php /* note`, false, true, false},
+		{JSX, `const x=<A>text`, true, false, true}, {JSX, `const x=<A title="raw`, true, false, true},
+		{JSX, `const x=<A>{true`, false, false, false}, {TSX, `const x=<A>{/* note`, false, true, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -225,6 +228,10 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{PHP, `<p title="<?= $name ?>">text</p>`, "$name", 0},
 		{PHP, `<?php "hi $name"`, "$name", ClassString},
 		{PHP, `<?php "{$row['key']}"`, "$row", 0},
+		{JSX, `const x=<A>if true</A>;`, "true", ClassString},
+		{JSX, `const x=<A title="{raw}">{true}</A>;`, "{raw}", ClassString},
+		{JSX, `const x=<A>{true}</A>;`, "true", 0},
+		{TSX, `const x=<A>{true}</A>;`, "{true}", ClassDelimiter},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -327,6 +334,52 @@ func TestPHPProfilesAndSuspension(t *testing.T) {
 		}
 		if len(r.Tokens) == 0 || r.Tokens[0].Kind != KindKeyword || r.State.Context().Embedded.ID() != PHP {
 			t.Fatalf("bare PHP fence: %+v", r)
+		}
+	}
+}
+
+func TestJSXFencesAndEditing(t *testing.T) {
+	md, _ := Builtin(Markdown)
+	custom, err := NewMarkdown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range []*Language{md, custom} {
+		for name, id := range map[string]ID{"jsx": JSX, "tsx": TSX, "javascriptreact": JSX, "typescriptreact": TSX} {
+			scanner := l.Tokenizer()
+			fence := "```" + name
+			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := "const x=<A/>;"
+			r, err = scanner.Scan(Input{Text: text, Limit: len(text), LineEnd: true}, r.State)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.State.Context().Embedded.ID() != id {
+				t.Fatalf("%s: wrong fence profile", name)
+			}
+			found := false
+			for _, tok := range r.Tokens {
+				if tok.Start == 9 && tok.End == 10 && tok.Kind == KindTag {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("%s: JSX tag not highlighted: %v", name, r.Tokens)
+			}
+		}
+	}
+	for _, id := range []ID{JSX, TSX} {
+		l, _ := Builtin(id)
+		if l.Editing().Tags != nil {
+			t.Fatal("JSX enabled markup-only tag matcher")
+		}
+		for _, p := range l.Editing().Brackets {
+			if p.Open == "<" {
+				t.Fatal("JSX guesses generic angle pairs")
+			}
 		}
 	}
 }

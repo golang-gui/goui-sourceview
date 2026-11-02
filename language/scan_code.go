@@ -155,6 +155,12 @@ func finishCodeWord(s *codeState, w *tokenWriter, end int) {
 }
 
 func (b codeTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+// scan can pause at a confirmed code boundary for an enclosing JSX profile.
+// Only the private caller may receive zero consumption at that boundary.
+func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int) bool) (Result, error) {
 	s, ok := state.(codeState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign state for %s", b.id)
@@ -390,6 +396,9 @@ func (b codeTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			finishWord(in.Offset + i)
 			continue
+		}
+		if boundary != nil && s.mode == codeNormal && boundary(s, i) {
+			break
 		}
 		if space(c) {
 			s.sqlColon = false

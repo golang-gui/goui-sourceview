@@ -118,6 +118,36 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case JSX, TSX:
+			d.Tokenizer = jsxTokenizer{info.ID}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
+			p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+			d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+			d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return !c.Context.Tag || c.Selected || c.Typed != "'" && c.Typed != `"` || c.Context.Value
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			base := JavaScript
+			if info.ID == TSX {
+				base = TypeScript
+			}
+			vocabulary := codeVocabulary(base)
+			html := out[HTML]
+			d.Suggest = func(c Context) []string {
+				if c.String || c.Comment {
+					return nil
+				}
+				if c.Tag {
+					items := html.Suggestions(c)
+					if !c.TagName {
+						items = append(items, "className", "htmlFor", "key", "ref")
+					}
+					return items
+				}
+				return vocabulary
+			}
 		case PHP:
 			htmlDefinition := out[HTML].Definition()
 			// Mixed PHP spans are not safe input to the markup-only tag matcher.
@@ -251,7 +281,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines,
 		"c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp,
 		"ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell,
-		"rb": Ruby,
+		"rb":              Ruby,
+		"javascriptreact": JSX, "typescriptreact": TSX,
 	} {
 		table[alias] = definitions[id]
 	}

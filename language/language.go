@@ -42,6 +42,8 @@ const (
 	PowerShell ID = "powershell"
 	Ruby       ID = "ruby"
 	PHP        ID = "php"
+	JSX        ID = "jsx"
+	TSX        ID = "tsx"
 	Markdown   ID = "markdown"
 )
 
@@ -124,6 +126,8 @@ var builtins = []Info{
 	{ID: PowerShell, Name: "PowerShell", Extensions: []string{".ps1", ".psm1", ".psd1"}, MIMETypes: []string{"application/x-powershell"}},
 	{ID: Ruby, Name: "Ruby", Extensions: []string{".rb", ".rbw", ".rake", ".gemspec", ".ru"}, MIMETypes: []string{"text/x-ruby"}},
 	{ID: PHP, Name: "PHP", Extensions: []string{".php", ".phtml"}, MIMETypes: []string{"application/x-httpd-php"}},
+	{ID: JSX, Name: "JSX", Extensions: []string{".jsx"}, MIMETypes: []string{"text/jsx", "text/javascript-jsx"}},
+	{ID: TSX, Name: "TSX", Extensions: []string{".tsx"}, MIMETypes: []string{"text/tsx", "text/typescript-jsx"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

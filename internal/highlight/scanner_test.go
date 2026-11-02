@@ -317,6 +317,8 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.PowerShell, "$x=@'\nbody\n'@\nfunction f {}", "'@", " '@", "function", language.KindString},
 		{language.Ruby, "x=<<~TXT\nbody\n TXT\nclass Demo; end", " TXT", " MISS", "class", language.KindString},
 		{language.PHP, "<?php $x=<<<TXT\nbody\nTXT;\nreturn 1;", "TXT;", "MISS;", "return", language.KindString},
+		{language.JSX, "const x=<A/>;\nconst n=1;", "/>", ">", "const n", language.KindPlain},
+		{language.TSX, "const f=<T,>(x:T)=>x;\nconst n=1;", ",", "", "const n", language.KindPlain},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -610,6 +612,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
 		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
+		{language.JSX, "const x=<A>{true ? <B title={", "1}/> : null}"},
 	} {
 		_, before := scanAll(tc.id, tc.prefix, 3)
 		_, _, _ = Scan(tc.id, before, tc.next, len(tc.next), true)
@@ -701,6 +704,21 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.PHP, "<?php $x=<<<TXT\nTXT_MORE\nstill\nTXT;", "still", language.KindString},
 		{language.PHP, "<?php #[Route('/')] function f() {}", "Route", language.KindPlain},
 		{language.Markdown, "```php\nreturn true;\n```", "return", language.KindKeyword},
+		{language.JSX, `const x=<Panel title="a>b" enabled>{true ? <Item/> : null}</Panel>;`, "Panel", language.KindTag},
+		{language.JSX, `const x=<Panel title="a>b" enabled>{true ? <Item/> : null}</Panel>;`, "title", language.KindAttribute},
+		{language.JSX, `const x=<Panel title="a>b" enabled>{true ? <Item/> : null}</Panel>;`, "a>b", language.KindString},
+		{language.JSX, `const x=<Panel title="a>b" enabled>{true ? <Item/> : null}</Panel>;`, "true", language.KindKeyword},
+		{language.JSX, `const x=a < b; const y=<A/> / 2;`, "b;", language.KindPlain},
+		{language.JSX, `const y=<A/> / 2;`, "/ 2", language.KindDelimiter},
+		{language.JSX, `const x=<A>if true // text &amp;</A>;`, "true", language.KindPlain},
+		{language.JSX, `const x=<A>if true // text &amp;</A>;`, "&amp;", language.KindEntity},
+		{language.JSX, `const x=<UI.Button aria-label="go"><svg:path/></UI.Button>;`, "UI.Button", language.KindTag},
+		{language.JSX, "const x=<A>{/[}]/.test(x) ? `hi ${<B/>}` : null}</A>;", "B", language.KindTag},
+		{language.TSX, `const f=<T,>(x:T)=><A value={x}/>;`, "T,", language.KindPlain},
+		{language.TSX, `const f=<T extends unknown>(x:T)=><A/>;`, "extends", language.KindKeyword},
+		{language.TSX, `const f=<T=string,>(x:T)=>x;`, "string", language.KindKeyword},
+		{language.TSX, `const x=<T extends={true}/>;`, "extends", language.KindAttribute},
+		{language.TSX, `interface Props { readonly name: string; }`, "readonly", language.KindKeyword},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -726,6 +744,8 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 	fixtures[language.PowerShell] = []string{"function Greet { param($name) \"hi $name$($(\"nested\")) ${env:PATH}\"; if ($true -AND $false) { 1..3 } }\n$x=@\"\nbody $env:PATH $(if (1) { \"x\" })\n\"@\n$x=@'\nliteral $name\n '@\n'@", "$x=‘it’’s’\n<# a <# b #> function f {}\n$x=\"a`\"b\"", "$x=@'\n" + strings.Repeat("字", ChunkSize) + "\n'@"}
 	fixtures[language.Ruby] = []string{"class Demo\n def hi(name)\n \"#{true ? %Q{nested #{1}} : name} #@value\"\n end\nend\nx=%r[[/]]im; y=10 / 2\nputs(<<A, <<-'B')\n#{true}\nA\n#{false}\n B\nclass Real;end", "x=<<A\n#{puts <<B}\ninner\nB\nouter\nA\nclass Demo;end", "x=<<'" + strings.Repeat("字", ChunkSize) + "'\nbody\n" + strings.Repeat("字", ChunkSize) + "\nclass Demo;end", "x=\"#@" + strings.Repeat("name", ChunkSize) + "\""}
 	fixtures[language.PHP] = []string{"<p title=\"<?= $name ?>\">Hi</p><script>const<?php echo ' '; ?> value=\"<?= $name ?>\";</script><!-- <?= $name ?> -->\n<?php #[Route('/')] readonly class Demo { function f() { return \"{$row['key']} ${name}\"; } } // ?> <b>text</b>", "<?php $x=<<<TXT\n$name {$row['key']}\n TXT, true; $x=<<<'END'\n$name\nENDING\nEND; return;", "<?php $x=<<<\"" + strings.Repeat("字", ChunkSize) + "\"\nbody\n" + strings.Repeat("字", ChunkSize) + "; return;"}
+	fixtures[language.JSX] = []string{"const x=<><UI.Button aria-label=\"a>b &gt;\" {...props}>{items.map(x=><Item key={x.id}/>)}</UI.Button>{/[}]/.test(x) ? `hi ${<B/>}` : null}</>; const y=a < b; const ratio=<A/> / 2;", "const x=<A title=\"\nbody\\\n\"/>;", "const x=<A>" + strings.Repeat("字", ChunkSize) + " &amp;</A>;"}
+	fixtures[language.TSX] = []string{"interface Props {readonly name:string;}\nconst f=<T,>(x:T):T=>x; const g=<T extends unknown>(x:T)=><A value={x}/>; const x=<T extends={true}/>;", "const f=<T" + strings.Repeat(" ", ChunkSize*2) + ",>(x:T)=><A/>;"}
 	for id, texts := range fixtures {
 		for _, text := range texts {
 			want, ws := scanAll(id, text, ChunkSize*8)
@@ -742,7 +762,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

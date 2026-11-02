@@ -107,6 +107,8 @@ func main() {
 		{language.PowerShell, "funct", "function"},
 		{language.Ruby, "unles", "unless"},
 		{language.PHP, "<?php retu", "<?php return"},
+		{language.JSX, "cons", "const"}, {language.TSX, "interf", "interface"},
+		{language.JSX, "const x=<di", "const x=<div"}, {language.TSX, "const x=<A classN", "const x=<A className"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -164,6 +166,8 @@ func main() {
 		{language.PowerShell, "$x = ", "'it''s'", "$x = 'it''s'"},
 		{language.Ruby, "x = ", "'it\\'s'", "x = 'it\\'s'"},
 		{language.PHP, "<?php $x = ", "'it\\'s'", "<?php $x = 'it\\'s'"},
+		{language.JSX, "const x=<A title=", "\"C:\\\"", "const x=<A title=\"C:\\\""},
+		{language.JSX, "const x=<A>text ", "'", "const x=<A>text '"},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
