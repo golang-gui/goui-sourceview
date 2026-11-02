@@ -905,3 +905,17 @@ XML/TOML 关联样本和六份新增混合文档样本；检查代表性的正�
 结束时关闭本次 editor、专用 X11/窗口管理器，保留原有 X110/X3/X42/X78 桌面。
 没有运行样本、安装配置、操作剪贴板或修改全局设置；原有未跟踪 doc/Doing.md、example/temp/ 未纳入提交。
 Windows/macOS 仅交叉构建，未原生运行；真实 IME 未执行。SRT/WebVTT、iCalendar/vCard 按场景后置。
+
+## editor 样本弹窗高度（2026-11-02）
+
+示例将 Sample 的 PopupMaxHeight 从默认 320 DIP 显式改为 560 DIP，宽度仍为 360 DIP；
+复用 DropDown 的滚动、选择与桌面可用区域约束，不修改 GOUI。设计与示例中英文说明同步更新。
+`go test ./...`、`GOWORK=off go test ./...` 通过。
+
+Ubuntu 22.04.5 / TigerVNC :87 / Xfwm4 compositor / Software，独立构建修改前后两个 editor 做对照：
+浅色 1× 的含阴影原生弹窗从 410×370 增至 410×610 像素，深色 1.5× 从 615×555 增至 615×915 像素；
+宽度不变，高度分别增加 240/360 像素，与 240 DIP 增量一致。一屏可见约 19 项。
+经原生鼠标/键盘打开弹窗，End/Enter 选择末尾样本，重新打开后 Home/Escape 取消，关闭行为与文档切换正常。
+截图用于检查布局，尺寸变化和关闭状态另有独立断言。二进制、截图与日志位于
+`/tmp/sourceview-dropdown-height-RERUVo/`，结束后关闭本次专用桌面，保留原有桌面及未跟踪文件。
+未执行 Windows/macOS 原生窗口验证；本项没有引入平台接口或修改依赖。

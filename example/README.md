@@ -64,8 +64,10 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
 复用对应内嵌语言。语法高亮是编辑期词法分析，不执行这些样本或调用编译器。
 
 - Choose a language and filename from Sample. Scroll the dropdown or use the arrow
-  keys, Enter to confirm and Escape to cancel. Edit one, switch away and back, then Undo.
+  keys, Enter to confirm and Escape to cancel. The popup allows up to 560 DIP in height,
+  subject to the available desktop area. Edit one, switch away and back, then Undo.
   从 Sample 下拉列表选择语言与样本文件，支持滚动、方向键、Enter 确认和 Escape 取消。
+  弹窗最大高度为 560 DIP，实际高度仍受桌面可用区域限制。
   编辑后切换回来，确认内容和撤销历史保留。
 - Toggle Word wrap, Line numbers and Read only; the footer shows language, LF/CRLF/CR,
   line, Unicode character column, line count, output byte count and editing mode. The displayed

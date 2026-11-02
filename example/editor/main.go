@@ -151,6 +151,7 @@ func run() error {
 	sample.SetID("sample-selector")
 	sample.SetMinSize(geometry.Size{Width: 360})
 	sample.SetMaxSize(geometry.Size{Width: 360})
+	sample.SetPopupMaxHeight(560)
 	items := make([]widgets.DropDownItem, len(documents))
 	for i, d := range documents {
 		text := d.name
