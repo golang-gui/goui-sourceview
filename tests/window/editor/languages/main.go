@@ -103,7 +103,7 @@ func main() {
 		{language.TypeScript, "interf", "interface"}, {language.CSS, ".x { backg", ".x { background"},
 		{language.C, "retu", "return"}, {language.Cpp, "conste", "constexpr"},
 		{language.Java, "synch", "synchronized"}, {language.Rust, "matc", "match"},
-		{language.CSharp, "namesp", "namespace"},
+		{language.CSharp, "namesp", "namespace"}, {language.Lua, "funct", "function"},
 	}
 	var steps []func()
 	var pendingViewport func() bool

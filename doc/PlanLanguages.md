@@ -181,3 +181,49 @@ Software 浅色 1×、深色 1.5× 均通过正常事件路径的补全、接受
 
 日志和构建产物在 `/tmp/sourceview-jsonlines-L6LJ1q/`，没有向用户桌面发送输入或操作剪贴板。
 验收结束后关闭本次专用 X11 与窗口管理器会话，保留原有用户桌面。
+
+## 2026-11-02：C、C++、Java、Rust、C#、Lua
+
+设计见 [编程语言扩充](DesignHighlighting.md#12-ccjavarustclua)。实现六种独立语言 ID、
+元数据、文件识别、流式高亮、适用的注释/引用规则、静态词汇与 Markdown 围栏别名。
+C/C++ 共享词法实现和独立词汇；Java Unicode 转换、Rust、C#、Lua 独立维护状态。
+没有修改 GOUI、增加第三方依赖或公共扫描接口，依赖仍为 GOUI v0.5.0。
+中英文 README 同步，editor 新增六份原创样本，共 28 份；样本不执行。
+
+回归包含独立 Kind/Class 预期、1/2/3/7/31 byte 与 16 KiB 分片、完整出状态比较、
+每语言 300 轮固定种子不完整源码，以及开闭符号编辑后的增量传播与全量结果比较。
+长样本覆盖超长正文、C++ 16 字符 delimiter、Rust 255 个 hash、Java 连续 32 KiB 的 u、
+Lua 超过 32 KiB 的等号 delimiter，以及 C# 大于预读范围的 `$`/引号/插值括号数量。
+另外验证 Unicode 转义生成注释/换行、C 行注释续行、raw 标识符、嵌套注释/插值、
+空合并与范围运算符、Lua 拼接、文本状态快照不变性、围栏、文件识别和 Rust 单引号规则。
+普通词法、分片一致性与错误恢复均有断言；不以两条扫描路径相同代替独立分类预期。
+
+Ubuntu 22.04.5 amd64、Go 1.25.8、GOUI v0.5.0、Pango 下通过：
+
+工作区联调使用相邻 GOUI `b49049d`；关闭工作区的测试、窗口程序构建及交叉构建使用
+已发布 GOUI v0.5.0。按 C/C++、Java、Rust、C#、Lua 拆分的每份暂存快照均另行导出，
+在无 go.work 的临时目录运行 `GOWORK=off go test ./...` 通过，避免后续语言掩盖前一提交的依赖遗漏。
+
+- `go test ./...`
+- `GOWORK=off go test ./...`
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+原生颜色回归覆盖六语言亮暗 Scheme，将整行关键字、原始字符串正文、嵌套注释正文或
+Unicode 转义关键字的位图与同字体、独立指定目标颜色的 TextLayout 比较。
+采样范围为同排版参数的完整行 bitmap，比较尺寸、stride 和原始预乘 RGBA 字节，误差为 0；
+是同一 Pango 后端 1× 断言，不将其视为跨字体/跨平台金图或 1.5× 颜色采样。
+
+独立 TigerVNC `:87`、Xfwm4 compositor on，关闭工作区构建语言窗口程序。
+Software 浅色 1×、深色 1.5× 都通过 27 种有静态建议语言的补全布局、目标建议、接受和撤销断言；
+Java/C# 三引号、Rust 生命周期输入及原有引用、括号、只读、语义断言一并通过。
+所有模拟输入经正常 Window.DispatchEvent/CommitText；没有使用 DevServer 或语义动作捷径。
+示例窗口确认 28 个文件按钮完整换行显示，实际点击 C++ 浅色与 C# 深色观察引用、注释、
+数值和插值的呈现；观察截图不代替颜色断言。
+
+日志、可执行文件与截图在 `/tmp/sourceview-languages-six-CfIcYT/`，没有写入源码目录，
+没有向用户桌面发送输入或操作剪贴板。验证后关闭本次示例及专用桌面会话。
+本次未执行 macOS/Windows 原生窗口、真实 IME 或性能基准；交叉构建不等于原生场景验收。
+条件编译、完整语法检查和语言服务不在本批范围，词法 profile 的恢复边界以设计为准。

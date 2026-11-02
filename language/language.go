@@ -38,6 +38,7 @@ const (
 	Java       ID = "java"
 	Rust       ID = "rust"
 	CSharp     ID = "csharp"
+	Lua        ID = "lua"
 	Markdown   ID = "markdown"
 )
 
@@ -116,6 +117,7 @@ var builtins = []Info{
 	{ID: Java, Name: "Java", Extensions: []string{".java"}, MIMETypes: []string{"text/x-java"}},
 	{ID: Rust, Name: "Rust", Extensions: []string{".rs"}, MIMETypes: []string{"text/x-rust"}},
 	{ID: CSharp, Name: "C#", Extensions: []string{".cs", ".csx"}, MIMETypes: []string{"text/x-csharp"}},
+	{ID: Lua, Name: "Lua", Extensions: []string{".lua"}, MIMETypes: []string{"text/x-lua"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -169,6 +171,12 @@ func Guess(filename string, sample []byte) ID {
 	pythonVersion := strings.TrimPrefix(interpreter, "python")
 	if interpreter == "python" || pythonVersion != interpreter && len(pythonVersion) > 0 && digit(pythonVersion[0]) && strings.Trim(pythonVersion, "0123456789.") == "" {
 		return Python
+	}
+	for _, name := range []string{"lua", "luajit"} {
+		version := strings.TrimPrefix(interpreter, name)
+		if interpreter == name || version != interpreter && len(version) > 0 && digit(version[0]) && strings.Trim(version, "0123456789.") == "" {
+			return Lua
+		}
 	}
 	sample = bytes.TrimSpace(bytes.TrimPrefix(sample, []byte{0xef, 0xbb, 0xbf}))
 	lower := bytes.ToLower(sample)

@@ -312,6 +312,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Rust, "let s=r##\"open\nbody\n\"##;\nlet n=1;", "\"##;", "\"#;", "let n", language.KindString},
 		{language.CSharp, "var x = \"\"\"\nbody\n\"\"\";\nreturn;", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.CSharp, `var s=$$"""raw {{true}}""";`, "$$", "$$$", "true", language.KindString},
+		{language.Lua, "local x=[=[open\nbody\n]=]\nreturn x", "]=]", "]==]", "return", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -652,6 +653,11 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.CSharp, "var s = $\"{1:0.00}\";", "0.00", language.KindString},
 		{language.CSharp, "var s = $\"{value ?? 1:0.00} {global::System.String.Empty}\";", "0.00", language.KindString},
 		{language.CSharp, "var range=1..2;", "..", language.KindDelimiter},
+		{language.Lua, "local text=[==[raw ]=] still\n]==]\nreturn text", "still", language.KindString},
+		{language.Lua, "--[=[ note\nbody\n]=]\nlocal n=0x1.fp+2", "body", language.KindComment},
+		{language.Lua, "local x='a\\z \n  b'\nreturn x", "b", language.KindString},
+		{language.Lua, "local n=0x1.fp+2; return n", "0x1", language.KindNumber},
+		{language.Lua, "local x=1..2; return x", "..", language.KindDelimiter},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -672,6 +678,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 		language.Java:   {"@Override public String get(){ return \"\"\"\ntext \\\"\"\"\n\"\"\"; }", "cl\\u0061ss X { \\u002f\\u002a comment \\u002a\\u002f int n; }", "// note\\u000areturn;", "\\" + strings.Repeat("u", ChunkSize*2) + "0069nt n;", "String x=\"\\\\u0022\\u005c\\u006e\";"},
 		language.Rust:   {"fn borrow<'a>(x: &'a str) -> &'a str { /* outer /*inner*/ still */ let r#type=br###\"raw \"## still\"###; println!(\"{}\",'字'); x }", "let x=r" + strings.Repeat("#", 255) + "\"" + strings.Repeat("字", ChunkSize) + "\"" + strings.Repeat("#", 255) + "; let y=1..2;"},
 		language.CSharp: {"#nullable enable\nclass Demo { string s=$@\"Hi {true ? $\"{1}\" : @\"x\"}!\"; string r=$$\"\"\"literal {brace} {{{true}}}\"\"\"; }", "var s=\"\"\"\"\nraw \"\"\" text\n\"\"\"\"; var @class = @\"a\"\"b\";", "var s=$\"{1:0.00} {true ? 1 : 0}\";", "var s=" + strings.Repeat("$", 90) + strings.Repeat("\"", 100) + "raw " + strings.Repeat("{", 90) + "true" + strings.Repeat("}", 90) + strings.Repeat("\"", 100) + ";"},
+		language.Lua:    {"local x=[==[raw ]=] text\n]==]\n--[=[ comment\n]=]\nlocal s='a\\z \n b'; return 0x1.fp+2", "local x=[" + strings.Repeat("=", ChunkSize*2) + "[body]" + strings.Repeat("=", ChunkSize*2) + "]; return x"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
@@ -689,7 +696,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

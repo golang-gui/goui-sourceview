@@ -42,8 +42,8 @@ func TestGuess(t *testing.T) {
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"main.c", "", C}, {"main.C", "", Cpp}, {"lib.H", "", Cpp}, {"module.cppm", "", Cpp},
 		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp}, {"Main.java", "", Java},
-		{"main.rs", "", Rust}, {"Program.cs", "", CSharp}, {"script.csx", "", CSharp},
-
+		{"main.rs", "", Rust}, {"Program.cs", "", CSharp}, {"script.csx", "", CSharp}, {"init.lua", "", Lua},
+		{"script", "#!/usr/bin/env lua5.4", Lua}, {"script", "#!/usr/bin/luajit", Lua},
 		{"script", "#!/usr/bin/luatic", Plain}, {"script.c", "#!/bin/lua", C},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -128,6 +128,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{CSharp, `@"raw`, true, false, true}, {CSharp, `$$"""raw`, true, false, true},
 		{CSharp, `$$"""{{`, false, false, false}, {CSharp, `"""`, true, false, true},
 		{CSharp, `$"outer {$"inner {`, false, false, false},
+		{Lua, `[==[raw`, true, false, true}, {Lua, `--[=[comment`, false, true, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -170,7 +171,7 @@ func TestBuiltinMarkdownAddedFences(t *testing.T) {
 	}
 	builtin, _ := Builtin(Markdown)
 	for _, l := range []*Language{builtin, custom} {
-		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp, "java": Java, "rust": Rust, "rs": Rust, "csharp": CSharp, "cs": CSharp, "c#": CSharp} {
+		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp, "java": Java, "rust": Rust, "rs": Rust, "csharp": CSharp, "cs": CSharp, "c#": CSharp, "lua": Lua} {
 			scanner := l.Tokenizer()
 			fence := "```" + name
 			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -207,6 +208,8 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{CSharp, `$$"""literal {brace} {{true}}"""`, "{brace}", ClassString},
 		{CSharp, `$$"""literal {brace} {{true}}"""`, "true", 0},
 		{CSharp, `$"{1:0.00}"`, "0.00", ClassString},
+		{Lua, `[=[{ literal }]=]`, "{", ClassString},
+		{Lua, `--[=[{ comment }]=]`, "{", ClassComment},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -261,10 +264,13 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 }
 
 func TestProgrammingLanguageEditingRules(t *testing.T) {
-	for _, id := range []ID{C, Cpp, Java, Rust, CSharp} {
+	for _, id := range []ID{C, Cpp, Java, Rust, CSharp, Lua} {
 		l, _ := Builtin(id)
 		rules := l.Editing()
 		line, block := "//", "/*"
+		if id == Lua {
+			line, block = "--", "--[["
+		}
 		if rules.Comments.Line != line || rules.Comments.Block.Open != block {
 			t.Fatalf("%s: comments %+v", id, rules.Comments)
 		}

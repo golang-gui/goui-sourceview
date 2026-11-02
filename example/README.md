@@ -39,20 +39,20 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 
 ## Editor
 
-`editor` embeds 27 original language samples, so the binary can run from any
+`editor` embeds 28 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and gets its own file selector. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目 27 份原创语言样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目 28 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并增加对应选择按钮，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
 
 Samples cover JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell, HTTP, Protobuf,
 Makefile, CMake, Nginx, INI, Dockerfile, SQL, Go, Python, JavaScript, TypeScript, CSS,
-C, C++, Java, Rust and C#.
+C, C++, Java, Rust, C# and Lua.
 HTML script/style bodies and Markdown code fences reuse the supported child languages.
 
 样本覆盖上述标记、配置、构建及编程语言；HTML 的 script/style 正文与 Markdown 代码围栏

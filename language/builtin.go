@@ -118,7 +118,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
-		case C, Cpp, Java, Rust, CSharp:
+		case C, Cpp, Java, Rust, CSharp, Lua:
 			switch info.ID {
 			case C, Cpp:
 				d.Tokenizer = cTokenizer{info.ID}
@@ -128,9 +128,14 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 				d.Tokenizer = rustTokenizer{}
 			case CSharp:
 				d.Tokenizer = csTokenizer{}
+			case Lua:
+				d.Tokenizer = luaTokenizer{}
 			}
 			d.AllowWordSuggestions = codeWordSuggestions
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			if info.ID == Lua {
+				d.Editing.Comments = Comments{Line: "--", Block: Pair{Open: "--[[", Close: "]]"}}
+			}
 			if info.ID == Rust {
 				// An apostrophe usually starts a lifetime; selection surrounding
 				// remains available for explicitly creating a character literal.
@@ -221,6 +226,8 @@ func codeVocabulary(id ID) []string {
 		table = rustKeywords
 	case CSharp:
 		table = csKeywords
+	case Lua:
+		table = luaKeywords
 	case Go:
 		table = goKeywords
 	case Python:
