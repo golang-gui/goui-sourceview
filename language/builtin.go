@@ -17,6 +17,16 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Groovy:
+			d.Tokenizer = grTokenizer{}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return c.Selected || c.Context.String || c.Typed != `"` && c.Typed != "'" || !strings.HasSuffix(c.Before, c.Typed+c.Typed)
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case GitIgnore, GitAttributes:
 			d.Tokenizer = gitTokenizer{info.ID}
 			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}}
@@ -460,6 +470,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"gvy": Groovy, "gradle": Groovy,
 		"bzl": Starlark, "bazel": Starlark,
 		"env":    Dotenv,
 		"go.mod": GoMod, "go.work": GoWork, "go.sum": GoSum,
@@ -496,6 +507,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case Groovy:
+		table = grKeywords
 	case GoMod:
 		table = modKeywords
 	case GoWork:

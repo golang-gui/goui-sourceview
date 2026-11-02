@@ -936,3 +936,21 @@ GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.
 依据 [Starlark 语言规范](https://github.com/bazelbuild/starlark/blob/master/spec.md)
 与 [Bazel Starlark](https://bazel.build/rules/language)（读取 2026-11-02），
 沿用现有 Python 状态设施及分片契约，不将 Python 语言对象当作 Starlark 别名。
+
+## 37. Groovy / Gradle / Jenkinsfile
+
+新增 Groovy、.groovy/.gvy/.gy/.gsh/.gradle、Jenkinsfile、groovy shebang 和 groovy/gvy/gradle 围栏；
+.gradle.kts 仍由 Kotlin 处理，不把 .gsp 模板当作纯 Groovy。
+独立状态支持普通/三引号、slashy/dollar-slashy、短变量路径及嵌套 GString 表达式、注解、注释和数值。
+不可变表达式帧保存外层引用与括号深度；普通引用的转义、slashy 的斜杠转义与 dollar-slashy 的美元转义分别处理。
+slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复代码 Class，正文变量保持 String Class。
+三引号按源扫描器的相邻四/五引号规则闭合，正文及变量路径不积累文本副本。
+
+裸斜杠与除法参考前一 token 的表达式位置消歧，错误输入及依赖语法环境的歧义不承诺编译器解析结果。
+提供 //、块注释、结构/引用配对、三引号输入与关键词建议；斜杠引用由用户完整输入，避免干扰除法。
+不求值 Gradle/Jenkins DSL、加载类或解析运行环境，常见版本词汇合集不作为特定 Groovy 版本校验器。
+
+2026-11-02 核对 [Groovy 字符串](https://docs.groovy-lang.org/latest/html/documentation/#all-strings)
+（页面 v6.0.0）与 [Groovy 4.0.27 GroovyLexer.g4](https://github.com/apache/groovy/blob/GROOVY_4_0_27/src/antlr/GroovyLexer.g4)
+的 GString 模式、SlashyStringCharacter、REGEX_CHECK_ARRAY 及三引号谓词。
+采用现有插值语言的不可变状态和 Class 边界，不引入 Groovy/Gradle 运行依赖或复制 ANTLR 规则。

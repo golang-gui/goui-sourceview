@@ -1,0 +1,19 @@
+// Original Groovy / Gradle sample for SourceView.
+plugins { id 'java' }
+
+def name = 'SourceView'
+def greeting = "Hello, $name!"
+def description = """A native editor:
+${greeting}
+"""
+def literal = '''This ${name} stays literal.'''
+def identifier = ~/[A-Za-z_]\w*/
+def path = $/C:\Users\$name\documents/$
+
+tasks.register('greet') {
+    doLast {
+        println(greeting)
+        println(description)
+        println(path)
+    }
+}

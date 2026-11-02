@@ -67,6 +67,7 @@ const (
 	GitIgnore     ID = "gitignore"
 	GitAttributes ID = "gitattributes"
 	Starlark      ID = "starlark"
+	Groovy        ID = "groovy"
 	Markdown      ID = "markdown"
 )
 
@@ -174,6 +175,7 @@ var builtins = []Info{
 	{ID: GitIgnore, Name: "Git Ignore", Extensions: []string{".gitignore"}, MIMETypes: []string{"text/x-gitignore"}},
 	{ID: GitAttributes, Name: "Git Attributes", Extensions: []string{".gitattributes"}, MIMETypes: []string{"text/x-gitattributes"}},
 	{ID: Starlark, Name: "Starlark", Extensions: []string{".bzl", ".star", ".bazel"}, MIMETypes: []string{"text/x-starlark"}},
+	{ID: Groovy, Name: "Groovy", Extensions: []string{".groovy", ".gvy", ".gy", ".gsh", ".gradle"}, MIMETypes: []string{"text/x-groovy"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -194,6 +196,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == "Jenkinsfile":
+		return Groovy
 	case base == "BUILD" || base == "WORKSPACE":
 		return Starlark
 	case strings.HasPrefix(base, ".env."):
@@ -250,6 +254,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "groovy" {
+		return Groovy
+	}
 	perlVersion := strings.TrimPrefix(interpreter, "perl5.")
 	if interpreter == "perl" || perlVersion != interpreter && len(perlVersion) > 0 && digit(perlVersion[0]) && strings.Trim(perlVersion, "0123456789.") == "" {
 		return Perl

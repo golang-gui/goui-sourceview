@@ -606,3 +606,41 @@ Node.js 源码引用行为及未闭合引用的编辑恢复边界已记录，没
 `GOWORK=off go test ./...`、Pango 亮暗三引号正文颜色断言通过。
 独立浅色 1× 的 -language starlark 通过 return 建议、三引号与原始引用中的反斜杠/引号输入及公共断言。
 Context.Literal 按原始引用的实际闭合语义设置，既有 Python 规则保持独立，没有执行构建或加载目标。
+
+### Groovy
+
+新增 Groovy/Gradle/Jenkinsfile/shebang、围栏、六类引用、GString、建议和 build.gradle，示例共 57 份。
+独立预期覆盖短变量路径、嵌套插值、两种斜杠引用的转义/闭合、数字成员访问与范围、注解、Unicode 转义和三引号。
+首次检查的 TestGuess 仍要求 build.gradle=Plain，按新增契约更新为 Groovy，保留 .gradle.kts 的 Kotlin 预期。
+`GOWORK=off go test ./...` 复跑、Pango 亮暗正文颜色、长行/分片和快照通过。
+独立浅色 1× 的 -language groovy 通过 def 建议接受/撤销、三引号、GString 和 dollar-slashy 原始路径输入及公共断言。
+本批九种语言配置新增 2,700 组固定随机畸形输入分片对照，均通过；另有编辑后状态失效和分类恢复的独立预期。
+
+### 批次完成验证
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8，最终通过：
+
+- `go test ./...`（工作区相邻 GOUI b49049d）
+- `GOWORK=off go test ./...`（独立依赖 GOUI v0.5.0）
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+九种新增语言配置的原生 Pango 浅色/深色 1× 颜色断言通过，以同字体、同布局的独立前景色预期比较，
+RGBA 零误差。关闭工作区构建语言窗口程序、着色回归程序与 editor。
+独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software 的浅色 1×、深色 1.5× 均通过
+56 种语言配置的 54 组建议接受/撤销、49 组引用/配对输入，以及公共只读、语义和括号断言；
+无建议的语言仅验证适用的原样输入或公共行为。输入经 Window.DispatchEvent/CommitText，无 DevServer。
+既有着色回归每组通过 127 帧、60 次输入/删除和撤销重做，当前行和后续行显示稳定。
+
+editor 浅色 1× 实际点击九个新样本，深色 1× 检查 Groovy、Dotenv、Properties、Git Attributes；
+57 个样本按钮完整换行，ChromeInfo 确认 Integrated enabled，没有观察到正文或工具栏裁切。
+截图仅用于外观观察；颜色和编辑正确性由独立断言验证。Go 模块样本使用 .sample 资源后缀，
+显示名称去掉该后缀，避免嵌套模块影响 Go 的嵌入资源扫描。
+
+二进制、截图和日志在 `/tmp/sourceview-language-batch6-LhHxde/`，源码目录没有生成产物。
+结束时关闭本次 editor、专用 X11 和窗口管理器，保留原有 X110/X3/X42/X78 桌面。
+没有执行语言样本、加载模块、操作剪贴板或修改全局设置；未运行真实 IME 或 macOS/Windows 原生场景，
+交叉构建只证明可编译。本批没有新增依赖或修改 GOUI；保留原有未跟踪 doc/Doing.md、example/temp/，不纳入提交。
+词法歧义、方言和版本边界见专题设计，不承诺编译器、构建求值或语言服务能力。

@@ -335,6 +335,15 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.GraphQL, "\"\"\"open\nbody\n\"\"\"\ntype Real {}", "\"\"\"", "\"", "body", language.KindProperty},
 		{language.SCSS, "/* open\nbody\n*/\n.x{}", "/*", "", "body", language.KindTag},
 		{language.Less, "/* open\nbody\n*/\n.x{}", "/*", "", "body", language.KindTag},
+		{language.GoMod, "require (\nmodule\n)", "(", "", "module", language.KindKeyword},
+		{language.GoWork, "use (\nreplace a => b\n)", "(", "", "replace", language.KindKeyword},
+		{language.Dotenv, "NAME='first\nbody\nlast'", "'", "", "body", language.KindProperty},
+		{language.Properties, "key=value\\\n #body", "\\", "", "#body", language.KindComment},
+		{language.GitIgnore, `\#body`, "\\", "", "body", language.KindComment},
+		{language.GitAttributes, `"file name" text`, `"`, "", "name", language.KindProperty},
+		{language.Starlark, "value='''first\nbody\n'''", "'''", "'", "body", language.KindPlain},
+		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
+		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -636,6 +645,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.HCL, `value="outer ${"inner ${`, "true}"},
 		{language.SCSS, `.x{content:"outer #{"inner #{`, "true}"},
 		{language.Less, `.x{content:"@{long`, "name}"},
+		{language.Groovy, `def s="outer ${"inner ${`, "true}"},
 		{language.Swift, `let s="outer \("inner \(`, "true)"},
 		{language.Dart, `var s='outer ${"inner ${`, "true}"},
 		{language.R, `x <- r"--[open`, "body]--\""},
@@ -655,6 +665,18 @@ func TestSixthBatchKinds(t *testing.T) {
 		text, needle string
 		kind         language.Kind
 	}{
+		{language.Groovy, `def s="hello $user.name ${true ? "${1}" : 'no'}"`, "$user.name", language.KindVariable},
+		{language.Groovy, `def s="hello $user.name ${true ? "${1}" : 'no'}"`, "true", language.KindKeyword},
+		{language.Groovy, `def s='literal $name ${true}'`, "$name", language.KindString},
+		{language.Groovy, `def r=~/\d+ $name/; def n=10 / 2`, "$name", language.KindVariable},
+		{language.Groovy, `def r=~/\d+ $name/; def n=10 / 2`, "/ 2", language.KindDelimiter},
+		{language.Groovy, `def s=$/$$name $/$$ closing $name ${true}/$; def real=1`, "$$name", language.KindEscape},
+		{language.Groovy, `def s=$/$$name $/$$ closing $name ${true}/$; def real=1`, "true", language.KindKeyword},
+		{language.Groovy, `def s=$/$$name $/$$ closing $name ${true}/$; def real=1`, "def real", language.KindKeyword},
+		{language.Groovy, `def s="\123\u00AF"`, "00AF", language.KindEscape},
+		{language.Groovy, "def s=\"\"\"body\"\"\"\"\"; def real=1", "def real", language.KindKeyword},
+		{language.Groovy, `@groovy.transform.CompileStatic class Demo {}`, "@groovy.transform.CompileStatic", language.KindMeta},
+		{language.Groovy, `def n=42.toString(); def r=1..2`, "toString", language.KindPlain},
 		{language.Starlark, `load("//tools:rules.bzl", "rule") # note`, "load", language.KindKeyword},
 		{language.Starlark, `x=10 // 2; y=3 /* not comment */; def f(): pass`, "def", language.KindKeyword},
 		{language.Starlark, `x=f"{True}"`, "True", language.KindString},
@@ -706,6 +728,7 @@ func TestSixthBatchKinds(t *testing.T) {
 
 func TestSixthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.Groovy:        {"@groovy.transform.CompileStatic\nclass Demo { def s=\"hello $user.name ${true ? \"${1}\" : 'no'}\"; def r=~/\\d+ $name/; def n=10 / 2; def t=$/$$name $/$$ $name ${true}/$ }\ndef s='''literal ${true}\nbody'''; def a=\"\"\"body\"\"\"\"\"; def n=42.toString(); def r=1..2", "def s=\"\"\"" + strings.Repeat("字", ChunkSize) + "${true}\"\"\"; def r=$/" + strings.Repeat("\\{}", ChunkSize) + " $name/$", "def " + strings.Repeat("v", ChunkSize) + "=\"\\123\\u00AF\"; def r=/a\\/b/"},
 		language.Starlark:      {"load(\"//tools:rules.bzl\",\"rule\")\ndef f(x):\n  return x // 2\nx=rb\"\\n\"; y=f\"{True}\"\nz=\"\"\"multi\nbody\n\"\"\"", "value=r'''" + strings.Repeat("字\\", ChunkSize) + "'''\ndef real(): pass"},
 		language.GitAttributes: {"  # note\n*.txt text eol=lf\n\"file name\\040with\\\"quote\" -diff !text\n[attr]binary -diff -merge -text\nfile\\ name text", "\"" + strings.Repeat("字", ChunkSize) + " file\" text eol=lf\n* " + strings.Repeat("a", ChunkSize) + "=value"},
 		language.GitIgnore:     {"# note\n\\#literal\n!keep\n/**/build/\n*.log\n[a-z]name\nfile\\ name\\ \n #literal", strings.Repeat("字", ChunkSize) + "/**/*[a-z]\\ file\n!keep"},
@@ -1086,6 +1109,25 @@ func TestToolingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rremurl0129_'\"`\\$#@%!.*+-[]{}():,;=/~ \t\n你好")
 	for _, id := range []language.ID{language.Diff, language.Batch, language.HCL, language.GraphQL, language.SCSS, language.Less} {
+		for round := 0; round < 300; round++ {
+			var b strings.Builder
+			for n := random.Intn(500); n > 0; n-- {
+				b.WriteRune(alphabet[random.Intn(len(alphabet))])
+			}
+			text := b.String()
+			want, ws := scanAll(id, text, 1024)
+			got, gs := scanAll(id, text, 1+random.Intn(17))
+			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+				t.Fatalf("%s malformed %q: tokens=%v states=%v\ngot state %#v\nwant state %#v", id, text, reflect.DeepEqual(got, want), gs.Equal(ws), gs.raw, ws.raw)
+			}
+		}
+	}
+}
+
+func TestSixthBatchMalformedFragments(t *testing.T) {
+	random := rand.New(rand.NewSource(20261102))
+	alphabet := []rune("exportrequireloaddef0129_'\"`\\$#@%!.*+-[]{}():,;=/~ \t\n你好")
+	for _, id := range []language.ID{language.GoMod, language.GoWork, language.GoSum, language.Dotenv, language.Properties, language.GitIgnore, language.GitAttributes, language.Starlark, language.Groovy} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

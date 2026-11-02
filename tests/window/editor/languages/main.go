@@ -1,7 +1,8 @@
 // 内置语言集成验证，需要桌面、窗口管理器、原生排版及字体。
 // 启动：go run ./tests/window/editor/languages [-dark] [-language ID]。
 // Linux 无 IME 服务时设置 XMODIFIERS=@im=none；-language 省略时验收全部场景，
-// 未匹配场景时失败。Diff 只检查原样输入，其余语言检查建议及引用。
+// 未匹配场景时失败。Diff、GoSum、Properties、GitIgnore 检查原样输入；
+// 其余语言检查建议与引用，新增语言不需要提供无意义的静态建议。
 // 初始为一个可编辑视图，程序自动切换文档，经正常事件路径
 // 触发补全、方向键选中、Enter 接受、撤销，再输入引用与括号并断言文本和光标。
 // Java/C#/Kotlin/Swift/Dart 三引号不能多插闭合引用，Rust 生命周期不能补成字符引用。
@@ -132,6 +133,7 @@ func main() {
 		{language.Dotenv, "expo", "export"},
 		{language.GitAttributes, "*.txt te", "*.txt text"},
 		{language.Starlark, "retu", "return"},
+		{language.Groovy, "de", "def"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -215,6 +217,9 @@ func main() {
 		{language.GoSum, "path v1.0.0 h1:", "{", "path v1.0.0 h1:{"},
 		{language.Starlark, "value=", `"""`, `value="""`},
 		{language.Starlark, "value=", `r"\""`, `value=r"\""`},
+		{language.Groovy, "def s=", `"""`, `def s="""`},
+		{language.Groovy, "def s=", `"${true}"`, `def s="${true}"`},
+		{language.Groovy, "def s=", `$/C:\path/$`, `def s=$/C:\path/$`},
 		{language.Properties, "key=", `"`, `key="`},
 		{language.GitIgnore, "", "[", "["},
 		{language.GitAttributes, "", `"file name" text`, `"file name" text`},

@@ -69,12 +69,13 @@ func TestGuess(t *testing.T) {
 		{".gitignore", "", GitIgnore}, {"rules.gitignore", "", GitIgnore},
 		{".gitattributes", "", GitAttributes},
 		{"BUILD", "", Starlark}, {"BUILD.bazel", "", Starlark}, {"MODULE.bazel", "", Starlark}, {"WORKSPACE", "", Starlark}, {"rules.bzl", "", Starlark}, {"script.star", "", Starlark},
+		{"hello.groovy", "", Groovy}, {"build.gradle", "", Groovy}, {"Jenkinsfile", "", Groovy}, {"script", "#!/usr/bin/env groovy", Groovy}, {"build.gradle.kts", "", Kotlin},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
 		{"hello.R", "", R}, {"hello.r", "", R}, {"hello.Rscript", "", R}, {".Rprofile", "", R},
 		{"script", "#!/usr/bin/env -S Rscript --vanilla", R},
-		{"report.Rmd", "", Plain}, {"report.qmd", "", Plain}, {"data.RData", "", Plain}, {"build.gradle", "", Plain},
+		{"report.Rmd", "", Plain}, {"report.qmd", "", Plain}, {"data.RData", "", Plain},
 		{"hello.rb", "", Ruby}, {"Gemfile", "", Ruby}, {"Rakefile", "", Ruby}, {"app.gemspec", "", Ruby}, {"config.ru", "", Ruby}, {"script", "#!/usr/bin/env ruby", Ruby},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -186,6 +187,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{GitIgnore, `[a-z]`, true, false, true},
 		{GitAttributes, `*.txt text eol=lf`, true, false, true},
 		{Starlark, `value=r"raw`, true, false, false}, {Starlark, `value="""raw`, true, false, false},
+		{Groovy, `def s="hello ${true`, false, false, false}, {Groovy, `def s=$/raw`, true, false, true},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -293,6 +295,13 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{GraphQL, `query Q { field(x:"[()]") }`, "[()]", ClassString},
 		{SCSS, `.x {content:"[()]"}`, "[()]", ClassString}, {SCSS, `.x {content:"#{true}"}`, "true", 0},
 		{Less, `.x {content:"@{name}"}`, "name", ClassString}, {Less, `.@{name}{}`, "name", 0},
+		{Groovy, `def s="${true}"`, "true", 0}, {Groovy, `def s=/[()]/`, "[()]", ClassString},
+		{GoMod, `replace a => "(literal)"`, "(literal)", ClassString},
+		{Dotenv, `NAME="${literal}"`, "{literal}", ClassString},
+		{Properties, `key=[literal]`, "[literal]", ClassString},
+		{GitIgnore, `[a-z]`, "[a-z]", ClassString},
+		{GitAttributes, `"[file] name" text`, "[file]", ClassString},
+		{Starlark, `value=f"{True}"`, "{True}", ClassString},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -465,6 +474,7 @@ func TestToolingLanguageFences(t *testing.T) {
 		{"gitignore", GitIgnore, "literal", KindString},
 		{"gitattributes", GitAttributes, "literal", KindString},
 		{"starlark", Starlark, "load", KindKeyword}, {"bzl", Starlark, "def", KindKeyword}, {"bazel", Starlark, "return", KindKeyword},
+		{"groovy", Groovy, "def", KindKeyword}, {"gradle", Groovy, "trait", KindKeyword}, {"gvy", Groovy, "return", KindKeyword},
 	} {
 		scanner := md.Tokenizer()
 		fence := "```" + tc.name

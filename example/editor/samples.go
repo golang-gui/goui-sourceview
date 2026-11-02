@@ -50,6 +50,7 @@ func sampleDocuments() []exampleDocument {
 		"rules.gitignore",
 		"rules.gitattributes",
 		"rules.bzl",
+		"build.gradle",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
