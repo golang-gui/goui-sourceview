@@ -1,0 +1,14 @@
+%% Mermaid diagram source; no rendering or execution.
+flowchart LR
+    A["Open document"] --> B{"Edited?"}
+    B -->|yes| C["Save changes"]
+    B -->|no| D["Close"]
+    subgraph Editor
+        A
+        B
+    end
+    C --> D
+
+    %% A Markdown label can span lines.
+    E["`**SourceView**
+    A native editor`"] --> A

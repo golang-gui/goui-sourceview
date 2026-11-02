@@ -17,6 +17,14 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Mermaid:
+			d.Tokenizer = mermaidTokenizer{}
+			d.Editing.Comments.Line = "%%"
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '-' }
+			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: "\"", Close: "\"", NotInString: true, NotInComment: true})
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Suggest = func(Context) []string { return mermaidWords }
 		case Crontab:
 			d.Tokenizer = cronTokenizer{}
 			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '@' }, Comments: Comments{Line: "#"}}
@@ -587,6 +595,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"mmd":              Mermaid,
 		"cron":             Crontab,
 		"ssh-config":       SSHConfig,
 		"pot":              Gettext,

@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.Mermaid, "A[\"first\nbody\"]", "\"", "", "body", language.KindPlain},
 		{language.Crontab, "0 1 * * * echo #body", "0 1 * * * echo ", "", "body", language.KindComment},
 		{language.SSHConfig, "User=\"name #body\"", "\"", "", "body", language.KindComment},
 		{language.GitConfig, "key=one\\\nbody", "\\", "", "body", language.KindProperty},
@@ -416,6 +417,13 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.Mermaid, "flowchart LR\n A-->B", "flowchart", language.KindKeyword},
+	{language.Mermaid, "%% comment", "comment", language.KindComment},
+	{language.Mermaid, "A[\"label %% text\"]", "%%", language.KindString},
+	{language.Mermaid, "A[\"`first\nbody`\"]", "body", language.KindString},
+	{language.Mermaid, "%%{init: {\"theme\":\"dark\"}}%%\nflowchart LR", "theme", language.KindMeta},
+	{language.Mermaid, "A[\"`first`\n\"body`\"]", "body", language.KindString},
+	{language.Mermaid, "stateDiagram-v2", "stateDiagram-v2", language.KindKeyword},
 	{language.Crontab, "*/15 9-17 * * MON-FRI echo body", "15", language.KindNumber},
 	{language.Crontab, "0 1 * * * echo # body", "body", language.KindString},
 	{language.Crontab, "MAILTO=value # body", "body", language.KindString},

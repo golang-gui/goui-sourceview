@@ -852,6 +852,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		row        int
 		kind       language.Kind
 	}{
+		{language.Mermaid, "A[\"first\nbody\nlast\"]", "body", 1, language.KindString},
 		{language.Crontab, "# body", "# body", 0, language.KindComment},
 		{language.SSHConfig, "# body", "# body", 0, language.KindComment},
 		{language.GitConfig, "key=one\\\nbody", "body", 1, language.KindString},

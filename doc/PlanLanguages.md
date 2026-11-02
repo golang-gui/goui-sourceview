@@ -834,3 +834,10 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，通过 `go test ./...`（工作区 GOUI b4904
 独立依赖 `GOWORK=off go test ./...` 通过；新增独立词法预期、分片、编辑恢复和原生颜色断言。
 独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的 `-language crontab` 通过正常事件输入及公共编辑断言。
 本项未执行 Windows/macOS 原生验证；无 GOUI 或依赖改动。
+
+### Mermaid（2026-11-02）
+
+新增 Mermaid 图表词法、跨行/Markdown 标签、注释/指令及 flow.mmd 样本，自动加入 Markdown 围栏表。
+独立依赖 `GOWORK=off go test ./...` 通过；新增独立词法预期、分片、编辑恢复和原生颜色断言。
+独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的 `-language mermaid` 通过正常事件输入及公共编辑断言。
+本项未执行 Windows/macOS 原生验证；无 GOUI 或依赖改动。

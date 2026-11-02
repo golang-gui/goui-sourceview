@@ -95,6 +95,7 @@ const (
 	GitConfig        ID = "gitconfig"
 	SSHConfig        ID = "sshconfig"
 	Crontab          ID = "crontab"
+	Mermaid          ID = "mermaid"
 	Markdown         ID = "markdown"
 )
 
@@ -230,6 +231,7 @@ var builtins = []Info{
 	{ID: GitConfig, Name: "Git config", Extensions: []string{".gitconfig", ".gitmodules"}},
 	{ID: SSHConfig, Name: "SSH config", Extensions: []string{".sshconfig"}},
 	{ID: Crontab, Name: "crontab", Extensions: []string{".crontab", ".cron"}},
+	{ID: Mermaid, Name: "Mermaid", Extensions: []string{".mmd", ".mermaid"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

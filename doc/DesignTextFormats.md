@@ -124,3 +124,12 @@ Host/Match 模式与远端命令保持参数文本，单引号不承担配置引
 默认以用户 crontab 的五段时间边界分类；系统 crontab 的额外用户名作为命令区域的普通文本，不冒充完整方言校验。
 
 依据 [crontab(5)](https://man7.org/linux/man-pages/man5/crontab.5.html)（Cronie）。
+
+## Mermaid
+
+识别 .mmd/.mermaid 与 mermaid/mmd 围栏，提供常见图类型/控制词、节点标识、连接标点、引用标签、Markdown 标签及 %% 注释。
+双引号标签遵循 Mermaid 的文字边界，不引入 C 风格反斜杠转义；Markdown 引用以反引号加双引号闭合，可跨行。
+兼容 %%{...}%% 配置指令的独立元数据区域；只做词法高亮，不执行 click、href 或配置，不渲染图表。
+不同图类型的具体语法校验和完整结构语义不在本轮范围。
+
+依据 [Mermaid 12.2.0 Syntax Reference](https://mermaid.js.org/intro/syntax-reference.html) 与 [flow.jison](https://github.com/mermaid-js/mermaid/blob/develop/packages/mermaid/src/diagrams/flowchart/parser/flow.jison)。
