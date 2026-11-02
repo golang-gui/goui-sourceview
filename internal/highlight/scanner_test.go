@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.EDN, "#_(\nbody\n) true", "#_", "", "body", language.KindPlain},
 		{language.JSON5, "/* first\nbody */ true", "/*", "", "body", language.KindInvalid},
 		{language.EditorConfig, "key=one #body", "=one", " one", "body", language.KindProperty},
 		{language.Gettext, "# msgid \"body\"", "# ", "", "msgid", language.KindKeyword},
@@ -412,6 +413,13 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.EDN, "{:key true :other nil}", ":key", language.KindProperty},
+	{language.EDN, "{:key true}", "true", language.KindKeyword},
+	{language.EDN, "(defn x)", "defn", language.KindPlain},
+	{language.EDN, "#inst \"2026-01-01\"", "#inst", language.KindMeta},
+	{language.EDN, "#_ #_ first second {:real true}", "second", language.KindComment},
+	{language.EDN, "[\\newline \\u03bb]", "\\newline", language.KindString},
+	{language.EDN, "'form", "'", language.KindInvalid},
 	{language.JSON5, "/ 01 1_000 --Infinity", "/", language.KindInvalid},
 	{language.JSON5, "[--Infinity, .5, 2.]", "--Infinity", language.KindInvalid},
 	{language.JSON5, "{unquoted:'value'}", "unquoted", language.KindProperty},

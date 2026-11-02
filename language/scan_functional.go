@@ -88,6 +88,7 @@ type functionalTokenizer struct{ id ID }
 func (b functionalTokenizer) InitialState() State { return fnState{id: b.id, atStart: true} }
 
 var functionalWords = map[ID]map[string]bool{
+	EDN:     words("nil true false"),
 	FSharp:  words("abstract and as assert base begin class default delegate do done downcast downto elif else end exception extern false finally fixed for fun function global if in inherit inline interface internal lazy let match member module mutable namespace new not null of open or override private public rec return select sig static struct then to true try type upcast use val void when while with yield async task seq"),
 	Elixir:  words("after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end false fn for if import in nil not or quote raise receive require rescue super true try unless unquote unquote_splicing use when with"),
 	Erlang:  words("after begin case catch cond end fun if let of receive try when and andalso band bnot bor bsl bsr bxor div not or orelse rem xor maybe else true false"),
@@ -112,7 +113,7 @@ func functionalEditing(id ID) EditingRules {
 		d.Comments = Comments{Line: "", Block: Pair{Open: "(*", Close: "*)"}}
 	case Haskell:
 		d.Comments = Comments{Line: "--", Block: Pair{Open: "{-", Close: "-}"}}
-	case Clojure:
+	case Clojure, EDN:
 		d.Comments.Line = ";"
 	case Elixir, Julia:
 		d.Comments.Line = "#"
@@ -130,7 +131,7 @@ func functionalEditing(id ID) EditingRules {
 		if c.Selected || c.Context.String {
 			return true
 		}
-		if c.Typed == "'" && (id == FSharp || id == OCaml || id == Julia || id == Haskell || id == Clojure) {
+		if c.Typed == "'" && (id == FSharp || id == OCaml || id == Julia || id == Haskell || id == Clojure || id == EDN) {
 			return false
 		}
 		return c.Typed != "\"" || !strings.HasSuffix(c.Before, "\"\"")
@@ -142,7 +143,7 @@ func fnName(id ID, r rune) bool {
 		return true
 	}
 	switch id {
-	case Clojure:
+	case Clojure, EDN:
 		return strings.ContainsRune("*+!_?-./:$%&=<>", r)
 	case FSharp, OCaml, Haskell:
 		return r == '\''
@@ -170,7 +171,7 @@ func fnLine(id ID) string {
 		return "--"
 	case Erlang:
 		return "%"
-	case Clojure:
+	case Clojure, EDN:
 		return ";"
 	case Julia, Elixir:
 		return "#"
@@ -180,6 +181,8 @@ func fnLine(id ID) string {
 func fnSymbol(r rune) bool {
 	return strings.ContainsRune("!#$%&*+./<=>?@\\^|-~:", r) || unicode.IsSymbol(r) || unicode.IsPunct(r) && !strings.ContainsRune("(),;[]{}\x60_'\"", r)
 }
+
+func fnData(id ID) bool { return id == Clojure || id == EDN }
 
 // Character literals have a bounded spelling; an unmatched apostrophe belongs
 // to an identifier/type variable or an operator rather than a long string.
@@ -577,7 +580,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			finish(in.Offset + i)
 			continue
 		}
-		if space(c) || s.id == Clojure && c == ',' {
+		if space(c) || fnData(s.id) && c == ',' {
 			i += n
 			continue
 		}
@@ -603,7 +606,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += len(open)
 			continue
 		}
-		if s.id == Clojure && strings.HasPrefix(text[i:], "#_") {
+		if fnData(s.id) && strings.HasPrefix(text[i:], "#_") {
 			s.discard = &fnDiscard{parent: s.discard, need: 1}
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -623,7 +626,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			v.need++
 			s.discard = &v
 		}
-		if s.id == Clojure && c == '\\' {
+		if fnData(s.id) && c == '\\' {
 			s.word = scanWord{start: in.Offset + i, kind: KindString}
 			s.wordOn = true
 			s.word.add(text[i : i+n])
@@ -635,7 +638,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			continue
 		}
-		if s.id == Clojure && c == '#' && i+1 < len(text) && (unicode.IsLetter(rune(text[i+1])) || text[i+1] == ':') {
+		if fnData(s.id) && c == '#' && i+1 < len(text) && (unicode.IsLetter(rune(text[i+1])) || s.id == Clojure && text[i+1] == ':') {
 			s.word = scanWord{start: in.Offset + i, kind: KindMeta}
 			s.wordOn, s.wordPrefix = true, true
 			s.word.add("#")
@@ -729,7 +732,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += size
 			continue
 		}
-		if digit(c) || s.id == Clojure && (c == '-' || c == '+') && i+1 < len(text) && digit(text[i+1]) {
+		if digit(c) || fnData(s.id) && (c == '-' || c == '+') && i+1 < len(text) && digit(text[i+1]) {
 			s.mode, s.last = fnNumber, c
 			add(i, i+1, KindNumber, 0)
 			i++
@@ -737,7 +740,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 		if fnName(s.id, r) || s.id == Elixir && (c == ':' || c == '@') {
 			k := KindPlain
-			if s.id == Clojure && c == ':' || s.id == Elixir && c == ':' {
+			if fnData(s.id) && c == ':' || s.id == Elixir && c == ':' {
 				k = KindProperty
 			}
 			if s.id == Elixir && c == '@' {
@@ -796,7 +799,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				s.expr = &v
 			}
 		}
-		if s.id == Clojure && s.discard != nil && strings.ContainsRune("([{", r) {
+		if fnData(s.id) && s.discard != nil && strings.ContainsRune("([{", r) {
 			v := *s.discard
 			v.depth++
 			s.discard = &v
@@ -809,9 +812,15 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.id == Clojure && strings.ContainsRune("'@^#~", r) {
 			k = KindMeta
 		}
+		if s.id == EDN && c == '#' {
+			k = KindMeta
+		}
+		if s.id == EDN && strings.ContainsRune("'@^~`", r) {
+			k = KindInvalid
+		}
 		add(i, i+n, k, class)
 		i += n
-		if s.id == Clojure && s.discard != nil && strings.ContainsRune(")]}", r) {
+		if fnData(s.id) && s.discard != nil && strings.ContainsRune(")]}", r) {
 			v := *s.discard
 			if v.depth > 0 {
 				v.depth--

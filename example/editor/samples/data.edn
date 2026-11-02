@@ -1,0 +1,11 @@
+; Extensible Data Notation
+{:name "SourceView"
+ :enabled true
+ :count 42N
+ :ratio 1.25M
+ :letters [\a \newline \u03bb]
+ :tags #{:editor :gui}
+ :created #inst "2026-11-02T00:00:00Z"
+ :id #uuid "e1a9b399-1d5b-4ac8-a840-33064d978aef"
+ #_ {:discarded ["complete" "form"]}
+ :options (compact, readable)}

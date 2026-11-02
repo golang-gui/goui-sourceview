@@ -89,3 +89,11 @@ verb 与 verbatim/verbatim*、lstlisting、minted 正文使用原样字符串规
 不作为完整语法校验器，错误恢复在非转义物理换行后离开普通引用。
 
 依据 [JSON5 Data Interchange Format](https://spec.json5.org/)（1.0.0）。
+
+## EDN
+
+EDN 使用独立 ID、词汇和编辑规则，复用 Clojure 扫描设施中的数据形式：字符串/字符、keyword/symbol、数字、集合、tagged literal、分号注释和 #_ 完整形式丢弃。
+不启用 Clojure 的 defn 等关键字、quote/deref/metadata/unquote/reader conditional 等 reader 宏；不求值标签、不自动读取命名空间。
+保留不可变丢弃帧，嵌套丢弃不提前恢复正文，字符串正文不累计副本。词法数值着色不代替 EDN 数字合法性校验。
+
+依据 [edn-format/edn 规范](https://github.com/edn-format/edn)。

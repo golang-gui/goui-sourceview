@@ -64,6 +64,7 @@ func sampleDocuments() []exampleDocument {
 		"messages.po",
 		"settings.editorconfig",
 		"settings.json5",
+		"data.edn",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

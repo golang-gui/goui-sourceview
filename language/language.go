@@ -91,6 +91,7 @@ const (
 	Gettext          ID = "po"
 	EditorConfig     ID = "editorconfig"
 	JSON5            ID = "json5"
+	EDN              ID = "edn"
 	Markdown         ID = "markdown"
 )
 
@@ -222,6 +223,7 @@ var builtins = []Info{
 	{ID: Gettext, Name: "gettext PO/POT", Extensions: []string{".po", ".pot"}},
 	{ID: EditorConfig, Name: "EditorConfig", Extensions: []string{".editorconfig"}},
 	{ID: JSON5, Name: "JSON5", Extensions: []string{".json5"}, MIMETypes: []string{"application/json5"}},
+	{ID: EDN, Name: "EDN", Extensions: []string{".edn"}, MIMETypes: []string{"application/edn"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

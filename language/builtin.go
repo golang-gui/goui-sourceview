@@ -17,6 +17,13 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case EDN:
+			d.Tokenizer = functionalTokenizer{EDN}
+			d.Editing = functionalEditing(EDN)
+			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: "\"", Close: "\"", NotInString: true, NotInComment: true})
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Suggest = func(Context) []string { return []string{"nil", "true", "false"} }
 		case JSON5:
 			d.Tokenizer = json5Tokenizer{}
 			d.Editing.Brackets = slices.Clone(d.Editing.Brackets[1:])

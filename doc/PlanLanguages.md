@@ -806,3 +806,10 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，通过 `go test ./...`（工作区 GOUI b4904
 独立依赖 `GOWORK=off go test ./...` 通过；新增独立词法预期、分片、编辑恢复和原生颜色断言。
 独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的 `-language json5` 通过正常事件输入及公共编辑断言。
 本项未执行 Windows/macOS 原生验证；无 GOUI 或依赖改动。
+
+### EDN（2026-11-02）
+
+新增 EDN 数据 profile，分离 Clojure 关键字与 reader 宏，共用数据形式扫描并增加 data.edn 样本。
+独立依赖 `GOWORK=off go test ./...` 通过；新增独立词法预期、分片、编辑恢复和原生颜色断言。
+独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的 `-language edn` 通过正常事件输入及公共编辑断言。
+本项未执行 Windows/macOS 原生验证；无 GOUI 或依赖改动。
