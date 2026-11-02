@@ -50,7 +50,7 @@
 3. Kotlin、Swift、Dart、R：已有词法、编辑规则及示例。
 4. Zig、Objective-C、Objective-C++、Scala、Perl：已有词法、编辑规则及示例。
 5. Diff/Patch、Windows Batch、HCL/Terraform、GraphQL、SCSS、Less：已有词法、相应编辑规则及示例。
-6. Go Modules、Dotenv、Properties、Git Ignore/Attributes、Starlark、Groovy：Go Modules 已接入，其余依次实现和验收。
+6. Go Modules、Dotenv、Properties、Git Ignore/Attributes、Starlark、Groovy：Go Modules、Dotenv 已接入，其余依次实现和验收。
 
 各批语言的验收状态见语言验证记录。优先复用现有 token、上下文和
 分片协议，新增语言不以引入解析器框架或语言服务为前置。

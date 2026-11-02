@@ -64,6 +64,7 @@ func TestGuess(t *testing.T) {
 		{"theme.scss", "", SCSS}, {"theme.sass", "", Plain},
 		{"theme.less", "", Less},
 		{"go.mod", "", GoMod}, {"go.work", "", GoWork}, {"go.sum", "", GoSum}, {"go.work.sum", "", GoSum}, {"other.mod", "", Plain},
+		{".env", "", Dotenv}, {".env.local", "", Dotenv}, {"dev.env", "", Dotenv}, {".environment", "", Plain},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -176,6 +177,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{SCSS, `.x {content:"#{true`, false, false, false}, {SCSS, `/* comment`, false, true, false},
 		{Less, `.x {content:"@{name`, true, false, false}, {Less, `.x{width:@name`, false, false, false},
 		{GoMod, "module `path", true, false, true}, {GoWork, "use \"path", true, false, false}, {GoSum, "path v1 h1:hash", true, false, true},
+		{Dotenv, `NAME="body`, true, false, true}, {Dotenv, `NAME='body`, true, false, true},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -450,6 +452,7 @@ func TestToolingLanguageFences(t *testing.T) {
 		{"scss", SCSS, "@mixin", KindMeta},
 		{"less", Less, "@import", KindMeta},
 		{"gomod", GoMod, "require", KindKeyword}, {"go.mod", GoMod, "module", KindKeyword}, {"gowork", GoWork, "use", KindKeyword}, {"gosum", GoSum, "path", KindString},
+		{"dotenv", Dotenv, "KEY", KindProperty}, {"env", Dotenv, "KEY", KindProperty},
 	} {
 		scanner := md.Tokenizer()
 		fence := "```" + tc.name
@@ -569,7 +572,7 @@ func TestConfigurationAndShellDetection(t *testing.T) {
 		{"script", "#!/usr/bin/pythonic", Plain},
 		{"main.go", "", Go}, {"main.PYI", "", Python}, {"main.mjs", "", JavaScript},
 		{"main.cts", "", TypeScript}, {"style.css", "", CSS}, {"service.proto", "", Protobuf}, {"query.SQL", "", SQL},
-		{"unknown", " #!/bin/sh", Plain}, {".env", "NAME=value", Plain}, {"unknown", "name: value", Plain},
+		{"unknown", " #!/bin/sh", Plain}, {".env", "NAME=value", Dotenv}, {"unknown", "name: value", Plain},
 		{"unknown", string(make([]byte, 4096)) + "#!/bin/sh", Plain},
 	} {
 		if got := Guess(tc.name, []byte(tc.sample)); got != tc.want {

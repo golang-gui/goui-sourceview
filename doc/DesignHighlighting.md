@@ -876,3 +876,17 @@ GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.
 [x/mod v0.27.0 modfile/read.go](https://github.com/golang/mod/blob/v0.27.0/modfile/read.go)
 （读取 2026-11-02），采用已有代码语言的分片、引用和结构 Class 划分，不新增 modfile 依赖。
 示例资源使用 .sample 后缀，显示/识别使用原文件名，避免 go:embed 跨嵌套模块限制。
+
+## 32. Dotenv
+
+识别 .env、.env.*、*.env，提供 dotenv/env 围栏、键、export 前缀、值和 # 注释。
+本 profile 以 Node.js Dotenv 为基线：单双引号与反引号引用可跨行，$ 不触发插值，
+反斜杠不保护闭合引号；双引号中的反斜杠 n 单独着色，其他反斜杠保持正文。
+引用内 # 是正文，裸值的 # 开始注释；引用后的其他尾部作为非代码文本保守呈现。
+编辑提供 # 注释、引用配对和 export 建议，不启用结构括号；Literal 上下文保留引用闭合语义。
+不声称兼容全部 dotenv 库或 shell 展开。未闭合引用持续到后续闭合/文档末尾，避免扫描整个文档后回改旧行。
+
+依据 [Node.js Dotenv 文档](https://nodejs.org/api/environment_variables.html#dotenv)
+和 [v24.11.0 node_dotenv.cc](https://github.com/nodejs/node/blob/v24.11.0/src/node_dotenv.cc)
+（读取 2026-11-02；文档页面 v26.13.0，反引号与闭合行为另按该版本源码核对）。
+采用现有配置语言的状态分解，不执行赋值、修改环境或引入 dotenv 库。

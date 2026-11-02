@@ -98,6 +98,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.SCSS,
 		language.Less,
 		language.GoMod, language.GoWork, language.GoSum,
+		language.Dotenv,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

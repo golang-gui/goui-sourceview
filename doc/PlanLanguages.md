@@ -566,3 +566,12 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，独立 TigerVNC :87 / Xfwm4 compositor on / P
 逐一运行 -language gomod/gowork/gosum，建议接受/撤销、引用和校验正文输入及公共语义/只读/括号断言通过。
 日志及构建产物在 `/tmp/sourceview-language-batch6-LhHxde/`；没有 GOUI 或依赖改动，也不加载示例声明的模块。
 其余 Dotenv、Properties、Git Ignore/Attributes、Starlark、Groovy 继续实现和验收。
+
+### Dotenv
+
+新增识别、围栏、键/值/引用/注释状态、编辑规则、export 建议与 settings.env，示例共 52 份。
+独立预期覆盖变量保持字面文本、多行引用、引用/裸值的 #、双引号换行转义及路径尾反斜杠；长行和极小分片通过。
+首次全仓检查的 TestConfigurationAndShellDetection 保留旧 .env=Plain 预期，按新增识别契约更新为 Dotenv；
+`GOWORK=off go test ./...` 复跑和 Pango 亮暗多行正文颜色断言通过。
+独立浅色 1× 的 -language dotenv 通过 export 建议接受/撤销、路径引用输入和公共断言。
+Node.js 源码引用行为及未闭合引用的编辑恢复边界已记录，没有环境修改或 shell 执行。

@@ -17,6 +17,17 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Dotenv:
+			d.Tokenizer = envTokenizer{}
+			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}, AutoClosingPairs: []Pair{{Open: `"`, Close: `"`, NotInString: true, NotInComment: true}, {Open: "'", Close: "'", NotInString: true, NotInComment: true}, {Open: "`", Close: "`", NotInString: true, NotInComment: true}}}
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Suggest = func(c Context) []string {
+				if c.Data == envStart || c.Data == envKey {
+					return []string{"export"}
+				}
+				return nil
+			}
 		case GoMod, GoWork, GoSum:
 			d.Tokenizer = modTokenizer{info.ID}
 			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("./+-", r) }}
@@ -431,6 +442,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"env":    Dotenv,
 		"go.mod": GoMod, "go.work": GoWork, "go.sum": GoSum,
 		"patch": Diff,
 		"batch": Batch, "cmd": Batch,

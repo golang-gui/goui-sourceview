@@ -129,6 +129,7 @@ func main() {
 		{language.SCSS, "@mix", "@mixin"},
 		{language.Less, "@imp", "@import"},
 		{language.GoMod, "requi", "require"}, {language.GoWork, "us", "use"},
+		{language.Dotenv, "expo", "export"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -210,6 +211,7 @@ func main() {
 		{language.GoMod, "replace a => ", "`../dir`", "replace a => `../dir`"},
 		{language.GoWork, "use ", `"./dir"`, `use "./dir"`},
 		{language.GoSum, "path v1.0.0 h1:", "{", "path v1.0.0 h1:{"},
+		{language.Dotenv, "NAME=", `"C:\"`, `NAME="C:\"`},
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
 		{language.GraphQL, "", `"""`, `"""`},
 		{language.SCSS, ".x {content:", `"#{true}"`, `.x {content:"#{true}"`},

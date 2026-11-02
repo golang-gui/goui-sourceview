@@ -62,6 +62,7 @@ const (
 	GoMod        ID = "gomod"
 	GoWork       ID = "gowork"
 	GoSum        ID = "gosum"
+	Dotenv       ID = "dotenv"
 	Markdown     ID = "markdown"
 )
 
@@ -164,6 +165,7 @@ var builtins = []Info{
 	{ID: GoMod, Name: "Go Module", MIMETypes: []string{"text/x-go-mod"}},
 	{ID: GoWork, Name: "Go Workspace", MIMETypes: []string{"text/x-go-work"}},
 	{ID: GoSum, Name: "Go Checksums", MIMETypes: []string{"text/x-go-sum"}},
+	{ID: Dotenv, Name: "Dotenv", Extensions: []string{".env"}, MIMETypes: []string{"text/x-dotenv"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -184,6 +186,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case strings.HasPrefix(base, ".env."):
+		return Dotenv
 	case base == "go.mod":
 		return GoMod
 	case base == "go.work":

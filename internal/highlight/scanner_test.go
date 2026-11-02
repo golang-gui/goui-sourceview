@@ -655,6 +655,14 @@ func TestSixthBatchKinds(t *testing.T) {
 		text, needle string
 		kind         language.Kind
 	}{
+		{language.Dotenv, `export NAME="literal ${HOME} # text" # note`, "export", language.KindKeyword},
+		{language.Dotenv, `export NAME="literal ${HOME} # text" # note`, "HOME", language.KindString},
+		{language.Dotenv, "NAME='first\n# literal\nlast'\nOTHER=value # note", "# literal", language.KindString},
+		{language.Dotenv, "NAME='first\n# literal\nlast'\nOTHER=value # note", "OTHER", language.KindProperty},
+		{language.Dotenv, `NAME="a\nline"`, `\n`, language.KindEscape},
+		{language.Dotenv, `NAME='a\nline'`, `\n`, language.KindString},
+		{language.Dotenv, `NAME=literal\#note`, "note", language.KindComment},
+		{language.Dotenv, `NAME="C:\" # note`, "note", language.KindComment},
 		{language.GoMod, "module example.org/x\nrequire (\n example.org/x v1.2.3 // indirect\n)", "require", language.KindKeyword},
 		{language.GoMod, "module example.org/x\nrequire (\n example.org/x v1.2.3 // indirect\n)", "v1.2.3", language.KindNumber},
 		{language.GoMod, "replace a => `../dir//literal`", "literal", language.KindString},
@@ -673,6 +681,7 @@ func TestSixthBatchKinds(t *testing.T) {
 
 func TestSixthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.Dotenv: {"export NAME=\"literal ${HOME} # text\\nline\" # note\nMULTI='first\n# literal\nlast'\nOTHER=value #note\nexport=valid-key\nBAD-KEY=value", "LONG='" + strings.Repeat("字", ChunkSize) + "'\n" + strings.Repeat("K", ChunkSize) + "=value"},
 		language.GoMod:  {"module example.org/x\ngo 1.24.0\nrequire (\n example.org/x v1.2.3 // indirect\n)\nreplace a => `../path//literal`\nretract [v1.0.0, v1.0.1]", "module " + strings.Repeat("字", ChunkSize) + "\nrequire a v1.2.3"},
 		language.GoWork: {"go 1.24.0\nuse (\n ./editor\n \"./path with spaces\"\n)\nreplace a => b v1.0.0"},
 		language.GoSum:  {"example.org/x v1.2.3/go.mod h1:" + strings.Repeat("ab+/=", ChunkSize)},
