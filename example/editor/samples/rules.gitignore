@@ -1,0 +1,9 @@
+# Original Git ignore patterns for SourceView.
+/build/
+**/cache/
+*.log
+!important.log
+file[0-9].tmp
+\#literal-name
+\!literal-name
+path\ with\ spaces/

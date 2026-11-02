@@ -655,6 +655,10 @@ func TestSixthBatchKinds(t *testing.T) {
 		text, needle string
 		kind         language.Kind
 	}{
+		{language.GitIgnore, "# comment\n\\#literal\n!keep\n **/*.log", "comment", language.KindComment},
+		{language.GitIgnore, "# comment\n\\#literal\n!keep\n **/*.log", "literal", language.KindString},
+		{language.GitIgnore, "!keep\n [a-z]literal", "!", language.KindKeyword},
+		{language.GitIgnore, " #literal", "#literal", language.KindString},
 		{language.Properties, `key\ with\:colon = literal # !`, "# !", language.KindString},
 		{language.Properties, "key=value\\\n  #continued\n!comment", "#continued", language.KindString},
 		{language.Properties, "key=value\\\\\n  #comment", "#comment", language.KindComment},
@@ -690,6 +694,7 @@ func TestSixthBatchKinds(t *testing.T) {
 
 func TestSixthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.GitIgnore:  {"# note\n\\#literal\n!keep\n/**/build/\n*.log\n[a-z]name\nfile\\ name\\ \n #literal", strings.Repeat("字", ChunkSize) + "/**/*[a-z]\\ file\n!keep"},
 		language.Properties: {"# note\nkey\\ with\\:colon : text # !\ncontinued=value\\\n  # literal\\\n  tail\nkey\\\n !name=value\nnext=\\u0041\\ntext\n!comment\\\nnew=value", strings.Repeat("k", ChunkSize) + "=" + strings.Repeat("字", ChunkSize) + "\\\n continued", "key=value\\\r\n  #continued\r\nnew=value"},
 		language.Dotenv:     {"export NAME=\"literal ${HOME} # text\\nline\" # note\nMULTI='first\n# literal\nlast'\nOTHER=value #note\nexport=valid-key\nBAD-KEY=value", "LONG='" + strings.Repeat("字", ChunkSize) + "'\n" + strings.Repeat("K", ChunkSize) + "=value"},
 		language.GoMod:      {"module example.org/x\ngo 1.24.0\nrequire (\n example.org/x v1.2.3 // indirect\n)\nreplace a => `../path//literal`\nretract [v1.0.0, v1.0.1]", "module " + strings.Repeat("字", ChunkSize) + "\nrequire a v1.2.3"},

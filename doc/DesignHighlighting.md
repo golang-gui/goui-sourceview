@@ -903,3 +903,12 @@ GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.
 依据 [Java SE 25 Properties.load(Reader)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Properties.html#load(java.io.Reader))
 （读取 2026-11-02），对照 [Lexilla LexProps.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexProps.cxx)
 的键/值分类。保留 Java 逻辑行语义，不套用该通用 lexer 的 INI 节或分号注释规则。
+
+## 34. Git Ignore
+
+支持 .gitignore 及 gitignore 围栏。按行区分列首注释、否定前缀、glob/globstar、
+斜杠、字符类及反斜杠转义；前导空格是模式的一部分，不按通用配置的 trim-space 方式处理。
+正文使用 String Class/Literal 上下文，保留 # 行注释操作，关闭代码配对和默认补全。
+不展开文件系统、计算忽略结果或解析嵌入源码，不将规则自动用于 .dockerignore 等方言。
+依据 [gitignore pattern format](https://git-scm.com/docs/gitignore#_pattern_format)
+（读取 2026-11-02），延续 Diff 对非代码文本的 Class/编辑边界，不复制匹配器或依赖 Git 进程。

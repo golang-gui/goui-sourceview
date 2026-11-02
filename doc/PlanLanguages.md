@@ -583,3 +583,10 @@ Node.js 源码引用行为及未闭合引用的编辑恢复边界已记录，没
 续行前后的可选分隔符、Unicode 转义及 CRLF；长词/值和极小分片通过。
 `GOWORK=off go test ./...`、Pango 亮暗续行正文颜色断言通过。
 独立浅色 1× 的 -language properties 通过引号原样输入及公共断言；没有把引号解释为引用配对。
+
+### Git Ignore
+
+新增文件/围栏、模式分类和 rules.gitignore，示例共 54 份。
+独立断言覆盖列首注释、转义 #/!、否定前缀和前导空格；glob、字符类、长行及极小分片通过。
+`GOWORK=off go test ./...`、Pango 亮暗模式正文颜色断言通过。
+独立浅色 1× 的 -language gitignore 通过方括号原样输入及公共断言，没有把模式当作代码配对。

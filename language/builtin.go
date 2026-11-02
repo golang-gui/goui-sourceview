@@ -17,6 +17,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case GitIgnore:
+			d.Tokenizer = gitTokenizer{info.ID}
+			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}}
+			d.AllowWordSuggestions = func(Context, bool) bool { return false }
 		case Properties:
 			d.Tokenizer = propTokenizer{}
 			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '.' || r == '-' }, Comments: Comments{Line: "#"}}

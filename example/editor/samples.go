@@ -47,6 +47,7 @@ func sampleDocuments() []exampleDocument {
 		"go.mod.sample", "go.work.sample", "go.sum.sample",
 		"settings.env",
 		"messages.properties",
+		"rules.gitignore",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

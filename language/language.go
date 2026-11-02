@@ -64,6 +64,7 @@ const (
 	GoSum        ID = "gosum"
 	Dotenv       ID = "dotenv"
 	Properties   ID = "properties"
+	GitIgnore    ID = "gitignore"
 	Markdown     ID = "markdown"
 )
 
@@ -168,6 +169,7 @@ var builtins = []Info{
 	{ID: GoSum, Name: "Go Checksums", MIMETypes: []string{"text/x-go-sum"}},
 	{ID: Dotenv, Name: "Dotenv", Extensions: []string{".env"}, MIMETypes: []string{"text/x-dotenv"}},
 	{ID: Properties, Name: "Java Properties", Extensions: []string{".properties"}, MIMETypes: []string{"text/x-java-properties"}},
+	{ID: GitIgnore, Name: "Git Ignore", Extensions: []string{".gitignore"}, MIMETypes: []string{"text/x-gitignore"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
