@@ -41,6 +41,7 @@ const (
 	Lua        ID = "lua"
 	PowerShell ID = "powershell"
 	Ruby       ID = "ruby"
+	PHP        ID = "php"
 	Markdown   ID = "markdown"
 )
 
@@ -122,6 +123,7 @@ var builtins = []Info{
 	{ID: Lua, Name: "Lua", Extensions: []string{".lua"}, MIMETypes: []string{"text/x-lua"}},
 	{ID: PowerShell, Name: "PowerShell", Extensions: []string{".ps1", ".psm1", ".psd1"}, MIMETypes: []string{"application/x-powershell"}},
 	{ID: Ruby, Name: "Ruby", Extensions: []string{".rb", ".rbw", ".rake", ".gemspec", ".ru"}, MIMETypes: []string{"text/x-ruby"}},
+	{ID: PHP, Name: "PHP", Extensions: []string{".php", ".phtml"}, MIMETypes: []string{"application/x-httpd-php"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -192,6 +194,9 @@ func Guess(filename string, sample []byte) ID {
 	}
 	sample = bytes.TrimSpace(bytes.TrimPrefix(sample, []byte{0xef, 0xbb, 0xbf}))
 	lower := bytes.ToLower(sample)
+	if phpOpening(string(sample)) > 0 {
+		return PHP
+	}
 	if bytes.HasPrefix(sample, []byte("<?xml")) {
 		return XML
 	}

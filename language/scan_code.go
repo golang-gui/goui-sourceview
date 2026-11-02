@@ -130,6 +130,30 @@ func codeNamePart(id ID, r rune) bool {
 	return IdentifierRune(r) || r == '$' && (id == JavaScript || id == TypeScript || id == SQL) || r == '-' && id == CSS
 }
 
+func finishCodeWord(s *codeState, w *tokenWriter, end int) {
+	if !s.wordOn {
+		return
+	}
+	word := s.word
+	kind := word.kind
+	if !s.lastDot && codeKeyword(s.id, word.text) {
+		kind = KindKeyword
+	}
+	if s.id == CSS && strings.HasPrefix(word.text, "@") {
+		kind = KindMeta
+		switch strings.ToLower(word.text) {
+		case "@media", "@supports", "@layer", "@container", "@keyframes", "@-webkit-keyframes", "@document", "@scope", "@starting-style":
+			s.cssGroup = true
+		}
+	}
+	if s.id == JavaScript || s.id == TypeScript {
+		s.canRegexp = kind == KindKeyword && wordsBeforeExpression[word.text]
+		s.pendingControl = controlKeywords[word.text]
+	}
+	w.add(word.start, end, kind, 0)
+	s.word, s.wordOn, s.lastDot = scanWord{}, false, false
+}
+
 func (b codeTokenizer) Scan(in Input, state State) (Result, error) {
 	s, ok := state.(codeState)
 	if !ok || s.id != b.id {
@@ -151,30 +175,7 @@ func (b codeTokenizer) Scan(in Input, state State) (Result, error) {
 			capture.Reset()
 		}
 	}
-	finishWord := func(end int) {
-		if !s.wordOn {
-			return
-		}
-		word := s.word
-		kind := word.kind
-		if !s.lastDot && codeKeyword(b.id, word.text) {
-			kind = KindKeyword
-		}
-		if b.id == CSS && strings.HasPrefix(word.text, "@") {
-			kind = KindMeta
-			switch strings.ToLower(word.text) {
-			case "@media", "@supports", "@layer", "@container", "@keyframes", "@-webkit-keyframes", "@document", "@scope", "@starting-style":
-				s.cssGroup = true
-			}
-		}
-		if js {
-			s.canRegexp = kind == KindKeyword && wordsBeforeExpression[word.text]
-			s.pendingControl = controlKeywords[word.text]
-		}
-		w.add(word.start, end, kind, 0)
-		s.word, s.wordOn = scanWord{}, false
-		s.lastDot = false
-	}
+	finishWord := func(end int) { finishCodeWord(&s, &w, end) }
 	startQuote := func(quote byte, raw, formatted bool) {
 		s.mode, s.quote, s.raw, s.formatted, s.escape = codeQuoted, quote, raw, formatted, false
 		s.triple = b.id == Python && strings.HasPrefix(text[i:], strings.Repeat(string(quote), 3))

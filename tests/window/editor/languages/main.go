@@ -106,6 +106,7 @@ func main() {
 		{language.CSharp, "namesp", "namespace"}, {language.Lua, "funct", "function"},
 		{language.PowerShell, "funct", "function"},
 		{language.Ruby, "unles", "unless"},
+		{language.PHP, "<?php retu", "<?php return"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -162,6 +163,7 @@ func main() {
 		{language.Rust, "fn get<", "'a", "fn get<'a"},
 		{language.PowerShell, "$x = ", "'it''s'", "$x = 'it''s'"},
 		{language.Ruby, "x = ", "'it\\'s'", "x = 'it\\'s'"},
+		{language.PHP, "<?php $x = ", "'it\\'s'", "<?php $x = 'it\\'s'"},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {

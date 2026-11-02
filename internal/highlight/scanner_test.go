@@ -316,6 +316,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Lua, "local x=[=[open\nbody\n]=]\nreturn x", "]=]", "]==]", "return", language.KindString},
 		{language.PowerShell, "$x=@'\nbody\n'@\nfunction f {}", "'@", " '@", "function", language.KindString},
 		{language.Ruby, "x=<<~TXT\nbody\n TXT\nclass Demo; end", " TXT", " MISS", "class", language.KindString},
+		{language.PHP, "<?php $x=<<<TXT\nbody\nTXT;\nreturn 1;", "TXT;", "MISS;", "return", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -687,6 +688,19 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.Ruby, "__END__\nclass data", "class", language.KindString},
 		{language.Ruby, "x=:name; @@value=$name; x=1..2", "name", language.KindProperty},
 		{language.Ruby, `x=?\u{5b57}; x!=y`, `?\u{5b57}`, language.KindString},
+		{language.PHP, `<?php readonly class Demo { public function f() { return true; } }`, "readonly", language.KindKeyword},
+		{language.PHP, `<p title="<?= $name ?>">Hi</p>`, "$name", language.KindVariable},
+		{language.PHP, `<script>const<?php echo ' '; ?> value=1;</script>`, "const", language.KindKeyword},
+		{language.PHP, `<script>const<?php echo ' '; ?> value=1;</script>`, "echo", language.KindKeyword},
+		{language.PHP, `<script>let text="<?= $name ?>";</script>`, "$name", language.KindVariable},
+		{language.PHP, `<!-- <?= $name ?> -->`, "$name", language.KindVariable},
+		{language.PHP, `<?php // note ?><b>outside</b>`, "outside", language.KindPlain},
+		{language.PHP, `<?php /* ?> still */ return;`, "still", language.KindComment},
+		{language.PHP, "<?php $x=<<<TXT\n$name {$row['key']}\n TXT, true;", "true", language.KindKeyword},
+		{language.PHP, "<?php $x=<<<'TXT'\n$name {$row['key']}\n TXT;", "$name", language.KindString},
+		{language.PHP, "<?php $x=<<<TXT\nTXT_MORE\nstill\nTXT;", "still", language.KindString},
+		{language.PHP, "<?php #[Route('/')] function f() {}", "Route", language.KindPlain},
+		{language.Markdown, "```php\nreturn true;\n```", "return", language.KindKeyword},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -711,6 +725,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 	}
 	fixtures[language.PowerShell] = []string{"function Greet { param($name) \"hi $name$($(\"nested\")) ${env:PATH}\"; if ($true -AND $false) { 1..3 } }\n$x=@\"\nbody $env:PATH $(if (1) { \"x\" })\n\"@\n$x=@'\nliteral $name\n '@\n'@", "$x=‘it’’s’\n<# a <# b #> function f {}\n$x=\"a`\"b\"", "$x=@'\n" + strings.Repeat("字", ChunkSize) + "\n'@"}
 	fixtures[language.Ruby] = []string{"class Demo\n def hi(name)\n \"#{true ? %Q{nested #{1}} : name} #@value\"\n end\nend\nx=%r[[/]]im; y=10 / 2\nputs(<<A, <<-'B')\n#{true}\nA\n#{false}\n B\nclass Real;end", "x=<<A\n#{puts <<B}\ninner\nB\nouter\nA\nclass Demo;end", "x=<<'" + strings.Repeat("字", ChunkSize) + "'\nbody\n" + strings.Repeat("字", ChunkSize) + "\nclass Demo;end", "x=\"#@" + strings.Repeat("name", ChunkSize) + "\""}
+	fixtures[language.PHP] = []string{"<p title=\"<?= $name ?>\">Hi</p><script>const<?php echo ' '; ?> value=\"<?= $name ?>\";</script><!-- <?= $name ?> -->\n<?php #[Route('/')] readonly class Demo { function f() { return \"{$row['key']} ${name}\"; } } // ?> <b>text</b>", "<?php $x=<<<TXT\n$name {$row['key']}\n TXT, true; $x=<<<'END'\n$name\nENDING\nEND; return;", "<?php $x=<<<\"" + strings.Repeat("字", ChunkSize) + "\"\nbody\n" + strings.Repeat("字", ChunkSize) + "; return;"}
 	for id, texts := range fixtures {
 		for _, text := range texts {
 			want, ws := scanAll(id, text, ChunkSize*8)
@@ -727,13 +742,16 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {
 				b.WriteRune(alphabet[random.Intn(len(alphabet))])
 			}
 			text := b.String()
+			if id == language.PHP {
+				text = "<?php " + text
+			}
 			want, ws := scanAll(id, text, 1024)
 			got, gs := scanAll(id, text, 1+random.Intn(17))
 			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {

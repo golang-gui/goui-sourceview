@@ -19,6 +19,21 @@ func (w *tokenWriter) add(start, end int, kind Kind, class Class) {
 	if start >= end {
 		return
 	}
+	w.retract(start)
+	if kind == KindPlain && class == 0 {
+		return
+	}
+	if len(w.tokens) > 0 {
+		t := &w.tokens[len(w.tokens)-1]
+		if t.End == start && t.Kind == kind && t.Class == class {
+			t.End = end
+			return
+		}
+	}
+	w.tokens = append(w.tokens, Token{Start: start, End: end, Kind: kind, Class: class})
+}
+
+func (w *tokenWriter) retract(start int) {
 	if start < w.base && (w.replace == nil || start < *w.replace) {
 		n := start
 		w.replace = &n
@@ -31,17 +46,15 @@ func (w *tokenWriter) add(start, end int, kind Kind, class Class) {
 		}
 		w.tokens = w.tokens[:len(w.tokens)-1]
 	}
-	if kind == KindPlain && class == 0 {
-		return
+}
+
+func (w *tokenWriter) merge(r Result) {
+	if r.ReplaceFrom != nil {
+		w.retract(*r.ReplaceFrom)
 	}
-	if len(w.tokens) > 0 {
-		t := &w.tokens[len(w.tokens)-1]
-		if t.End == start && t.Kind == kind && t.Class == class {
-			t.End = end
-			return
-		}
+	for _, t := range r.Tokens {
+		w.add(t.Start, t.End, t.Kind, t.Class)
 	}
-	w.tokens = append(w.tokens, Token{Start: start, End: end, Kind: kind, Class: class})
 }
 
 func (w *tokenWriter) result(n int, state State) Result {

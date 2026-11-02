@@ -503,3 +503,37 @@ Shell、SQL、Ruby 共用，规则与可变状态仍分别维护。正文不进�
 参考 [Lexilla LexRuby 6645c18](https://github.com/ScintillaOrg/lexilla/blob/6645c18df16077f1ea19cabdf1e8bc6b2a4409be/lexers/LexRuby.cxx)
 的引用、preferRE、heredoc 上下文划分。该源码的 HereDocCls 使用固定 delimiter 数组，
 本项目不沿用长度限制，采用既有不可变分片协议。未复制其实现或依赖解释器。
+
+## 15. PHP
+
+新增 `language.PHP`，识别 `.php/.phtml` 和明确的 `<?php`/`<?=` 内容开头。
+默认文件扫描从 HTML 开始；不启用依赖 PHP 配置的 `<?` 短标签，不把所有 `.inc` 映射为 PHP。
+默认 Markdown php 围栏使用同一扫描器的内部代码片段模式，可以省略开标签；
+调用方显式传入围栏表时不替换其选择，没有新增公开模式类型或注册体系。
+
+PHP 区支持大小写不敏感的关键字/常用类型词、数值、变量、单双/反引号、转义、
+`{$...}`/`${...}` 插值、`#[...]` 属性、两种行注释和块注释、heredoc/nowdoc。
+单引号仍允许转义自身和反斜杠，不能标为完全禁用转义的 Context.Literal；nowdoc 才禁用插值和转义。
+heredoc 保存完整标识符，按片段比较行首空白后的候选；标识符前缀后紧接名字字符不关闭，
+完整标识符后跟非名字字符时立即回到 PHP 代码，因此同一行的逗号、分号及后续表达式继续分析。
+不要求结束行只能含 delimiter/分号，不执行或验证 heredoc 缩进剥离。
+
+外层 HTML 状态在 `<?php`/`<?=` 处暂停，PHP 可以中断 HTML 属性、注释及 script/style 引用。
+`?>` 在 PHP 代码或行注释中恢复外层状态，引用、块注释及 heredoc/nowdoc 内的同样文字不退出。
+暂停前完成 JS/CSS 待分类词，避免恢复后用跨 PHP 的范围覆盖已发布 token；
+只提取私有 finishCodeWord 和 tokenWriter 合并/撤回工具，不改变公开扫描契约。
+引用插值用不可变恢复栈，子表达式拥有自己的引用/注释状态，旧状态快照不被后续扫描修改。
+
+外层通过不可变 HTML profile 提供适用的词、注释和建议；script/style 仍使用现有内嵌语言。
+混合文档中 HTML profile 不绑定现有只识别标记文本的 Tags/Folding，避免把 PHP 字符串内的
+伪标签当成配对或联动重命名目标。代码区提供 PHP 注释、结构/引用配对及词汇建议，
+不做运行结果推断、完整类型/属性语义、条件执行或通用混合文档折叠。
+
+2026-11-02 核对 [PHP tags](https://www.php.net/manual/en/language.basic-syntax.phptags.php)、
+[HTML/PHP 边界](https://www.php.net/manual/en/language.basic-syntax.phpmode.php)、
+[注释](https://www.php.net/manual/en/language.basic-syntax.comments.php) 和
+[字符串/heredoc/nowdoc](https://www.php.net/manual/en/language.types.string.php)。
+采用当前手册的现代 heredoc 结束规则（PHP 7.3 起），提供 PHP 8 常见词汇；
+不宣称是某个 PHP 发行版的完整编译器或按环境探测语法配置。
+源码另核对 [php-src 8.4.0 zend_language_scanner.l](https://github.com/php/php-src/blob/php-8.4.0/Zend/zend_language_scanner.l)
+的 ST_HEREDOC、ST_IN_SCRIPTING 和插值状态；不移植其解析器，也不执行 PHP。

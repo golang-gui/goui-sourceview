@@ -21,7 +21,7 @@ go get github.com/golang-gui/goui-sourceview@v0.2.0
 ## 主要能力
 
 - **语法高亮：** 支持 JSON/JSONC、JSON Lines、XML、HTML、Markdown、TOML、YAML、Shell、HTTP、Protobuf、
-  Makefile、CMake、Nginx、INI、Dockerfile、SQL、Go、Python、JavaScript、TypeScript、CSS、C、C++、Java、Rust、C#、Lua、PowerShell、Ruby。
+  Makefile、CMake、Nginx、INI、Dockerfile、SQL、Go、Python、JavaScript、TypeScript、CSS、C、C++、Java、Rust、C#、Lua、PowerShell、Ruby、PHP。
 - **折叠与导航：** 结构化标记、Markdown 标题及围栏代码折叠，行列跳转。
 - **编辑辅助：** 智能缩进、空白标记、缩进线及列标尺。
 - **源码编辑：** Unicode 选区、剪贴板、撤销/重做、缩进和整行操作。

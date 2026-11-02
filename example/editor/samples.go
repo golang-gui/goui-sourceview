@@ -26,6 +26,7 @@ func sampleDocuments() []exampleDocument {
 		"hello.c", "hello.cpp", "Hello.java", "hello.rs", "Hello.cs", "hello.lua",
 		"hello.ps1",
 		"hello.rb",
+		"hello.php",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

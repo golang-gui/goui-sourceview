@@ -46,7 +46,7 @@
 现有标记、配置和脚本语言保持维护，新增编程语言按可验证的词法状态逐批推进：
 
 1. C、C++、Java、Rust、C#、Lua：已有识别、引用/注释状态、编辑规则、建议及样本。
-2. PowerShell、Ruby、PHP、JSX/TSX：本轮按语言逐组接入。PowerShell、Ruby 的引用、插值、heredoc 与编辑规则见高亮设计；其余组继续落实混合语言边界。
+2. PowerShell、Ruby、PHP、JSX/TSX：本轮按语言逐组接入。PowerShell、Ruby、PHP 的引用、插值、heredoc 与混合语言规则见高亮设计；JSX/TSX 继续落实标签与表达式边界。
 3. Kotlin、Swift、Dart、R；Scala、Perl、Zig、Objective-C 根据实际使用需求安排。
 
 第三批仍是未来方向；第二批各语言的实施与验收状态见语言验证记录。优先复用现有 token、上下文和

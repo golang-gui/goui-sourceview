@@ -118,6 +118,26 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case PHP:
+			htmlDefinition := out[HTML].Definition()
+			// Mixed PHP spans are not safe input to the markup-only tag matcher.
+			htmlDefinition.Editing.Tags = nil
+			htmlDefinition.Folding = nil
+			htmlProfile, err := New(htmlDefinition)
+			if err != nil {
+				panic(err)
+			}
+			d.Tokenizer = phpTokenizer{html: htmlProfile}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' || r == '\\' }
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(c Context) []string {
+				if c.Embedded != nil && c.Embedded.ID() != PHP {
+					return c.Embedded.Suggestions(c)
+				}
+				return vocabulary
+			}
 		case Ruby:
 			d.Tokenizer = rbTokenizer{}
 			d.Editing.Comments = Comments{Line: "#"}
@@ -212,6 +232,17 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 	table := make(map[string]*Language)
 	for id, l := range definitions {
 		if id != Plain && id != Markdown {
+			if id == PHP {
+				d := l.Definition()
+				scanner := d.Tokenizer.(phpTokenizer)
+				scanner.fragment = true
+				d.Tokenizer = scanner
+				var err error
+				l, err = New(d)
+				if err != nil {
+					panic(err)
+				}
+			}
 			table[string(id)] = l
 		}
 	}
@@ -244,6 +275,8 @@ func codeVocabulary(id ID) []string {
 		table = psKeywords
 	case Ruby:
 		table = rbKeywords
+	case PHP:
+		table = phpKeywords
 	case C:
 		table = cKeywords
 	case Cpp:

@@ -271,3 +271,16 @@ Ruby 非插值短引用仍允许转义结束符，Context.Literal 不将这类�
 独立浅色 1× 正常事件窗口验证通过，并逐步断言：输入反引号转义的双引号后，
 生成的另一个闭合引号仍在，光标停在它之前；不是只比较整段输入后的最终文本。
 没有按语言 ID 在控件中加入特例，也未修改 GOUI。
+
+### PHP
+
+新增 PHP、文件/内容识别、默认 php 围栏片段模式、基础编辑规则和 hello.php，示例共 31 份。
+独立预期覆盖 HTML 属性/注释/script 中断、恢复后的 JS/CSS 待分类词、行注释与块注释的
+结束差异、变量和复杂引用插值、属性标记、现代 heredoc/nowdoc、长标识符及同一行后续代码。
+随机输入显式加 PHP 开标签，确保实际覆盖代码模式；完整/极小分片、增量和 Class 断言通过。
+另外检查默认 Markdown 围栏可省略开标签，以及混合 HTML profile 不启用不安全的标签辅助。
+
+`go test ./...`、`GOWORK=off go test ./...`、
+`GOWORK=off go test -race ./language ./internal/highlight` 通过，原生亮暗 1× 的 nowdoc 正文颜色通过。
+独立 Software 浅色 1× 窗口通过 30 种语言建议、接受和撤销，PHP 转义引用与原有全部断言通过。
+本组环境、依赖和日志目录同前，未单独运行 macOS/Windows；没有新增第三方依赖或 GOUI 改动。

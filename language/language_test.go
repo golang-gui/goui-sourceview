@@ -47,6 +47,7 @@ func TestGuess(t *testing.T) {
 		{"script", "#!/usr/bin/luatic", Plain}, {"script.c", "#!/bin/lua", C},
 		{"run.PS1", "", PowerShell}, {"module.psm1", "", PowerShell}, {"data.psd1", "", PowerShell},
 		{"script", "#!/usr/bin/env pwsh", PowerShell},
+		{"index.PHP", "", PHP}, {"page.phtml", "", PHP}, {"", "<?php echo 1;", PHP}, {"", "<?= 1 ?>", PHP}, {"", "<?phpfoo", Plain},
 		{"hello.rb", "", Ruby}, {"Gemfile", "", Ruby}, {"Rakefile", "", Ruby}, {"app.gemspec", "", Ruby}, {"config.ru", "", Ruby}, {"script", "#!/usr/bin/env ruby", Ruby},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -135,6 +136,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{PowerShell, `"hello $name`, true, false, false}, {PowerShell, `'literal`, true, false, true},
 		{PowerShell, `"hello $(if`, false, false, false}, {PowerShell, `<# comment`, false, true, false},
 		{Ruby, `%q{literal`, true, false, false}, {Ruby, `"hi #{if`, false, false, false}, {Ruby, `%Q{outer #{%Q{inner #{`, false, false, false},
+		{PHP, `<?php "hello $name`, true, false, false}, {PHP, `<?php "{$row['key']`, false, false, false}, {PHP, `<?php /* note`, false, true, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -220,6 +222,9 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{PowerShell, `"hello $name"`, "$name", ClassString},
 		{PowerShell, `<# { comment } #>`, "{", ClassComment},
 		{Ruby, `"hi #{true}"`, "true", 0}, {Ruby, `%q{#{literal}}`, "literal", ClassString}, {Ruby, `%Q{#@value}`, "@value", ClassString},
+		{PHP, `<p title="<?= $name ?>">text</p>`, "$name", 0},
+		{PHP, `<?php "hi $name"`, "$name", ClassString},
+		{PHP, `<?php "{$row['key']}"`, "$row", 0},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -269,6 +274,59 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 			if got != tc.class {
 				t.Fatalf("%s chunk %d %q: class %v want %v; %v", tc.id, chunk, tc.text, got, tc.class, tokens)
 			}
+		}
+	}
+}
+
+func TestPHPProfilesAndSuspension(t *testing.T) {
+	l, _ := Builtin(PHP)
+	for _, tc := range []struct {
+		text     string
+		embedded ID
+		str      bool
+	}{
+		{`<p title="`, HTML, true},
+		{`<p title="<?= $name`, PHP, false},
+		{`<script>const name="<?= $name ?> tail`, JavaScript, true},
+	} {
+		scanner := l.Tokenizer()
+		in := Input{Text: tc.text, Limit: len(tc.text)}
+		r, err := scanner.Scan(in, scanner.InitialState())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = ValidateResult(in, r); err != nil {
+			t.Fatal(err)
+		}
+		c := r.State.Context()
+		id := PHP
+		if c.Embedded != nil {
+			id = c.Embedded.ID()
+		}
+		if id != tc.embedded || c.String != tc.str {
+			t.Fatalf("%q: %+v", tc.text, c)
+		}
+		if id == HTML && c.Embedded.Editing().Tags != nil {
+			t.Fatal("mixed HTML enabled markup-only tag matching")
+		}
+	}
+	markdown, _ := Builtin(Markdown)
+	custom, err := NewMarkdown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, md := range []*Language{markdown, custom} {
+		scanner := md.Tokenizer()
+		r, err := scanner.Scan(Input{Text: "```php", Limit: 6, LineEnd: true}, scanner.InitialState())
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err = scanner.Scan(Input{Text: "return true;", Limit: 12, LineEnd: true}, r.State)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Tokens) == 0 || r.Tokens[0].Kind != KindKeyword || r.State.Context().Embedded.ID() != PHP {
+			t.Fatalf("bare PHP fence: %+v", r)
 		}
 	}
 }
