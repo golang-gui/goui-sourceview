@@ -79,3 +79,13 @@ verb 与 verbatim/verbatim*、lstlisting、minted 正文使用原样字符串规
 不加载或应用配置、不执行 glob 匹配，结构标记不自动配对，提供常用属性名建议。
 
 依据 [EditorConfig Specification 0.17.2](https://spec.editorconfig.org/)（No inline comments、Glob Expressions）。
+
+## JSON5
+
+独立 JSON5 profile 和 .json5 识别，不能成为 JSONC 别名。支持单双引号、裸键、注释、行连接、十六进制、
+正号、首尾小数点以及 Infinity/NaN；对象与数组使用不可变帧，键/值分类在分片和编辑后保持一致。
+数值使用有限状态识别，超长数值不缓存全部文本；单词只保留有界关键词。
+保留 JSON/JSONC 原有语法，JSON5 不启用 JavaScript 的 regex/template/undefined 或执行语句。
+不作为完整语法校验器，错误恢复在非转义物理换行后离开普通引用。
+
+依据 [JSON5 Data Interchange Format](https://spec.json5.org/)（1.0.0）。

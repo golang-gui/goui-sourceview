@@ -797,3 +797,12 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，通过 `go test ./...`（工作区 GOUI b4904
 独立依赖 `GOWORK=off go test ./...` 通过；新增独立词法预期、分片、编辑恢复和原生颜色断言。
 独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的 `-language editorconfig` 通过正常事件输入及公共编辑断言。
 本项未执行 Windows/macOS 原生验证；无 GOUI 或依赖改动。
+
+### JSON5（2026-11-02）
+
+新增 JSON5 独立词法、不可变结构状态、特殊数值、单引号与行连接及 settings.json5 样本。
+首次增量检查发现悬空 / 没有取得扫描进展，已补齐消费并保留定向用例；原生颜色样本修正为完整、颜色一致的物理行。
+常见格式另有固定随机畸形输入的整行/单字符预算分片对照，保留独立词法预期与原生颜色断言。
+独立依赖 `GOWORK=off go test ./...` 通过；新增独立词法预期、分片、编辑恢复和原生颜色断言。
+独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的 `-language json5` 通过正常事件输入及公共编辑断言。
+本项未执行 Windows/macOS 原生验证；无 GOUI 或依赖改动。

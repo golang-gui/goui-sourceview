@@ -49,6 +49,7 @@ func TestGuess(t *testing.T) {
 		{"messages.po", "", Gettext},
 		{"messages.pot", "", Gettext},
 		{".editorconfig", "", EditorConfig},
+		{"settings.json5", "", JSON5},
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"main.c", "", C}, {"main.C", "", Cpp}, {"lib.H", "", Cpp}, {"module.cppm", "", Cpp},
 		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp}, {"Main.java", "", Java},

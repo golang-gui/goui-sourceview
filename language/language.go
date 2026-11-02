@@ -90,6 +90,7 @@ const (
 	BibTeX           ID = "bibtex"
 	Gettext          ID = "po"
 	EditorConfig     ID = "editorconfig"
+	JSON5            ID = "json5"
 	Markdown         ID = "markdown"
 )
 
@@ -220,6 +221,7 @@ var builtins = []Info{
 	{ID: BibTeX, Name: "BibTeX", Extensions: []string{".bib"}},
 	{ID: Gettext, Name: "gettext PO/POT", Extensions: []string{".po", ".pot"}},
 	{ID: EditorConfig, Name: "EditorConfig", Extensions: []string{".editorconfig"}},
+	{ID: JSON5, Name: "JSON5", Extensions: []string{".json5"}, MIMETypes: []string{"application/json5"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

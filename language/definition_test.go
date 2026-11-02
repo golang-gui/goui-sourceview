@@ -108,6 +108,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Systemd, language.DesktopEntry,
 		language.Nix, language.JQ, language.PromQL,
 		language.FSharp, language.Elixir, language.Erlang, language.Julia, language.Clojure, language.Haskell, language.OCaml,
+		language.JSON5,
 		language.EditorConfig,
 		language.Gettext,
 		language.BibTeX,
@@ -175,5 +176,16 @@ func TestTSVLiteralContext(t *testing.T) {
 	ctx := l.Tokenizer().InitialState().Context()
 	if !ctx.String || !ctx.Literal || ctx.Comment {
 		t.Fatal("TSV fields must remain literal data")
+	}
+}
+
+func TestJSON5DataPairs(t *testing.T) {
+	l, _ := language.Builtin(language.JSON5)
+	seen := make(map[string]bool)
+	for _, p := range l.Editing().AutoClosingPairs {
+		seen[p.Open] = true
+	}
+	if seen["("] || !seen["{"] || !seen["["] || !seen["'"] || !seen["\""] {
+		t.Fatal("JSON5 needs data pairs, not call parentheses")
 	}
 }

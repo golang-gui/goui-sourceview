@@ -1,0 +1,12 @@
+{
+  // JSON5 adds more than comments.
+  unquoted: 'SourceView',
+  singleQuotes: 'A "quoted" word',
+  lineBreaks: "first \
+second",
+  hexadecimal: 0xdecaf,
+  leadingDecimal: .5,
+  trailingDecimal: 5.,
+  signed: +1,
+  special: [Infinity, -Infinity, NaN],
+}

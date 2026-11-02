@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.JSON5, "/* first\nbody */ true", "/*", "", "body", language.KindInvalid},
 		{language.EditorConfig, "key=one #body", "=one", " one", "body", language.KindProperty},
 		{language.Gettext, "# msgid \"body\"", "# ", "", "msgid", language.KindKeyword},
 		{language.BibTeX, "@book{x,title={first\nbody\n}}", "{first", "first", "body", language.KindVariable},
@@ -411,6 +412,15 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.JSON5, "/ 01 1_000 --Infinity", "/", language.KindInvalid},
+	{language.JSON5, "[--Infinity, .5, 2.]", "--Infinity", language.KindInvalid},
+	{language.JSON5, "{unquoted:'value'}", "unquoted", language.KindProperty},
+	{language.JSON5, "{x:'value'}", "value", language.KindString},
+	{language.JSON5, "[.5,5.,+1,0xFF,Infinity,-Infinity,NaN]", "0xFF", language.KindNumber},
+	{language.JSON5, "[.5,5.,+1]", "5.", language.KindNumber},
+	{language.JSON5, "{x:\"first\\\nbody\"}", "body", language.KindString},
+	{language.JSON5, "/* first\nbody */ true", "body", language.KindComment},
+	{language.JSON5, "[undefined, 01, 1_000]", "undefined", language.KindInvalid},
 	{language.EditorConfig, "[src/**.{go,mod}]", "src", language.KindMeta},
 	{language.EditorConfig, "indent_size = 4 # literal ; body", "body", language.KindString},
 	{language.EditorConfig, "; comment", "comment", language.KindComment},
@@ -472,10 +482,35 @@ func TestTextFormats(t *testing.T) {
 						t.Fatalf("invalid token: %+v", token)
 					}
 				}
-				snapshot := state
 				_, _, _ = Scan(tc.id, state, "\"#{}你好", 7, true)
-				if !snapshot.Equal(state) {
+				if !state.Equal(final) {
 					t.Fatal("published state mutated")
+				}
+			}
+		})
+	}
+}
+
+func TestTextFormatMalformedFragments(t *testing.T) {
+	seen := make(map[language.ID]bool)
+	for _, tc := range textFormatCases {
+		if seen[tc.id] {
+			continue
+		}
+		seen[tc.id] = true
+		t.Run(string(tc.id), func(t *testing.T) {
+			random := rand.New(rand.NewSource(20261104))
+			alphabet := []rune("name019_\\'\"$#@!?*+-.[]{}():,;=/|<>~% \t\n你好")
+			for sample := 0; sample < 120; sample++ {
+				var b strings.Builder
+				for n := random.Intn(400); n > 0; n-- {
+					b.WriteRune(alphabet[random.Intn(len(alphabet))])
+				}
+				text := b.String()
+				want, final := scanAll(tc.id, text, ChunkSize)
+				got, state := scanAll(tc.id, text, 1)
+				if !reflect.DeepEqual(got, want) || !state.Equal(final) {
+					t.Fatalf("sample=%d %q\n%+v\n%+v", sample, text, got, want)
 				}
 			}
 		})
