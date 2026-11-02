@@ -118,6 +118,13 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case ObjectiveC:
+			d.Tokenizer = cTokenizer{info.ID}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '@' }
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Zig:
 			d.Tokenizer = zigTokenizer{}
 			d.Editing.Comments.Line = "//"
@@ -343,6 +350,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"rb":              Ruby,
 		"javascriptreact": JSX, "typescriptreact": TSX,
 		"kt": Kotlin, "kts": Kotlin,
+		"objc": ObjectiveC, "objectivec": ObjectiveC,
 	} {
 		table[alias] = definitions[id]
 	}
@@ -362,6 +370,16 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case ObjectiveC:
+		out := codeVocabulary(cBaseID(id))
+		for word := range objcKeywords {
+			out = append(out, word)
+		}
+		for word := range objcDirectives {
+			out = append(out, "@"+word)
+		}
+		slices.Sort(out)
+		return out
 	case Kotlin:
 		table = ktKeywords
 	case Swift:

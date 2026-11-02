@@ -49,6 +49,7 @@ const (
 	Dart       ID = "dart"
 	R          ID = "r"
 	Zig        ID = "zig"
+	ObjectiveC ID = "objective-c"
 	Markdown   ID = "markdown"
 )
 
@@ -138,6 +139,7 @@ var builtins = []Info{
 	{ID: Dart, Name: "Dart", Extensions: []string{".dart"}, MIMETypes: []string{"text/x-dart"}},
 	{ID: R, Name: "R", Extensions: []string{".r", ".rscript"}, MIMETypes: []string{"text/x-r-source"}},
 	{ID: Zig, Name: "Zig", Extensions: []string{".zig"}, MIMETypes: []string{"text/x-zig"}},
+	{ID: ObjectiveC, Name: "Objective-C", Extensions: []string{".m"}, MIMETypes: []string{"text/x-objcsrc"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -176,6 +178,18 @@ func Guess(filename string, sample []byte) ID {
 		return Cpp
 	}
 	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == ".m" {
+		// MATLAB shares this suffix. Require a leading Objective-C construct.
+		for _, line := range strings.Split(string(sample[:min(len(sample), 4096)]), "\n") {
+			line = strings.TrimSpace(line)
+			for _, marker := range []string{"#import", "@interface", "@implementation", "@protocol", "@class", "@import", "@autoreleasepool"} {
+				if strings.HasPrefix(line, marker) && (len(line) == len(marker) || strings.ContainsRune(" \t({\"<", rune(line[len(marker)]))) {
+					return ObjectiveC
+				}
+			}
+		}
+		return Plain
+	}
 	for _, info := range builtins {
 		for _, candidate := range info.Extensions {
 			if ext == candidate {

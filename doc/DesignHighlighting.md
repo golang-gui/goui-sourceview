@@ -694,3 +694,21 @@ Zig 每个逻辑行独立分词：普通引用和 `\\` 正文在真实行尾结�
 的注释、引用名称、字面量和多行字符串；参考
 [Lexilla LexZig.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexZig.cxx)
 对各引用/注释模式的区分。采用本模块的分片/增量协议，不复制规则资源、引入编译器或依赖 GOUI 改动。
+
+## 22. Objective-C 系列
+
+Objective-C 复用第 12 章的 C 扫描器，增加语言身份及 `@` 词法，不另建一份 C 引用/预处理状态。
+支持 `@interface/@implementation/@end` 等指令、id/instancetype/self/nil 等语言词汇、
+对象字符串、装箱数值/布尔、集合与消息表达式中的结构符；字符串/注释内的括号仍不参与配对。
+不通过 Foundation 类名猜测类型，也不从消息参数名字推断方法或属性。
+基础编辑规则保留结构/引用配对、// 与 /* */，关键词建议包含 `@` 前缀，单词边界同步包含它。
+
+`language.ObjectiveC` 的 ID 为 objective-c，默认围栏接受 objc/objectivec/objective-c。
+`.m` 与 MATLAB 冲突，自动识别只检查调用方提供的前 4 KiB 中行首明确的 Objective-C 构造；
+没有此类信息时保持 Plain，使用方可显式选择语言。`.h` 保持原 C++ 约定，不改动其他文件识别。
+判断是有界推测，不承诺解析注释、字符串或整个编译单元后才确定语言。
+
+2026-11-02 核对 [Apple 类定义](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/ProgrammingWithObjectiveC/DefiningClasses/DefiningClasses.html)
+和 [Clang Objective-C 字面量](https://clang.llvm.org/docs/ObjectiveCLiterals.html)
+（后者注明 LLVM Clang 3.1 / Apple LLVM 4.0 起提供相关字面量）。
+C/C++ 基础状态及参考框架沿用第 12 章，不引入 Clang、Cocoa 或其他运行依赖。

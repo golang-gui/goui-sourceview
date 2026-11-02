@@ -638,6 +638,11 @@ func TestFourthBatchKinds(t *testing.T) {
 		kind         language.Kind
 	}{
 		{language.Zig, `const x: u4096 = @intCast(1);`, "u4096", language.KindKeyword},
+		{language.ObjectiveC, `@interface Demo : NSObject @end`, "@interface", language.KindKeyword},
+		{language.ObjectiveC, `id s=@"a {literal}"; NSArray *a=@[@42,@YES];`, "literal", language.KindString},
+		{language.ObjectiveC, `id s=@"a {literal}"; NSArray *a=@[@42,@YES];`, "@42", language.KindNumber},
+		{language.ObjectiveC, `NSArray *a=@[@-42,@YES];`, "@YES", language.KindKeyword},
+		{language.ObjectiveC, "#import <Foundation/Foundation.h>", "Foundation.h", language.KindString},
 		{language.Zig, `const @"a b" = @import("std");`, "a b", language.KindVariable},
 		{language.Zig, `const x=@import("std");`, "@import", language.KindMeta},
 		{language.Zig, "const x=\\\\${raw} \\n\nconst y=1;", "${raw}", language.KindString},
@@ -656,7 +661,8 @@ func TestFourthBatchKinds(t *testing.T) {
 
 func TestFourthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
-		language.Zig: {"//! module\nconst @\"name 字\"=\\\\body ${raw} \\n\n\\\\continued\nconst n:u12=0x1.fp+2; const c='\\u{1234}'; const s=\"\\x41\";", "const s=\\\\" + strings.Repeat("字\\{}", ChunkSize) + "\nconst yes=true;"},
+		language.ObjectiveC: {"#import <Foundation/Foundation.h>\n@interface Demo : NSObject\n@property(copy) NSString *name;\n@end\n@implementation Demo\n- (id)value { @autoreleasepool { return @{ @\"key\": @[@42,@-1,@YES,@(1+2)] }; } }\n@end", "id s=@\"" + strings.Repeat("字\\n", ChunkSize) + "\"; /* comment */ return nil;"},
+		language.Zig:        {"//! module\nconst @\"name 字\"=\\\\body ${raw} \\n\n\\\\continued\nconst n:u12=0x1.fp+2; const c='\\u{1234}'; const s=\"\\x41\";", "const s=\\\\" + strings.Repeat("字\\{}", ChunkSize) + "\nconst yes=true;"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
@@ -849,7 +855,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig, language.ObjectiveC} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

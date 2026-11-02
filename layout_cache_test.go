@@ -887,6 +887,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Dart, "var s=r'''\nbody\n''';", "body", 1, language.KindString},
 		{language.R, "x <- r\"--[\nbody\n]--\"", "body", 1, language.KindString},
 		{language.Zig, "const s=\n\\\\body\n;", "\\\\body", 1, language.KindString},
+		{language.ObjectiveC, "@interface", "@interface", 0, language.KindKeyword},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

@@ -406,3 +406,12 @@ Unicode/十六进制转义、成员/级联点号、指数与十六进制数。
 `-language zig` 的建议接受/撤销、引用转义输入及公共括号/只读/语义断言通过。
 筛选参数用于逐语言验证，未指定时仍执行全部场景；没有场景匹配时直接失败。
 本批日志和产物在 `/tmp/sourceview-language-batch4-5i1u39/`，未修改 GOUI 或依赖。
+
+### Objective-C
+
+新增 Objective-C、保守 .m 识别、围栏及别名、编辑规则和 hello.m，示例共 39 份。
+复用 C 词法设施，独立断言验证 @ 指令、对象字符串、装箱数值/布尔与预处理头文件，
+长引用、极小分片和随机畸形输入通过；既有 C/C++ 回归保持通过。
+`GOWORK=off go test ./...` 及原生 Pango 亮暗 1× 指令颜色断言通过。
+同本批独立 X11 / Software / 浅色 1×，`-language objective-c` 的 @interface 建议、接受/撤销、
+对象引用输入及公共断言通过。自动识别保留 MATLAB/无特征 .m 的 Plain 和 .h 的 C++ 约定。

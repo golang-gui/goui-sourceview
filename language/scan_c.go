@@ -44,11 +44,25 @@ func (b cTokenizer) InitialState() State { return cState{id: b.id, leading: true
 var cKeywords = words("alignas alignof auto bool break case char const constexpr continue default do double else enum extern false float for goto if inline int long nullptr register restrict return short signed sizeof static static_assert struct switch thread_local true typedef typeof typeof_unqual union unsigned void volatile while _Alignas _Alignof _Atomic _BitInt _Bool _Complex _Decimal32 _Decimal64 _Decimal128 _Generic _Imaginary _Noreturn _Static_assert _Thread_local")
 var cppKeywords = words("alignas alignof and and_eq asm auto bitand bitor bool break case catch char char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum explicit export extern false float for friend goto if inline int long mutable namespace new noexcept not not_eq nullptr operator or or_eq private protected public register reinterpret_cast requires return short signed sizeof static static_assert static_cast struct switch template this thread_local throw true try typedef typeid typename union unsigned using virtual void volatile wchar_t while xor xor_eq")
 
+var objcKeywords = words("id Class SEL BOOL instancetype YES NO nil Nil self super __kindof __weak __strong __autoreleasing __unsafe_unretained __block _Nonnull _Nullable _Null_unspecified __covariant __contravariant")
+var objcDirectives = words("interface implementation end class protocol property synthesize dynamic selector encode defs optional required public protected private package try catch finally throw synchronized autoreleasepool import available compatibility_alias YES NO true false")
+
+func cBaseID(id ID) ID {
+	if id == ObjectiveC {
+		return C
+	}
+	return id
+}
+func cObjective(id ID) bool { return id == ObjectiveC }
+
 func cPrefix(id ID, word string, quote byte) (raw, ok bool) {
+	if cObjective(id) && word == "@" && quote == '"' {
+		return false, true
+	}
 	if word == "L" || word == "u" || word == "U" || word == "u8" {
 		return false, true
 	}
-	if id == Cpp && quote == '"' {
+	if cBaseID(id) == Cpp && quote == '"' {
 		switch word {
 		case "R", "LR", "uR", "UR", "u8R":
 			return true, true
@@ -73,12 +87,14 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 		if !s.wordOn {
 			return
 		}
-		kind := KindPlain
+		kind := s.word.kind
 		if s.directiveName {
 			kind = KindMeta
 			s.include = s.word.text == "include" || s.word.text == "include_next" || s.word.text == "import"
 			s.directiveName = false
-		} else if b.id == C && cKeywords[s.word.text] || b.id == Cpp && cppKeywords[s.word.text] {
+		} else if cObjective(b.id) && (objcKeywords[s.word.text] || strings.HasPrefix(s.word.text, "@") && objcDirectives[strings.TrimPrefix(s.word.text, "@")]) {
+			kind = KindKeyword
+		} else if cBaseID(b.id) == C && cKeywords[s.word.text] || cBaseID(b.id) == Cpp && cppKeywords[s.word.text] {
 			kind = KindKeyword
 		}
 		w.add(s.word.start, end, kind, 0)
@@ -202,6 +218,16 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		s.leading = false
+		if cObjective(b.id) && c == '@' && i+1 < len(text) && (digit(text[i+1]) || (text[i+1] == '+' || text[i+1] == '-') && i+2 < len(text) && digit(text[i+2])) {
+			n = 1
+			if text[i+1] == '+' || text[i+1] == '-' {
+				n = 2
+			}
+			add(i, i+n, KindNumber, 0)
+			s.mode, s.last = cNumber, text[i+n-1]
+			i += n
+			continue
+		}
 		if c == '"' || c == '\'' || c == '<' && s.include {
 			s.mode, s.quote, s.escape = cQuoted, c, false
 			if c == '<' {
@@ -220,8 +246,11 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			i++
 			continue
 		}
-		if IdentifierRune(r) {
+		if IdentifierRune(r) || cObjective(b.id) && c == '@' {
 			s.word, s.wordOn = scanWord{start: in.Offset + i}, true
+			if c == '@' {
+				s.word.kind = KindMeta
+			}
 			s.word.add(text[i : i+n])
 			s.last = c
 			i += n

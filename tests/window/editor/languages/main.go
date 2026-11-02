@@ -117,6 +117,7 @@ func main() {
 		{language.Dart, "requi", "required"},
 		{language.R, "funct", "function"},
 		{language.Zig, "comp", "comptime"},
+		{language.ObjectiveC, "@interf", "@interface"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -190,6 +191,7 @@ func main() {
 		{language.R, "x <- ", `r"--(raw)--"`, `x <- r"--(raw)--"`},
 		{language.R, "x <- ", "'it\\'s'", "x <- 'it\\'s'"},
 		{language.Zig, "const s = ", "\"a\\\"b\"", "const s = \"a\\\"b\""},
+		{language.ObjectiveC, "id s = ", `@"hello"`, `id s = @"hello"`},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
