@@ -847,3 +847,18 @@ SCSS 使用独立语言身份，复用 CSS 的名称、声明栈、数值/单位
 （页面列出 Dart Sass 1.107.0），参考
 [Monaco v0.52.2 SCSS](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/scss/scss.ts)
 的变量/声明/引用模式划分。采用本项目的独立 Class、分片和不可变栈，不复制正则规则或引入 Sass 依赖。
+
+## 30. Less
+
+Less 与 CSS/SCSS 共用 CSS 基础规则、URL、转义和声明状态，但语言身份和插值规则独立。
+支持 `.less`、less 围栏、@ 变量/间接变量、$ 属性变量、@{name} 变量插值、
+常见指令、mixin/guard 的词法形式、转义引用、// 与块注释以及数值单位。
+代码、引用和 URL 中的变量插值分别保留原上下文；引用/URL 内的变量仍为 String Class。
+已知 @ 指令与普通 @ 变量区分，不通过运行声明判定变量是否存在。
+反引号内容作为不透明引用呈现，提供相应配对；不嵌入 JavaScript 分析或执行。
+不执行 mixin、插件、导入、插值求值或 CSS 编译，语法位置判断保留词法边界。
+
+2026-11-02 核对 [Less Features](https://lesscss.org/features/) 的变量插值、属性变量、
+转义引用和 mixin/guard，参考
+[Monaco v0.52.2 Less](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/less/less.ts)
+的变量/引用/URL 区分。采用本项目已有 CSS 设施，不引入 Less.js 或复制规则资源。

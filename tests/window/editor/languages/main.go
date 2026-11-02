@@ -1,10 +1,12 @@
 // 内置语言集成验证，需要桌面、窗口管理器、原生排版及字体。
-// 启动：go run ./tests/window/editor/languages [-dark]；Linux 无 IME 服务时设置
-// -language zig 等参数只运行该语言的补全/引用场景；省略时验收全部场景。
-// XMODIFIERS=@im=none。初始为一个可编辑视图，程序自动切换文档，经正常事件路径
+// 启动：go run ./tests/window/editor/languages [-dark] [-language ID]。
+// Linux 无 IME 服务时设置 XMODIFIERS=@im=none；-language 省略时验收全部场景，
+// 未匹配场景时失败。Diff 只检查原样输入，其余语言检查建议及引用。
+// 初始为一个可编辑视图，程序自动切换文档，经正常事件路径
 // 触发补全、方向键选中、Enter 接受、撤销，再输入引用与括号并断言文本和光标。
 // Java/C#/Kotlin/Swift/Dart 三引号不能多插闭合引用，Rust 生命周期不能补成字符引用。
 // Swift/R 动态原始引用手工输入完整定界符，Dart 原始引用尾反斜杠不转义闭合引号。
+// Batch 路径反斜杠不转义引号，HCL/SCSS/Less 插值输入保留文本，GraphQL 检查三引号。
 // 另检查只读拒绝、语义文本/选区；全部断言完成后自动关闭，提前关闭或失败则非零退出。
 // 补全逐个等待已分配的可视区域，最多 8 秒；Show 返回不能代替布局完成。
 // 记录实际 typography/painter/scale；颜色另有原生位图断言，不能用窗口启动代替像素验收。
@@ -125,6 +127,7 @@ func main() {
 		{language.HCL, "resou", "resource"},
 		{language.GraphQL, "mutat", "mutation"},
 		{language.SCSS, "@mix", "@mixin"},
+		{language.Less, "@imp", "@import"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -206,6 +209,10 @@ func main() {
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
 		{language.GraphQL, "", `"""`, `"""`},
 		{language.SCSS, ".x {content:", `"#{true}"`, `.x {content:"#{true}"`},
+		{language.SCSS, ".", `#{$name}`, `.#{$name}`},
+		{language.Less, ".x {content:", `"@{name}"`, `.x {content:"@{name}"`},
+		{language.Less, ".", `@{name}`, `.@{name}`},
+		{language.Less, ".x {width:", "`1 + 2`", ".x {width:`1 + 2`"},
 		{language.Batch, "echo ", "\"C:\\\"", "echo \"C:\\\""},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},

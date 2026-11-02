@@ -58,6 +58,7 @@ const (
 	HCL          ID = "hcl"
 	GraphQL      ID = "graphql"
 	SCSS         ID = "scss"
+	Less         ID = "less"
 	Markdown     ID = "markdown"
 )
 
@@ -156,6 +157,7 @@ var builtins = []Info{
 	{ID: HCL, Name: "HCL / Terraform", Extensions: []string{".hcl", ".tf", ".tfvars"}, MIMETypes: []string{"text/x-hcl"}},
 	{ID: GraphQL, Name: "GraphQL", Extensions: []string{".graphql", ".gql", ".graphqls"}, MIMETypes: []string{"application/graphql", "text/x-graphql"}},
 	{ID: SCSS, Name: "SCSS", Extensions: []string{".scss"}, MIMETypes: []string{"text/x-scss"}},
+	{ID: Less, Name: "Less", Extensions: []string{".less"}, MIMETypes: []string{"text/x-less"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

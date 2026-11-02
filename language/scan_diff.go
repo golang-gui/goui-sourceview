@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Diff styles describe changed lines independently of their source language.
 const (
 	KindAdded   Kind = "diff.added"
 	KindRemoved Kind = "diff.removed"

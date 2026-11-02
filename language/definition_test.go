@@ -96,6 +96,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.HCL,
 		language.GraphQL,
 		language.SCSS,
+		language.Less,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

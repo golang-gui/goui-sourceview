@@ -473,7 +473,8 @@ ChromeInfo 确认 Integrated enabled，未见正文或工具栏裁切。截图�
 新增文件/围栏识别、unified hunk 范围状态、增加/删除专用样式及 change.diff，示例共 43 份。
 独立断言覆盖正文与文件头同形的 +++/---、省略行数、空旧范围、Git 元数据和缺少换行提示；
 长行、长 hunk 头及极小分片对照通过。Pango 亮暗 1× 增删行 RGBA 断言通过。
-首次全仓测试发现新增样式尚未加入标准 token 部件，补齐 styles.go 后原断言及全仓复跑通过。
+首次 `GOWORK=off go test ./...` 的 TestRegisteredStylesAndTokenParts 在 styles_test.go:39
+发现 diff.added 回退为普通前景色：新增样式尚未加入标准 token 部件；补齐 styles.go 后原断言及全仓复跑通过。
 
 Ubuntu 22.04.5 amd64 / Go 1.25.8，`GOWORK=off go test ./...`（GOUI v0.5.0）通过。
 独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software / 浅色 1× 下，
@@ -516,3 +517,40 @@ Windows Batch、HCL/Terraform、GraphQL、SCSS、Less 继续依次实现。
 `GOWORK=off go test ./...`、`GOWORK=off go test -race ./language ./internal/highlight` 通过，
 Pango 亮暗块注释正文 RGBA 断言通过，既有 CSS/JS/TS/Python/SQL 共享扫描器回归保持通过。
 独立浅色 1×，`-language scss` 通过 @mixin 建议接受/撤销、引用中的插值输入及公共断言。
+
+### Less
+
+新增 .less、围栏、变量/指令/插值、基础编辑与 theme.less，示例共 48 份。
+独立预期覆盖变量与已知 @ 指令、间接/属性变量、选择器/引用/URL 插值、
+URL 的 //、反引号正文、嵌套规则后的属性恢复；长行/名称、快照和极小分片通过。
+本批六种语言共 1,800 组固定随机畸形输入的分片对照通过，另有编辑后失效/恢复的独立预期。
+独立浅色 1× 的 `-language less` 通过 @import 建议接受/撤销、引用插值、反引号输入与公共断言。
+
+### 批次完成验证
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8，最终通过：
+
+- `go test ./...`（工作区相邻 GOUI b49049d）
+- `GOWORK=off go test ./...`（独立依赖 GOUI v0.5.0）
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+新增六语言的原生 Pango 亮暗 1× 颜色断言通过，使用同字体/同布局的独立前景色预期，
+RGBA 零误差；另断言 Diff 增加/删除色分别以绿色/红色通道为主。
+关闭工作区构建语言窗口程序、着色回归程序与 editor；独立 TigerVNC :87 /
+Xfwm4 compositor on / Pango / Software 的浅色 1×、深色 1.5× 均通过
+47 种语言的 48 组建议接受/撤销与 37 组引用/配对输入，以及公共只读、语义、括号断言。
+Diff 没有建议场景；SCSS/Less 的代码选择器插值也验证了自动生成与手工闭合配合。
+输入均经 Window.DispatchEvent/CommitText，无 DevServer。
+既有着色回归每组通过 127 帧、60 次输入/删除和撤销重做，未回退当前行/后续行的显示稳定性。
+未知语言筛选按预期以 1 退出并报告没有集成场景，避免空筛选产生假通过。
+
+editor 浅色 1× 实际点击六个新样本，深色 1× 检查 Less/Diff；48 个样本按钮完整换行，
+ChromeInfo 确认 Integrated enabled，没有观察到正文或工具栏裁切；截图仅作外观观察。
+本批二进制、截图和日志在 `/tmp/sourceview-language-batch5-xOXtDs/`，源码目录没有生成产物。
+结束时关闭本次 editor、专用 X11 和窗口管理器，保留既有桌面；没有剪贴板操作、语言样本执行或全局设置更改。
+未运行真实 IME 或 macOS/Windows 原生场景，交叉构建只证明可编译。
+没有新增依赖或修改 GOUI；保留原有未跟踪 doc/Doing.md、example/temp/，不纳入提交。
+词法歧义和功能边界见设计，不承诺编译器、Schema/provider 解析或语言服务能力。

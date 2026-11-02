@@ -329,6 +329,12 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Swift, "let s=#\"\"\"\nbody\n\"\"\"#\nlet n=1", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.Dart, "var s=r'''\nbody\n''';\nvar n=1", "'''", "'", "body", language.KindPlain},
 		{language.R, "x <- r\"(body)\"\nreturn(1)", ")\"", ")-\"", "return", language.KindString},
+		{language.Diff, "@@ -1 +1 @@\n-old\n+new\n+++ b/next", "-1 +1", "-1,2 +1,2", "+++ b/next", language.KindAdded},
+		{language.Batch, "echo ^\nrem body", "^", "", "body", language.KindComment},
+		{language.HCL, "value=<<END\nbody\nEND\nresource real {}", "<<END", "1", "body", language.KindPlain},
+		{language.GraphQL, "\"\"\"open\nbody\n\"\"\"\ntype Real {}", "\"\"\"", "\"", "body", language.KindProperty},
+		{language.SCSS, "/* open\nbody\n*/\n.x{}", "/*", "", "body", language.KindTag},
+		{language.Less, "/* open\nbody\n*/\n.x{}", "/*", "", "body", language.KindTag},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -629,6 +635,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Perl, "my $x=<<'long", "tail'"},
 		{language.HCL, `value="outer ${"inner ${`, "true}"},
 		{language.SCSS, `.x{content:"outer #{"inner #{`, "true}"},
+		{language.Less, `.x{content:"@{long`, "name}"},
 		{language.Swift, `let s="outer \("inner \(`, "true)"},
 		{language.Dart, `var s='outer ${"inner ${`, "true}"},
 		{language.R, `x <- r"--[open`, "body]--\""},
@@ -694,6 +701,15 @@ func TestFifthBatchKinds(t *testing.T) {
 		{language.SCSS, `/* comment #{true} tail */ .x{color:red}`, "tail", language.KindComment},
 		{language.SCSS, `/* comment #{1 /*inner*/ + 2} tail */ .x{color:red}`, "color", language.KindProperty},
 		{language.SCSS, `.x{.child:hover{color:red} padding:1.5rem;}`, "padding", language.KindProperty},
+		{language.Less, `@color:#369; .x {color:@color; width:10px}`, "@color", language.KindVariable},
+		{language.Less, `@import "theme.less"; @media screen {.x {color:red}}`, "@import", language.KindMeta},
+		{language.Less, `@import "theme.less"; @media screen {.x {color:red}}`, "@media", language.KindMeta},
+		{language.Less, `.@{name}{content:~"Hello @{name}";color:@@ref}`, "@{name}", language.KindVariable},
+		{language.Less, `.@{name}{content:~"Hello @{name}";color:@@ref}`, "@@ref", language.KindVariable},
+		{language.Less, `.x{width:$height; background:url(http://example.test/@{name}.png); color:red}`, "$height", language.KindVariable},
+		{language.Less, `.x{background:url(http://example.test/@{name}.png); color:red}`, "http://", language.KindString},
+		{language.Less, ".x{width:`(1 + 2)`; color:red}", "(1 + 2)", language.KindString},
+		{language.Less, `.x{.child:hover{color:red} padding:1rem;}`, "padding", language.KindProperty},
 	} {
 		for _, chunk := range []int{1, 3, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -706,6 +722,7 @@ func TestFifthBatchKinds(t *testing.T) {
 
 func TestFifthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.Less:    {"@name: editor; @ref: name; .@{name} {content:~\"Hello @{name}\"; color:@@ref; background:url(http://example.test/@{name}.png); .child:hover{color:red} padding:1rem; width:`1 + 2`}\n@media screen {.x{height:2px}} // line", ".@{" + strings.Repeat("v", ChunkSize) + "}{content:\"" + strings.Repeat("字", ChunkSize) + "@{name}\"}", "/* note */ @" + strings.Repeat("v", ChunkSize) + ": 1; .x{content:\"\\1F600 smile\"}"},
 		language.SCSS:    {"$name: editor; @mixin box($x){width:$x} .#{$name}{content:\"#{if(true,\"#{1}\",\"no\")}\"; background:url(http://example.test/#{$name}.png); .child:hover{color:#abc} padding:1.5rem} /* comment #{1 /*nested*/ + 2} tail */ // line\n.x {content:\"\\1F600 smile\"}", ".x {content:\"" + strings.Repeat("字", ChunkSize) + "#{true}\"; background:url(" + strings.Repeat("a", ChunkSize) + "/#{$name}.png)}", "$" + strings.Repeat("v", ChunkSize) + ": 1; @" + strings.Repeat("m", ChunkSize) + " {}"},
 		language.GraphQL: {"query Q($id:ID!){ user(id:$id) @skip(if:false){ ...Details } }\nfragment Details on User { name }\n\"\"\"description \\\"\"\" literal\nbody\n\"\"\"\ntype User { id:ID! }", "query Q { field(text:\"\\u{1F600}\\u0041\") }\n\"\"\"" + strings.Repeat("字\\", ChunkSize) + "\"\"\"\nquery Q {}", "query " + strings.Repeat("q", ChunkSize) + "($" + strings.Repeat("v", ChunkSize) + ":Int){}"},
 		language.HCL:     {"resource \"local_file\" \"x\" {\nname-with-dash = \"${true ? \"${1}\" : \"no\"}\"\nbody = <<-END\n$${literal} %{ if true ~}\n${jsonencode({a=\"b\"})}\n%{ endif }\n END\n}\n/* end */", "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "value=<<" + strings.Repeat("字", ChunkSize) + "\n${true}\n" + strings.Repeat("字", ChunkSize) + "\nresource real {}", strings.Repeat("k", ChunkSize) + " = \"" + strings.Repeat("字", ChunkSize) + "${true}\""},
@@ -981,6 +998,25 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
 					t.Fatalf("%s chunk %d: tokens equal=%v states equal=%v\ngot %v\nwant %v\ngot state %#v\nwant state %#v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws), got, want, gs.raw, ws.raw)
 				}
+			}
+		}
+	}
+}
+
+func TestToolingLanguageMalformedFragments(t *testing.T) {
+	random := rand.New(rand.NewSource(20261102))
+	alphabet := []rune("Rremurl0129_'\"`\\$#@%!.*+-[]{}():,;=/~ \t\n你好")
+	for _, id := range []language.ID{language.Diff, language.Batch, language.HCL, language.GraphQL, language.SCSS, language.Less} {
+		for round := 0; round < 300; round++ {
+			var b strings.Builder
+			for n := random.Intn(500); n > 0; n-- {
+				b.WriteRune(alphabet[random.Intn(len(alphabet))])
+			}
+			text := b.String()
+			want, ws := scanAll(id, text, 1024)
+			got, gs := scanAll(id, text, 1+random.Intn(17))
+			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+				t.Fatalf("%s malformed %q: tokens=%v states=%v\ngot state %#v\nwant state %#v", id, text, reflect.DeepEqual(got, want), gs.Equal(ws), gs.raw, ws.raw)
 			}
 		}
 	}

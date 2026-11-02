@@ -1,0 +1,22 @@
+// Original Less sample for SourceView.
+@accent: #428bca;
+@name: editor;
+@images: "/icons";
+
+.panel(@radius: 6px) when (@radius >= 0) {
+  border: 1px solid @accent;
+  border-radius: @radius;
+}
+
+.@{name} {
+  .panel();
+  color: @accent;
+  background-image: url("@{images}/@{name}.svg");
+  &::before { content: ~"Hello, @{name}!"; }
+  .title:hover { color: lighten(@accent, 10%); }
+  padding: 1.5rem;
+}
+
+@media screen and (min-width: 800px) {
+  .@{name} { display: grid; }
+}

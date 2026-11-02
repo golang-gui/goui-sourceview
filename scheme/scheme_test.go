@@ -33,6 +33,15 @@ func TestImmutableAndFallback(t *testing.T) {
 	}
 }
 
+func TestDiffColors(t *testing.T) {
+	for _, s := range []*Scheme{Light(), Dark()} {
+		added, removed := s.Color(language.KindAdded), s.Color(language.KindRemoved)
+		if added.G <= added.R || added.G <= added.B || removed.R <= removed.G || removed.R <= removed.B || added.A != 255 || removed.A != 255 {
+			t.Fatalf("diff colors: added=%v removed=%v", added, removed)
+		}
+	}
+}
+
 func TestBracketColorsCanBeIndependentlyTransparent(t *testing.T) {
 	for _, base := range []*Scheme{Light(), Dark()} {
 		for _, alpha := range []uint8{0, 64, 255} {

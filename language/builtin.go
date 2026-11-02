@@ -17,13 +17,18 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
-		case SCSS:
+		case SCSS, Less:
 			d.Tokenizer = codeTokenizer{info.ID}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("-$@!", r) }
 			d.AllowWordSuggestions = codeWordSuggestions
 			vocabulary := codeVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+			if info.ID == Less {
+				p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+				d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+				d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			}
 		case GraphQL:
 			d.Tokenizer = gqlTokenizer{}
 			d.Editing.Comments.Line = "#"
@@ -442,6 +447,8 @@ func codeVocabulary(id ID) []string {
 	switch id {
 	case SCSS:
 		return append(codeVocabulary(CSS), strings.Fields("@use @forward @import @mixin @include @function @return @if @else @for @each @while @extend @at-root @content @debug @warn @error true false null and or not from through to in as with using !default !global !optional")...)
+	case Less:
+		return append(codeVocabulary(CSS), strings.Fields("@import @plugin @media @supports @container @layer @keyframes @font-face @page @property @namespace when and not true false iscolor isnumber isstring iskeyword isurl ispixel ispercentage isem lighten darken saturate desaturate fade mix spin round ceil floor percentage")...)
 	case GraphQL:
 		table = gqlKeywords
 	case HCL:

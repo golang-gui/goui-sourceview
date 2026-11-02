@@ -19,6 +19,7 @@ const (
 	codeDollarOpen
 	codeDollarBody
 	codeURL
+	codeStyleVariable
 )
 
 type stringFrame struct {
@@ -46,8 +47,9 @@ type styleFrame struct {
 	declaration, value, group bool
 }
 
-// codeState contains lexical context only. JS/TS share a scanner with separate
-// vocabularies; Python interpolation and SQL quoting have explicit states.
+// codeState contains lexical context only. Language IDs keep shared rules
+// isolated; string interpolation, CSS declarations and SQL quoting retain
+// their own immutable snapshots.
 type codeState struct {
 	id                                          ID
 	mode                                        codeMode
@@ -69,6 +71,7 @@ type codeState struct {
 	styles                                      *styleFrame
 	styleEscapeLeft                             int
 	styleEscapeSpace                            bool
+	styleVariableBack                           codeMode
 }
 
 func (s codeState) Equal(other State) bool {
@@ -116,8 +119,12 @@ func (s codeState) Equal(other State) bool {
 }
 
 func (s codeState) Context() Context {
-	return Context{String: s.mode == codeQuoted || s.mode == codeRegexp || s.mode == codeRegexpFlags || s.mode == codeDollarBody || s.mode == codeURL,
-		Comment: s.mode == codeLineComment || s.mode == codeBlockComment, Literal: s.mode == codeDollarBody || s.mode == codeQuoted && s.raw}
+	mode := s.mode
+	if mode == codeStyleVariable {
+		mode = s.styleVariableBack
+	}
+	return Context{String: mode == codeQuoted || mode == codeRegexp || mode == codeRegexpFlags || mode == codeDollarBody || mode == codeURL,
+		Comment: mode == codeLineComment || mode == codeBlockComment, Literal: mode == codeDollarBody || mode == codeQuoted && s.raw}
 }
 
 type codeTokenizer struct{ id ID }
@@ -147,18 +154,22 @@ func codeKeyword(id ID, word string) bool {
 		return sqlKeywords[strings.ToUpper(word)]
 	case SCSS:
 		return scssKeywords[word]
+	case Less:
+		return lessKeywords[word]
 	}
 	return false
 }
-func cssLanguage(id ID) bool { return id == CSS || id == SCSS }
+func cssLanguage(id ID) bool { return id == CSS || id == SCSS || id == Less }
 
 var scssKeywords = words("true false null and or not from through to in as with using !default !global !optional")
+var lessKeywords = words("when and not true false iscolor isnumber isstring iskeyword isurl ispixel ispercentage isem lighten darken saturate desaturate fade mix spin round ceil floor percentage")
+var lessAtRules = words("@import @plugin @charset @namespace @media @supports @container @layer @document @keyframes @-webkit-keyframes @font-face @page @property @scope @starting-style @counter-style @font-feature-values")
 
 func codeNameStart(id ID, r rune) bool {
-	return IdentifierRune(r) && !(r >= '0' && r <= '9') || r == '$' && (id == JavaScript || id == TypeScript || id == SQL || id == SCSS) || r == '-' && cssLanguage(id)
+	return IdentifierRune(r) && !(r >= '0' && r <= '9') || r == '$' && (id == JavaScript || id == TypeScript || id == SQL || id == SCSS || id == Less) || r == '-' && cssLanguage(id)
 }
 func codeNamePart(id ID, r rune) bool {
-	return IdentifierRune(r) || r == '$' && (id == JavaScript || id == TypeScript || id == SQL) || r == '-' && cssLanguage(id)
+	return IdentifierRune(r) || r == '$' && (id == JavaScript || id == TypeScript || id == SQL) || r == '-' && cssLanguage(id) || id == Less && r == '@'
 }
 
 func finishCodeWord(s *codeState, w *tokenWriter, end int) {
@@ -172,6 +183,9 @@ func finishCodeWord(s *codeState, w *tokenWriter, end int) {
 	}
 	if cssLanguage(s.id) && strings.HasPrefix(word.text, "@") {
 		kind = KindMeta
+		if s.id == Less && !lessAtRules[strings.ToLower(word.text)] {
+			kind = KindVariable
+		}
 		switch strings.ToLower(word.text) {
 		case "@media", "@supports", "@layer", "@container", "@keyframes", "@-webkit-keyframes", "@document", "@scope", "@starting-style":
 			s.cssGroup = true
@@ -205,7 +219,8 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 	i := 0
 	add := func(a, z int, k Kind, c Class) { w.add(in.Offset+a, in.Offset+z, k, c) }
 	js := b.id == JavaScript || b.id == TypeScript
-	css, preprocessor := cssLanguage(b.id), b.id == SCSS
+	css := cssLanguage(b.id)
+	preprocessor := css && b.id != CSS
 	var capture strings.Builder
 	flushCapture := func() {
 		if capture.Len() > 0 {
@@ -265,7 +280,28 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			i += 2
 			continue
 		}
+		if b.id == Less && !s.wordOn && !s.escape && s.quote != '`' && strings.HasPrefix(text[i:], "@{") && (s.mode == codeNormal || s.mode == codeQuoted || s.mode == codeURL) {
+			class := Class(0)
+			if s.mode != codeNormal {
+				class = ClassString
+			}
+			s.styleVariableBack, s.mode = s.mode, codeStyleVariable
+			add(i, i+2, KindVariable, class)
+			i += 2
+			continue
+		}
 		switch s.mode {
+		case codeStyleVariable:
+			class := Class(0)
+			if s.styleVariableBack == codeQuoted || s.styleVariableBack == codeURL {
+				class = ClassString
+			}
+			add(i, i+n, KindVariable, class)
+			i += n
+			if c == '}' {
+				s.mode, s.styleVariableBack = s.styleVariableBack, codeNormal
+			}
+			continue
 		case codeURL:
 			if s.escape {
 				s.escape = false
@@ -477,6 +513,10 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			continue
 		}
 		if s.wordOn {
+			if b.id == Less && c == '@' && (!strings.HasPrefix(s.word.text, "@") || strings.HasPrefix(text[i:], "@{")) {
+				finishWord(in.Offset + i)
+				continue
+			}
 			if codeNamePart(b.id, r) {
 				s.word.add(text[i : i+n])
 				add(i, i+n, s.word.kind, 0)
@@ -535,7 +575,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			i += 2
 			continue
 		}
-		if c == '"' || c == '\'' || c == '`' && (b.id == Go || js || b.id == SQL) {
+		if c == '"' || c == '\'' || c == '`' && (b.id == Go || js || b.id == SQL || b.id == Less) {
 			startQuote(c, c == '`' && (b.id == Go || js), c == '`' && js)
 			// Template strings still process escapes, unlike Go raw strings.
 			if js {
@@ -606,6 +646,9 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 					kind = KindTag
 				}
 				if b.id == SCSS && c == '$' {
+					kind = KindVariable
+				}
+				if b.id == Less && (c == '@' || c == '$') {
 					kind = KindVariable
 				}
 			}
@@ -694,6 +737,9 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 	flushCapture()
 	if in.LineEnd && i == len(text) {
 		finishWord(in.Offset + i)
+		if s.mode == codeStyleVariable {
+			s.mode, s.styleVariableBack = s.styleVariableBack, codeNormal
+		}
 		if s.mode == codeLineComment || s.mode == codeNumber || s.mode == codeRegexp || s.mode == codeRegexpFlags || s.mode == codeDollarOpen {
 			s.mode = codeNormal
 			s.lastNumber = 0
