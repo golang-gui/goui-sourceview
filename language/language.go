@@ -56,6 +56,7 @@ const (
 	Diff         ID = "diff"
 	Batch        ID = "bat"
 	HCL          ID = "hcl"
+	GraphQL      ID = "graphql"
 	Markdown     ID = "markdown"
 )
 
@@ -152,6 +153,7 @@ var builtins = []Info{
 	{ID: Diff, Name: "Diff", Extensions: []string{".diff", ".patch"}, MIMETypes: []string{"text/x-diff", "text/x-patch"}},
 	{ID: Batch, Name: "Windows Batch", Extensions: []string{".bat", ".cmd"}, MIMETypes: []string{"application/x-bat"}},
 	{ID: HCL, Name: "HCL / Terraform", Extensions: []string{".hcl", ".tf", ".tfvars"}, MIMETypes: []string{"text/x-hcl"}},
+	{ID: GraphQL, Name: "GraphQL", Extensions: []string{".graphql", ".gql", ".graphqls"}, MIMETypes: []string{"application/graphql", "text/x-graphql"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

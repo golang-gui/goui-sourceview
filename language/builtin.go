@@ -17,6 +17,18 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case GraphQL:
+			d.Tokenizer = gqlTokenizer{}
+			d.Editing.Comments.Line = "#"
+			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: `"`, Close: `"`, NotInString: true, NotInComment: true})
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			d.Editing.Word = func(r rune) bool { return gqlName(r) || r == '$' || r == '@' }
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return c.Selected || c.Context.String || c.Typed != `"` || !strings.HasSuffix(c.Before, `""`)
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case HCL:
 			d.Tokenizer = hcTokenizer{}
 			d.Editing.Comments = Comments{Line: "#", Block: Pair{Open: "/*", Close: "*/"}}
@@ -391,7 +403,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"patch": Diff,
 		"batch": Batch, "cmd": Batch,
 		"terraform": HCL, "tf": HCL,
-		"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
+		"gql": GraphQL,
+		"sh":  Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
 		"proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines,
 		"c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp,
 		"ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell,
@@ -420,6 +433,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case GraphQL:
+		table = gqlKeywords
 	case HCL:
 		table = hcKeywords
 	case Batch:

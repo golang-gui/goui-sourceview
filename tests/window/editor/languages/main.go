@@ -123,6 +123,7 @@ func main() {
 		{language.Perl, "packa", "package"},
 		{language.Batch, "setl", "setlocal"},
 		{language.HCL, "resou", "resource"},
+		{language.GraphQL, "mutat", "mutation"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -202,6 +203,7 @@ func main() {
 		{language.Perl, "my $s = ", "'it\\'s'", "my $s = 'it\\'s'"},
 		{language.Diff, "+ ", "{'x'}", "+ {'x'}"},
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
+		{language.GraphQL, "", `"""`, `"""`},
 		{language.Batch, "echo ", "\"C:\\\"", "echo \"C:\\\""},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},

@@ -40,6 +40,7 @@ func sampleDocuments() []exampleDocument {
 		"change.diff",
 		"build.cmd",
 		"main.tf",
+		"query.graphql",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

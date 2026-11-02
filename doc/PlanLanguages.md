@@ -499,3 +499,11 @@ Windows Batch、HCL/Terraform、GraphQL、SCSS、Less 继续依次实现。
 `GOWORK=off go test ./...`、Pango 亮暗 heredoc 正文 RGBA 断言通过。
 同本批独立浅色 1×，`-language hcl` 通过 resource 建议接受/撤销、插值引用输入与公共断言。
 闭合前后空白按 HCL 2.24.0 扫描器源码处理，文档与源码区别已记录；没有加载 Terraform 或 provider。
+
+### GraphQL
+
+新增文件/围栏、普通与块引用、变量/指令、Schema/查询词汇、基础编辑和 query.graphql，示例共 46 份。
+普通/花括号 Unicode 转义、块引用中的转义三引号、变量/指令、名称、数字和真实行尾恢复有独立预期；
+长正文、长名称与极小分片通过。`GOWORK=off go test ./...`、Pango 亮暗块正文 RGBA 断言通过。
+同本批独立浅色 1×，`-language graphql` 通过 mutation 建议接受/撤销、三引号输入及公共断言。
+没有 Schema 加载、网络请求或 GraphQL 执行。

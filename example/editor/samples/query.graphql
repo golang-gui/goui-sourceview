@@ -1,0 +1,23 @@
+# Original query and schema sample for SourceView.
+query Editor($id: ID!, $details: Boolean = true) {
+  editor(id: $id) {
+    name
+    ...EditorDetails @include(if: $details)
+  }
+}
+
+fragment EditorDetails on Editor {
+  languages
+  editable
+}
+
+"""
+A native code editor.
+Literal quotes inside this description: \""".
+"""
+type Editor {
+  id: ID!
+  name: String!
+  languages: [String!]!
+  editable: Boolean!
+}

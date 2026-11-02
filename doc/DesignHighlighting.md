@@ -815,3 +815,18 @@ heredoc 不解释反斜杠，闭合名称单独保存、不保存正文。普通
 （页面 v1.17.x）和 [HCL v2.24.0 scan_tokens.rl](https://github.com/hashicorp/hcl/blob/v2.24.0/hclsyntax/scan_tokens.rl)
 的 heredocLiteralEOL、beginTemplateInterp/Control 及表达式返回栈。
 采用既有 Shell/Ruby 等语言的分片和状态隔离方式，不导入 HCL/Terraform 解析器或复制第三方源码。
+
+## 28. GraphQL
+
+支持 `.graphql/.graphqls/.gql`、graphql/gql 围栏、查询和 Schema 常用词汇、
+变量、指令、名称、数值、# 注释、普通和三引号字符串。
+普通字符串处理固定/花括号 Unicode 转义，真实行尾恢复；块字符串跨行，
+只有反斜杠加三引号具有专用转义意义，其他反斜杠保持正文。
+所有引用保留 String Class，块引用使用 Literal 上下文，正文内括号不参与代码配对。
+支持结构/双引号配对、三引号输入、注释与关键词建议；不插入单引号。
+不解析 Schema、验证查询或推断字段类型，常用词汇着色不等于语法位置校验。
+
+依据 [GraphQL September 2025 规范](https://spec.graphql.org/September2025/#sec-String-Value)
+及 [graphql-js v16.11.0 lexer.ts](https://github.com/graphql/graphql-js/blob/v16.11.0/src/language/lexer.ts)
+的普通/块字符串区分、Unicode 转义和 ASCII 名称规则（读取 2026-11-02）。
+采用既有三引号和分片呈现协议，不引入执行器或 Schema 依赖。

@@ -60,6 +60,7 @@ func TestGuess(t *testing.T) {
 		{"change.diff", "", Diff}, {"change.patch", "", Diff},
 		{"build.bat", "", Batch}, {"build.CMD", "", Batch},
 		{"main.tf", "", HCL}, {"vars.tfvars", "", HCL}, {".terraform.lock.hcl", "", HCL}, {"vars.tfvars.json", "", JSON},
+		{"query.graphql", "", GraphQL}, {"schema.graphqls", "", GraphQL}, {"query.gql", "", GraphQL},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -168,6 +169,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Perl, `my $s=q{literal`, true, false, false}, {Perl, "=pod", false, true, false},
 		{Batch, `echo "text %name`, true, false, true}, {Batch, "@REM note", false, true, false},
 		{HCL, `value="hello ${true`, false, false, false}, {HCL, `value="hello`, true, false, false},
+		{GraphQL, `"""body`, true, false, true}, {GraphQL, `"body`, true, false, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -272,6 +274,7 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{Perl, `my $r=qr/[()]/;`, "[()]", ClassString},
 		{Batch, `echo "%name% (literal)"`, "(literal)", ClassString},
 		{HCL, `value="${true}"`, "true", 0}, {HCL, `value="$${true}"`, "true", ClassString},
+		{GraphQL, `query Q { field(x:"[()]") }`, "[()]", ClassString},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -435,6 +438,7 @@ func TestToolingLanguageFences(t *testing.T) {
 		{"diff", Diff, "+new", KindAdded}, {"patch", Diff, "@@", KindMeta},
 		{"bat", Batch, "echo", KindKeyword}, {"batch", Batch, "set", KindKeyword}, {"cmd", Batch, "call", KindKeyword},
 		{"hcl", HCL, "resource", KindKeyword}, {"terraform", HCL, "variable", KindKeyword}, {"tf", HCL, "module", KindKeyword},
+		{"graphql", GraphQL, "query", KindKeyword}, {"gql", GraphQL, "schema", KindKeyword},
 	} {
 		scanner := md.Tokenizer()
 		fence := "```" + tc.name

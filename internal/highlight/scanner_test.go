@@ -673,6 +673,14 @@ func TestFifthBatchKinds(t *testing.T) {
 		{language.HCL, "value=<<-END\n${jsonencode({x=true})}\n  END  \nresource real {}", "true", language.KindKeyword},
 		{language.HCL, "value=<<-END\n${jsonencode({x=true})}\n  END  \nresource real {}", "resource", language.KindKeyword},
 		{language.HCL, "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "resource", language.KindKeyword},
+		{language.GraphQL, `query Q($id: ID!) { user(id:$id) @skip(if:false) { ...Details } }`, "$id", language.KindVariable},
+		{language.GraphQL, `query Q($id: ID!) { user(id:$id) @skip(if:false) { ...Details } }`, "@skip", language.KindMeta},
+		{language.GraphQL, `query Q { user { __typename } }`, "__typename", language.KindProperty},
+		{language.GraphQL, "\"\"\"description \\\"\"\" literal\nbody\n\"\"\"\ntype User { id:ID! }", "body", language.KindString},
+		{language.GraphQL, "\"\"\"description \\\"\"\" literal\nbody\n\"\"\"\ntype User { id:ID! }", "type", language.KindKeyword},
+		{language.GraphQL, `query Q { field(text:"\u{1F600}\u0041") }`, "1F600", language.KindEscape},
+		{language.GraphQL, "# comment\nquery Q { field(x:-1.2e+3) }", "-1.2e+3", language.KindNumber},
+		{language.GraphQL, "\"unfinished\nquery Q {}", "query", language.KindKeyword},
 	} {
 		for _, chunk := range []int{1, 3, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -685,9 +693,10 @@ func TestFifthBatchKinds(t *testing.T) {
 
 func TestFifthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
-		language.HCL:   {"resource \"local_file\" \"x\" {\nname-with-dash = \"${true ? \"${1}\" : \"no\"}\"\nbody = <<-END\n$${literal} %{ if true ~}\n${jsonencode({a=\"b\"})}\n%{ endif }\n END\n}\n/* end */", "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "value=<<" + strings.Repeat("字", ChunkSize) + "\n${true}\n" + strings.Repeat("字", ChunkSize) + "\nresource real {}", strings.Repeat("k", ChunkSize) + " = \"" + strings.Repeat("字", ChunkSize) + "${true}\""},
-		language.Batch: {"@echo off\nsetlocal EnableDelayedExpansion\nREM note\n:build\n:: note\nfor %%i in (*.txt) do (\n echo \"%%~fi %~dp0 %NAME:~1,2% !count!\"\n)\necho ^\nrem continuation\nrem actual", "echo \"" + strings.Repeat("字", ChunkSize) + "%NAME%\"\n" + strings.Repeat("r", ChunkSize) + " argument\nrem final"},
-		language.Diff:  {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@ function\n--- old\n+++ new\n same\n--- a/b\n+++ b/b\n@@ -0,0 +1 @@\n+new\n\\ No newline at end of file", "@@ -1 +1 @@ " + strings.Repeat("字", ChunkSize) + "\n-" + strings.Repeat("x", ChunkSize*2) + "\n+new", "@@ -1," + strings.Repeat("9", ChunkSize) + " +1 @@\n+new"},
+		language.GraphQL: {"query Q($id:ID!){ user(id:$id) @skip(if:false){ ...Details } }\nfragment Details on User { name }\n\"\"\"description \\\"\"\" literal\nbody\n\"\"\"\ntype User { id:ID! }", "query Q { field(text:\"\\u{1F600}\\u0041\") }\n\"\"\"" + strings.Repeat("字\\", ChunkSize) + "\"\"\"\nquery Q {}", "query " + strings.Repeat("q", ChunkSize) + "($" + strings.Repeat("v", ChunkSize) + ":Int){}"},
+		language.HCL:     {"resource \"local_file\" \"x\" {\nname-with-dash = \"${true ? \"${1}\" : \"no\"}\"\nbody = <<-END\n$${literal} %{ if true ~}\n${jsonencode({a=\"b\"})}\n%{ endif }\n END\n}\n/* end */", "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "value=<<" + strings.Repeat("字", ChunkSize) + "\n${true}\n" + strings.Repeat("字", ChunkSize) + "\nresource real {}", strings.Repeat("k", ChunkSize) + " = \"" + strings.Repeat("字", ChunkSize) + "${true}\""},
+		language.Batch:   {"@echo off\nsetlocal EnableDelayedExpansion\nREM note\n:build\n:: note\nfor %%i in (*.txt) do (\n echo \"%%~fi %~dp0 %NAME:~1,2% !count!\"\n)\necho ^\nrem continuation\nrem actual", "echo \"" + strings.Repeat("字", ChunkSize) + "%NAME%\"\n" + strings.Repeat("r", ChunkSize) + " argument\nrem final"},
+		language.Diff:    {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@ function\n--- old\n+++ new\n same\n--- a/b\n+++ b/b\n@@ -0,0 +1 @@\n+new\n\\ No newline at end of file", "@@ -1 +1 @@ " + strings.Repeat("字", ChunkSize) + "\n-" + strings.Repeat("x", ChunkSize*2) + "\n+new", "@@ -1," + strings.Repeat("9", ChunkSize) + " +1 @@\n+new"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
