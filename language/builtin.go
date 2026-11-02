@@ -17,10 +17,20 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
-		case GitIgnore:
+		case GitIgnore, GitAttributes:
 			d.Tokenizer = gitTokenizer{info.ID}
 			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}}
 			d.AllowWordSuggestions = func(Context, bool) bool { return false }
+			if info.ID == GitAttributes {
+				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '-' || r == '!' }
+				vocabulary := strings.Fields("text binary eol diff merge filter ident working-tree-encoding export-ignore export-subst whitespace -text !text -diff -merge")
+				d.Suggest = func(c Context) []string {
+					if c.Data == true {
+						return vocabulary
+					}
+					return nil
+				}
+			}
 		case Properties:
 			d.Tokenizer = propTokenizer{}
 			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '.' || r == '-' }, Comments: Comments{Line: "#"}}

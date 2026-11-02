@@ -912,3 +912,14 @@ GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.
 不展开文件系统、计算忽略结果或解析嵌入源码，不将规则自动用于 .dockerignore 等方言。
 依据 [gitignore pattern format](https://git-scm.com/docs/gitignore#_pattern_format)
 （读取 2026-11-02），延续 Diff 对非代码文本的 Class/编辑边界，不复制匹配器或依赖 Git 进程。
+
+## 35. Git Attributes
+
+新增 .gitattributes 与 gitattributes 围栏，复用 Git 模式着色设施，独立跟踪模式/属性区域。
+允许前导空白和 C 风格引用路径；未引用的空白结束模式，不能套用 Ignore 的转义空格规则。
+属性区区分名称、设置/取消/未指定前缀、赋值和值，支持 [attr] 宏声明与常用属性建议。
+行首注释、字符类、引用和转义保留非代码 Class，属性值中的 # 不触发行注释。
+关闭引用/结构自动配对，不解释否定模式，不查找仓库或执行属性匹配与宏展开。
+依据 [gitattributes](https://git-scm.com/docs/gitattributes) 和
+[Git v2.51.1 attr.c](https://github.com/git/git/blob/v2.51.1/attr.c) 的 parse_attr_line
+（读取 2026-11-02），明确与 gitignore 的模式、空白及属性语义边界。

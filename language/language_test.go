@@ -67,6 +67,7 @@ func TestGuess(t *testing.T) {
 		{".env", "", Dotenv}, {".env.local", "", Dotenv}, {"dev.env", "", Dotenv}, {".environment", "", Plain},
 		{"messages.properties", "", Properties},
 		{".gitignore", "", GitIgnore}, {"rules.gitignore", "", GitIgnore},
+		{".gitattributes", "", GitAttributes},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -182,6 +183,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Dotenv, `NAME="body`, true, false, true}, {Dotenv, `NAME='body`, true, false, true},
 		{Properties, `key="literal`, true, false, true},
 		{GitIgnore, `[a-z]`, true, false, true},
+		{GitAttributes, `*.txt text eol=lf`, true, false, true},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -459,6 +461,7 @@ func TestToolingLanguageFences(t *testing.T) {
 		{"dotenv", Dotenv, "KEY", KindProperty}, {"env", Dotenv, "KEY", KindProperty},
 		{"properties", Properties, "key", KindProperty},
 		{"gitignore", GitIgnore, "literal", KindString},
+		{"gitattributes", GitAttributes, "literal", KindString},
 	} {
 		scanner := md.Tokenizer()
 		fence := "```" + tc.name

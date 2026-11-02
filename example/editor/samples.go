@@ -48,6 +48,7 @@ func sampleDocuments() []exampleDocument {
 		"settings.env",
 		"messages.properties",
 		"rules.gitignore",
+		"rules.gitattributes",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

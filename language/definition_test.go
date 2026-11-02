@@ -101,6 +101,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Dotenv,
 		language.Properties,
 		language.GitIgnore,
+		language.GitAttributes,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

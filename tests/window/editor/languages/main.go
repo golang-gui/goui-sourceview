@@ -130,6 +130,7 @@ func main() {
 		{language.Less, "@imp", "@import"},
 		{language.GoMod, "requi", "require"}, {language.GoWork, "us", "use"},
 		{language.Dotenv, "expo", "export"},
+		{language.GitAttributes, "*.txt te", "*.txt text"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -213,6 +214,7 @@ func main() {
 		{language.GoSum, "path v1.0.0 h1:", "{", "path v1.0.0 h1:{"},
 		{language.Properties, "key=", `"`, `key="`},
 		{language.GitIgnore, "", "[", "["},
+		{language.GitAttributes, "", `"file name" text`, `"file name" text`},
 		{language.Dotenv, "NAME=", `"C:\"`, `NAME="C:\"`},
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
 		{language.GraphQL, "", `"""`, `"""`},

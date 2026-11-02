@@ -1,0 +1,10 @@
+# Original Git attributes sample for SourceView.
+* text=auto
+*.go text eol=lf
+*.cmd text eol=crlf
+*.png binary
+"docs/file with spaces.txt" text
+[attr]source text diff
+*.src source
+*.generated -diff -merge
+*.local !text

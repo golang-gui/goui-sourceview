@@ -590,3 +590,11 @@ Node.js 源码引用行为及未闭合引用的编辑恢复边界已记录，没
 独立断言覆盖列首注释、转义 #/!、否定前缀和前导空格；glob、字符类、长行及极小分片通过。
 `GOWORK=off go test ./...`、Pango 亮暗模式正文颜色断言通过。
 独立浅色 1× 的 -language gitignore 通过方括号原样输入及公共断言，没有把模式当作代码配对。
+
+### Git Attributes
+
+新增文件/围栏、属性/宏分类、建议和 rules.gitattributes，示例共 55 份。
+独立断言覆盖 C 引用路径、赋值/属性、宏、前导空白、行中 #、非否定模式及未引用空格边界；长行和分片通过。
+`GOWORK=off go test ./...`、Pango 亮暗正文颜色断言通过。
+独立浅色 1× 的 -language gitattributes 通过 text 建议接受/撤销、带空格路径原样输入及公共断言。
+复用模式设施后的 Git Ignore 回归保持通过，没有读取/修改仓库属性或执行 Git 匹配。
