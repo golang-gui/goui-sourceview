@@ -118,15 +118,22 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
-		case C, Cpp, Java:
+		case C, Cpp, Java, Rust:
 			switch info.ID {
 			case C, Cpp:
 				d.Tokenizer = cTokenizer{info.ID}
 			case Java:
 				d.Tokenizer = javaTokenizer{}
+			case Rust:
+				d.Tokenizer = rustTokenizer{}
 			}
 			d.AllowWordSuggestions = codeWordSuggestions
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			if info.ID == Rust {
+				// An apostrophe usually starts a lifetime; selection surrounding
+				// remains available for explicitly creating a character literal.
+				d.Editing.AllowPair = func(c PairContext) bool { return c.Selected || c.Typed != "'" }
+			}
 			if info.ID == Java {
 				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
 			}
@@ -183,7 +190,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 			table[string(id)] = l
 		}
 	}
-	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines, "c++": Cpp, "cc": Cpp} {
+	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines, "c++": Cpp, "cc": Cpp, "rs": Rust} {
 		table[alias] = definitions[id]
 	}
 	return table
@@ -208,6 +215,8 @@ func codeVocabulary(id ID) []string {
 		table = cppKeywords
 	case Java:
 		table = javaKeywords
+	case Rust:
+		table = rustKeywords
 	case Go:
 		table = goKeywords
 	case Python:

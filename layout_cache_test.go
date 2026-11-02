@@ -874,6 +874,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.C, "return", "return", 0, language.KindKeyword},
 		{language.Cpp, "auto x=R\"tag(\nbody\n)tag\";", "body", 1, language.KindString},
 		{language.Java, `cl\u0061ss`, `cl\u0061ss`, 0, language.KindKeyword},
+		{language.Rust, "/* outer /* inner */\nstill\n*/", "still", 1, language.KindComment},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

@@ -308,6 +308,8 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Cpp, "auto x = R\"tag(open\nbody\n)tag\";\nreturn 1;", ")tag", ")miss", "return", language.KindString},
 		{language.Java, "String x = \"\"\"\nbody\n\"\"\";\nreturn;", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.Java, `\u002f\u002f note\u000aint n;`, "000a", "0009", "int", language.KindComment},
+		{language.Rust, "/* outer /* inner */\nbody\n*/\nlet x=1;", "/* inner", "inner", "body", language.KindPlain},
+		{language.Rust, "let s=r##\"open\nbody\n\"##;\nlet n=1;", "\"##;", "\"#;", "let n", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -632,6 +634,13 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.Java, "\\u002f\\uu002f comment\\u000aint n;", "int", language.KindKeyword},
 		{language.Java, "String x=\"\"\"\nraw \" quoted\n\"\"\"; return;", "quoted", language.KindString},
 		{language.Java, "String x=\"\\\\u0022 still\";", "still", language.KindString},
+		{language.Rust, "fn get<'a>(x: &'a str) -> &'a str { x }", "'a", language.KindVariable},
+		{language.Rust, "let ch='字'; let raw=r#type;", "字", language.KindString},
+		{language.Rust, "let raw=r#type;", "type", language.KindPlain},
+		{language.Rust, "let x = cr##\"raw \"# still\"##;", "still", language.KindString},
+		{language.Rust, "/* outer /* inner */ still */ let x=1;", "still", language.KindComment},
+		{language.Rust, "println!(\"ok\");", "println", language.KindMeta},
+		{language.Rust, "let x=1..2;", "..", language.KindDelimiter},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -650,6 +659,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 		language.C:    {"#include <stdio.h>\n#define SUM(a,b) \\\n ((a)+(b))\n// note \\\\\nstill\nconst char *x=u8\"abc\\n\"; wchar_t ch=L'字';", "/*" + strings.Repeat("字", ChunkSize) + "*/ int n;"},
 		language.Cpp:  {"template<class T> concept Value = requires(T t) { t.x; };\nauto x=u8R\"0123456789abcdef(raw\n)wrong\" )0123456789abcdef\"; return 1'000ULL;", "auto x=R\"(" + strings.Repeat("\"\\字", ChunkSize) + ")\";"},
 		language.Java: {"@Override public String get(){ return \"\"\"\ntext \\\"\"\"\n\"\"\"; }", "cl\\u0061ss X { \\u002f\\u002a comment \\u002a\\u002f int n; }", "// note\\u000areturn;", "\\" + strings.Repeat("u", ChunkSize*2) + "0069nt n;", "String x=\"\\\\u0022\\u005c\\u006e\";"},
+		language.Rust: {"fn borrow<'a>(x: &'a str) -> &'a str { /* outer /*inner*/ still */ let r#type=br###\"raw \"## still\"###; println!(\"{}\",'字'); x }", "let x=r" + strings.Repeat("#", 255) + "\"" + strings.Repeat("字", ChunkSize) + "\"" + strings.Repeat("#", 255) + "; let y=1..2;"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
@@ -667,7 +677,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

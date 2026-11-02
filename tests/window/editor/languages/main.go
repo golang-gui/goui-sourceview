@@ -102,7 +102,7 @@ func main() {
 		{language.Python, "whil", "while"}, {language.JavaScript, "cons", "const"},
 		{language.TypeScript, "interf", "interface"}, {language.CSS, ".x { backg", ".x { background"},
 		{language.C, "retu", "return"}, {language.Cpp, "conste", "constexpr"},
-		{language.Java, "synch", "synchronized"},
+		{language.Java, "synch", "synchronized"}, {language.Rust, "matc", "match"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -155,6 +155,8 @@ func main() {
 		{language.Python, "text = ", `"""`, `text = """`},
 		{language.Go, "text := ", "`raw`", "text := `raw`"},
 		{language.Java, "String text = ", `"""`, `String text = """`},
+
+		{language.Rust, "fn get<", "'a", "fn get<'a"},
 	} {
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)
