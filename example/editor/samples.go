@@ -54,7 +54,7 @@ func sampleDocuments() []exampleDocument {
 		"page.gohtml", "page.html.j2",
 		"editor.service", "editor.desktop",
 		"default.nix", "filter.jq", "query.promql",
-		"hello.fsx", "hello.ex"} {
+		"hello.fsx", "hello.ex", "hello.erl"} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
 			panic(err)

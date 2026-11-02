@@ -77,6 +77,7 @@ const (
 	PromQL        ID = "promql"
 	FSharp        ID = "fsharp"
 	Elixir        ID = "elixir"
+	Erlang        ID = "erlang"
 
 	Markdown ID = "markdown"
 )
@@ -195,6 +196,7 @@ var builtins = []Info{
 	{ID: PromQL, Name: "PromQL", Extensions: []string{".promql"}},
 	{ID: FSharp, Name: "F#", Extensions: []string{".fs", ".fsi", ".fsx"}},
 	{ID: Elixir, Name: "Elixir", Extensions: []string{".ex", ".exs"}},
+	{ID: Erlang, Name: "Erlang", Extensions: []string{".erl", ".hrl"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
@@ -279,6 +281,8 @@ func Guess(filename string, sample []byte) ID {
 		return JQ
 	case "elixir":
 		return Elixir
+	case "escript":
+		return Erlang
 
 	case "fsharpi":
 		return FSharp

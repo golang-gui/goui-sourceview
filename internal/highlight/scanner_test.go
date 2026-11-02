@@ -351,6 +351,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.PromQL, "\x60open\nbody\n\x60", "\x60", "", "body", language.KindPlain},
 		{language.FSharp, "(* open\nbody\n*)", "(*", "", "body", language.KindPlain},
 		{language.Elixir, "\"\"\"first\nbody\n\"\"\"", "\"\"\"", "1", "body", language.KindPlain},
+		{language.Erlang, "'first\nbody\n'", "'", "", "body", language.KindProperty},
 
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
@@ -653,6 +654,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.PromQL, "metric{key=\x60raw", "body\x60}"},
 		{language.FSharp, "let s=$\"outer {$\"inner {", "true}\"}"},
 		{language.Elixir, "text=\"outer #{\"inner #{", "true}\"}"},
+		{language.Erlang, "Text=\"\"\"first", "body\"\"\"."},
 
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
@@ -727,6 +729,10 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.Elixir, "value = ~s\"hello #{true}\"", "true", language.KindKeyword},
 		{language.Elixir, "value = ~r{outer {inner} text}u", "text", language.KindString},
 		{language.Elixir, "~u你好", "好", language.KindPlain},
+		{language.Erlang, "case Value of true -> 'quoted atom'; _ -> 16#FF end.", "Value", language.KindVariable},
+		{language.Erlang, "case Value of true -> 'quoted atom'; _ -> 16#FF end.", "case", language.KindKeyword},
+		{language.Erlang, "case Value of true -> 'quoted atom'; _ -> 16#FF end.", "16#FF", language.KindNumber},
+		{language.Erlang, "[$a, $\\n, \"text\"] % note", "$a", language.KindString},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -746,6 +752,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 		language.PromQL:       {"sum by(job)(rate(metric{status=~\"5..\"}[1h30m])) offset 1m\nmetric{key=\x60raw\nbody\x60} # comment", "rate(" + strings.Repeat("a", ChunkSize) + "[1h30m])"},
 		language.FSharp:       {"(* outer (* inner *) body *)\nlet f (x:'a) = x\nlet s=$\"value {if true then \"yes\" else \"no\"}\"\nlet text=@\"quote \"\" literal\"\nlet raw=\"\"\"body\nend\"\"\"", "let s=$$\"\"\"" + strings.Repeat("字", ChunkSize) + " {{true}}\"\"\""},
 		language.Elixir:       {"defmodule Editor do\n@name :editor\ndef hello(name), do: \"hello #{if true, do: \"yes\", else: \"no\"}\"\nraw=~S\"literal #{true}\"\nr=~r{outer {inner} text}u\nend", "text=\"\"\"" + strings.Repeat("字", ChunkSize) + " #{true}\"\"\""},
+		language.Erlang:       {"-module(editor).\nhello(Value) -> case Value of true -> 'quoted atom'; _ -> 16#FF end.\nchars=[$a,$\\n,\"text\"]. % note", "Text=\"\"\"" + strings.Repeat("字", ChunkSize) + "\"\"\"."},
 
 		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
 		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
@@ -766,7 +773,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp, language.Elixir} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp, language.Elixir, language.Erlang} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {

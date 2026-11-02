@@ -916,6 +916,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.PromQL, "\x60first\nbody\nlast\x60", "body", 1, language.KindString},
 		{language.FSharp, "let s=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 		{language.Elixir, "text=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
+		{language.Erlang, "Text=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

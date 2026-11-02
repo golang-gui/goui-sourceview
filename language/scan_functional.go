@@ -39,9 +39,9 @@ type fnState struct {
 	literal    fnLiteral
 	expr       *fnExpr
 
-	commentDepth, braces, prefix int
-	escape, wordOn, value        bool
-	word                         scanWord
+	commentDepth, braces, prefix   int
+	escape, wordOn, value, atStart bool
+	word                           scanWord
 }
 
 func (s fnState) Equal(other State) bool {
@@ -67,11 +67,12 @@ func (s fnState) Context() Context {
 
 type functionalTokenizer struct{ id ID }
 
-func (b functionalTokenizer) InitialState() State { return fnState{id: b.id} }
+func (b functionalTokenizer) InitialState() State { return fnState{id: b.id, atStart: true} }
 
 var functionalWords = map[ID]map[string]bool{
 	FSharp: words("abstract and as assert base begin class default delegate do done downcast downto elif else end exception extern false finally fixed for fun function global if in inherit inline interface internal lazy let match member module mutable namespace new not null of open or override private public rec return select sig static struct then to true try type upcast use val void when while with yield async task seq"),
 	Elixir: words("after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end false fn for if import in nil not or quote raise receive require rescue super true try unless unquote unquote_splicing use when with"),
+	Erlang: words("after begin case catch cond end fun if let of receive try when and andalso band bnot bor bsl bsr bxor div not or orelse rem xor maybe else true false"),
 }
 
 func functionalVocabulary(id ID) []string {
@@ -90,7 +91,8 @@ func functionalEditing(id ID) EditingRules {
 
 	case Elixir:
 		d.Comments.Line = "#"
-
+	case Erlang:
+		d.Comments.Line = "%"
 	}
 	if id == FSharp {
 		d.Comments.Line = "//"
@@ -133,6 +135,9 @@ func fnLine(id ID) string {
 	switch id {
 	case FSharp:
 		return "//"
+
+	case Erlang:
+		return "%"
 
 	case Elixir:
 		return "#"
@@ -184,7 +189,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			return
 		}
 		k := s.word.kind
-		if (k == KindPlain) && functionalWords[s.id][s.word.text] {
+		if (k == KindPlain || s.id == Erlang && k == KindProperty) && functionalWords[s.id][s.word.text] {
 			k = KindKeyword
 		}
 
@@ -196,7 +201,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 		w.add(s.word.start, end, k, class)
 
-		s.word, s.wordOn, s.value = scanWord{}, false, true
+		s.word, s.wordOn, s.value, s.atStart = scanWord{}, false, true, false
 	}
 	endString := func() {
 		wasComment := s.literal.comment
@@ -382,7 +387,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += n
 			continue
 		case fnNumber:
-			if IdentifierRune(r) || c == '.' && i+1 < len(text) && digit(text[i+1]) || (c == '+' || c == '-') && (s.last == 'e' || s.last == 'E' || s.last == 'p' || s.last == 'P') {
+			if IdentifierRune(r) || s.id == Erlang && c == '#' || c == '.' && i+1 < len(text) && digit(text[i+1]) || (c == '+' || c == '-') && (s.last == 'e' || s.last == 'E' || s.last == 'p' || s.last == 'P') {
 				add(i, i+n, KindNumber, 0)
 				s.last = c
 				i += n
@@ -449,7 +454,20 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += size
 			continue
 		}
-
+		if s.id == Erlang && c == '$' {
+			add(i, i+1, KindString, ClassString)
+			i++
+			if i < len(text) {
+				z := i + runeSize(text, i)
+				if text[i] == '\\' && z < len(text) {
+					z += runeSize(text, z)
+				}
+				add(i, z, KindString, ClassString)
+				i = z
+			}
+			s.value = true
+			continue
+		}
 		if s.id == Elixir && c == '?' && i+1 < len(text) {
 			z := i + 1 + runeSize(text, i+1)
 			if text[i+1] == '\\' && z < len(text) {
@@ -460,7 +478,13 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			s.value = true
 			continue
 		}
-
+		if s.id == Erlang && c == '-' && s.atStart {
+			s.word = scanWord{start: in.Offset + i, kind: KindMeta}
+			s.wordOn = true
+			s.word.add(text[i : i+n])
+			i += n
+			continue
+		}
 		if c == '\'' && (s.id == FSharp) {
 			if size := fnCharacter(text[i:]); size > 0 {
 				add(i, i+size, KindString, ClassString)
@@ -470,10 +494,10 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 		}
-		if c == '"' || c == '\'' && (s.id == Elixir) {
+		if c == '"' || c == '\'' && (s.id == Elixir || s.id == Erlang) {
 			s.mode = fnString
 			s.literal = fnLiteral{quote: c, arity: 1, interpolate: s.id == Elixir}
-			s.literal.triple = (s.id == FSharp || s.id == Elixir) && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
+			s.literal.triple = (s.id == FSharp || s.id == Elixir || s.id == Erlang) && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
 			if s.id == FSharp && s.literal.triple {
 				s.literal.raw = true
 			}
@@ -502,7 +526,16 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			if s.id == Elixir && unicode.IsUpper(r) {
 				k = KindMeta
 			}
-
+			if s.id == Erlang {
+				if unicode.IsUpper(r) || c == '_' {
+					k = KindVariable
+				} else {
+					k = KindProperty
+				}
+				if functionalWords[s.id][string(r)] {
+					k = KindPlain
+				}
+			}
 			s.word = scanWord{start: in.Offset + i, kind: k}
 			s.wordOn = true
 			s.word.add(text[i : i+n])
@@ -554,7 +587,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		i += n
 
 		s.value = strings.ContainsRune(")]}", r)
-
+		s.atStart = false
 	}
 
 	if in.LineEnd && i == len(text) {
@@ -571,7 +604,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp) {
 			endString()
 		}
-		s.last, s.escape, s.value = 0, false, false
+		s.last, s.escape, s.value, s.atStart = 0, false, false, true
 		s.braces, s.braceStart = 0, 0
 	}
 	return w.result(i, s), nil

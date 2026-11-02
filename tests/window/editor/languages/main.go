@@ -137,7 +137,7 @@ func main() {
 		{language.GoTemplate, "{{pri", "{{print"}, {language.Jinja2, "{% endi", "{% endif"},
 		{language.Systemd, "ExecSta", "ExecStart"}, {language.DesktopEntry, "Termi", "Terminal"},
 		{language.Nix, "inhe", "inherit"}, {language.JQ, "sel", "select"}, {language.PromQL, "ira", "irate"},
-		{language.FSharp, "modu", "module"}, {language.Elixir, "defm", "defmodule"},
+		{language.FSharp, "modu", "module"}, {language.Elixir, "defm", "defmodule"}, {language.Erlang, "rece", "receive"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -198,6 +198,7 @@ func main() {
 		{language.PromQL, "metric{label=", "\"ok\"", "metric{label=\"ok\""},
 		{language.FSharp, "let f (value:", "'a", "let f (value:'a"},
 		{language.Elixir, "text=", "~S\"literal #{true}\"", "text=~S\"literal #{true}\""},
+		{language.Erlang, "Value=", "'atom'", "Value='atom'"},
 
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},
