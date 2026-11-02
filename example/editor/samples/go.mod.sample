@@ -1,0 +1,11 @@
+// Original Go module sample for SourceView.
+module example.org/editor
+
+go 1.24.0
+
+require (
+    example.org/syntax v1.2.3
+    example.org/colors/v2 v2.0.0 // indirect
+)
+
+replace example.org/syntax => ../syntax

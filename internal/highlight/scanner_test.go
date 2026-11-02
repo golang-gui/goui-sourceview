@@ -649,6 +649,47 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 	}
 }
 
+func TestSixthBatchKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.GoMod, "module example.org/x\nrequire (\n example.org/x v1.2.3 // indirect\n)", "require", language.KindKeyword},
+		{language.GoMod, "module example.org/x\nrequire (\n example.org/x v1.2.3 // indirect\n)", "v1.2.3", language.KindNumber},
+		{language.GoMod, "replace a => `../dir//literal`", "literal", language.KindString},
+		{language.GoMod, "retract [v1.0.0, v1.0.1] // note", "v1.0.1", language.KindNumber},
+		{language.GoWork, "go 1.24.0\nuse (\n ./editor\n)", "use", language.KindKeyword},
+		{language.GoSum, "example.org/x v1.2.3/go.mod h1:abc//literal=", "h1:abc//literal=", language.KindMeta},
+	} {
+		for _, chunk := range []int{1, 3, 31, ChunkSize} {
+			tokens, _ := scanAll(tc.id, tc.text, chunk)
+			if got := kindAt(tokens, strings.Index(tc.text, tc.needle)); got != tc.kind {
+				t.Fatalf("%s %q chunk %d: %s want %s", tc.id, tc.needle, chunk, got, tc.kind)
+			}
+		}
+	}
+}
+
+func TestSixthBatchFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+		language.GoMod:  {"module example.org/x\ngo 1.24.0\nrequire (\n example.org/x v1.2.3 // indirect\n)\nreplace a => `../path//literal`\nretract [v1.0.0, v1.0.1]", "module " + strings.Repeat("字", ChunkSize) + "\nrequire a v1.2.3"},
+		language.GoWork: {"go 1.24.0\nuse (\n ./editor\n \"./path with spaces\"\n)\nreplace a => b v1.0.0"},
+		language.GoSum:  {"example.org/x v1.2.3/go.mod h1:" + strings.Repeat("ab+/=", ChunkSize)},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens=%v states=%v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws))
+				}
+			}
+		}
+	}
+}
+
 func TestFifthBatchKinds(t *testing.T) {
 	for _, tc := range []struct {
 		id           language.ID

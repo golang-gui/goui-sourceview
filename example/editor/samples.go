@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"strings"
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
@@ -43,12 +44,14 @@ func sampleDocuments() []exampleDocument {
 		"query.graphql",
 		"theme.scss",
 		"theme.less",
+		"go.mod.sample", "go.work.sample", "go.sum.sample",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
 			panic(err)
 		}
 		doc := source.NewDocument(string(text))
+		name = strings.TrimSuffix(name, ".sample")
 		if err := doc.SetLanguage(language.Guess(name, text)); err != nil {
 			panic(err) // Embedded language IDs are fixed, not user input.
 		}

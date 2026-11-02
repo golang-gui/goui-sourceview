@@ -862,3 +862,17 @@ Less 与 CSS/SCSS 共用 CSS 基础规则、URL、转义和声明状态，但语
 转义引用和 mixin/guard，参考
 [Monaco v0.52.2 Less](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/less/less.ts)
 的变量/引用/URL 区分。采用本项目已有 CSS 设施，不引入 Less.js 或复制规则资源。
+
+## 31. Go Modules
+
+GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.work、go.sum/go.work.sum 文件名识别，
+不抢占其他 .mod/.work/.sum 文件。提供对应 ID 与 go.mod/go.work/go.sum 围栏。
+模块/工作区区分指令、路径、版本、=>、分组、引用和 // 注释；校验文件按三列着色，不解释注释或代码配对。
+模块/工作区启用分组和引用编辑、关键词建议，GoMod 另支持 retract 的方括号范围。
+普通词候选最多保存 128 byte；分组跨行，错误引用在真实行尾恢复，不缓存正文或加载模块。
+长于候选上限的词保留路径颜色，不据其前缀猜测完整版本有效性；词法呈现不替代 go 命令校验。
+
+参考 [Go Modules Reference](https://go.dev/ref/mod) 和
+[x/mod v0.27.0 modfile/read.go](https://github.com/golang/mod/blob/v0.27.0/modfile/read.go)
+（读取 2026-11-02），采用已有代码语言的分片、引用和结构 Class 划分，不新增 modfile 依赖。
+示例资源使用 .sample 后缀，显示/识别使用原文件名，避免 go:embed 跨嵌套模块限制。

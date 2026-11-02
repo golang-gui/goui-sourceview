@@ -59,6 +59,9 @@ const (
 	GraphQL      ID = "graphql"
 	SCSS         ID = "scss"
 	Less         ID = "less"
+	GoMod        ID = "gomod"
+	GoWork       ID = "gowork"
+	GoSum        ID = "gosum"
 	Markdown     ID = "markdown"
 )
 
@@ -158,6 +161,9 @@ var builtins = []Info{
 	{ID: GraphQL, Name: "GraphQL", Extensions: []string{".graphql", ".gql", ".graphqls"}, MIMETypes: []string{"application/graphql", "text/x-graphql"}},
 	{ID: SCSS, Name: "SCSS", Extensions: []string{".scss"}, MIMETypes: []string{"text/x-scss"}},
 	{ID: Less, Name: "Less", Extensions: []string{".less"}, MIMETypes: []string{"text/x-less"}},
+	{ID: GoMod, Name: "Go Module", MIMETypes: []string{"text/x-go-mod"}},
+	{ID: GoWork, Name: "Go Workspace", MIMETypes: []string{"text/x-go-work"}},
+	{ID: GoSum, Name: "Go Checksums", MIMETypes: []string{"text/x-go-sum"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -178,6 +184,12 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == "go.mod":
+		return GoMod
+	case base == "go.work":
+		return GoWork
+	case base == "go.sum" || base == "go.work.sum":
+		return GoSum
 	case base == ".Rprofile":
 		return R
 	case base == "CMakeLists.txt":

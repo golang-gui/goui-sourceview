@@ -1,0 +1,9 @@
+// Original Go workspace sample for SourceView.
+go 1.24.0
+
+use (
+    ./editor
+    ./syntax
+)
+
+replace example.org/colors/v2 v2.0.0 => ./colors

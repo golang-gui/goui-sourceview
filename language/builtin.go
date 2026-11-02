@@ -17,6 +17,25 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case GoMod, GoWork, GoSum:
+			d.Tokenizer = modTokenizer{info.ID}
+			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("./+-", r) }}
+			if info.ID == GoSum {
+				d.AllowWordSuggestions = func(Context, bool) bool { return false }
+			} else {
+				d.Editing = defaultEditing()
+				count := 1
+				if info.ID == GoMod {
+					count = 2
+				}
+				d.Editing.Brackets = d.Editing.Brackets[:count]
+				d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: `"`, Close: `"`, NotInString: true, NotInComment: true}, Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true})
+				d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+				d.Editing.Comments.Line = "//"
+				d.AllowWordSuggestions = codeWordSuggestions
+				vocabulary := codeVocabulary(info.ID)
+				d.Suggest = func(Context) []string { return vocabulary }
+			}
 		case SCSS, Less:
 			d.Tokenizer = codeTokenizer{info.ID}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -412,6 +431,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"go.mod": GoMod, "go.work": GoWork, "go.sum": GoSum,
 		"patch": Diff,
 		"batch": Batch, "cmd": Batch,
 		"terraform": HCL, "tf": HCL,
@@ -445,6 +465,10 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case GoMod:
+		table = modKeywords
+	case GoWork:
+		table = workKeywords
 	case SCSS:
 		return append(codeVocabulary(CSS), strings.Fields("@use @forward @import @mixin @include @function @return @if @else @for @each @while @extend @at-root @content @debug @warn @error true false null and or not from through to in as with using !default !global !optional")...)
 	case Less:

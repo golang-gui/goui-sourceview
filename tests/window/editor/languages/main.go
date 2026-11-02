@@ -128,6 +128,7 @@ func main() {
 		{language.GraphQL, "mutat", "mutation"},
 		{language.SCSS, "@mix", "@mixin"},
 		{language.Less, "@imp", "@import"},
+		{language.GoMod, "requi", "require"}, {language.GoWork, "us", "use"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -206,6 +207,9 @@ func main() {
 		{language.Scala, "val code = ", "'{true}", "val code = '{true}"},
 		{language.Perl, "my $s = ", "'it\\'s'", "my $s = 'it\\'s'"},
 		{language.Diff, "+ ", "{'x'}", "+ {'x'}"},
+		{language.GoMod, "replace a => ", "`../dir`", "replace a => `../dir`"},
+		{language.GoWork, "use ", `"./dir"`, `use "./dir"`},
+		{language.GoSum, "path v1.0.0 h1:", "{", "path v1.0.0 h1:{"},
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
 		{language.GraphQL, "", `"""`, `"""`},
 		{language.SCSS, ".x {content:", `"#{true}"`, `.x {content:"#{true}"`},

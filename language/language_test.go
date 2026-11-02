@@ -63,6 +63,7 @@ func TestGuess(t *testing.T) {
 		{"query.graphql", "", GraphQL}, {"schema.graphqls", "", GraphQL}, {"query.gql", "", GraphQL},
 		{"theme.scss", "", SCSS}, {"theme.sass", "", Plain},
 		{"theme.less", "", Less},
+		{"go.mod", "", GoMod}, {"go.work", "", GoWork}, {"go.sum", "", GoSum}, {"go.work.sum", "", GoSum}, {"other.mod", "", Plain},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -174,6 +175,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{GraphQL, `"""body`, true, false, true}, {GraphQL, `"body`, true, false, false},
 		{SCSS, `.x {content:"#{true`, false, false, false}, {SCSS, `/* comment`, false, true, false},
 		{Less, `.x {content:"@{name`, true, false, false}, {Less, `.x{width:@name`, false, false, false},
+		{GoMod, "module `path", true, false, true}, {GoWork, "use \"path", true, false, false}, {GoSum, "path v1 h1:hash", true, false, true},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -447,6 +449,7 @@ func TestToolingLanguageFences(t *testing.T) {
 		{"graphql", GraphQL, "query", KindKeyword}, {"gql", GraphQL, "schema", KindKeyword},
 		{"scss", SCSS, "@mixin", KindMeta},
 		{"less", Less, "@import", KindMeta},
+		{"gomod", GoMod, "require", KindKeyword}, {"go.mod", GoMod, "module", KindKeyword}, {"gowork", GoWork, "use", KindKeyword}, {"gosum", GoSum, "path", KindString},
 	} {
 		scanner := md.Tokenizer()
 		fence := "```" + tc.name

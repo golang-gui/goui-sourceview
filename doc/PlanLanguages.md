@@ -554,3 +554,15 @@ ChromeInfo 确认 Integrated enabled，没有观察到正文或工具栏裁切�
 未运行真实 IME 或 macOS/Windows 原生场景，交叉构建只证明可编译。
 没有新增依赖或修改 GOUI；保留原有未跟踪 doc/Doing.md、example/temp/，不纳入提交。
 词法歧义和功能边界见设计，不承诺编译器、Schema/provider 解析或语言服务能力。
+
+## 第六批语言（2026-11-02）
+
+### Go Modules
+
+新增 GoMod/GoWork/GoSum、明确文件名及围栏识别、相应编辑/建议与三份样本，示例共 51 份。
+独立断言覆盖分组、版本、replace、retract 范围、原始路径和含 // 的校验值；长行/名称和极小分片通过。
+`GOWORK=off go test ./...`（GOUI v0.5.0）及 Pango 亮暗 1× 颜色断言通过。
+Ubuntu 22.04.5 amd64 / Go 1.25.8，独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software / 浅色 1×，
+逐一运行 -language gomod/gowork/gosum，建议接受/撤销、引用和校验正文输入及公共语义/只读/括号断言通过。
+日志及构建产物在 `/tmp/sourceview-language-batch6-LhHxde/`；没有 GOUI 或依赖改动，也不加载示例声明的模块。
+其余 Dotenv、Properties、Git Ignore/Attributes、Starlark、Groovy 继续实现和验收。
