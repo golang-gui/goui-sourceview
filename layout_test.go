@@ -1502,6 +1502,42 @@ func TestPlainIndexCompletionDoesNotMutateNativeColors(t *testing.T) {
 	}
 }
 
+// 普通输入到分析完成之间，当前行和后续行不能先退回普通前景色。
+func TestEditingKeepsParagraphColorsWhileAnalysisPending(t *testing.T) {
+	v := NewSourceView()
+	v.Document().Model().SetText("\"hello\"\n\"world\"\ntrue")
+	if err := v.Document().SetLanguage(language.JSON); err != nil {
+		t.Fatal(err)
+	}
+	v.SetFoldingEnabled(false)
+	observe(t, v)
+	v.Document().engine.Advance(time.Time{})
+	ctx := &shapedContext{}
+	v.context = ctx
+	t.Cleanup(v.dropLayouts)
+	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
+	current, suffix := v.paragraph(0), v.paragraph(1)
+	before := append([]color.NRGBA(nil), suffix.layout.(*shapedLayout).colors...)
+	calls := suffix.layout.(*shapedLayout).colorCalls
+	if err := v.Document().Model().ReplaceAtomic(textedit.Range{Start: 3, End: 3}, "X"); err != nil {
+		t.Fatal(err)
+	}
+	current = v.paragraph(0)
+	if got := current.layout.(*shapedLayout).colors; len(got) != 8 || got[1] != v.colors.Tokens[language.KindString] || got[3] != got[1] || got[6] != got[1] {
+		t.Fatal("editing cleared unchanged/inserted string colors", got)
+	}
+	if got := v.paragraph(1); got != suffix || !reflect.DeepEqual(got.layout.(*shapedLayout).colors, before) || got.layout.(*shapedLayout).colorCalls != calls {
+		t.Fatal("pending analysis cleared untouched suffix colors")
+	}
+	if _, _, valid := v.Document().engine.Tokens(1); valid {
+		t.Fatal("paint fallback exposed stale semantic tokens")
+	}
+	v.Document().engine.Advance(time.Time{})
+	if v.paragraph(0) != current || v.paragraph(1) != suffix || suffix.layout.(*shapedLayout).colorCalls != calls {
+		t.Fatal("analysis convergence unnecessarily recolored or reshaped suffix")
+	}
+}
+
 func TestEquivalentTokenColorsDoNotMutateNativeLayout(t *testing.T) {
 	v, _ := colorFixture(t)
 	p := v.paragraph(0)

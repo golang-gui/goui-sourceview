@@ -71,3 +71,41 @@
 - GOUI 工作副本全仓测试仍有既有写图副作用；本轮未迁移这些测试。
 - 真实 IME、跨屏/真实混合 DPI、所有 GPU 组合和完整规模矩阵未执行，不计作通过。
 - 两仓工作区依赖仍未发布；DirectWrite 修正已在 GOUI `227220a` 独立提交，仍待发行版本提供。
+
+## 5. 输入期间的着色快照（2026-11-02）
+
+修正当前行及后续行因词法状态待确认而先清色、随后恢复的闪烁。
+引擎保留一份已映射到当前文本坐标的显示快照，另用一个工作缓冲分析新 token；
+完成整行后发布，相同结果保持显示版本。括号、配对、补全继续要求有效状态，
+不会将显示提示用于编辑判断。新旧 token 一起计入 16 MiB payload 目标，淘汰时释放定义引用。
+更早行的缓存重载取消后续工作时，该未完成行仍保留在 dirty 待办中。
+完整规则及参考源码见 [稳定着色](DesignHighlighting.md#71-编辑期间的稳定着色)。
+
+旧代码 `a5da6e5` 上，新增
+`GOWORK=off go test . -run '^TestEditingKeepsParagraphColorsWhileAnalysisPending$' -count=1`
+失败：编辑字符串后，整行变为普通前景 `{36 41 47 255}`。
+关闭工作区，在该提交的仓库外归档中仅加入同一窗口验证程序，首次输入即在 `(10,9)` 复现像素变化。
+修正后纯测试覆盖 Unicode、插入/删除、分行/合行、替换、撤销/重做、跨行注释变化、
+同 ID 的语言定义切换、长行片段被连续编辑打断、LRU 重载前移和共享预算；
+最终 token 与重新完整分析一致，未修改段落复用原生布局且不调用颜色 setter。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8 下通过 `go test ./...`（工作区 GOUI b49049d）、
+`GOWORK=off go test ./...`（已发布 GOUI v0.5.0）、`GOWORK=off go test -race ./...`、
+`GOWORK=off go vet ./...`，以及 Windows amd64 / macOS arm64 的 CGO_ENABLED=0 `go build ./...`。
+新增同 ID 显示隔离断言后，另执行针对性 race 检查通过。本次没有 GOUI、依赖或公开 SourceView API 改动。
+
+专用 TigerVNC :87 / Xfwm4 compositor on / Pango / Software：
+`tests/window/editor/highlight` 浅色 1×、深色 1.5× 均通过 127 帧检查，包含 30 次输入、
+30 次退格、撤销/重做和结束后的五帧。除自然帧外，每次输入后都经正常 PaintEvent 分发，
+确定性覆盖分析 Timer 前的一帧；不调用内部分析动作或改变私有调度状态。
+RenderWidget 在 Paint 外采样，首行固定前缀和后续行与同一字体/后端基线的预乘 sRGB RGBA 零误差相等，
+裁剪排除光标及被编辑区域；基线须含实际着色，不能用空白基线通过。
+探针初版在首帧尚未分配尺寸时返回 `gui: invalid widget render size or scale`；
+修正为仅在基线建立前等待有效 allocation，此后的帧仍逐项完整断言，不放宽颜色容差。
+
+语言窗口的 36 种语言建议、接受/撤销及引用、括号、只读和语义断言全部通过。
+editor 浅色 1× 经 XTest 实际键入/退格，12 次桌面采样中未修改的后续正文区域像素不变；
+另外观察插入文字和退格恢复，未见整行清色。桌面采样不替代确定性的中间帧与最终状态断言。
+日志、归档、二进制和截图在 `/tmp/sourceview-highlight-OIZHr4/`，不写源码目录。
+未验证真实 IME、Windows/macOS 原生窗口或作出性能量化结论；预算触发时仍允许按设计降级显示。
+结束后关闭本次示例、专用窗口管理器和 X11；没有剪贴板或系统设置改动，保留已有用户会话。

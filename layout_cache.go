@@ -59,8 +59,9 @@ type paragraphColor struct {
 // Paint-only state is deliberately separate from the native layout's text,
 // font, tab and wrapping identity.
 type paragraphStyle struct {
-	scheme        *scheme.Scheme
-	language      language.ID
+	scheme   *scheme.Scheme
+	language language.ID
+	// Display snapshot identity; semantic readiness is tracked by tokenValid.
 	tokenVersion  uint64
 	languageEpoch uint64
 	tokenValid    bool
@@ -163,8 +164,10 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	tokenRow, hasTokens := v.highlightRow(row)
 	var version uint64
 	valid := false
+	var tokens []highlight.Token
 	if hasTokens && e != nil {
-		_, version, valid = e.Tokens(tokenRow)
+		_, _, valid = e.Tokens(tokenRow)
+		tokens, version, _ = e.PaintTokens(tokenRow)
 		if !valid {
 			e.Ensure(tokenRow)
 			v.document.requestWork()
@@ -182,10 +185,6 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	// Selection geometry is painted independently. Only an actual foreground
 	// override makes selection/focus part of the native text's color identity.
 	style := paragraphStyle{scheme: v.appliedScheme, language: v.document.language, languageEpoch: v.document.languageEpoch, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
-	var tokens []highlight.Token
-	if valid {
-		tokens, _, _ = e.Tokens(tokenRow)
-	}
 	state, epoch := v.operationState(), v.layoutEpoch
 	p := v.layouts[key]
 	adopted := false

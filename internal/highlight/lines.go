@@ -11,6 +11,7 @@ type Line struct {
 	complete, loaded, limited bool
 	tokens                    []Token
 	version                   uint64
+	definition                *language.Language
 }
 
 type lineNode struct {

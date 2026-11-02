@@ -3,6 +3,7 @@ package highlight
 import (
 	"container/list"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,6 +27,9 @@ type work struct {
 	row, at       int
 	state, oldOut language.State
 	oldComplete   bool
+	tokens        []Token
+	version       uint64
+	limited       bool
 }
 
 // Engine belongs to one active Document. All calls are sequential.
@@ -36,6 +40,7 @@ type Engine struct {
 	revision     uint64
 	lines        lineStore
 	nextID       uint64
+	nextVersion  uint64
 	building     bool
 	buildRow     int
 	dirty        []interval
@@ -70,12 +75,13 @@ func (e *Engine) SetDefinition(l *language.Language) {
 	if e.syntax == l {
 		return
 	}
-	e.syntax = l
 	if !e.Ready() {
+		e.syntax = l
 		e.Reset(id)
 		return
 	}
 	e.cancelWork()
+	e.syntax = l
 	e.id, e.err, e.next, e.dirty = id, nil, -1, nil
 	if e.syntax.Tokenizer() != nil {
 		e.addDirty(0, e.LineCount())
@@ -135,9 +141,11 @@ func (e *Engine) discard(line *Line) {
 	}
 	e.payloadBytes -= len(line.tokens) * 40
 	line.tokens = nil
+	line.definition = nil
 	line.loaded = false
 	line.limited = false
-	line.version++
+	e.nextVersion++
+	line.version = e.nextVersion
 }
 
 func (e *Engine) touch(line *Line) {
@@ -149,10 +157,10 @@ func (e *Engine) touch(line *Line) {
 }
 
 func (e *Engine) trim() {
-	for e.payloadBytes > tokenBudget && e.lru.Len() > 1 {
+	for e.payloadBytes > tokenBudget && e.lru.Len() > 0 {
 		element := e.lru.Back()
 		line := element.Value.(*Line)
-		if e.work != nil && e.lines.at(e.work.row) == line {
+		if e.work != nil && e.lines.at(e.work.row) == line && e.lru.Len() > 1 {
 			e.lru.MoveToFront(element)
 			continue
 		}
@@ -160,7 +168,7 @@ func (e *Engine) trim() {
 	}
 }
 
-// Tokens returns borrowed read-only tokens and a paint version. Future stale
+// Tokens returns borrowed read-only tokens and a version. Future stale
 // rows are not exposed while an earlier lexical state is unresolved.
 func (e *Engine) Tokens(row int) ([]Token, uint64, bool) {
 	line := e.Line(row)
@@ -170,7 +178,10 @@ func (e *Engine) Tokens(row int) ([]Token, uint64, bool) {
 	if e.syntax.Tokenizer() == nil {
 		return nil, line.version, true
 	}
-	valid := e.next < 0 || row < e.next || e.work != nil && row == e.work.row
+	if e.work != nil && row == e.work.row {
+		return e.work.tokens, e.work.version, true
+	}
+	valid := e.next < 0 || row < e.next
 	if !valid || !line.loaded {
 		return nil, line.version, false
 	}
@@ -196,11 +207,30 @@ func (e *Engine) Ensure(row int) {
 
 func (e *Engine) cancelWork() {
 	if e.work != nil {
-		if l := e.lines.at(e.work.row); l != nil {
-			e.discard(l)
+		e.addDirty(e.work.row, e.work.row+1)
+		if l := e.lines.at(e.work.row); !l.loaded || l.definition != e.syntax {
+			e.publishWork()
+		} else {
+			e.payloadBytes -= len(e.work.tokens) * 40
 		}
 		e.work = nil
 	}
+}
+
+// Publish one complete result, or preserve a first-pass prefix on cancellation.
+// Identical tokens retain their paint identity and do not disturb native colors.
+func (e *Engine) publishWork() {
+	w := e.work
+	line := e.lines.at(w.row)
+	if line.loaded && line.definition == e.syntax && slices.Equal(line.tokens, w.tokens) {
+		e.payloadBytes -= len(w.tokens) * 40
+	} else {
+		e.payloadBytes -= len(line.tokens) * 40
+		line.tokens, line.version = w.tokens, w.version
+	}
+	line.loaded, line.definition = true, e.syntax
+	w.tokens = nil
+	e.touch(line)
 }
 
 func (e *Engine) addDirty(start, end int) {
@@ -272,6 +302,7 @@ func (e *Engine) Change(c textedit.Change) ([]Splice, bool) {
 			}
 		}
 		inserted = append(inserted, e.newLine(length+suffix, tail.LF))
+		e.mapPaint(inserted, e.lines.at(first), tail, prefix, edit.Range.End-lastStart, edit.Range.Start == edit.Range.End)
 		removed := last - first + 1
 		for row := first; row <= last; row++ {
 			e.discard(e.lines.at(row))
@@ -301,6 +332,7 @@ func (e *Engine) Change(c textedit.Change) ([]Splice, bool) {
 		e.addDirty(first, first+len(inserted))
 		splices = append(splices, Splice{first, removed, len(inserted)})
 	}
+	e.trim()
 	if e.syntax.Tokenizer() == nil {
 		e.next = -1
 		e.dirty = nil
@@ -372,8 +404,6 @@ func (e *Engine) Advance(deadline time.Time) bool {
 			}
 			e.work = &work{row: e.next, state: state, oldOut: line.out, oldComplete: line.complete}
 			line.in = state
-			e.discard(line)
-			line.loaded = true
 			e.touch(line)
 		}
 		w := e.work
@@ -404,20 +434,20 @@ func (e *Engine) Advance(deadline time.Time) bool {
 			break
 		}
 		n, next := result.Consumed, result.State
-		oldLen := len(line.tokens)
+		oldLen := len(w.tokens)
 		if result.ReplaceFrom != nil {
 			start := *result.ReplaceFrom
 			if !e.model.IsRuneBoundary(lineStart + start) {
 				e.err = fmt.Errorf("highlight: replacement splits UTF-8 at line %d", w.row)
 				break
 			}
-			for len(line.tokens) > 0 && line.tokens[len(line.tokens)-1].End > start {
-				last := &line.tokens[len(line.tokens)-1]
+			for len(w.tokens) > 0 && w.tokens[len(w.tokens)-1].End > start {
+				last := &w.tokens[len(w.tokens)-1]
 				if last.Start < start {
 					last.End = start
 					break
 				}
-				line.tokens = line.tokens[:len(line.tokens)-1]
+				w.tokens = w.tokens[:len(w.tokens)-1]
 			}
 		}
 		for _, token := range result.Tokens {
@@ -425,19 +455,22 @@ func (e *Engine) Advance(deadline time.Time) bool {
 				e.err = fmt.Errorf("highlight: token splits UTF-8 at line %d", w.row)
 				break
 			}
-			if len(line.tokens) >= maxLineTokens {
-				line.limited = true
+			if len(w.tokens) >= maxLineTokens {
+				w.limited = true
 				break
 			}
-			appendStyled(&line.tokens, token)
+			appendStyled(&w.tokens, token)
 		}
-		e.payloadBytes += (len(line.tokens) - oldLen) * 40
-		line.version++
+		e.payloadBytes += (len(w.tokens) - oldLen) * 40
+		e.nextVersion++
+		w.version = e.nextVersion
 		w.at += n
 		w.state = next
 		if w.at == length {
 			line.out = next
 			line.complete = true
+			line.limited = w.limited
+			e.publishWork()
 			e.scanned++
 			e.cleanRow(w.row)
 			stop := w.oldComplete && language.StatesEqual(next, w.oldOut)

@@ -119,6 +119,208 @@ func TestConvergenceAndStaleRows(t *testing.T) {
 	}
 }
 
+// 显示可暂用同一定义的旧颜色，但编辑上下文和 Class 不能借此变成有效结果。
+func TestPaintTokensSurviveInvalidation(t *testing.T) {
+	m := textedit.NewModel("/* note */\nconst value = true;\nreturn value;")
+	e := New(m, language.JavaScript)
+	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	defer h.Disconnect()
+	drain(t, e)
+	old, version, _ := e.PaintTokens(1)
+	old = append([]Token(nil), old...)
+	if err := m.ReplaceAtomic(textedit.Range{Start: 8, End: 10}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, valid := e.Tokens(1); valid {
+		t.Fatal("stale semantic tokens exposed")
+	}
+	if _, valid := e.ContextAt(len("/* note \nconst")); valid {
+		t.Fatal("stale predecessor accepted for editing")
+	}
+	got, current, ok := e.PaintTokens(1)
+	if !ok || !reflect.DeepEqual(got, old) || current != version {
+		t.Fatal("pending suffix lost display snapshot", got)
+	}
+	drain(t, e)
+	got, _, ok = e.PaintTokens(1)
+	if !ok || kindAt(got, 0) != language.KindComment {
+		t.Fatal("new cross-line comment was not published", got)
+	}
+	checkPaintPayload(t, e)
+	for _, id := range []language.ID{language.XML, language.Plain, language.JavaScript} {
+		e.SetLanguage(id)
+		if got, _, _ := e.PaintTokens(1); len(got) > 0 {
+			t.Fatal("old definition display tokens leaked", id, got)
+		}
+		drain(t, e)
+	}
+}
+
+func checkPaintPayload(t *testing.T, e *Engine) {
+	t.Helper()
+	bytes := 0
+	for row := 0; row < e.LineCount(); row++ {
+		bytes += len(e.lines.at(row).tokens) * 40
+	}
+	if e.work != nil {
+		bytes += len(e.work.tokens) * 40
+	}
+	if bytes != e.payloadBytes || bytes > tokenBudget {
+		t.Fatal("paint/work payload accounting", bytes, e.payloadBytes)
+	}
+}
+
+// 字节范围映射覆盖 Unicode、分行、合行、替换及撤销/重做，不依赖 tokenizer 的最终修正。
+func TestPaintTokensMapEdits(t *testing.T) {
+	for _, tc := range []struct {
+		text       string
+		start, end int
+		insert     string
+		want       [][]Token
+	}{
+		{"\"ab字cd\"", 3, 3, "é", [][]Token{{{Start: 0, End: 11, Kind: language.KindString, Class: language.ClassString}}}},
+		{"\"abcdef\"", 3, 5, "", [][]Token{{{Start: 0, End: 6, Kind: language.KindString, Class: language.ClassString}}}},
+		{"\"abcdef\"", 3, 3, "\nx\n", [][]Token{{{Start: 0, End: 3, Kind: language.KindString, Class: language.ClassString}}, {{Start: 0, End: 1, Kind: language.KindString, Class: language.ClassString}}, {{Start: 0, End: 5, Kind: language.KindString, Class: language.ClassString}}}},
+		{"\"abc\"\n\"def\"", 4, 8, "", [][]Token{{{Start: 0, End: 7, Kind: language.KindString, Class: language.ClassString}}}},
+		{"\"abcdef\"", 3, 5, "XY", [][]Token{{{Start: 0, End: 3, Kind: language.KindString, Class: language.ClassString}, {Start: 5, End: 8, Kind: language.KindString, Class: language.ClassString}}}},
+	} {
+		m := textedit.NewModel(tc.text)
+		e := New(m, language.JSON)
+		h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+		drain(t, e)
+		if err := m.ReplaceAtomic(textedit.Range{Start: tc.start, End: tc.end}, tc.insert); err != nil {
+			t.Fatal(err)
+		}
+		for row, want := range tc.want {
+			got, _, ok := e.PaintTokens(row)
+			if !ok || !reflect.DeepEqual(got, want) {
+				t.Fatalf("%q row %d: got %v want %v", tc.text, row, got, want)
+			}
+		}
+		checkPaintPayload(t, e)
+		drain(t, e)
+		if !m.Undo() || !m.Redo() {
+			t.Fatal("missing edit history")
+		}
+		checkPaintPayload(t, e)
+		drain(t, e)
+		fresh := New(m, language.JSON)
+		drain(t, fresh)
+		for row := 0; row < e.LineCount(); row++ {
+			got, _, _ := e.Tokens(row)
+			want, _, _ := fresh.Tokens(row)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatal("mapping changed final lexical result", got, want)
+			}
+		}
+		h.Disconnect()
+	}
+}
+
+type pacedScanner struct {
+	language.Tokenizer
+	slow bool
+}
+
+func (s *pacedScanner) Scan(in language.Input, state language.State) (language.Result, error) {
+	r, err := s.Tokenizer.Scan(in, state)
+	if s.slow {
+		time.Sleep(2 * time.Millisecond)
+	}
+	return r, err
+}
+
+// 显式延迟一个扫描片段，使中间状态确定存在；不把测量/高亮同步塞进输入回调。
+func TestPaintSnapshotSurvivesPartialWorkAndCancellation(t *testing.T) {
+	base, _ := language.Builtin(language.JSON)
+	scanner := &pacedScanner{Tokenizer: base.Tokenizer()}
+	l, err := language.New(language.Definition{Info: language.Info{ID: "paced", Name: "Paced JSON"}, Tokenizer: scanner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := textedit.NewModel("\"" + strings.Repeat("x", ChunkSize*8) + "\"\ntrue")
+	e := NewWithLanguage(m, l)
+	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	defer h.Disconnect()
+	drain(t, e)
+	for i := 0; i < 5; i++ {
+		if err := m.ReplaceAtomic(textedit.Range{Start: 10, End: 10}, "y"); err != nil {
+			t.Fatal(err)
+		}
+		_, version, _ := e.PaintTokens(0)
+		scanner.slow = true
+		e.Advance(time.Now().Add(time.Millisecond))
+		if e.work == nil || e.work.at == 0 || !e.Pending() {
+			t.Fatal("fixture failed to suspend partial analysis")
+		}
+		tokens, current, ok := e.PaintTokens(0)
+		if !ok || current != version || kindAt(tokens, m.Len()-8) != language.KindString {
+			t.Fatal("partial work cleared old tail", tokens)
+		}
+		strict, _, ok := e.Tokens(0)
+		if !ok || kindAt(strict, m.Len()-8) != language.KindPlain {
+			t.Fatal("old display tail leaked as semantic tokens")
+		}
+		checkPaintPayload(t, e)
+		scanner.slow = false
+	}
+	drain(t, e)
+	checkPaintPayload(t, e)
+	_, version, _ := e.PaintTokens(0)
+	if version == 0 {
+		t.Fatal("missing published version")
+	}
+	e.discard(e.Line(1))
+	e.Ensure(1)
+	drain(t, e)
+	checkPaintPayload(t, e)
+	m.SetText("true")
+	drain(t, e)
+	checkPaintPayload(t, e)
+}
+
+// 更早的缓存重载不能丢掉已暂停的后续分析；旧快照和工作缓冲共同计入预算。
+func TestPaintWorkRewindAndBudget(t *testing.T) {
+	base, _ := language.Builtin(language.JSON)
+	scanner := &pacedScanner{Tokenizer: base.Tokenizer()}
+	l, err := language.New(language.Definition{Info: language.Info{ID: "paced", Name: "Paced JSON"}, Tokenizer: scanner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{"\"" + strings.Repeat("x", ChunkSize*4) + "\"", "[" + strings.Repeat("0,", maxLineTokens/2) + "0]"} {
+		m := textedit.NewModel("true\n" + body)
+		e := NewWithLanguage(m, l)
+		h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+		drain(t, e)
+		if err := m.ReplaceAtomic(textedit.Range{Start: 15, End: 15}, "1"); err != nil {
+			t.Fatal(err)
+		}
+		scanner.slow = true
+		e.Advance(time.Now().Add(time.Millisecond))
+		scanner.slow = false
+		if e.work == nil {
+			t.Fatal("fixture did not leave partial work")
+		}
+		checkPaintPayload(t, e)
+		e.discard(e.Line(0))
+		e.Ensure(0)
+		checkPaintPayload(t, e)
+		drain(t, e)
+		got, _, ready := e.Tokens(1)
+		if !ready || !e.Line(1).complete || len(got) == 0 {
+			t.Fatal("rewind lost incomplete work")
+		}
+		fresh := NewWithLanguage(m, l)
+		drain(t, fresh)
+		want, _, _ := fresh.Tokens(1)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatal("rewound result differs from full analysis")
+		}
+		checkPaintPayload(t, e)
+		h.Disconnect()
+	}
+}
+
 func TestReentryAndLongLine(t *testing.T) {
 	m := textedit.NewModel("a")
 	var e *Engine
@@ -262,6 +464,9 @@ func TestSameIDDefinitionInvalidation(t *testing.T) {
 	drain(t, e)
 	before := e.Line(0).ID
 	e.SetDefinition(makeLanguage("second"))
+	if tokens, _, _ := e.PaintTokens(0); len(tokens) != 0 {
+		t.Fatal("same-ID replacement exposed old display tokens")
+	}
 	if _, _, valid := e.Tokens(0); valid {
 		t.Fatal("old tokens exposed")
 	}

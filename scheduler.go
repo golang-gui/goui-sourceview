@@ -251,7 +251,8 @@ func (v *SourceView) analysisPaintNeeded() bool {
 			return true
 		}
 		if tokenRow, ok := v.highlightRow(row); ok {
-			_, version, valid := v.document.engine.Tokens(tokenRow)
+			_, _, valid := v.document.engine.Tokens(tokenRow)
+			_, version, _ := v.document.engine.PaintTokens(tokenRow)
 			if !p.styled || p.style.tokenVersion != version || p.style.tokenValid != valid {
 				return true
 			}
