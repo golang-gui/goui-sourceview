@@ -121,6 +121,7 @@ func main() {
 		{language.ObjectiveCpp, "namesp", "namespace"},
 		{language.Scala, "giv", "given"},
 		{language.Perl, "packa", "package"},
+		{language.Batch, "setl", "setlocal"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -199,6 +200,7 @@ func main() {
 		{language.Scala, "val code = ", "'{true}", "val code = '{true}"},
 		{language.Perl, "my $s = ", "'it\\'s'", "my $s = 'it\\'s'"},
 		{language.Diff, "+ ", "{'x'}", "+ {'x'}"},
+		{language.Batch, "echo ", "\"C:\\\"", "echo \"C:\\\""},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {

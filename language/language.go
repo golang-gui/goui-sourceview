@@ -54,6 +54,7 @@ const (
 	Scala        ID = "scala"
 	Perl         ID = "perl"
 	Diff         ID = "diff"
+	Batch        ID = "bat"
 	Markdown     ID = "markdown"
 )
 
@@ -148,6 +149,7 @@ var builtins = []Info{
 	{ID: Scala, Name: "Scala", Extensions: []string{".scala", ".sbt"}, MIMETypes: []string{"text/x-scala"}},
 	{ID: Perl, Name: "Perl", Extensions: []string{".pl", ".pm"}, MIMETypes: []string{"text/x-perl"}},
 	{ID: Diff, Name: "Diff", Extensions: []string{".diff", ".patch"}, MIMETypes: []string{"text/x-diff", "text/x-patch"}},
+	{ID: Batch, Name: "Windows Batch", Extensions: []string{".bat", ".cmd"}, MIMETypes: []string{"application/x-bat"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

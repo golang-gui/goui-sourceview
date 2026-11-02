@@ -893,6 +893,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Perl, "=pod\nbody\n=cut", "body", 1, language.KindComment},
 		{language.Diff, "+body", "+body", 0, language.KindAdded},
 		{language.Diff, "-body", "-body", 0, language.KindRemoved},
+		{language.Batch, "REM note", "REM note", 0, language.KindComment},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

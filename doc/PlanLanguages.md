@@ -481,3 +481,12 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，`GOWORK=off go test ./...`（GOUI v0.5.0）�
 语言筛选现在也接受只有输入场景、没有建议场景的语言；未知筛选仍失败。
 日志与产物在 `/tmp/sourceview-language-batch5-xOXtDs/`，未修改 GOUI 或依赖。
 Windows Batch、HCL/Terraform、GraphQL、SCSS、Less 继续依次实现。
+
+### Windows Batch
+
+新增 .bat/.cmd、围栏、编辑规则、建议和 build.cmd，示例共 44 份。
+独立断言覆盖大小写、命令 REM 与 echo 参数的差别、标签、变量/参数修饰、
+双引号、^ 转义/续行及未闭合引用的真实行尾恢复；长行和极小分片通过。
+`GOWORK=off go test ./...`、Pango 亮暗 REM 原生颜色断言通过。
+同本批独立 X11 / Software / 浅色 1×，`-language bat` 通过 setlocal 建议接受/撤销、
+反斜杠结尾路径的引用输入及公共断言。没有执行批处理或依赖 Windows 命令解释器。

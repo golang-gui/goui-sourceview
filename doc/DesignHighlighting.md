@@ -780,3 +780,20 @@ hunk 头及缺少换行提示使用已有样式，不把删除行当作语法错
 不根据路径猜测并重新解释增删行里的源码；自定义配色继续通过现有 Scheme.Tokens 完成。
 参考 [Git diff-format](https://git-scm.com/docs/diff-format)（读取 2026-11-02，页面最后更新 2.55.0）
 和 Lexilla LexDiff.cxx 的按行分类思路；采用本项目有界分片和增量状态，不复制其规则或增加依赖。
+
+## 26. Windows Batch
+
+新增 bat ID、`.bat/.cmd`、bat/batch/cmd 围栏和关键词建议。命令词不区分大小写；
+行首标签、常用 :: 注释写法、命令位置的 REM、双引号、百分号/延迟变量、参数及 FOR 变量分别跟踪。
+`^` 在普通代码中转义下一字符，位于真实行尾时保留命令上下文；引号内保持普通正文。
+双引号在真实行尾恢复，工作片段边界不恢复；引号内的变量保持字符串 Class。
+编辑只启用圆括号和双引号配对，QuoteEscape 使用 ^，引用上下文为 Literal；REM 用作行注释命令。
+
+词法显示不执行命令或环境展开，不根据 setlocal 的运行状态开关 !…! 颜色，也不解析 CALL 的二次展开。
+REM 与命令起点使用词法启发式，不承诺 CMD 的所有 IF、重定向和多阶段解析歧义。
+参考 [Microsoft cmd](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd)、
+[for](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/for)、
+[rem](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/rem)
+（读取 2026-11-02，页面适用于 Windows 10/11、Server 2016–2025）及
+[Lexilla LexBatch.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexBatch.cxx)
+的命令/标签/变量区分，采用独立有界状态，不复制实现或调用 cmd.exe。

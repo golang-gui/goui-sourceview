@@ -17,6 +17,17 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Batch:
+			d.Tokenizer = batTokenizer{}
+			d.Editing.Comments.Line = "REM"
+			d.Editing.QuoteEscape = '^'
+			d.Editing.Brackets = d.Editing.Brackets[:1]
+			d.Editing.AutoClosingPairs = []Pair{d.Editing.Brackets[0], {Open: `"`, Close: `"`, NotInString: true, NotInComment: true}}
+			d.Editing.SurroundingPairs = d.Editing.AutoClosingPairs
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '%' || r == '!' }
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Diff:
 			d.Tokenizer = diffTokenizer{}
 			d.Editing = EditingRules{Word: IdentifierRune}
@@ -369,7 +380,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 	}
 	for alias, id := range map[string]ID{
 		"patch": Diff,
-		"sh":    Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
+		"batch": Batch, "cmd": Batch,
+		"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
 		"proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines,
 		"c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp,
 		"ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell,
@@ -398,6 +410,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case Batch:
+		table = batKeywords
 	case Perl:
 		table = plKeywords
 	case Scala:

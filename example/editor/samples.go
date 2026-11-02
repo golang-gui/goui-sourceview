@@ -38,6 +38,7 @@ func sampleDocuments() []exampleDocument {
 		"hello.scala",
 		"hello.pl",
 		"change.diff",
+		"build.cmd",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

@@ -652,6 +652,17 @@ func TestFifthBatchKinds(t *testing.T) {
 		{language.Diff, "@@ -0,0 +1,2 @@\n+new\n+again\n+++ b/next", "+++ b/next", language.KindHeading},
 		{language.Diff, "diff --git a/a b/a", "diff", language.KindMeta},
 		{language.Diff, "\\ No newline at end of file", "No newline", language.KindComment},
+		{language.Batch, "@EcHo off\nREM comment\necho rem argument", "EcHo", language.KindKeyword},
+		{language.Batch, "@EcHo off\nREM comment\necho rem argument", "comment", language.KindComment},
+		{language.Batch, "echo rem argument", "rem", language.KindPlain},
+		{language.Batch, "echo ^& rem argument", "rem", language.KindPlain},
+		{language.Batch, "echo ^\nrem continued\nrem actual", "continued", language.KindPlain},
+		{language.Batch, "echo ^\nrem continued\nrem actual", "actual", language.KindComment},
+		{language.Batch, ":build\n:: note\necho \"%NAME% !count!\"", ":build", language.KindTag},
+		{language.Batch, "echo \"%NAME% !count!\"", "%NAME%", language.KindVariable},
+		{language.Batch, "for %%i in (*) do echo %%~fi %~dp0 %1 %*", "%%~fi", language.KindVariable},
+		{language.Batch, "for %%i in (*) do echo %%~fi %~dp0 %1 %*", "%~dp0", language.KindVariable},
+		{language.Batch, "echo \"unclosed\nrem actual", "actual", language.KindComment},
 	} {
 		for _, chunk := range []int{1, 3, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -664,7 +675,8 @@ func TestFifthBatchKinds(t *testing.T) {
 
 func TestFifthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
-		language.Diff: {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@ function\n--- old\n+++ new\n same\n--- a/b\n+++ b/b\n@@ -0,0 +1 @@\n+new\n\\ No newline at end of file", "@@ -1 +1 @@ " + strings.Repeat("字", ChunkSize) + "\n-" + strings.Repeat("x", ChunkSize*2) + "\n+new", "@@ -1," + strings.Repeat("9", ChunkSize) + " +1 @@\n+new"},
+		language.Batch: {"@echo off\nsetlocal EnableDelayedExpansion\nREM note\n:build\n:: note\nfor %%i in (*.txt) do (\n echo \"%%~fi %~dp0 %NAME:~1,2% !count!\"\n)\necho ^\nrem continuation\nrem actual", "echo \"" + strings.Repeat("字", ChunkSize) + "%NAME%\"\n" + strings.Repeat("r", ChunkSize) + " argument\nrem final"},
+		language.Diff:  {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@ function\n--- old\n+++ new\n same\n--- a/b\n+++ b/b\n@@ -0,0 +1 @@\n+new\n\\ No newline at end of file", "@@ -1 +1 @@ " + strings.Repeat("字", ChunkSize) + "\n-" + strings.Repeat("x", ChunkSize*2) + "\n+new", "@@ -1," + strings.Repeat("9", ChunkSize) + " +1 @@\n+new"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
