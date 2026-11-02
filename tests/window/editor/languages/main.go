@@ -139,6 +139,7 @@ func main() {
 		{language.Nix, "inhe", "inherit"}, {language.JQ, "sel", "select"}, {language.PromQL, "ira", "irate"},
 		{language.FSharp, "modu", "module"}, {language.Elixir, "defm", "defmodule"}, {language.Erlang, "rece", "receive"},
 		{language.Julia, "funct", "function"}, {language.Clojure, "(defm", "(defmacro"},
+		{language.Haskell, "deriv", "deriving"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -202,6 +203,7 @@ func main() {
 		{language.Erlang, "Value=", "'atom'", "Value='atom'"},
 		{language.Julia, "matrix", "'", "matrix'"},
 		{language.Clojure, "", "'name", "'name"},
+		{language.Haskell, "foo", "'", "foo'"},
 
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},

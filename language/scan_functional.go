@@ -17,6 +17,7 @@ const (
 	fnVariable
 
 	fnPrefix
+	fnDash
 )
 
 // These dialects share bounded words and persistent literal/comment frames,
@@ -85,6 +86,7 @@ var functionalWords = map[ID]map[string]bool{
 	Erlang:  words("after begin case catch cond end fun if let of receive try when and andalso band bnot bor bsl bsr bxor div not or orelse rem xor maybe else true false"),
 	Julia:   words("abstract baremodule begin break catch const continue do else elseif end export false finally for function global if import in isa let local macro module mutable primitive public quote return struct true try using where while type"),
 	Clojure: words("def defn defn- defmacro defonce defmulti defmethod defrecord deftype defprotocol fn fn* let letfn loop recur if if-not if-let when when-not when-let cond condp case do doseq dotimes for lazy-seq binding with-open try catch finally throw new set! ns in-ns require import quote var nil true false and or not"),
+	Haskell: words("case class data default deriving do else foreign if import in infix infixl infixr instance let module newtype of then type where qualified as hiding forall mdo family role pattern stock anyclass via safe unsafe interruptible"),
 }
 
 func functionalVocabulary(id ID) []string {
@@ -100,7 +102,8 @@ func functionalEditing(id ID) EditingRules {
 	switch id {
 	case FSharp:
 		d.Comments = Comments{Line: "", Block: Pair{Open: "(*", Close: "*)"}}
-
+	case Haskell:
+		d.Comments = Comments{Line: "--", Block: Pair{Open: "{-", Close: "-}"}}
 	case Clojure:
 		d.Comments.Line = ";"
 	case Elixir, Julia:
@@ -119,7 +122,7 @@ func functionalEditing(id ID) EditingRules {
 		if c.Selected || c.Context.String {
 			return true
 		}
-		if c.Typed == "'" && (id == FSharp || id == Julia || id == Clojure) {
+		if c.Typed == "'" && (id == FSharp || id == Julia || id == Haskell || id == Clojure) {
 			return false
 		}
 		return c.Typed != "\"" || !strings.HasSuffix(c.Before, "\"\"")
@@ -133,7 +136,7 @@ func fnName(id ID, r rune) bool {
 	switch id {
 	case Clojure:
 		return strings.ContainsRune("*+!_?-./:$%&=<>", r)
-	case FSharp:
+	case FSharp, Haskell:
 		return r == '\''
 	case Elixir:
 		return r == '!' || r == '?'
@@ -144,7 +147,8 @@ func fnComment(id ID) (string, string) {
 	switch id {
 	case FSharp:
 		return "(*", "*)"
-
+	case Haskell:
+		return "{-", "-}"
 	case Julia:
 		return "#=", "=#"
 	}
@@ -154,7 +158,8 @@ func fnLine(id ID) string {
 	switch id {
 	case FSharp:
 		return "//"
-
+	case Haskell:
+		return "--"
 	case Erlang:
 		return "%"
 	case Clojure:
@@ -163,6 +168,9 @@ func fnLine(id ID) string {
 		return "#"
 	}
 	return ""
+}
+func fnSymbol(r rune) bool {
+	return strings.ContainsRune("!#$%&*+./<=>?@\\^|-~:", r) || unicode.IsSymbol(r) || unicode.IsPunct(r) && !strings.ContainsRune("(),;[]{}\x60_'\"", r)
 }
 
 // Character literals have a bounded spelling; an unmatched apostrophe belongs
@@ -261,7 +269,20 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			s.expr = &v
 		}
 		switch s.mode {
-
+		case fnDash:
+			if c == '-' {
+				add(i, i+1, KindDelimiter, 0)
+				i++
+				continue
+			}
+			if !fnSymbol(r) {
+				w.add(s.word.start, in.Offset+i, KindComment, ClassComment)
+				s.word = scanWord{}
+				s.mode = fnLineComment
+				continue
+			}
+			s.word = scanWord{}
+			s.mode = fnCode
 		case fnLineComment:
 			add(i, i+n, KindComment, ClassComment)
 			i += n
@@ -483,7 +504,13 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		line := fnLine(s.id)
 		if line != "" && strings.HasPrefix(text[i:], line) {
 			isComment := true
-
+			if s.id == Haskell {
+				s.mode = fnDash
+				s.word = scanWord{start: in.Offset + i}
+				add(i, i+2, KindDelimiter, 0)
+				i += 2
+				continue
+			}
 			if isComment {
 				s.mode = fnLineComment
 				continue
@@ -592,7 +619,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += n
 			continue
 		}
-		if c == '\'' && (s.id == FSharp || s.id == Julia) {
+		if c == '\'' && (s.id == FSharp || s.id == Haskell || s.id == Julia) {
 			if size := fnCharacter(text[i:]); size > 0 && (s.id != Julia || !s.value) {
 				add(i, i+size, KindString, ClassString)
 				i += size
@@ -713,7 +740,11 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 	}
 
 	if in.LineEnd && i == len(text) {
-
+		if s.mode == fnDash {
+			w.add(s.word.start, in.Offset+i, KindComment, ClassComment)
+			s.word = scanWord{}
+			s.mode = fnCode
+		}
 		finish(in.Offset + i)
 		if s.mode == fnLineComment {
 			s.mode = fnCode
@@ -726,7 +757,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = fnString
 		}
 
-		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp) {
+		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp || s.id == Haskell) {
 			endString()
 		}
 		s.last, s.escape, s.value, s.atStart = 0, false, false, true

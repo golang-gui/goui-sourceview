@@ -80,6 +80,7 @@ const (
 	Erlang        ID = "erlang"
 	Julia         ID = "julia"
 	Clojure       ID = "clojure"
+	Haskell       ID = "haskell"
 
 	Markdown ID = "markdown"
 )
@@ -201,6 +202,7 @@ var builtins = []Info{
 	{ID: Erlang, Name: "Erlang", Extensions: []string{".erl", ".hrl"}},
 	{ID: Julia, Name: "Julia", Extensions: []string{".jl"}},
 	{ID: Clojure, Name: "Clojure", Extensions: []string{".clj", ".cljs", ".cljc"}},
+	{ID: Haskell, Name: "Haskell", Extensions: []string{".hs", ".hs-boot"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
@@ -291,6 +293,8 @@ func Guess(filename string, sample []byte) ID {
 		return Julia
 	case "clojure", "clj", "bb":
 		return Clojure
+	case "runghc", "runhaskell":
+		return Haskell
 
 	case "fsharpi":
 		return FSharp

@@ -1031,3 +1031,9 @@ atom、变量、字符、基数数值与三引号；与 Elixir 保持独立词�
 读取器形式及完整 #_ 丢弃，包括嵌套丢弃、metadata、tagged literal 与 reader conditional。
 保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
 参考[官方规范/源码](https://github.com/clojure/clojure/blob/clojure-1.12.0/src/jvm/clojure/lang/LispReader.java)（读取 2026-11-02）。
+
+### Haskell
+
+嵌套注释、pragma、标识符撇号及长连字符后的 ASCII/Unicode 符号判断。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://www.haskell.org/onlinereport/haskell2010/haskellch2.html)（读取 2026-11-02）。
