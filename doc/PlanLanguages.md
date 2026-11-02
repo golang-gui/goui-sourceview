@@ -660,3 +660,9 @@ editor 浅色 1× 实际点击九个新样本，深色 1× 检查 Groovy、Doten
 表达式、语句、注释、过滤器和 raw/endraw；显式纯文本/HTML 宿主。
 同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 page.html.j2 样本。
 本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+
+### systemd unit
+
+分节、键值、跳过注释行的续行、转义、% specifier 及 Exec 变量。
+同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 editor.service 样本。
+本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。

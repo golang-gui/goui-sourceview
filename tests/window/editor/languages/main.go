@@ -135,6 +135,7 @@ func main() {
 		{language.Starlark, "retu", "return"},
 		{language.Groovy, "de", "def"},
 		{language.GoTemplate, "{{pri", "{{print"}, {language.Jinja2, "{% endi", "{% endif"},
+		{language.Systemd, "ExecSta", "ExecStart"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -188,6 +189,7 @@ func main() {
 	}{
 		{language.GoTemplate, "{{printf ", "\"hello\"}}", "{{printf \"hello\"}}"},
 		{language.Jinja2, "{% raw %}", "{{true}}", "{% raw %}{{true}}"},
+		{language.Systemd, "Description=", "\"text\"", "Description=\"text\""},
 
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},

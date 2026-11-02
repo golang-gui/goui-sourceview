@@ -105,6 +105,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.Starlark,
 		language.Groovy,
 		language.GoTemplate, language.Jinja2,
+		language.Systemd,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

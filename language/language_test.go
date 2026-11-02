@@ -72,7 +72,7 @@ func TestGuess(t *testing.T) {
 		{"hello.groovy", "", Groovy}, {"build.gradle", "", Groovy}, {"Jenkinsfile", "", Groovy}, {"script", "#!/usr/bin/env groovy", Groovy}, {"build.gradle.kts", "", Kotlin},
 		{"page.gotmpl", "", GoTemplate}, {"page.gohtml", "", GoTemplate}, {"page.tpl", "", Plain},
 		{"page.html.j2", "", Jinja2}, {"page.jinja", "", Jinja2}, {"page.jinja2", "", Jinja2},
-		{"other.conf", "", Plain},
+		{"app.service", "", Systemd}, {"app.timer", "", Systemd}, {"app.socket", "", Systemd}, {"other.conf", "", Plain},
 
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
@@ -188,7 +188,7 @@ func TestTemplateHosts(t *testing.T) {
 
 func TestSeventhBatchFences(t *testing.T) {
 	md, _ := Builtin(Markdown)
-	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2} {
+	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2, "systemd": Systemd} {
 		scanner := md.Tokenizer()
 		fence := "\x60\x60\x60" + name
 		r, e := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -370,6 +370,7 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 	}{
 		{GoTemplate, "{{printf \"[literal]\"}}", "[literal]", ClassString},
 		{Jinja2, "{# [comment] #}", "[comment]", ClassComment},
+		{Systemd, "Description=[literal]", "[literal]", ClassString},
 
 		{C, `#include <stdio.h>`, "stdio", ClassString},
 		{Cpp, `R"tag({ /* literal */ })tag"`, "{", ClassString},

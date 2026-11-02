@@ -1,0 +1,16 @@
+# Original systemd unit sample for SourceView.
+[Unit]
+Description=SourceView example service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/editor
+Environment="EDITOR_THEME=Modern"
+ExecStart=/opt/editor/editor --instance=%i \
+    --theme=modern
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target

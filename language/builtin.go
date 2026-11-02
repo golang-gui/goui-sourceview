@@ -18,6 +18,17 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		}
 		switch info.ID {
 
+		case Systemd:
+			d.Tokenizer = unitTokenizer{info.ID}
+			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '-' || r == '.' }, Comments: Comments{Line: "#"}}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := unitWords(info.ID)
+			d.Suggest = func(c Context) []string {
+				if c.Data == true {
+					return vocabulary
+				}
+				return nil
+			}
 		case GoTemplate, Jinja2:
 			l, err := newTemplate(info.ID, nil)
 			if err != nil {
@@ -479,7 +490,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 	}
 	for alias, id := range map[string]ID{
 
-		"gotmpl": GoTemplate, "go-html-template": GoTemplate, "jinja": Jinja2, "j2": Jinja2,
+		"systemd-unit": Systemd,
+		"gotmpl":       GoTemplate, "go-html-template": GoTemplate, "jinja": Jinja2, "j2": Jinja2,
 		"gvy": Groovy, "gradle": Groovy,
 		"bzl": Starlark, "bazel": Starlark,
 		"env":    Dotenv,
