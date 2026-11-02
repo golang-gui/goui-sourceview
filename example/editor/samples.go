@@ -71,6 +71,7 @@ func sampleDocuments() []exampleDocument {
 		"flow.mmd",
 		"graph.dot",
 		"View.xaml", "Cargo.lock",
+		"page-yaml.md", "page-toml.md",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

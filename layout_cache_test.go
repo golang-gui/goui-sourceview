@@ -852,6 +852,8 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		row        int
 		kind       language.Kind
 	}{
+		{language.Markdown, "---\n# body\n---\n# Heading", "# body", 1, language.KindComment},
+		{language.Markdown, "+++\ntext='''\nbody\n'''\n+++\n# Heading", "body", 2, language.KindString},
 		{language.DOT, "/* first\nbody\n*/", "body", 1, language.KindComment},
 		{language.Mermaid, "A[\"first\nbody\nlast\"]", "body", 1, language.KindString},
 		{language.Crontab, "# body", "# body", 0, language.KindComment},

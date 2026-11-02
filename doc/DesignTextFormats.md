@@ -152,3 +152,16 @@ Cargo.lock 使用 TOML。只扩充识别，不增加 ID 或扫描器，不把其
 依据 [MSBuild XML 项目格式](https://learn.microsoft.com/en-us/dotnet/core/project-sdk/overview#project-files)、
 [Qt UI XML 格式](https://doc.qt.io/qt-6/designer-ui-file-format.html) 和
 [Cargo lockfile](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)（读取 2026-11-02）。
+
+## Markdown 前置元数据
+
+文档第一逻辑行（允许 UTF-8 BOM）单独的 --- 开启 YAML、+++ 开启 TOML；不向后寻找闭合行才决定。
+边界允许尾部空白，YAML 也接受 ... 作为结束行。边界优先于子语言状态，未闭合时持续到文档末尾。
+这是文档生态扩展，并非 CommonMark 的承诺；首行 --- 的歧义按元数据处理，其他位置仍按原 Markdown 处理。
+参照 [Hugo front matter](https://gohugo.io/content-management/front-matter/) 与
+[Jekyll front matter](https://jekyllrb.com/docs/front-matter/)（读取 2026-11-02）；BOM 兼容仅是编辑器识别，不保证 Jekyll 构建兼容。
+
+复用 NewMarkdown 显式嵌入表中的 yaml/toml 定义，不增加注册或新公共参数；空表保留边界和普通正文，关闭子语言着色。
+元数据直接分片送给子扫描器，闭合候选行由有限状态独立识别，巨长正文或尾部空白不复制整行。
+子语言 Context/Embedded、注释、引用和编辑规则继续有效，结束后恢复 Markdown。
+折叠按外层元数据边界处理，不把 YAML 注释当 Markdown 标题。

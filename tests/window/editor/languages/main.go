@@ -95,6 +95,8 @@ func main() {
 		id         language.ID
 		text, want string
 	}{
+		{language.Markdown, "---\nenabled: tr", "---\nenabled: true"},
+		{language.Markdown, "+++\nenabled = tr", "+++\nenabled = true"},
 		{language.LaTeX, "\\sect", "\\section"},
 		{language.BibTeX, "@art", "@article"},
 		{language.Gettext, "msgi", "msgid"},
@@ -202,6 +204,7 @@ func main() {
 		id                  language.ID
 		prefix, typed, want string
 	}{
+		{language.Markdown, "---\ntext: ", "'it''s'", "---\ntext: 'it''s'"},
 		{language.CSV, "", "\"a\"\"b\",x", "\"a\"\"b\",x"},
 		{language.TSV, "", "\"raw\"\tx", "\"raw\"\tx"},
 		{language.AsciiDoc, "", "`raw` *text*", "`raw` *text*"},

@@ -26,6 +26,69 @@ func TestLookupDetached(t *testing.T) {
 	}
 }
 
+func TestMarkdownFrontMatter(t *testing.T) {
+	for _, text := range []string{
+		"---\ntitle: true\n---\n# Heading",
+		"+++\ntitle='Editor'\n+++\n# Heading",
+		"\ufeff--- \t\r\nkey: false\n... \t\r\n# Heading",
+		"---" + strings.Repeat(" ", 70<<10) + "\nkey: true\n---\n# Heading",
+		"---\nkey: \"" + strings.Repeat("字", 24<<10) + "\"\n---\n# Heading",
+	} {
+		for _, chunk := range []int{1, 7, 4096} {
+			// 巨长行另按 4 KiB 验证，避免单字符分片开销淹没其意图。
+			if len(text) > 64<<10 && chunk != 4096 {
+				continue
+			}
+			tokens, state := markdownTokens(t, text, chunk)
+			at := strings.Index(text, "Heading")
+			found := false
+			for _, tok := range tokens {
+				if tok.Start <= at && at < tok.End && tok.Kind == KindHeading {
+					found = true
+				}
+			}
+			if !found || state.Context().Embedded != nil {
+				t.Fatalf("front matter did not restore Markdown, chunk=%d", chunk)
+			}
+		}
+		folds, err := foldMarkdown(context.Background(), text)
+		if err != nil || len(folds) == 0 || folds[0].StartLine != 0 {
+			t.Fatalf("metadata folding: %v %v", folds, err)
+		}
+	}
+	plain, err := NewMarkdown(map[string]*Language{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanner := plain.Tokenizer()
+	open, err := scanner.Scan(Input{Text: "---", Limit: 3, LineEnd: true}, scanner.InitialState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := scanner.Scan(Input{Text: "# literal", Limit: 9, LineEnd: true}, open.State)
+	if err != nil || len(body.Tokens) != 0 || body.State.Context().Embedded != nil || !body.State.Context().Literal {
+		t.Fatalf("empty embedding table: %+v %v", body, err)
+	}
+}
+
+func TestTextFormatFences(t *testing.T) {
+	md, _ := Builtin(Markdown)
+	for alias, id := range map[string]ID{"csv": CSV, "tsv": TSV, "adoc": AsciiDoc, "rst": ReStructuredText,
+		"tex": LaTeX, "bib": BibTeX, "po": Gettext, "editorconfig": EditorConfig, "json5": JSON5, "edn": EDN,
+		"gitconfig": GitConfig, "ssh-config": SSHConfig, "cron": Crontab, "mermaid": Mermaid, "graphviz": DOT} {
+		scanner := md.Tokenizer()
+		line := "```" + alias
+		r, err := scanner.Scan(Input{Text: line, Limit: len(line), LineEnd: true}, scanner.InitialState())
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err = scanner.Scan(Input{Text: "body", Limit: 4}, r.State)
+		if err != nil || r.State.Context().Embedded == nil || r.State.Context().Embedded.ID() != id {
+			t.Fatalf("%s: wrong child, %v", alias, err)
+		}
+	}
+}
+
 func TestGuess(t *testing.T) {
 	for _, tc := range []struct {
 		name, sample string

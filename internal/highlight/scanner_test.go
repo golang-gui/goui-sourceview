@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.Markdown, "---\nkey: true\n---\n# Heading", "\n---\n", "\nend\n", "Heading", language.KindComment},
 		{language.DOT, "/* first\nbody */ digraph G {}", "/*", "", "body", language.KindPlain},
 		{language.Mermaid, "A[\"first\nbody\"]", "\"", "", "body", language.KindPlain},
 		{language.Crontab, "0 1 * * * echo #body", "0 1 * * * echo ", "", "body", language.KindComment},
@@ -418,6 +419,12 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.Markdown, "---\ntitle: true\n---\n# Heading", "title", language.KindProperty},
+	{language.Markdown, "---\ntitle: true\n---\n# Heading", "Heading", language.KindHeading},
+	{language.Markdown, "+++\ntitle = 'Editor'\n+++\n# Heading", "Editor", language.KindString},
+	{language.Markdown, "\n---\nkey: true", "true", language.KindPlain},
+	{language.Markdown, "--- text\nkey: true", "true", language.KindPlain},
+	{language.Markdown, "---\nkey: true\n... \t\n# Heading", "Heading", language.KindHeading},
 	{language.DOT, "DiGraph G { a -> b }", "DiGraph", language.KindKeyword},
 	{language.DOT, "a [label = \"body\"]", "label", language.KindProperty},
 	{language.DOT, "a [label=<<B X=\">\">body</B>>]; after", "after", language.KindPlain},

@@ -62,41 +62,69 @@ func newMarkdown(embedded map[string]*Language) (*Language, error) {
 }
 
 type mdBlock struct {
-	fence    byte
-	length   int
-	language *Language
-	child    State
-	comment  bool
+	frontMatter bool
+	fence       byte
+	length      int
+	language    *Language
+	child       State
+	comment     bool
 }
 
 func (a mdBlock) equal(b mdBlock) bool {
-	return a.fence == b.fence && a.length == b.length && a.language == b.language && a.comment == b.comment && StatesEqual(a.child, b.child)
+	return a.frontMatter == b.frontMatter && a.fence == b.fence && a.length == b.length && a.language == b.language && a.comment == b.comment && StatesEqual(a.child, b.child)
 }
 
 type markdownState struct {
-	block, base mdBlock
-	prefix      string
-	overflow    bool
-	context     Context
+	first, frontCandidate bool
+	frontMarker           byte
+	frontRun              int
+	block, base           mdBlock
+	prefix                string
+	overflow              bool
+	context               Context
 }
 
 func (s markdownState) Equal(other State) bool {
 	t, ok := other.(markdownState)
-	return ok && s.block.equal(t.block) && s.base.equal(t.base) && s.prefix == t.prefix && s.overflow == t.overflow
+	return ok && s.first == t.first && s.frontCandidate == t.frontCandidate && s.frontMarker == t.frontMarker && s.frontRun == t.frontRun && s.block.equal(t.block) && s.base.equal(t.base) && s.prefix == t.prefix && s.overflow == t.overflow
 }
 func (s markdownState) Context() Context { return s.context }
 
 type markdownTokenizer struct{ embedded map[string]*Language }
 
-func (markdownTokenizer) InitialState() State { return markdownState{} }
+func (markdownTokenizer) InitialState() State { return markdownState{first: true} }
 func (t markdownTokenizer) Scan(in Input, previous State) (Result, error) {
 	s, ok := previous.(markdownState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Markdown state")
 	}
-	n := in.Limit
-	for n < len(in.Text) && !utf8.RuneStart(in.Text[n]) {
-		n++
+	n, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	if s.block.frontMatter {
+		return t.frontMatter(in, s)
+	}
+	if s.first {
+		if in.Offset == 0 {
+			s.frontCandidate, s.frontMarker, s.frontRun = true, 0, 0
+		}
+		s.frontPrefix(in.Text[:n], in.Offset, true)
+		if in.LineEnd && n == len(in.Text) && s.frontCandidate && s.frontRun == 3 {
+			name := "yaml"
+			if s.frontMarker == '+' {
+				name = "toml"
+			}
+			s.block = mdBlock{frontMatter: true, fence: s.frontMarker, language: t.embedded[name]}
+			if s.block.language != nil && s.block.language.Tokenizer() != nil {
+				s.block.child = s.block.language.Tokenizer().InitialState()
+			}
+			s.context = Context{Embedded: s.block.language}
+			s.first, s.frontCandidate, s.frontMarker, s.frontRun = false, false, 0, 0
+			s.base, s.prefix, s.overflow = mdBlock{}, "", false
+			zero := 0
+			return Result{Consumed: n, State: s, Tokens: []Token{{Start: 0, End: in.Offset + n, Kind: KindFence}}, ReplaceFrom: &zero}, nil
+		}
 	}
 	if in.Offset == 0 {
 		s.prefix = ""
@@ -144,6 +172,8 @@ func (t markdownTokenizer) Scan(in Input, previous State) (Result, error) {
 			result.Tokens = []Token{{Start: in.Offset, End: in.Offset + n, Kind: kind, Class: class}}
 		}
 		if in.LineEnd && n == len(in.Text) {
+			s.first = false
+			s.frontCandidate, s.frontMarker, s.frontRun = false, 0, 0
 			s.base = mdBlock{}
 			s.prefix = ""
 			s.overflow = false
@@ -162,12 +192,92 @@ func (t markdownTokenizer) Scan(in Input, previous State) (Result, error) {
 	zero := 0
 	result := Result{Consumed: n, State: s, Tokens: tokens, ReplaceFrom: &zero}
 	if end {
+		s.first = false
+		s.frontCandidate, s.frontMarker, s.frontRun = false, 0, 0
 		s.prefix = ""
 		s.base = mdBlock{}
 		result.State = s
 	}
 	return result, nil
 }
+
+// Metadata is streamed directly into its child tokenizer. Closing candidates
+// are tracked independently, so even a very long line never needs replay.
+func (t markdownTokenizer) frontMatter(in Input, s markdownState) (Result, error) {
+	if in.Offset == 0 {
+		s.frontCandidate, s.frontMarker, s.frontRun = true, 0, 0
+	}
+	n, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	s.context = Context{String: true, Literal: true}
+	if s.block.language != nil && s.block.language.Tokenizer() != nil {
+		r, err := s.block.language.Tokenizer().Scan(in, s.block.child)
+		if err != nil {
+			return Result{}, err
+		}
+		if err = ValidateResult(in, r); err != nil {
+			return Result{}, err
+		}
+		n, s.block.child = r.Consumed, r.State
+		w.merge(r)
+		s.context = r.State.Context()
+		s.context.Embedded = s.block.language
+	}
+	s.frontPrefix(in.Text[:n], in.Offset, false)
+	if in.LineEnd && n == len(in.Text) {
+		if s.frontCandidate && s.frontRun == 3 {
+			w.add(0, in.Offset+n, KindFence, 0)
+			s.block, s.context = mdBlock{}, Context{}
+		}
+		s.frontCandidate, s.frontMarker, s.frontRun = false, 0, 0
+	}
+	return w.result(n, s), nil
+}
+
+func (s *markdownState) frontPrefix(text string, offset int, opening bool) {
+	for i, c := range text {
+		if !s.frontCandidate {
+			break
+		}
+		if opening && offset+i == 0 && c == '\ufeff' {
+			continue
+		}
+		if s.frontRun == 0 {
+			valid := c == rune(s.block.fence) || s.block.fence == '-' && c == '.'
+			if opening {
+				valid = c == '-' || c == '+'
+			}
+			if !valid {
+				s.frontCandidate = false
+				break
+			}
+			s.frontMarker = byte(c)
+		}
+		if s.frontRun < 3 {
+			if c != rune(s.frontMarker) {
+				s.frontCandidate = false
+				break
+			}
+			s.frontRun++
+		} else if c != ' ' && c != '\t' && c != '\r' {
+			s.frontCandidate = false
+		}
+	}
+}
+
+func frontMatterMarker(text string) byte {
+	switch strings.TrimRight(text, " \t\r") {
+	case "---":
+		return '-'
+	case "+++":
+		return '+'
+	}
+	return 0
+}
+
 func fencePrefix(line string) (char byte, width int, rest string) {
 	text := strings.TrimLeft(line, " ")
 	if len(line)-len(text) > 3 || len(text) < 3 || text[0] != '`' && text[0] != '~' {
@@ -393,9 +503,24 @@ func foldMarkdown(ctx context.Context, text string) ([]FoldRange, error) {
 	var out []FoldRange
 	fence, length, start := byte(0), 0, 0
 	comment := false
+	front := byte(0)
 	for row, line := range lines {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		if row == 0 {
+			front = frontMatterMarker(strings.TrimPrefix(line, "\ufeff"))
+			if front != 0 {
+				continue
+			}
+		}
+		if front != 0 {
+			trim := strings.TrimRight(line, " \t\r")
+			if trim == strings.Repeat(string(front), 3) || front == '-' && trim == "..." {
+				out = append(out, FoldRange{0, row})
+				front = 0
+			}
+			continue
 		}
 		c, n, rest := fencePrefix(line)
 		if fence != 0 {
@@ -444,6 +569,9 @@ func foldMarkdown(ctx context.Context, text string) ([]FoldRange, error) {
 	last := len(lines) - 1
 	if last > 0 && lines[last] == "" {
 		last--
+	}
+	if front != 0 && last > 0 {
+		out = append(out, FoldRange{0, last})
 	}
 	if fence != 0 && last > start {
 		out = append(out, FoldRange{start, last})

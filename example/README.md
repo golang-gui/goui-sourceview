@@ -39,13 +39,13 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 
 ## Editor
 
-`editor` embeds 88 original language samples, so the binary can run from any
+`editor` embeds 90 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and becomes the first option in the Sample dropdown. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目 88 份原创语言样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目 90 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并作为 Sample 下拉列表的首项，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
@@ -172,3 +172,6 @@ use $1/${name} in replacements, or capture the current editor selection as scope
 
 XAML/ResX/MSBuild/UI files use XML highlighting; Cargo.lock uses TOML.
 XAML、ResX、MSBuild、UI 文件复用 XML 着色，Cargo.lock 复用 TOML。
+
+Markdown page-yaml.md and page-toml.md show YAML/TOML front matter and embedded diagrams.
+Markdown 的 page-yaml.md/page-toml.md 展示前置元数据和图表代码围栏。

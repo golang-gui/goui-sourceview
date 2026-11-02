@@ -854,3 +854,11 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8，通过 `go test ./...`（工作区 GOUI b4904
 新增 XML 系列后缀与 Cargo.lock=TOML，增加 View.xaml/Cargo.lock 样本；不增加扫描器或改变泛化 config/.lock 识别。
 独立文件名预期、示例语言覆盖与现有 XML/TOML 分片、编辑、原生颜色回归通过 GOWORK=off go test ./...。
 本项只改变文件识别，窗口编辑行为复用已有 XML/TOML 验证；未执行 Windows/macOS 原生验证。
+
+### Markdown 前置元数据（2026-11-02）
+
+新增文档起始的 YAML/TOML 元数据、外层边界折叠、两份样本和各新格式的 Markdown 围栏断言。
+覆盖 BOM、空嵌入表、迟发的闭合行、后续正文恢复、增量编辑以及超过 64 KiB 的正文/边界空白。
+GOWORK=off go test ./... 与原生亮暗颜色断言通过；独立 X11 / Xfwm4 / Pango / Software 浅色 1× 的
+-language markdown 通过 YAML/TOML 建议接受/撤销、YAML 引用逐字符输入与公共编辑断言。
+未执行 Windows/macOS 原生验证；本项不修改 GOUI。
