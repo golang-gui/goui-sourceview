@@ -69,6 +69,7 @@ func sampleDocuments() []exampleDocument {
 		"ssh_config",
 		"jobs.crontab",
 		"flow.mmd",
+		"graph.dot",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

@@ -133,3 +133,197 @@ func (mermaidTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	return w.result(i, s), nil
 }
+
+type dotTokenizer struct{}
+type dotState struct {
+	mode, htmlQuote                               byte
+	htmlDepth, htmlEnd, slashAt, keyStart, keyEnd int
+	htmlComment, slash, wordOn, pendingKey        bool
+	word                                          scanWord
+}
+
+func (s dotState) Equal(other State) bool { t, ok := other.(dotState); return ok && s == t }
+func (s dotState) Context() Context {
+	return Context{String: s.mode == '"' || s.mode == '<', Literal: s.mode == '<', Comment: s.mode == '/' || s.mode == '*'}
+}
+func (dotTokenizer) InitialState() State { return dotState{} }
+
+var dotWords = strings.Fields("strict graph digraph subgraph node edge label rankdir rank shape style color fillcolor fontname fontsize penwidth")
+
+func dotKeyword(s string) bool {
+	switch strings.ToLower(s) {
+	case "strict", "graph", "digraph", "subgraph", "node", "edge":
+		return true
+	}
+	return false
+}
+func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
+	s, ok := previous.(dotState)
+	if !ok {
+		return Result{}, fmt.Errorf("language: foreign DOT state")
+	}
+	limit, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	finish := func(end int) {
+		kind := s.word.kind
+		if dotKeyword(s.word.text) {
+			kind = KindKeyword
+		}
+		w.add(s.word.start, end, kind, 0)
+		s.pendingKey, s.keyStart, s.keyEnd = kind == KindPlain, s.word.start, end
+		s.word, s.wordOn = scanWord{}, false
+	}
+	i := 0
+	for i < limit {
+		c := in.Text[i]
+		r, n := utf8.DecodeRuneInString(in.Text[i:])
+		at := in.Offset + i
+		if s.mode == '/' {
+			w.add(at, at+n, KindComment, ClassComment)
+			i += n
+			continue
+		}
+		if s.mode == '*' {
+			if strings.HasPrefix(in.Text[i:], "*/") {
+				w.add(at, at+2, KindComment, ClassComment)
+				s.mode = 0
+				i += 2
+			} else {
+				w.add(at, at+n, KindComment, ClassComment)
+				i += n
+			}
+			continue
+		}
+		if s.mode == '"' {
+			if s.slash {
+				s.slash = false
+				if c == '"' {
+					w.add(s.slashAt, at+n, KindEscape, ClassString)
+					s.slashAt = 0
+					i += n
+					continue
+				}
+			}
+			w.add(at, at+n, KindString, ClassString)
+			if c == '\\' {
+				s.slash, s.slashAt = true, at
+			} else if c == '"' {
+				s.mode = 0
+			}
+			i += n
+			continue
+		}
+		if s.mode == '<' {
+			if s.htmlComment {
+				close := "-->"
+				if c == close[s.htmlEnd] {
+					s.htmlEnd++
+				} else if c == '-' {
+					s.htmlEnd = 1
+				} else {
+					s.htmlEnd = 0
+				}
+				if s.htmlEnd == len(close) {
+					s.htmlComment, s.htmlEnd = false, 0
+					s.htmlDepth--
+				}
+			} else if s.htmlQuote != 0 {
+				if c == s.htmlQuote {
+					s.htmlQuote = 0
+				}
+			} else {
+				switch c {
+				case '<':
+					s.htmlDepth++
+					if strings.HasPrefix(in.Text[i:], "<!--") {
+						s.htmlComment = true
+						w.add(at, at+4, KindString, ClassString)
+						i += 4
+						continue
+					}
+				case '>':
+					s.htmlDepth--
+				case '\'', '"':
+					if s.htmlDepth > 1 {
+						s.htmlQuote = c
+					}
+				}
+			}
+			w.add(at, at+n, KindString, ClassString)
+			i += n
+			if s.htmlDepth == 0 {
+				s.mode = 0
+			}
+			continue
+		}
+		if s.wordOn {
+			if IdentifierRune(r) || s.word.kind == KindNumber && c == '.' {
+				s.word.add(in.Text[i : i+n])
+				i += n
+				continue
+			}
+			finish(at)
+			continue
+		}
+		if space(c) {
+			i += n
+			continue
+		}
+		if c == '=' && s.pendingKey {
+			w.add(s.keyStart, s.keyEnd, KindProperty, 0)
+		}
+		s.pendingKey = false
+		if c == '#' || strings.HasPrefix(in.Text[i:], "//") {
+			s.mode = '/'
+			continue
+		}
+		if strings.HasPrefix(in.Text[i:], "/*") {
+			s.mode = '*'
+			w.add(at, at+2, KindComment, ClassComment)
+			i += 2
+			continue
+		}
+		if c == '"' {
+			s.mode = '"'
+			w.add(at, at+n, KindString, ClassString)
+			i += n
+			continue
+		}
+		if c == '<' {
+			s.mode, s.htmlDepth = '<', 1
+			w.add(at, at+n, KindString, ClassString)
+			i += n
+			continue
+		}
+		if IdentifierRune(r) || (c == '-' || c == '.') && i+1 < len(in.Text) && digit(in.Text[i+1]) {
+			kind := KindPlain
+			if digit(c) || c == '-' || c == '.' {
+				kind = KindNumber
+			}
+			s.word, s.wordOn = scanWord{start: at, kind: kind}, true
+			s.word.add(in.Text[i : i+n])
+			i += n
+			continue
+		}
+		class := Class(0)
+		if strings.ContainsRune("{}[]", r) {
+			class = ClassDelimiter
+		}
+		w.add(at, at+n, KindDelimiter, class)
+		i += n
+	}
+	if in.LineEnd && i == len(in.Text) {
+		if s.wordOn {
+			finish(in.Offset + i)
+		}
+		if s.mode == '/' || s.mode == '"' && !s.slash {
+			s.mode = 0
+		}
+		s.slash, s.slashAt, s.htmlEnd = false, 0, 0
+		s.pendingKey, s.keyStart, s.keyEnd = false, 0, 0
+	}
+	return w.result(i, s), nil
+}

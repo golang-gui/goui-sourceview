@@ -133,3 +133,13 @@ Host/Match 模式与远端命令保持参数文本，单引号不承担配置引
 不同图类型的具体语法校验和完整结构语义不在本轮范围。
 
 依据 [Mermaid 12.2.0 Syntax Reference](https://mermaid.js.org/intro/syntax-reference.html) 与 [flow.jison](https://github.com/mermaid-js/mermaid/blob/develop/packages/mermaid/src/diagrams/flowchart/parser/flow.jison)。
+
+## Graphviz DOT
+
+识别 .dot/.gv 与 dot/graphviz 围栏，区分大小写不敏感的保留字、标识符、属性、数值、边与结构标点。
+普通引用仅把反斜杠加双引号识别为转义，其他反斜杠保留；反斜杠换行可继续引用。
+HTML-like label 作为完整字符串分类，跟踪角括号、属性引用和 XML 注释，内部的 > 或注释不能提前结束 label；不调用 HTML 渲染。
+支持 //、块注释和 # 行注释（按 2026-10-02 在线规范）。仅 {}、[] 自动配对，避免用通用程序字符串的奇偶反斜杠规则处理 DOT 引号。
+不运行 Graphviz，不验证属性与图结构，不将 HTML label 当作可执行标记。
+
+依据 [Graphviz DOT Language](https://graphviz.org/doc/info/lang.html)（2026-10-02 更新）。

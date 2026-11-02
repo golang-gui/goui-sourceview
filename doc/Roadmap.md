@@ -83,3 +83,5 @@
 - crontab：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
 
 - Mermaid：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
+
+- Graphviz DOT：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。

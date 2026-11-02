@@ -1,0 +1,13 @@
+// Graphviz DOT; source only, no rendering.
+digraph Editor {
+    rankdir = LR;
+    node [shape = box, fontname = "Sans"];
+    open [label = "Open document"];
+    edit [label = <<TABLE BORDER="0"><TR><TD>SourceView</TD></TR></TABLE>>];
+    save [label = "Save changes"];
+    open -> edit -> save;
+    subgraph cluster_tools {
+        label = "Editing tools";
+        find -> replace;
+    }
+}

@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.DOT, "/* first\nbody */ digraph G {}", "/*", "", "body", language.KindPlain},
 		{language.Mermaid, "A[\"first\nbody\"]", "\"", "", "body", language.KindPlain},
 		{language.Crontab, "0 1 * * * echo #body", "0 1 * * * echo ", "", "body", language.KindComment},
 		{language.SSHConfig, "User=\"name #body\"", "\"", "", "body", language.KindComment},
@@ -417,6 +418,13 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.DOT, "DiGraph G { a -> b }", "DiGraph", language.KindKeyword},
+	{language.DOT, "a [label = \"body\"]", "label", language.KindProperty},
+	{language.DOT, "a [label=<<B X=\">\">body</B>>]; after", "after", language.KindPlain},
+	{language.DOT, "a [label=<<!-- > -->body>]; after", "body", language.KindString},
+	{language.DOT, "a [label=\"a\\\" body\"]", "body", language.KindString},
+	{language.DOT, "a [label=\"first\\\nbody\"];", "body", language.KindString},
+	{language.DOT, "graph G { # comment", "comment", language.KindComment},
 	{language.Mermaid, "flowchart LR\n A-->B", "flowchart", language.KindKeyword},
 	{language.Mermaid, "%% comment", "comment", language.KindComment},
 	{language.Mermaid, "A[\"label %% text\"]", "%%", language.KindString},

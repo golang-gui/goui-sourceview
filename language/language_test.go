@@ -61,6 +61,8 @@ func TestGuess(t *testing.T) {
 		{"crontab", "", Crontab},
 		{"jobs.cron", "", Crontab},
 		{"flow.mmd", "", Mermaid},
+		{"graph.dot", "", DOT},
+		{"graph.gv", "", DOT},
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"main.c", "", C}, {"main.C", "", Cpp}, {"lib.H", "", Cpp}, {"module.cppm", "", Cpp},
 		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp}, {"Main.java", "", Java},

@@ -96,6 +96,7 @@ const (
 	SSHConfig        ID = "sshconfig"
 	Crontab          ID = "crontab"
 	Mermaid          ID = "mermaid"
+	DOT              ID = "dot"
 	Markdown         ID = "markdown"
 )
 
@@ -232,6 +233,7 @@ var builtins = []Info{
 	{ID: SSHConfig, Name: "SSH config", Extensions: []string{".sshconfig"}},
 	{ID: Crontab, Name: "crontab", Extensions: []string{".crontab", ".cron"}},
 	{ID: Mermaid, Name: "Mermaid", Extensions: []string{".mmd", ".mermaid"}},
+	{ID: DOT, Name: "Graphviz DOT", Extensions: []string{".dot", ".gv"}, MIMETypes: []string{"text/vnd.graphviz"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
