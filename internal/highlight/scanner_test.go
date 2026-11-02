@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.AsciiDoc, "----\nbody\n----\nafter", "----", "text", "body", language.KindPlain},
 		{language.TSV, "name\tvalue", "\t", ",", ",", language.KindString},
 		{language.CSV, "\"first\nbody,x\",end", "\"", "", ",", language.KindDelimiter},
 		{language.TOML, "s = \"\"\"open\ntext\nend\nnext = true", `"""`, `"`, "next", language.KindProperty},
@@ -405,6 +406,12 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.AsciiDoc, "= Heading", "Heading", language.KindHeading},
+	{language.AsciiDoc, "----\ncode *literal*\n----\n* list", "literal", language.KindCode},
+	{language.AsciiDoc, "////\ncomment\n////\ntext", "comment", language.KindComment},
+	{language.AsciiDoc, "---- \t\r\nbody\n---- \t\r\ntext", "body", language.KindCode},
+	{language.AsciiDoc, "Text {author} and `code`", "author", language.KindVariable},
+	{language.AsciiDoc, "* item", "*", language.KindMarker},
 	{language.TSV, "name\tvalue", "\t", language.KindDelimiter},
 	{language.TSV, "\"raw\tvalue\"\nnext\ttrue", "\"raw", language.KindString},
 	{language.TSV, "\"raw\tvalue\"\nnext\ttrue", "true", language.KindString},

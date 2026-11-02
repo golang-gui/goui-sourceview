@@ -26,3 +26,12 @@ SRT/WebVTT、iCalendar/vCard 后置，当前不声明支持。
 不沿用 CSV 的引用、转义或跨行字段，不猜测字段类型/标题，不校验列数。关闭代码自动配对和建议。
 
 依据 [IANA text/tab-separated-values 定义](https://www.iana.org/assignments/media-types/text/tab-separated-values)。
+
+## AsciiDoc
+
+识别 .adoc/.asciidoc/.asc 及 asciidoc/adoc 围栏。标题、列表标记、属性声明/引用、交叉引用、行注释和行内强调/代码分别着色。
+同字符且同长度的四字符以上边界用于 listing、literal、passthrough、引用和注释块；块正文保持独立状态。
+边界只保存字符/长度，不缓存正文；极长行仍按分片扫描。代码块采用代码正文颜色，当前不按 source 属性解析嵌入语言；
+行内未闭合标记在行末恢复，不实现完整 Asciidoctor 替换和文档结构解析。
+
+依据 [AsciiDoc Delimited Blocks](https://docs.asciidoctor.org/asciidoc/latest/blocks/delimited/) 与 [Source Blocks](https://docs.asciidoctor.org/asciidoc/latest/verbatim/source-blocks/)。

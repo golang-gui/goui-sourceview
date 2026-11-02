@@ -1,0 +1,22 @@
+= SourceView
+:author: GOUI
+
+A *native editor* with `code`, {author}, and <<editing,editing>>.
+
+== Editing
+
+* Select and copy text
+* Search and replace
+
+[source,json]
+----
+{"enabled": true}
+----
+
+____
+A quoted paragraph.
+____
+
+////
+A block comment.
+////

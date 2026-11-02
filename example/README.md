@@ -39,20 +39,20 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 
 ## Editor
 
-`editor` embeds 73 original language samples, so the binary can run from any
+`editor` embeds 74 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and becomes the first option in the Sample dropdown. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目 73 份原创语言样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目 74 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并作为 Sample 下拉列表的首项，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
 
 Samples cover JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell, HTTP, Protobuf,
 Makefile, CMake, Nginx, INI, Dockerfile, SQL, Go, Python, JavaScript, TypeScript, CSS,
-C, C++, Java, Rust, C#, Lua, PowerShell, Ruby, PHP, JSX, TSX, Kotlin, Swift, Dart, R, Zig, Objective-C, Objective-C++, Scala, Perl, Diff/Patch, Windows Batch, HCL/Terraform, GraphQL, SCSS, Less, Dotenv, Java Properties, Git Ignore/Attributes, Starlark, Groovy, Go Template, Jinja2, systemd unit, Desktop Entry, Nix, jq, PromQL, F#, Elixir, Erlang, Julia, Clojure, Haskell, OCaml, CSV, TSV and Go module/workspace/checksum files.
+C, C++, Java, Rust, C#, Lua, PowerShell, Ruby, PHP, JSX, TSX, Kotlin, Swift, Dart, R, Zig, Objective-C, Objective-C++, Scala, Perl, Diff/Patch, Windows Batch, HCL/Terraform, GraphQL, SCSS, Less, Dotenv, Java Properties, Git Ignore/Attributes, Starlark, Groovy, Go Template, Jinja2, systemd unit, Desktop Entry, Nix, jq, PromQL, F#, Elixir, Erlang, Julia, Clojure, Haskell, OCaml, CSV, TSV, AsciiDoc and Go module/workspace/checksum files.
 HTML script/style bodies and Markdown code fences reuse the supported child languages.
 
 The Go Template and Jinja2 samples explicitly use an HTML host. Compound HTML

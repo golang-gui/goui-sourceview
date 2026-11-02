@@ -57,6 +57,7 @@ func sampleDocuments() []exampleDocument {
 		"hello.fsx", "hello.ex", "hello.erl", "hello.jl", "hello.clj", "Main.hs", "hello.ml",
 		"export.csv",
 		"export.tsv",
+		"guide.adoc",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

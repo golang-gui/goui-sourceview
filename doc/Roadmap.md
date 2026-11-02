@@ -59,3 +59,5 @@
 - CSV：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
 
 - TSV：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
+
+- AsciiDoc：已有词法、相应编辑规则及样本；范围见 [文本格式设计](DesignTextFormats.md)。
