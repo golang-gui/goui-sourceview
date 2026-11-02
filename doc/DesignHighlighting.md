@@ -737,3 +737,31 @@ raw 普通插值的反斜杠保持正文色，但 Context.Literal 不开启，�
 [Scala 2.13.16 Scanners.scala](https://github.com/scala/scala/blob/v2.13.16/src/compiler/scala/tools/nsc/ast/parser/Scanners.scala#L1003)
 的 getStringPart/isTripleQuote，及 [Scala 3 代码引用](https://docs.scala-lang.org/scala3/reference/metaprogramming/macros.html)
 （读取 2026-11-02，Scala 3 页面为 3.10.0）。沿用既有语言的上下文分解与显示快照，不增加解析器或依赖。
+
+## 24. Perl
+
+新增 Perl、`.pl/.pm`、perl/版本化 perl5 shebang 和 perl/pl 围栏；不抢占通用的 `.t` 扩展名。
+独立状态处理单双引号、反引号、q/qq/qw/qx/qr/m/s/tr/y 引用运算符、正则与替换修饰符、
+sigil 变量、POD、`__DATA__/__END__` 以及普通/缩进 heredoc。
+引用运算符可以跨工作片段和物理行等待定界符；ASCII 成对定界符使用嵌套计数，
+其他定界符按自身闭合，支持 Unicode 自闭合字符。替换/转写的两个正文分别跟踪，
+普通引用、正则和 heredoc 的插值按各自规则区分，不把所有单引号定界形式等同于 q。
+
+引用定界符先于正则字符类解释，不能套用 JavaScript 正则的字符类屏蔽规则。
+`$` 作为锚点与特殊变量的判断保留定界符和后续字符上下文；字符串中的变量仍归 String Class，
+代码结构配对不会进入这些变量或引用正文。词候选有界保存；引用正文不进入状态副本。
+heredoc 只保存必要的闭合名称，多个声明按顺序处理；持久队列及名称描述与 Ruby 共用私有工具，
+Ruby 的扫描器和语言状态保持独立。闭合行必须整行匹配，`<<~` 允许闭合前缩进，
+单引号或反斜杠名称的正文不插值。POD 从行首命令开始，到 `=cut` 后恢复代码，数据区保持字符串正文。
+
+基础编辑提供 # 注释、结构/引用配对、包含 sigil 的词边界和关键词建议。
+这是词法呈现：裸 `/` 与除法使用表达式位置启发式，方法/声明名称及 `=>` 前的裸词保守处理；
+不执行 Perl 解析器、feature pragma、`/e` 替换代码或任意插值表达式，也不启用 extra_paired_delimiters。
+不承诺覆盖所有依赖语法和声明环境的歧义，使用方仍可通过现有语言定义接口替换规则。
+
+2026-11-02 核对 [perlop 引用运算符](https://perldoc.perl.org/perlop#Quote-and-Quote-like-Operators)
+和 [perlsyn POD](https://perldoc.perl.org/perlsyn#PODs:-Embedded-Documentation)
+（页面版本 Perl 5.44.0），参考
+[Lexilla LexPerl.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexPerl.cxx)
+对 heredoc 和引用模式的分离。另用本机 Perl 5.34.0 的独立小片段核对定界符/字符类及 `$]` 的解释，
+不将引用结束判断交给正则内部字符类。采用现有分片、增量和上下文契约，不复制规则资源或增加依赖。

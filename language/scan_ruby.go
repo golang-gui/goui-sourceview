@@ -21,53 +21,6 @@ const (
 	rbStringVariable
 )
 
-type rbHere struct {
-	label           string
-	indent, literal bool
-}
-
-// A persistent append tree keeps queued heredocs in declaration order without
-// copying the queue on each fragment or reversing it in one UI turn.
-type rbQueue struct {
-	left, right *rbQueue
-	here        *rbHere
-	n           int
-}
-
-func rbEnqueue(q *rbQueue, h *rbHere) *rbQueue {
-	leaf := &rbQueue{here: h, n: 1}
-	if q == nil {
-		return leaf
-	}
-	if q.n&(q.n-1) == 0 {
-		return &rbQueue{left: q, right: leaf, n: q.n + 1}
-	}
-	return &rbQueue{left: q.left, right: rbEnqueue(q.right, h), n: q.n + 1}
-}
-func (q *rbQueue) at(i int) *rbHere {
-	for q.here == nil {
-		if i < q.left.n {
-			q = q.left
-		} else {
-			i -= q.left.n
-			q = q.right
-		}
-	}
-	return q.here
-}
-func rbQueuesEqual(a, b *rbQueue) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil || a.n != b.n {
-		return false
-	}
-	if a.here != nil || b.here != nil {
-		return a.here != nil && b.here != nil && *a.here == *b.here
-	}
-	return rbQueuesEqual(a.left, b.left) && rbQueuesEqual(a.right, b.right)
-}
-
 type rbLiteral struct {
 	open, close                rune
 	depth                      int
@@ -84,8 +37,8 @@ type rbResume struct {
 	mode               rbMode
 	literal            rbLiteral
 	expr               *rbExpr
-	active             *rbHere
-	queue              *rbQueue
+	active             *scanHere
+	queue              *scanHereQueue
 	next               int
 	canRegexp, command bool
 }
@@ -95,9 +48,9 @@ type rbState struct {
 	literal                                                      rbLiteral
 	expr                                                         *rbExpr
 	resume                                                       *rbResume
-	queue                                                        *rbQueue
+	queue                                                        *scanHereQueue
 	next                                                         int
-	active                                                       *rbHere
+	active                                                       *scanHere
 	matching, beginning                                          bool
 	matched, matchStart                                          int
 	word                                                         scanWord
@@ -118,14 +71,13 @@ func rbExprsEqual(a, b *rbExpr) bool {
 	}
 	return true
 }
-func rbHeresEqual(a, b *rbHere) bool { return a == b || a != nil && b != nil && *a == *b }
 func (s rbState) Equal(other State) bool {
 	t, ok := other.(rbState)
-	if !ok || !rbExprsEqual(s.expr, t.expr) || !rbHeresEqual(s.active, t.active) || !rbQueuesEqual(s.queue, t.queue) || s.capture != t.capture && captureText(s.capture) != captureText(t.capture) {
+	if !ok || !rbExprsEqual(s.expr, t.expr) || !heresEqual(s.active, t.active) || !hereQueuesEqual(s.queue, t.queue) || s.capture != t.capture && captureText(s.capture) != captureText(t.capture) {
 		return false
 	}
 	for a, b := s.resume, t.resume; a != b; a, b = a.parent, b.parent {
-		if a == nil || b == nil || a.mode != b.mode || a.literal != b.literal || a.next != b.next || a.canRegexp != b.canRegexp || a.command != b.command || !rbExprsEqual(a.expr, b.expr) || !rbHeresEqual(a.active, b.active) || !rbQueuesEqual(a.queue, b.queue) {
+		if a == nil || b == nil || a.mode != b.mode || a.literal != b.literal || a.next != b.next || a.canRegexp != b.canRegexp || a.command != b.command || !rbExprsEqual(a.expr, b.expr) || !heresEqual(a.active, b.active) || !hereQueuesEqual(a.queue, b.queue) {
 			return false
 		}
 	}
@@ -136,6 +88,7 @@ func (s rbState) Equal(other State) bool {
 	s.capture, t.capture = nil, nil
 	return s == t
 }
+
 func (s rbState) Context() Context {
 	m := s.mode
 	if m == rbStringVariable {
@@ -188,8 +141,8 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 	}
 	finishHere := func() {
 		flush()
-		h := &rbHere{label: captureText(s.capture), indent: s.hereIndent, literal: s.hereQuote == '\''}
-		s.queue = rbEnqueue(s.queue, h)
+		h := &scanHere{label: captureText(s.capture), indent: s.hereIndent, literal: s.hereQuote == '\''}
+		s.queue = enqueueHere(s.queue, h)
 		s.capture, s.hereQuote, s.hereIndent, s.hereStart = nil, 0, false, 0
 		s.mode, s.canRegexp = rbCode, false
 	}

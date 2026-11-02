@@ -118,6 +118,13 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case Perl:
+			d.Tokenizer = plTokenizer{}
+			d.Editing.Comments.Line = "#"
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' || r == '@' || r == '%' }
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Scala:
 			d.Tokenizer = scalaTokenizer{}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -364,6 +371,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"javascriptreact": JSX, "typescriptreact": TSX,
 		"kt": Kotlin, "kts": Kotlin,
 		"objc": ObjectiveC, "objectivec": ObjectiveC,
+		"pl":     Perl,
 		"objcpp": ObjectiveCpp, "objc++": ObjectiveCpp, "objective-c++": ObjectiveCpp,
 	} {
 		table[alias] = definitions[id]
@@ -384,6 +392,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case Perl:
+		table = plKeywords
 	case Scala:
 		table = scalaKeywords
 	case ObjectiveC, ObjectiveCpp:

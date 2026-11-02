@@ -120,6 +120,7 @@ func main() {
 		{language.ObjectiveC, "@interf", "@interface"},
 		{language.ObjectiveCpp, "namesp", "namespace"},
 		{language.Scala, "giv", "given"},
+		{language.Perl, "packa", "package"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -197,6 +198,7 @@ func main() {
 		{language.ObjectiveCpp, "id s = ", `@"hello"`, `id s = @"hello"`},
 		{language.Scala, "val s = ", `"""`, `val s = """`},
 		{language.Scala, "val code = ", "'{true}", "val code = '{true}"},
+		{language.Perl, "my $s = ", "'it\\'s'", "my $s = 'it\\'s'"},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {

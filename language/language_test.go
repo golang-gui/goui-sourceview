@@ -56,6 +56,8 @@ func TestGuess(t *testing.T) {
 		{"hello.zig", "", Zig},
 		{"hello.mm", "", ObjectiveCpp},
 		{"hello.scala", "", Scala}, {"build.sbt", "", Scala}, {"script", "#!/usr/bin/env scala-cli", Scala},
+		{"hello.pl", "", Perl}, {"Module.pm", "", Perl}, {"script", "#!/usr/bin/env perl", Perl}, {"script", "#!/usr/bin/perl5.40.0", Perl},
+		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
 		{"hello.R", "", R}, {"hello.r", "", R}, {"hello.Rscript", "", R}, {".Rprofile", "", R},
@@ -160,6 +162,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{ObjectiveC, `id s=@"text`, true, false, false},
 		{ObjectiveCpp, `auto s=R"tag(raw`, true, false, true},
 		{Scala, `val s=s"hi ${true`, false, false, false}, {Scala, `val s="""raw`, true, false, true},
+		{Perl, `my $s=q{literal`, true, false, false}, {Perl, "=pod", false, true, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -257,6 +260,11 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{Swift, `let r=#/[(]/#`, "[(]", ClassString},
 		{Dart, `var s=r'${true}';`, "{true}", ClassString}, {Dart, `var s='${true}';`, "true", 0},
 		{R, `x <- r"--[{raw}]--";`, "{raw}", ClassString}, {R, "x %[% y", "[", 0},
+		{Zig, `const s=\\{raw}`, "{raw}", ClassString},
+		{ObjectiveC, `id s=@"{raw}";`, "{raw}", ClassString},
+		{ObjectiveCpp, `auto s=R"({raw})";`, "{raw}", ClassString},
+		{Scala, `val s=s"${true}"`, "true", 0},
+		{Perl, `my $r=qr/[()]/;`, "[()]", ClassString},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -429,6 +437,7 @@ func TestProgrammingLanguageFences(t *testing.T) {
 			{"objc", ObjectiveC, "@interface"}, {"objective-c", ObjectiveC, "@end"},
 			{"objcpp", ObjectiveCpp, "namespace"}, {"objc++", ObjectiveCpp, "@end"}, {"objective-cpp", ObjectiveCpp, "template"},
 			{"scala", Scala, "given"},
+			{"perl", Perl, "package"}, {"pl", Perl, "sub"},
 		} {
 			scanner := md.Tokenizer()
 			fence := "```" + tc.name

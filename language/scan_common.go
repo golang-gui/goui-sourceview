@@ -87,6 +87,55 @@ func (w *scanWord) add(text string) {
 	}
 }
 
+type scanHere struct {
+	label           string
+	indent, literal bool
+}
+
+// A persistent append tree keeps queued heredocs in declaration order without
+// copying the queue on each fragment or reversing it in one UI turn.
+type scanHereQueue struct {
+	left, right *scanHereQueue
+	here        *scanHere
+	n           int
+}
+
+func enqueueHere(q *scanHereQueue, h *scanHere) *scanHereQueue {
+	leaf := &scanHereQueue{here: h, n: 1}
+	if q == nil {
+		return leaf
+	}
+	if q.n&(q.n-1) == 0 {
+		return &scanHereQueue{left: q, right: leaf, n: q.n + 1}
+	}
+	return &scanHereQueue{left: q.left, right: enqueueHere(q.right, h), n: q.n + 1}
+}
+func (q *scanHereQueue) at(i int) *scanHere {
+	for q.here == nil {
+		if i < q.left.n {
+			q = q.left
+		} else {
+			i -= q.left.n
+			q = q.right
+		}
+	}
+	return q.here
+}
+func heresEqual(a, b *scanHere) bool { return a == b || a != nil && b != nil && *a == *b }
+
+func hereQueuesEqual(a, b *scanHereQueue) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil || a.n != b.n {
+		return false
+	}
+	if a.here != nil || b.here != nil {
+		return a.here != nil && b.here != nil && *a.here == *b.here
+	}
+	return hereQueuesEqual(a.left, b.left) && hereQueuesEqual(a.right, b.right)
+}
+
 func words(text string) map[string]bool {
 	out := make(map[string]bool)
 	for _, word := range strings.Fields(text) {

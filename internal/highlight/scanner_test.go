@@ -320,6 +320,12 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.JSX, "const x=<A/>;\nconst n=1;", "/>", ">", "const n", language.KindPlain},
 		{language.TSX, "const f=<T,>(x:T)=>x;\nconst n=1;", ",", "", "const n", language.KindPlain},
 		{language.Kotlin, "val s=\"\"\"open\nbody\n\"\"\"\nval n=1", "\"\"\"", "\"", "body", language.KindPlain},
+		{language.Zig, "const s=\\\\raw\nconst real=true", "\\\\", "/", "raw", language.KindPlain},
+		{language.ObjectiveC, "/*open\nbody\n*/\n@end", "/*", "", "body", language.KindPlain},
+		{language.ObjectiveCpp, "auto x=R\"(\nbody\n)\";", "R\"", "\"", "body", language.KindPlain},
+		{language.Scala, "val s=\"\"\"open\nbody\n\"\"\"", "\"\"\"", "\"", "body", language.KindPlain},
+		{language.Perl, "my $x=<<'TXT';\nbody\nTXT\nsub real", "<<'TXT'", "1", "body", language.KindPlain},
+		{language.Perl, "=pod\nbody\n=cut\nsub real", "=pod", "", "body", language.KindPlain},
 		{language.Swift, "let s=#\"\"\"\nbody\n\"\"\"#\nlet n=1", "\"\"\"", "\"", "body", language.KindPlain},
 		{language.Dart, "var s=r'''\nbody\n''';\nvar n=1", "'''", "'", "body", language.KindPlain},
 		{language.R, "x <- r\"(body)\"\nreturn(1)", ")\"", ")-\"", "return", language.KindString},
@@ -618,6 +624,9 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
 		{language.JSX, "const x=<A>{true ? <B title={", "1}/> : null}"},
 		{language.Kotlin, `val s="outer ${"inner ${`, "true}"},
+		{language.Scala, `val s=s"outer ${s"inner ${`, "true}"},
+		{language.Perl, "print <<A, <<'B';\nbody", "A"},
+		{language.Perl, "my $x=<<'long", "tail'"},
 		{language.Swift, `let s="outer \("inner \(`, "true)"},
 		{language.Dart, `var s='outer ${"inner ${`, "true}"},
 		{language.R, `x <- r"--[open`, "body]--\""},
@@ -640,6 +649,33 @@ func TestFourthBatchKinds(t *testing.T) {
 		{language.Zig, `const x: u4096 = @intCast(1);`, "u4096", language.KindKeyword},
 		{language.ObjectiveC, `@interface Demo : NSObject @end`, "@interface", language.KindKeyword},
 		{language.Scala, `val s="literal $name";`, "$name", language.KindString},
+		{language.Perl, `my $s="hi $name ${other}";`, "$name", language.KindVariable},
+		{language.Perl, `my $s=q{literal $name};`, "$name", language.KindString},
+		{language.Perl, `my $s=qq{hi $name};`, "$name", language.KindVariable},
+		{language.Perl, `$x =~ s{[{}]}{qq $name}g; my $n=10 / 2;`, "$name", language.KindVariable},
+		{language.Perl, `$x =~ s{[{}]}{qq $name}g; my $n=10 / 2;`, "/ 2", language.KindDelimiter},
+		{language.Perl, `my $x=qr'no $name';`, "$name", language.KindString},
+		{language.Perl, `my $r=qr/^[\$]foo$/; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `my $r=qr{[}]}; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `my $r=qr/$]/;`, "$]", language.KindVariable},
+		{language.Perl, `my $r=qr{foo$|bar$}; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `my $s=q§a\§b§; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `sub q { return 1; } $obj->m(2);`, "return", language.KindKeyword},
+		{language.Perl, `my %h=(q => 1); $h{m};`, "q", language.KindPlain},
+		{language.Perl, "=pod\nsub fake\n=cut\nsub real", "fake", language.KindComment},
+		{language.Perl, "__DATA__\nsub fake", "fake", language.KindString},
+		{language.Perl, "my $x=<<'END';\n$name literal\nEND\nsub real", "$name", language.KindString},
+		{language.Perl, "my $x=<<~END;\n  $name\n  END\nsub real", "$name", language.KindVariable},
+		{language.Perl, `my $x=qq{outer {nested} $name}; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `$x =~ s/old/new $name/g; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `$x =~ s{old} [new $name]g; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `$x =~ tr[a-z][A-Z]; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `$x =~ y/abc/def/; sub real {}`, "sub", language.KindKeyword},
+		{language.Perl, `$x =~ s'old'new $name'g;`, "$name", language.KindString},
+		{language.Perl, `my $x=qq'hello $name';`, "$name", language.KindVariable},
+		{language.Perl, "print <<A, <<~'B';\n$name\nA\n literal $name\n B\nsub real {}", "sub", language.KindKeyword},
+		{language.Perl, "my $x=q # note\n {literal}; sub real {}", "sub", language.KindKeyword},
+		{language.Perl, "my $x=<< 1; sub real {}", "sub", language.KindKeyword},
 		{language.Scala, `val s=s"hello $name ${if (true) s"${1}" else "no"}"`, "if", language.KindKeyword},
 		{language.Scala, `val s=raw"\${false}";`, "false", language.KindKeyword},
 		{language.Scala, `val s=s"quote $" dollar $$"; val x=1`, "val x", language.KindKeyword},
@@ -671,6 +707,7 @@ func TestFourthBatchKinds(t *testing.T) {
 
 func TestFourthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.Perl:         {"use strict; my %h=(q => 1); sub q { return 1; } $obj->m(2); my $s=qq{hi $name ${other}}; my $r=qr{[{}]\\d+}i; $s =~ s{old}{new $name}g; $s =~ tr/a-z/A-Z/; my $x=10 / 2; my $y=//;", "print <<A, <<~'B';\n$name\nA\n literal $name\n B\n=pod\nignored\n=cut\nsub real {}\n__END__\ndata", "my $s=qq{" + strings.Repeat("字\\}", ChunkSize) + " $name}; my $r=m/[\\]{}]+/;", "my $s=<<'" + strings.Repeat("字", ChunkSize) + "';\nbody\n" + strings.Repeat("字", ChunkSize) + "\nsub real;", "my $s=q" + strings.Repeat(" ", ChunkSize*2) + "{body}; $s =~ s{old} # comment\n {new $name}g;"},
 		language.Scala:        {"@deprecated(\"note\")\n/* outer /* nested */ still */\nval s=s\"hi $name ${if (true) s\"${1}\" else raw\"\\${false}\"}\"; val t=s\"\"\"\n${List(1,2)} $$ $\"\n\"\"\"\"\"; val `type`='symbol; val ch='字'; val code='{true}", "val s=custom\"\"\"" + strings.Repeat("字\\", ChunkSize) + "${true}" + strings.Repeat("\"", 50) + "; val x=42.toString"},
 		language.ObjectiveCpp: {"#import <Foundation/Foundation.h>\n#include <vector>\ntemplate<class T> id box(T x){return @(x);} auto s=u8R\"tag(raw\n@interface fake )wrong\" still)tag\"; @interface Real : NSObject @end", "auto s=R\"0123456789abcdef(" + strings.Repeat("字@\"", ChunkSize) + ")0123456789abcdef\"; @end"},
 		language.ObjectiveC:   {"#import <Foundation/Foundation.h>\n@interface Demo : NSObject\n@property(copy) NSString *name;\n@end\n@implementation Demo\n- (id)value { @autoreleasepool { return @{ @\"key\": @[@42,@-1,@YES,@(1+2)] }; } }\n@end", "id s=@\"" + strings.Repeat("字\\n", ChunkSize) + "\"; /* comment */ return nil;"},
@@ -867,7 +904,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig, language.ObjectiveC, language.ObjectiveCpp, language.Scala} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig, language.ObjectiveC, language.ObjectiveCpp, language.Scala, language.Perl} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

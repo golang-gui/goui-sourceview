@@ -52,6 +52,7 @@ const (
 	ObjectiveC   ID = "objective-c"
 	ObjectiveCpp ID = "objective-cpp"
 	Scala        ID = "scala"
+	Perl         ID = "perl"
 	Markdown     ID = "markdown"
 )
 
@@ -144,6 +145,7 @@ var builtins = []Info{
 	{ID: ObjectiveC, Name: "Objective-C", Extensions: []string{".m"}, MIMETypes: []string{"text/x-objcsrc"}},
 	{ID: ObjectiveCpp, Name: "Objective-C++", Extensions: []string{".mm"}, MIMETypes: []string{"text/x-objc++src"}},
 	{ID: Scala, Name: "Scala", Extensions: []string{".scala", ".sbt"}, MIMETypes: []string{"text/x-scala"}},
+	{ID: Perl, Name: "Perl", Extensions: []string{".pl", ".pm"}, MIMETypes: []string{"text/x-perl"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -210,6 +212,10 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	perlVersion := strings.TrimPrefix(interpreter, "perl5.")
+	if interpreter == "perl" || perlVersion != interpreter && len(perlVersion) > 0 && digit(perlVersion[0]) && strings.Trim(perlVersion, "0123456789.") == "" {
+		return Perl
+	}
 	if interpreter == "scala" || interpreter == "scala-cli" {
 		return Scala
 	}

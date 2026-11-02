@@ -431,3 +431,37 @@ C++ 原始字符串与 @ 语法混合、长引用、模板词汇、真实行尾�
 `GOWORK=off go test ./...`、`GOWORK=off go test -race ./language ./internal/highlight` 通过，
 Pango 亮暗 1× 三引号正文 RGBA 断言通过。独立浅色 1× 的 `-language scala` 通过
 关键词建议、三引号输入、代码引用的结构配对及公共断言，没有生成多余的闭合单引号。
+
+### Perl 与批次完成验证
+
+新增 Perl、文件/shebang/围栏识别、编辑规则与 hello.pl，示例共 42 份。
+独立预期覆盖变量、字面与插值引用、嵌套定界符、Unicode 自闭合定界符、
+两段替换/转写、正则修饰符、锚点与特殊变量、方法/裸词、POD、数据区及多个 heredoc。
+引用/替换/heredoc 结束后恢复代码颜色有独立关键词断言。
+长正文、超长闭合名称、跨片段空白、极小分片、随机畸形输入、增量恢复、
+状态快照、Class 和围栏通过；复用 heredoc 私有队列后的 Ruby 回归保持通过。
+新增五语言的 Pango 亮暗 1× 原生颜色断言通过，同字体/同布局的独立预期保持 RGBA 零误差。
+
+最终在 Ubuntu 22.04.5 amd64 / Go 1.25.8 下通过：
+
+- `go test ./...`（工作区 GOUI b49049d）
+- `GOWORK=off go test ./...`（独立依赖 GOUI v0.5.0）
+- `GOWORK=off go test -race ./...`
+- `GOWORK=off go vet ./...`
+- `GOWORK=off GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./...`
+- `GOWORK=off GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./...`
+
+关闭工作区构建语言窗口程序、输入着色回归程序与 editor。独立 TigerVNC :87 /
+Xfwm4 compositor on / Pango / Software 的浅色 1×、深色 1.5× 均通过
+41 种语言的 43 组建议接受/撤销、28 组引用输入及公共只读/括号/语义断言。
+输入经 Window.DispatchEvent/CommitText；新增五语言的逐语言场景也单独通过。
+既有着色回归每组通过 127 帧、60 次输入/删除及撤销重做，确认未回退当前行/后续行的显示稳定性。
+editor 浅色 1× 实际点击五个新样本，深色 1× 检查 Scala/Perl；42 个样本按钮完整换行，
+ChromeInfo 确认 Integrated enabled，未见正文或工具栏裁切。截图仅作外观观察。
+
+本批二进制、日志和截图保留在 `/tmp/sourceview-language-batch4-5i1u39/`，未写入源码目录。
+完成后关闭本次 editor、专用 X11 与窗口管理器，保留原有用户桌面；
+没有 DevServer、剪贴板操作、语言样本执行或全局设置更改。
+未执行真实 IME、macOS/Windows 原生验证；交叉构建只证明可编译，不代替原生验收。
+没有 GOUI 或依赖改动；原有未跟踪 doc/Doing.md、example/temp/ 保留并排除于提交。
+语言歧义和词法范围见设计，不承诺编译器解析或语言服务能力。
