@@ -75,8 +75,9 @@ func TestGuess(t *testing.T) {
 		{"app.service", "", Systemd}, {"app.timer", "", Systemd}, {"app.socket", "", Systemd}, {"other.conf", "", Plain},
 		{"app.desktop", "", DesktopEntry}, {"menu.directory", "", DesktopEntry},
 		{"default.nix", "", Nix}, {"filter.jq", "", JQ}, {"query.promql", "", PromQL},
+		{"App.fs", "", FSharp}, {"Types.fsi", "", FSharp}, {"script.fsx", "", FSharp},
 
-		{"script", "#!/usr/bin/env jq -f", JQ},
+		{"script", "#!/usr/bin/env jq -f", JQ}, {"script", "#!/usr/bin/env fsharpi", FSharp},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -191,7 +192,7 @@ func TestTemplateHosts(t *testing.T) {
 
 func TestSeventhBatchFences(t *testing.T) {
 	md, _ := Builtin(Markdown)
-	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2, "systemd": Systemd, "desktop": DesktopEntry, "nix": Nix, "jq": JQ, "promql": PromQL} {
+	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2, "systemd": Systemd, "desktop": DesktopEntry, "nix": Nix, "jq": JQ, "promql": PromQL, "fsharp": FSharp, "f#": FSharp} {
 		scanner := md.Tokenizer()
 		fence := "\x60\x60\x60" + name
 		r, e := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -378,6 +379,8 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{Nix, "x=\"literal ${true}\"", "true", 0},
 		{JQ, "\"literal \\(true)\"", "true", 0},
 		{PromQL, "metric{key=\x60[literal]\x60}", "[literal]", ClassString},
+		{FSharp, "let s=$$\"\"\"{literal} {{true}}\"\"\"", "{literal}", ClassString},
+		{FSharp, "let s=$$\"\"\"{literal} {{true}}\"\"\"", "true", 0},
 
 		{C, `#include <stdio.h>`, "stdio", ClassString},
 		{Cpp, `R"tag({ /* literal */ })tag"`, "{", ClassString},

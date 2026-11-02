@@ -17,7 +17,12 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
-
+		case FSharp:
+			d.Tokenizer = functionalTokenizer{info.ID}
+			d.Editing = functionalEditing(info.ID)
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := functionalVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Nix, JQ, PromQL:
 			d.Tokenizer = queryTokenizer{info.ID}
 			d.Editing.Comments.Line = "#"
@@ -505,6 +510,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"f#": FSharp, "fs": FSharp,
 
 		"systemd-unit": Systemd, "desktop-entry": DesktopEntry,
 		"gotmpl": GoTemplate, "go-html-template": GoTemplate, "jinja": Jinja2, "j2": Jinja2,

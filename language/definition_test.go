@@ -107,6 +107,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.GoTemplate, language.Jinja2,
 		language.Systemd, language.DesktopEntry,
 		language.Nix, language.JQ, language.PromQL,
+		language.FSharp,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

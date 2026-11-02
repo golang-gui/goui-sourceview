@@ -349,6 +349,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Nix, "let x=''\nbody\n''", "''", "0", "body", language.KindPlain},
 		{language.JQ, "\"open\\(\ntrue\n)\"", "\\(", "", "true", language.KindString},
 		{language.PromQL, "\x60open\nbody\n\x60", "\x60", "", "body", language.KindPlain},
+		{language.FSharp, "(* open\nbody\n*)", "(*", "", "body", language.KindPlain},
 
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
@@ -649,6 +650,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Nix, "let x=\"outer ${\"inner ${", "true}\"}"},
 		{language.JQ, "\"outer \\(\"inner \\(", "true)\")\""},
 		{language.PromQL, "metric{key=\x60raw", "body\x60}"},
+		{language.FSharp, "let s=$\"outer {$\"inner {", "true}\"}"},
 
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
@@ -711,6 +713,13 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.PromQL, "sum by (job) (rate(http_requests_total{status=~\"5..\"}[5m])) offset 1h", "rate", language.KindKeyword},
 		{language.PromQL, "rate(metric[1h30m])", "1h30m", language.KindNumber},
 		{language.PromQL, "metric{key=\x60raw\nstring\x60} # note", "string", language.KindString},
+		{language.FSharp, "let f (value:'a) = value // note", "'a", language.KindPlain},
+		{language.FSharp, "let s = $\"hello {if true then \"yes\" else \"no\"}\"", "true", language.KindKeyword},
+		{language.FSharp, "let s = @\"quote \"\" literal\"\nlet real = true", "real", language.KindPlain},
+		{language.FSharp, "(* outer (* inner *) body *) let real = true", "body", language.KindComment},
+		{language.FSharp, "let s=\"\"\"first\nbody\nlast\"\"\"", "body", language.KindString},
+		{language.FSharp, "let s=$$\"\"\"{literal} {{true}}\"\"\"", "literal", language.KindString},
+		{language.FSharp, "let s=$$\"\"\"{literal} {{true}}\"\"\"", "true", language.KindKeyword},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -728,6 +737,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 		language.Nix:          {"let path=modules/editor.nix; source=<nixpkgs>; in { x=\"hello ${if true then \"${1}\" else \"no\"}\"; body=''literal ''${name} ${true}''; } /* note */", "let x=''" + strings.Repeat("字", ChunkSize) + " ${true}''; in x"},
 		language.JQ:           {".items[] | map(select(.enabled)) | .[] as $item | \"id=\\($item.id)\" # note", "\"" + strings.Repeat("字", ChunkSize) + "\\(if true then \"\\(1)\" else \"no\" end)\""},
 		language.PromQL:       {"sum by(job)(rate(metric{status=~\"5..\"}[1h30m])) offset 1m\nmetric{key=\x60raw\nbody\x60} # comment", "rate(" + strings.Repeat("a", ChunkSize) + "[1h30m])"},
+		language.FSharp:       {"(* outer (* inner *) body *)\nlet f (x:'a) = x\nlet s=$\"value {if true then \"yes\" else \"no\"}\"\nlet text=@\"quote \"\" literal\"\nlet raw=\"\"\"body\nend\"\"\"", "let s=$$\"\"\"" + strings.Repeat("字", ChunkSize) + " {{true}}\"\"\""},
 
 		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
 		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
@@ -748,7 +758,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {

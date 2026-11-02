@@ -75,6 +75,7 @@ const (
 	Nix           ID = "nix"
 	JQ            ID = "jq"
 	PromQL        ID = "promql"
+	FSharp        ID = "fsharp"
 
 	Markdown ID = "markdown"
 )
@@ -191,6 +192,7 @@ var builtins = []Info{
 	{ID: Nix, Name: "Nix", Extensions: []string{".nix"}},
 	{ID: JQ, Name: "jq", Extensions: []string{".jq"}},
 	{ID: PromQL, Name: "PromQL", Extensions: []string{".promql"}},
+	{ID: FSharp, Name: "F#", Extensions: []string{".fs", ".fsi", ".fsx"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
@@ -274,6 +276,8 @@ func Guess(filename string, sample []byte) ID {
 	case "jq":
 		return JQ
 
+	case "fsharpi":
+		return FSharp
 	}
 	if interpreter == "groovy" {
 		return Groovy

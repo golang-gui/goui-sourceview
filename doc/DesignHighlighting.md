@@ -1001,3 +1001,9 @@ slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复�
 指标/标签、匹配运算符、时长/范围、修饰词和跨行原始引用。
 保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
 参考[官方规范/源码](https://github.com/prometheus/prometheus/blob/v3.7.0/promql/parser/lex.go)（读取 2026-11-02）。
+
+### F#
+
+字符/类型变量、逐字/三引号、多美元插值及嵌套注释。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://github.com/dotnet/fsharp/blob/v13.9.201/src/Compiler/lex.fsl)（读取 2026-11-02）。
