@@ -42,12 +42,12 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 `editor` embeds 71 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
-UTF-8 file is read once and gets its own file selector. All edits stay in memory.
+UTF-8 file is read once and becomes the first option in the Sample dropdown. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
 `editor` 内嵌本项目 71 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
-可选参数读取一个 UTF-8 文件并增加对应选择按钮，修改仅保存在内存中。
+可选参数读取一个 UTF-8 文件并作为 Sample 下拉列表的首项，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
 
 Samples cover JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell, HTTP, Protobuf,
@@ -63,8 +63,10 @@ for plain-text templates. Samples are displayed and edited; they are never execu
 样本覆盖上述标记、配置、构建及编程语言；HTML 的 script/style 正文与 Markdown 代码围栏
 复用对应内嵌语言。语法高亮是编辑期词法分析，不执行这些样本或调用编译器。
 
-- Click filenames to switch; edit one, switch away and back, then Undo.
-  点击文件名切换，编辑后切换回来，确认内容和撤销历史保留。
+- Choose a language and filename from Sample. Scroll the dropdown or use the arrow
+  keys, Enter to confirm and Escape to cancel. Edit one, switch away and back, then Undo.
+  从 Sample 下拉列表选择语言与样本文件，支持滚动、方向键、Enter 确认和 Escape 取消。
+  编辑后切换回来，确认内容和撤销历史保留。
 - Toggle Word wrap, Line numbers and Read only; the footer shows language, LF/CRLF/CR,
   line, Unicode character column, line count, output byte count and editing mode. The displayed
   column counts Unicode code points, rather than bytes or visual tab columns.
@@ -129,7 +131,7 @@ into the image. Sample data comes from the embedded files in `editor/samples/`.
 
 1. Run `GOUI_PLAT_PAINTER=software GOUI_PLAT_SCALE=1 go run ./example/editor -theme light`.
 2. Capture the initial JSON document after highlighting settles.
-3. Click `index.html`, switch to dark, open Find / Replace, and enter `feature`.
+3. Select `HTML — index.html` from Sample, switch to dark, open Find / Replace, and enter `feature`.
 4. Capture the window with search highlights and the floating panel visible.
 5. Close the example to reset; screenshots are documentation assets in `doc/images/`.
 

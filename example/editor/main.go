@@ -145,25 +145,25 @@ func run() error {
 		update()
 		win.SetFocusedWidget(editor)
 	}
-	group := widgets.NewCheckButtonGroup()
-	files := gui.NewWrapBox(layout.DirectionHorizontal)
-	files.SetSpacing(4)
-	files.SetLineSpacing(4)
-	files.SetPadding(geometry.UniformInsets(8))
-	files.SetCrossAlign(layout.CrossCenter)
+	files := row(8, 8)
+	files.AddChild(gui.NewLabel("Sample"))
+	sample := widgets.NewDropDown()
+	sample.SetID("sample-selector")
+	sample.SetMinSize(geometry.Size{Width: 360})
+	sample.SetMaxSize(geometry.Size{Width: 360})
+	items := make([]widgets.DropDownItem, len(documents))
 	for i, d := range documents {
-		choice := widgets.NewCheckButton()
-		choice.SetGroup(group)
-		choice.SetAppearance(widgets.CheckAppearanceButton)
-		choice.SetChild(gui.NewLabel(d.name))
-		choice.SetChecked(i == 0)
-		choice.ConnectChange(func(state widgets.CheckState) {
-			if state == widgets.CheckChecked {
-				show(d)
-			}
-		})
-		files.AddChild(choice)
+		text := d.name
+		if info, ok := language.Lookup(d.document.Language()); ok {
+			text = info.Name + " — " + text
+		}
+		items[i] = widgets.DropDownItem{Text: text}
 	}
+	sample.SetModel(gui.NewSliceListModel(items))
+	sample.SetSelected(0)
+	sample.ConnectSelected(func(index int) { show(documents[index]) })
+	sample.ConnectOpenError(func(err error) { status.SetText(err.Error()) })
+	files.AddChild(sample)
 	files.AddChild(button("Find / Replace", func() {
 		if err := editor.ShowReplace(); err != nil {
 			status.SetText(err.Error())

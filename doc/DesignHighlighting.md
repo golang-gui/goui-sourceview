@@ -1036,3 +1036,13 @@ Julia 区分字符与转置，处理宏、三引号、非标准字符串及插�
 - [Lexilla LexHaskell.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexHaskell.cxx)：
   核对 inDashes、嵌套注释与行间状态的处理方式。沿用本项目已有分片、不可变快照和 GUI 分离方式，
   不引入 Lexilla、原生语言运行时或外部语法资源；代码为本项目实现。
+
+## 39. editor 样本选择
+
+示例使用 GOUI v0.5.0 的 widgets.DropDown 替代多行样本按钮，固定一行选择入口，
+显示“语言名称 — 文件名”。保留样本顺序；初始选择首项，命令行导入文件仍位于首项。
+选择器宽 360 DIP，弹窗沿用控件默认的 320 DIP 高度上限与现有滚动/键盘行为，使用 Modern 样式。
+弹窗内浏览和 Escape 不切换文档；用户确认不同选项后切换对应的已有 Document，并将焦点交还编辑器。
+不重建 Document，不改变其文本/撤销历史；选择和滚动继续属于当前视图。
+弹窗打开失败在现有状态栏呈现。模型、选中项与弹窗的生命周期由 DropDown 管理，
+示例只持有有序 Document 列表，不另建菜单、滚动列表或选择状态机。

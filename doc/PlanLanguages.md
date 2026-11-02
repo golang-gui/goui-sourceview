@@ -710,3 +710,32 @@ editor 使用 Integrated chrome（日志 mode=1 enabled=true），浅色 1× 实
 没有运行语言样本、安装配置、读写剪贴板或更改全局设置；真实 IME 和 Windows/macOS 原生运行未执行，
 交叉构建仅证明可编译。本批不修改 GOUI 或依赖，保留原有未跟踪 doc/Doing.md、example/temp/。
 结束时关闭本次 editor、窗口验证程序、专用 X11 和窗口管理器，保留原有桌面。
+
+## editor 样本下拉选择（2026-11-02）
+
+以 GOUI v0.5.0 的 widgets.DropDown 替代多行按钮，显示语言名与文件名，保留 71 份样本的顺序、
+Document 实例、文本及撤销历史。命令行文件仍作为首项；Find / Replace 保留同一行。
+设计见高亮设计第 39 节，示例说明及 README 两张实际窗口截图同步更新。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8，通过 `go test ./...`（工作区 GOUI b49049d）
+及 `GOWORK=off go test ./...`（GOUI v0.5.0）；关闭工作区构建并运行 editor。
+针对 editor 的 Windows amd64、macOS arm64（CGO_ENABLED=0、GOWORK=off）交叉构建均通过，
+二进制写入同一临时目录；交叉构建不代表原生运行验收。
+独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software，使用 xdotool 的真实窗口输入观察验证：
+
+- 浅色 1×：展开列表后浏览 XML/HTML，再 Escape，当前仍为 JSON；
+  编辑 JSON 添加 SAMPLE_MARKER，切换 XML 并直接输入 XML_MARKER，
+  返回 JSON 时前一标记保留，Ctrl+Z 后恢复首字符 {，字节数由 824 恢复到原来的 811。
+- 浅色 1×：滚轮移动可见条目，拖动滚动条到末尾，鼠标选择 OCaml 后正确显示 hello.ml；
+  Home/End、方向键与 Enter 均能选择对应模型项。
+- 深色 1.5×：实际窗口 1680×1170 像素；弹窗尺寸随缩放，滚轮、滚动条拖动和最后一项选择正常。
+  命令行导入的 supplied-example.json 为首项，切换回该文件后直接输入 ZOOM_MARKER，
+  字节数由 40 到 51，Ctrl+Z 后恢复原文及 40 字节；磁盘文件内容未改动。
+- Find / Replace 在 HTML 的深色界面可正常打开，搜索 feature 显示两处高亮。
+  截图来自 Integrated 已启用的真实窗口（日志 mode=1 enabled=true），仅截取应用边界；
+  doc/images/editor-light.png 与 editor-dark.png 均为 1120×780 像素、1×，没有绘制额外 UI。
+
+临时二进制、输入样本、操作记录与观察截图位于 `/tmp/sourceview-sample-dropdown-DbbY9Z/`。
+没有使用 DevServer、操作剪贴板或修改全局设置；结束后关闭本次示例、专用 X11 和窗口管理器，
+保留原有 X110/X3/X42/X78 桌面。Windows/macOS 原生运行和真实 IME 未执行；
+本次只使用既有公开控件，没有修改 GOUI 或依赖，也没有改动原有未跟踪文件。
