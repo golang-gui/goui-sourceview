@@ -896,6 +896,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Batch, "REM note", "REM note", 0, language.KindComment},
 		{language.HCL, "value=<<END\nbody\nEND", "body", 1, language.KindString},
 		{language.GraphQL, "\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
+		{language.SCSS, "/* note\nbody\n*/", "body", 1, language.KindComment},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

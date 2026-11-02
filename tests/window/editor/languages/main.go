@@ -124,6 +124,7 @@ func main() {
 		{language.Batch, "setl", "setlocal"},
 		{language.HCL, "resou", "resource"},
 		{language.GraphQL, "mutat", "mutation"},
+		{language.SCSS, "@mix", "@mixin"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -204,6 +205,7 @@ func main() {
 		{language.Diff, "+ ", "{'x'}", "+ {'x'}"},
 		{language.HCL, "value = ", `"${true}"`, `value = "${true}"`},
 		{language.GraphQL, "", `"""`, `"""`},
+		{language.SCSS, ".x {content:", `"#{true}"`, `.x {content:"#{true}"`},
 		{language.Batch, "echo ", "\"C:\\\"", "echo \"C:\\\""},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},

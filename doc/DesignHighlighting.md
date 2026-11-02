@@ -830,3 +830,20 @@ heredoc 不解释反斜杠，闭合名称单独保存、不保存正文。普通
 及 [graphql-js v16.11.0 lexer.ts](https://github.com/graphql/graphql-js/blob/v16.11.0/src/language/lexer.ts)
 的普通/块字符串区分、Unicode 转义和 ASCII 名称规则（读取 2026-11-02）。
 采用既有三引号和分片呈现协议，不引入执行器或 Schema 依赖。
+
+## 29. SCSS
+
+SCSS 使用独立语言身份，复用 CSS 的名称、声明栈、数值/单位、引用及块注释扫描。
+新增 `.scss`、scss 围栏、$ 变量、@ 指令、// 注释、常用控制/布尔词汇、编辑规则及建议。
+`#{…}` 在代码、引用、URL 和块注释中进入表达式；不可变帧保存外层模式、声明栈和括号深度，
+表达式内的引用、注释和嵌套插值独立闭合，返回后恢复原上下文。行注释不插值。
+预处理语言增加 URL 正文模式，防止 http:// 被 // 吞入注释；其中仍允许插值及引用/转义。
+引用和普通代码支持单字符、最多六位十六进制及可选空白的 CSS 转义。
+嵌套规则结束后恢复属性状态，选择器和声明颜色采用词法位置判断，不进行编译器级语法消歧。
+
+不把缩进语法 `.sass` 映射到 SCSS，不解析模块、执行函数或生成 CSS。
+2026-11-02 核对 [Sass 插值](https://sass-lang.com/documentation/interpolation/)、
+[注释](https://sass-lang.com/documentation/syntax/comments/)、[字符串转义](https://sass-lang.com/documentation/values/strings/)
+（页面列出 Dart Sass 1.107.0），参考
+[Monaco v0.52.2 SCSS](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/scss/scss.ts)
+的变量/声明/引用模式划分。采用本项目的独立 Class、分片和不可变栈，不复制正则规则或引入 Sass 依赖。

@@ -507,3 +507,12 @@ Windows Batch、HCL/Terraform、GraphQL、SCSS、Less 继续依次实现。
 长正文、长名称与极小分片通过。`GOWORK=off go test ./...`、Pango 亮暗块正文 RGBA 断言通过。
 同本批独立浅色 1×，`-language graphql` 通过 mutation 建议接受/撤销、三引号输入及公共断言。
 没有 Schema 加载、网络请求或 GraphQL 执行。
+
+### SCSS
+
+新增 .scss、围栏、变量/指令、嵌套插值、URL、编辑规则和 theme.scss，示例共 47 份。
+独立预期覆盖普通引用不直接插入 $ 变量、转义插值前缀、十六进制转义、URL 的 //、
+嵌套选择器后恢复属性、块注释及内部注释/插值；长正文/名称/URL、极小分片与快照通过。
+`GOWORK=off go test ./...`、`GOWORK=off go test -race ./language ./internal/highlight` 通过，
+Pango 亮暗块注释正文 RGBA 断言通过，既有 CSS/JS/TS/Python/SQL 共享扫描器回归保持通过。
+独立浅色 1×，`-language scss` 通过 @mixin 建议接受/撤销、引用中的插值输入及公共断言。

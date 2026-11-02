@@ -628,6 +628,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Perl, "print <<A, <<'B';\nbody", "A"},
 		{language.Perl, "my $x=<<'long", "tail'"},
 		{language.HCL, `value="outer ${"inner ${`, "true}"},
+		{language.SCSS, `.x{content:"outer #{"inner #{`, "true}"},
 		{language.Swift, `let s="outer \("inner \(`, "true)"},
 		{language.Dart, `var s='outer ${"inner ${`, "true}"},
 		{language.R, `x <- r"--[open`, "body]--\""},
@@ -681,6 +682,18 @@ func TestFifthBatchKinds(t *testing.T) {
 		{language.GraphQL, `query Q { field(text:"\u{1F600}\u0041") }`, "1F600", language.KindEscape},
 		{language.GraphQL, "# comment\nquery Q { field(x:-1.2e+3) }", "-1.2e+3", language.KindNumber},
 		{language.GraphQL, "\"unfinished\nquery Q {}", "query", language.KindKeyword},
+		{language.SCSS, `$accent: #336699; @mixin box($size){width:$size}`, "$accent", language.KindVariable},
+		{language.SCSS, `$accent: #336699; @mixin box($size){width:$size}`, "@mixin", language.KindMeta},
+		{language.SCSS, `.x {content:"literal $name #{true}"}`, "$name", language.KindString},
+		{language.SCSS, `.x {content:"literal $name #{true}"}`, "true", language.KindKeyword},
+		{language.SCSS, `.x {content:"\#{true}"}`, "true", language.KindString},
+		{language.SCSS, `.x {content:"\1F600 smile"}`, "1F600", language.KindEscape},
+		{language.SCSS, `.x { background:url(http://example.test/#{$name}.png); color:red }`, "http://", language.KindString},
+		{language.SCSS, `.x { background:url(http://example.test/#{$name}.png); color:red }`, "$name", language.KindVariable},
+		{language.SCSS, `.x { background:url(http://example.test/#{$name}.png); color:red }`, "color", language.KindProperty},
+		{language.SCSS, `/* comment #{true} tail */ .x{color:red}`, "tail", language.KindComment},
+		{language.SCSS, `/* comment #{1 /*inner*/ + 2} tail */ .x{color:red}`, "color", language.KindProperty},
+		{language.SCSS, `.x{.child:hover{color:red} padding:1.5rem;}`, "padding", language.KindProperty},
 	} {
 		for _, chunk := range []int{1, 3, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -693,6 +706,7 @@ func TestFifthBatchKinds(t *testing.T) {
 
 func TestFifthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.SCSS:    {"$name: editor; @mixin box($x){width:$x} .#{$name}{content:\"#{if(true,\"#{1}\",\"no\")}\"; background:url(http://example.test/#{$name}.png); .child:hover{color:#abc} padding:1.5rem} /* comment #{1 /*nested*/ + 2} tail */ // line\n.x {content:\"\\1F600 smile\"}", ".x {content:\"" + strings.Repeat("字", ChunkSize) + "#{true}\"; background:url(" + strings.Repeat("a", ChunkSize) + "/#{$name}.png)}", "$" + strings.Repeat("v", ChunkSize) + ": 1; @" + strings.Repeat("m", ChunkSize) + " {}"},
 		language.GraphQL: {"query Q($id:ID!){ user(id:$id) @skip(if:false){ ...Details } }\nfragment Details on User { name }\n\"\"\"description \\\"\"\" literal\nbody\n\"\"\"\ntype User { id:ID! }", "query Q { field(text:\"\\u{1F600}\\u0041\") }\n\"\"\"" + strings.Repeat("字\\", ChunkSize) + "\"\"\"\nquery Q {}", "query " + strings.Repeat("q", ChunkSize) + "($" + strings.Repeat("v", ChunkSize) + ":Int){}"},
 		language.HCL:     {"resource \"local_file\" \"x\" {\nname-with-dash = \"${true ? \"${1}\" : \"no\"}\"\nbody = <<-END\n$${literal} %{ if true ~}\n${jsonencode({a=\"b\"})}\n%{ endif }\n END\n}\n/* end */", "value=<<OUTER\n${join(\"\",[<<INNER\nbody\nINNER\n])}\nOUTER\nresource real {}", "value=<<" + strings.Repeat("字", ChunkSize) + "\n${true}\n" + strings.Repeat("字", ChunkSize) + "\nresource real {}", strings.Repeat("k", ChunkSize) + " = \"" + strings.Repeat("字", ChunkSize) + "${true}\""},
 		language.Batch:   {"@echo off\nsetlocal EnableDelayedExpansion\nREM note\n:build\n:: note\nfor %%i in (*.txt) do (\n echo \"%%~fi %~dp0 %NAME:~1,2% !count!\"\n)\necho ^\nrem continuation\nrem actual", "echo \"" + strings.Repeat("字", ChunkSize) + "%NAME%\"\n" + strings.Repeat("r", ChunkSize) + " argument\nrem final"},

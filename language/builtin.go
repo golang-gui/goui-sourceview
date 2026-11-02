@@ -17,6 +17,13 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case SCSS:
+			d.Tokenizer = codeTokenizer{info.ID}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("-$@!", r) }
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case GraphQL:
 			d.Tokenizer = gqlTokenizer{}
 			d.Editing.Comments.Line = "#"
@@ -433,6 +440,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case SCSS:
+		return append(codeVocabulary(CSS), strings.Fields("@use @forward @import @mixin @include @function @return @if @else @for @each @while @extend @at-root @content @debug @warn @error true false null and or not from through to in as with using !default !global !optional")...)
 	case GraphQL:
 		table = gqlKeywords
 	case HCL:

@@ -1,0 +1,20 @@
+// Original SCSS sample for SourceView.
+@use "sass:math";
+$accent: #428bca;
+$name: editor;
+
+@mixin panel($radius: 6px) {
+  border: 1px solid $accent;
+  border-radius: $radius;
+}
+
+.#{$name} {
+  @include panel();
+  color: $accent;
+  background-image: url("/icons/#{$name}.svg");
+  &::before { content: "Hello, #{$name}!"; }
+  .title:hover { color: white; }
+  padding: 1.5rem;
+}
+
+/* Interpolation also works here: #{math.div(4, 2)}. */

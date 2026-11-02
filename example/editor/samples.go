@@ -41,6 +41,7 @@ func sampleDocuments() []exampleDocument {
 		"build.cmd",
 		"main.tf",
 		"query.graphql",
+		"theme.scss",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
