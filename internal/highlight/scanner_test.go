@@ -342,6 +342,8 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.GitIgnore, `\#body`, "\\", "", "body", language.KindComment},
 		{language.GitAttributes, `"file name" text`, `"`, "", "name", language.KindProperty},
 		{language.Starlark, "value='''first\nbody\n'''", "'''", "'", "body", language.KindPlain},
+		{language.GoTemplate, "{{/*open\nbody\n*/}}", "/*", "", "body", language.KindPlain},
+
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
 	} {
@@ -634,6 +636,8 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		prefix, next string
 	}{
 		{language.TOML, "a = [1, { b = ", "true }, 2]"},
+		{language.GoTemplate, "{{printf \"open", "body\"}}"},
+
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
 		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
@@ -655,6 +659,70 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		_, reference := scanAll(tc.id, tc.prefix, 7)
 		if !before.Equal(reference) {
 			t.Fatalf("%s scan mutated incoming snapshot", tc.id)
+		}
+	}
+}
+
+func TestSeventhBatchKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.GoTemplate, "hello {{if $enabled}}yes{{end}}", "if", language.KindKeyword},
+		{language.GoTemplate, "{{ $name | printf \"}}\" }}", "$name", language.KindVariable},
+		{language.GoTemplate, "{{/* multi\n comment }} */}} {{true}}", "comment", language.KindComment},
+		{language.GoTemplate, "{{printf \"}}\"}} {{true}}", "true", language.KindKeyword},
+	} {
+		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+			tokens, _ := scanAll(tc.id, tc.text, chunk)
+			if got := kindAt(tokens, strings.Index(tc.text, tc.needle)); got != tc.kind {
+				t.Fatalf("%s %q chunk %d: %s want %s", tc.id, tc.needle, chunk, got, tc.kind)
+			}
+		}
+	}
+}
+
+func TestSeventhBatchFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+
+		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens=%v states=%v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws))
+				}
+			}
+		}
+	}
+}
+
+func TestSeventhBatchMalformedFragments(t *testing.T) {
+	random := rand.New(rand.NewSource(20261103))
+	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
+	for _, id := range []language.ID{language.GoTemplate} {
+		for round := 0; round < 300; round++ {
+			var b strings.Builder
+			for n := random.Intn(450); n > 0; n-- {
+				b.WriteRune(alphabet[random.Intn(len(alphabet))])
+			}
+			text := b.String()
+			func() {
+				defer func() {
+					if err := recover(); err != nil {
+						t.Fatalf("%s malformed %q: panic %v", id, text, err)
+					}
+				}()
+				want, ws := scanAll(id, text, 1024)
+				got, gs := scanAll(id, text, 1+random.Intn(17))
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s malformed %q: tokens=%v states=%v\ngot=%#v\nwant=%#v", id, text, reflect.DeepEqual(got, want), gs.Equal(ws), gs.raw, ws.raw)
+				}
+			}()
 		}
 	}
 }

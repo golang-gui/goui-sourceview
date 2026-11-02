@@ -17,6 +17,14 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+
+		case GoTemplate:
+			l, err := newTemplate(info.ID, nil)
+			if err != nil {
+				panic(err)
+			}
+			out[info.ID] = l
+			continue
 		case Groovy:
 			d.Tokenizer = grTokenizer{}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -470,6 +478,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+
+		"gotmpl": GoTemplate, "go-html-template": GoTemplate,
 		"gvy": Groovy, "gradle": Groovy,
 		"bzl": Starlark, "bazel": Starlark,
 		"env":    Dotenv,

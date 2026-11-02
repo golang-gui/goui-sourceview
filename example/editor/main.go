@@ -54,6 +54,9 @@ func run() error {
 		if err := d.SetLanguage(language.Guess(path, data)); err != nil {
 			return err
 		}
+		if err := setTemplateHost(d, path); err != nil {
+			return err
+		}
 		documents = append([]exampleDocument{{name: filepath.Base(path), document: d}}, documents...)
 	}
 	app, err := gui.NewApplication("org.golanggui.SourceViewExample")

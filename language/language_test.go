@@ -70,6 +70,10 @@ func TestGuess(t *testing.T) {
 		{".gitattributes", "", GitAttributes},
 		{"BUILD", "", Starlark}, {"BUILD.bazel", "", Starlark}, {"MODULE.bazel", "", Starlark}, {"WORKSPACE", "", Starlark}, {"rules.bzl", "", Starlark}, {"script.star", "", Starlark},
 		{"hello.groovy", "", Groovy}, {"build.gradle", "", Groovy}, {"Jenkinsfile", "", Groovy}, {"script", "#!/usr/bin/env groovy", Groovy}, {"build.gradle.kts", "", Kotlin},
+		{"page.gotmpl", "", GoTemplate}, {"page.gohtml", "", GoTemplate}, {"page.tpl", "", Plain},
+
+		{"other.conf", "", Plain},
+
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -90,6 +94,116 @@ func TestGuess(t *testing.T) {
 func TestKind(t *testing.T) {
 	if KindInvalid.String() != "invalid" || Kind("bad key").Valid() {
 		t.Fatal("kind contract")
+	}
+}
+
+func TestTemplateHosts(t *testing.T) {
+	html, _ := Builtin(HTML)
+	for _, makeTemplate := range []func(*Language) (*Language, error){NewGoTemplate} {
+		l, err := makeTemplate(html)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, chunk := range []int{1, 3, 31, 4096} {
+			scanner := l.Tokenizer()
+			s := scanner.InitialState()
+			w := tokenWriter{}
+			text := "<div title=\"{{true}}\">{% if active %}{{name}}{% endif %}</div>"
+			if l.ID() == GoTemplate {
+				text = "<div title=\"{{true}}\">{{if .Active}}{{.Name}}{{end}}</div>"
+			}
+			for offset := 0; offset < len(text); {
+				in := Input{Text: text[offset:], Offset: offset, Limit: min(chunk, len(text)-offset), LineEnd: true}
+				r, err := scanner.Scan(in, s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = ValidateResult(in, r); err != nil {
+					t.Fatal(err)
+				}
+				w.merge(r)
+				s = r.State
+				offset += r.Consumed
+			}
+			at := func(needle string) Kind {
+				pos := strings.Index(text, needle)
+				for _, tok := range w.tokens {
+					if tok.Start <= pos && pos < tok.End {
+						return tok.Kind
+					}
+				}
+				return KindPlain
+			}
+			if at("title") != KindAttribute || at("true") != KindKeyword || at("div") != KindTag {
+				t.Fatalf("%s chunk %d: host/template colors %v", l.ID(), chunk, w.tokens)
+			}
+			if c := s.Context(); c.Embedded == nil || c.Embedded.Editing().Tags != nil || c.Embedded.Folding() != nil {
+				t.Fatal("unsafe mixed markup policy")
+			}
+		}
+		plain, err := makeTemplate(nil)
+		if err != nil || plain.Tokenizer().InitialState().Context().Data == true {
+			t.Fatal("plain template context")
+		}
+		sql, _ := Builtin(SQL)
+		if _, err := makeTemplate(sql); err == nil {
+			t.Fatal("unsupported host accepted")
+		}
+		scanner := l.Tokenizer()
+		for _, chunk := range []int{1, 3, 31, 4096} {
+			s := scanner.InitialState()
+			for row, line := range []string{"<script>// {{true}}", "const real = tru{{true}}e;</script>"} {
+				w := tokenWriter{}
+				for offset := 0; offset < len(line); {
+					in := Input{Text: line[offset:], Offset: offset, Limit: min(chunk, len(line)-offset), LineEnd: true}
+					r, e := scanner.Scan(in, s)
+					if e != nil {
+						t.Fatal(e)
+					}
+					if e = ValidateResult(in, r); e != nil {
+						t.Fatal(e)
+					}
+					w.merge(r)
+					s = r.State
+					offset += r.Consumed
+				}
+				if row == 1 {
+					constKind, splitKind := KindPlain, KindPlain
+					for _, tok := range w.tokens {
+						if tok.Start == 0 {
+							constKind = tok.Kind
+						}
+						if tok.Start <= strings.Index(line, "tru{") && strings.Index(line, "tru{") < tok.End {
+							splitKind = tok.Kind
+						}
+					}
+					if constKind != KindKeyword || splitKind != KindPlain {
+						t.Fatalf("%s JS boundary chunk %d: %v", l.ID(), chunk, w.tokens)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestSeventhBatchFences(t *testing.T) {
+	md, _ := Builtin(Markdown)
+	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate} {
+		scanner := md.Tokenizer()
+		fence := "\x60\x60\x60" + name
+		r, e := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
+		if e != nil {
+			t.Fatal(e)
+		}
+		child := r.State.Context().Embedded
+		r, e = scanner.Scan(Input{Text: "x", Limit: 1, LineEnd: true}, r.State)
+		if e != nil {
+			t.Fatal(e)
+		}
+		child = r.State.Context().Embedded
+		if child == nil || child.ID() != id {
+			t.Fatalf("%s: child %v", name, child)
+		}
 	}
 }
 
@@ -254,6 +368,8 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		text, needle string
 		class        Class
 	}{
+		{GoTemplate, "{{printf \"[literal]\"}}", "[literal]", ClassString},
+
 		{C, `#include <stdio.h>`, "stdio", ClassString},
 		{Cpp, `R"tag({ /* literal */ })tag"`, "{", ClassString},
 		{Java, `\u002f\u002f comment`, "comment", ClassComment},

@@ -68,7 +68,9 @@ const (
 	GitAttributes ID = "gitattributes"
 	Starlark      ID = "starlark"
 	Groovy        ID = "groovy"
-	Markdown      ID = "markdown"
+	GoTemplate    ID = "gotemplate"
+
+	Markdown ID = "markdown"
 )
 
 // Kind is an extensible style key. Lexical behavior uses Token.Class and Context.
@@ -176,6 +178,8 @@ var builtins = []Info{
 	{ID: GitAttributes, Name: "Git Attributes", Extensions: []string{".gitattributes"}, MIMETypes: []string{"text/x-gitattributes"}},
 	{ID: Starlark, Name: "Starlark", Extensions: []string{".bzl", ".star", ".bazel"}, MIMETypes: []string{"text/x-starlark"}},
 	{ID: Groovy, Name: "Groovy", Extensions: []string{".groovy", ".gvy", ".gy", ".gsh", ".gradle"}, MIMETypes: []string{"text/x-groovy"}},
+	{ID: GoTemplate, Name: "Go Template", Extensions: []string{".gotmpl", ".gohtml"}},
+
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -254,6 +258,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	switch interpreter {
+
+	}
 	if interpreter == "groovy" {
 		return Groovy
 	}

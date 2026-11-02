@@ -1,0 +1,14 @@
+<!-- Original Go HTML template sample for SourceView. -->
+<main class="editor">
+  {{- if .Enabled }}
+  <h1>{{ .Title | printf "%s" }}</h1>
+  {{/* A template comment with {{ literal delimiters }}. */}}
+  <ul>
+    {{range $index, $name := .Languages}}
+    <li data-index="{{$index}}">{{$name}}</li>
+    {{else}}
+    <li>No languages configured.</li>
+    {{end}}
+  </ul>
+  {{end}}
+</main>

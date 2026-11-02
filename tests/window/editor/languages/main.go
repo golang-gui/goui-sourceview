@@ -134,6 +134,7 @@ func main() {
 		{language.GitAttributes, "*.txt te", "*.txt text"},
 		{language.Starlark, "retu", "return"},
 		{language.Groovy, "de", "def"},
+		{language.GoTemplate, "{{pri", "{{print"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -185,6 +186,8 @@ func main() {
 		id                  language.ID
 		prefix, typed, want string
 	}{
+		{language.GoTemplate, "{{printf ", "\"hello\"}}", "{{printf \"hello\"}}"},
+
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},
 		{language.Shell, "echo ", "'\\'", "echo '\\'"},

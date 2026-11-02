@@ -51,7 +51,7 @@ func sampleDocuments() []exampleDocument {
 		"rules.gitattributes",
 		"rules.bzl",
 		"build.gradle",
-	} {
+		"page.gohtml"} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
 			panic(err)
@@ -61,7 +61,30 @@ func sampleDocuments() []exampleDocument {
 		if err := doc.SetLanguage(language.Guess(name, text)); err != nil {
 			panic(err) // Embedded language IDs are fixed, not user input.
 		}
+		if err := setTemplateHost(doc, name); err != nil {
+			panic(err)
+		}
 		documents = append(documents, exampleDocument{name, doc})
 	}
 	return documents
+}
+
+// Compound filenames choose the example's explicit HTML host.
+func setTemplateHost(doc *source.Document, name string) error {
+	name = strings.ToLower(name)
+	var makeTemplate func(*language.Language) (*language.Language, error)
+	if strings.HasSuffix(name, ".gohtml") {
+		makeTemplate = language.NewGoTemplate
+	}
+
+	if makeTemplate == nil {
+		return nil
+	}
+	html, _ := language.Builtin(language.HTML)
+	l, err := makeTemplate(html)
+	if err != nil {
+		return err
+	}
+	doc.SetLanguageDefinition(l)
+	return nil
 }

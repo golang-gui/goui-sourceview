@@ -28,7 +28,7 @@ The development branch depends on GOUI v0.5.0, which Go downloads automatically.
   JavaScript, TypeScript, JSX, TSX, CSS, C, C++, Java, Rust, C#, Lua, PowerShell, Ruby, PHP,
   Kotlin, Swift, Dart, R, Zig, Objective-C, Objective-C++, Scala, Perl, Diff/Patch, Windows Batch,
   HCL/Terraform, GraphQL, SCSS, Less, Dotenv, Java Properties, Git Ignore/Attributes,
-  Starlark, Groovy and Go module/workspace/checksum files.
+  Starlark, Groovy, Go Template and Go module/workspace/checksum files.
 - **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.
 - **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
 - **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.

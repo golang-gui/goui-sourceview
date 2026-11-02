@@ -954,3 +954,14 @@ slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复�
 （页面 v6.0.0）与 [Groovy 4.0.27 GroovyLexer.g4](https://github.com/apache/groovy/blob/GROOVY_4_0_27/src/antlr/GroovyLexer.g4)
 的 GString 模式、SlashyStringCharacter、REGEX_CHECK_ARRAY 及三引号谓词。
 采用现有插值语言的不可变状态和 Class 边界，不引入 Groovy/Gradle 运行依赖或复制 ANTLR 规则。
+
+## 38. 第七批语言接入
+
+按每种语言单独提交，复用现有分片、不可变状态、Context 和编辑规则，不修改 GOUI 或引入运行依赖。
+共享扫描设施随实际语言需求逐步扩展；只将已经接入的语言加入文件识别、内置列表及 README。
+
+### Go Template
+
+动作、变量、管道、裁剪、引用和块注释；显式纯文本/HTML 宿主。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://github.com/golang/go/blob/go1.25.0/src/text/template/parse/lex.go)（读取 2026-11-02）。
