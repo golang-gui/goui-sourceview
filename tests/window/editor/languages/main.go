@@ -109,6 +109,7 @@ func main() {
 		{language.PHP, "<?php retu", "<?php return"},
 		{language.JSX, "cons", "const"}, {language.TSX, "interf", "interface"},
 		{language.JSX, "const x=<di", "const x=<div"}, {language.TSX, "const x=<A classN", "const x=<A className"},
+		{language.Kotlin, "overr", "override"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -168,6 +169,7 @@ func main() {
 		{language.PHP, "<?php $x = ", "'it\\'s'", "<?php $x = 'it\\'s'"},
 		{language.JSX, "const x=<A title=", "\"C:\\\"", "const x=<A title=\"C:\\\""},
 		{language.JSX, "const x=<A>text ", "'", "const x=<A>text '"},
+		{language.Kotlin, "val s = ", `"""`, `val s = """`},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {

@@ -317,3 +317,22 @@ JSX/TSX 的词法歧义和标签/正文注释辅助边界详见设计，不将�
 最终日志、二进制和截图位于 `/tmp/sourceview-language-batch2-JqwBCh/`，没有写入源码目录，
 没有向用户桌面发送输入、操作剪贴板或执行样本。验证结束后关闭本次示例和专用 X11/窗口管理器会话，
 保留原有用户桌面。原有未跟踪 doc/Doing.md 和 example/temp/ 不纳入语言功能提交。
+
+## 第三批语言（2026-11-02）
+
+### Kotlin
+
+新增 Kotlin 文件、shebang、Markdown 围栏及别名识别，基础编辑规则、关键词建议与 hello.kt，示例共 34 份。
+独立预期覆盖注解、标签、反引号名称、普通/三引号字符串、嵌套插值、多美元插值和嵌套注释。
+32 KiB 美元定界符、超长正文、闭合引号串、数字后的成员访问与范围运算参加完整/极小分片对照；
+另检查随机畸形输入、增量恢复、状态快照不可变性、Class 及默认围栏。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8：`go test ./...`（工作区 GOUI b49049d）、
+`GOWORK=off go test ./...`（GOUI v0.5.0）、
+`GOWORK=off go test -race ./language ./internal/highlight` 通过。
+原生 Pango 亮暗 1× 字符串正文 RGBA 零误差断言通过，使用同字体、同布局的独立配色预期。
+关闭工作区构建语言窗口程序，在独立 TigerVNC :87 / Xfwm4 compositor on / Software / 浅色 1× 下，
+Kotlin 补全接受/撤销、三引号输入、已有语言和最终语义/只读/括号断言通过。
+输入经 Window.DispatchEvent/CommitText，不使用 DevServer，无剪贴板或用户桌面输入。
+日志和产物放在 `/tmp/sourceview-language-batch3-Yg4xpq/`；本阶段未运行 macOS/Windows 原生验证。
+没有新增第三方依赖或修改 GOUI。Swift、Dart、R 继续按设计实施。

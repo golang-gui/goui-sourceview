@@ -882,6 +882,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.PHP, "<?php $x=<<<'TXT'\nbody\nTXT;", "body", 1, language.KindString},
 		{language.JSX, "const x=<A title=\"\nbody\n\"/>;", "body", 1, language.KindString},
 		{language.TSX, "interface", "interface", 0, language.KindKeyword},
+		{language.Kotlin, "val s=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

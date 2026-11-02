@@ -319,6 +319,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.PHP, "<?php $x=<<<TXT\nbody\nTXT;\nreturn 1;", "TXT;", "MISS;", "return", language.KindString},
 		{language.JSX, "const x=<A/>;\nconst n=1;", "/>", ">", "const n", language.KindPlain},
 		{language.TSX, "const f=<T,>(x:T)=>x;\nconst n=1;", ",", "", "const n", language.KindPlain},
+		{language.Kotlin, "val s=\"\"\"open\nbody\n\"\"\"\nval n=1", "\"\"\"", "\"", "body", language.KindPlain},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -613,6 +614,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
 		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
 		{language.JSX, "const x=<A>{true ? <B title={", "1}/> : null}"},
+		{language.Kotlin, `val s="outer ${"inner ${`, "true}"},
 	} {
 		_, before := scanAll(tc.id, tc.prefix, 3)
 		_, _, _ = Scan(tc.id, before, tc.next, len(tc.next), true)
@@ -719,6 +721,15 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.TSX, `const f=<T=string,>(x:T)=>x;`, "string", language.KindKeyword},
 		{language.TSX, `const x=<T extends={true}/>;`, "extends", language.KindAttribute},
 		{language.TSX, `interface Props { readonly name: string; }`, "readonly", language.KindKeyword},
+		{language.Kotlin, `@file:JvmName("Demo") fun main() { val name="Kotlin" }`, "@file:JvmName", language.KindMeta},
+		{language.Kotlin, `val s="hi $name ${if (true) "ok" else "no"}"`, "if", language.KindKeyword},
+		{language.Kotlin, `val s="""raw \n $name ${true}"""`, "name", language.KindVariable},
+		{language.Kotlin, `val s=$$"""literal $name; $${true}"""`, "$name", language.KindString},
+		{language.Kotlin, `val s=$$"""literal $name; $${true}"""`, "true", language.KindKeyword},
+		{language.Kotlin, `/* outer /* inner */ still */ val x=1`, "still", language.KindComment},
+		{language.Kotlin, "val `class`=1; loop@ for (x in 1..<3) break@loop", "class", language.KindVariable},
+		{language.Kotlin, `val x=42.toString(); val n=0x2e+3`, "toString", language.KindPlain},
+		{language.Kotlin, `val x=42.toString(); val n=0x2e+3`, "+", language.KindDelimiter},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -746,6 +757,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 	fixtures[language.PHP] = []string{"<p title=\"<?= $name ?>\">Hi</p><script>const<?php echo ' '; ?> value=\"<?= $name ?>\";</script><!-- <?= $name ?> -->\n<?php #[Route('/')] readonly class Demo { function f() { return \"{$row['key']} ${name}\"; } } // ?> <b>text</b>", "<?php $x=<<<TXT\n$name {$row['key']}\n TXT, true; $x=<<<'END'\n$name\nENDING\nEND; return;", "<?php $x=<<<\"" + strings.Repeat("字", ChunkSize) + "\"\nbody\n" + strings.Repeat("字", ChunkSize) + "; return;"}
 	fixtures[language.JSX] = []string{"const x=<><UI.Button aria-label=\"a>b &gt;\" {...props}>{items.map(x=><Item key={x.id}/>)}</UI.Button>{/[}]/.test(x) ? `hi ${<B/>}` : null}</>; const y=a < b; const ratio=<A/> / 2;", "const x=<A title=\"\nbody\\\n\"/>;", "const x=<A>" + strings.Repeat("字", ChunkSize) + " &amp;</A>;"}
 	fixtures[language.TSX] = []string{"interface Props {readonly name:string;}\nconst f=<T,>(x:T):T=>x; const g=<T extends unknown>(x:T)=><A value={x}/>; const x=<T extends={true}/>;", "const f=<T" + strings.Repeat(" ", ChunkSize*2) + ",>(x:T)=><A/>;"}
+	fixtures[language.Kotlin] = []string{"@file:JvmName(\"Demo\")\n/* outer /* inner */ still */\nfun main(){ val s=\"hi $name ${if (true) \"${1}\" else name}\"; val raw=$$\"\"\"$literal $${true} $$$name\nraw\\n\"\"\"; val `class`=42.toString(); loop@ for(x in 1..<3)break@loop }", "val s=" + strings.Repeat("$", ChunkSize*2) + "\"" + strings.Repeat("$", ChunkSize*2) + "{true}\"", "val s=\"\"\"" + strings.Repeat("字", ChunkSize) + strings.Repeat("\"", 100) + "; val n=1"}
 	for id, texts := range fixtures {
 		for _, text := range texts {
 			want, ws := scanAll(id, text, ChunkSize*8)
@@ -762,7 +774,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

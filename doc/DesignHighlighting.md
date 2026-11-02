@@ -570,3 +570,29 @@ TSX 为同一物理行中可确认的 `<T,>`、`<T=...>` 和 `<T extends ...>` �
 [Monaco v0.52.2 TypeScript tokenizer](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/typescript/typescript.ts)
 作为现有 JS/TS 基础状态的参考，不将其 basic-languages 文件当成完整 TSX parser。
 保持 GtkSourceView 上下文分解的思路，混合语法以本项目自己的独立分类、分片及编辑测试验收。
+
+## 17. Kotlin
+
+新增 language.Kotlin、.kt/.kts（含 .gradle.kts）、kotlin shebang 和 kotlin/kt/kts 围栏。
+独立 ktState 支持关键字及常见软关键字、注解/标签、反引号名称、数值/范围、字符、
+普通字符串、三引号、多美元插值、行注释和嵌套块注释。复用既有扫描输出和增量协议，
+没有依赖编译器、修改 GOUI 或扩大公开 Tokenizer 接口。
+
+普通引用处理反斜杠及四位 Unicode 转义；Unicode 转义只在引用内解释，不执行 Java 式预词法转换。
+三引号不转义反斜杠，但仍允许插值；连续结束引号按 Kotlin 规则全部归入同一引用。
+美元前缀和美元运行数量用整数保存，少于要求数量为正文，达到要求后才进入变量或表达式。
+多余美元保留在正文；可跨任意工作分片，不截断为预读范围。插值用不可变栈保存引用与花括号深度，
+表达式内的字符串/注释不结束外层插值。正文、引号运行和美元运行均不保留整个文本副本。
+标识符只保留 128 byte 候选拼写与完整范围；未闭合普通引用按真实行尾恢复，三引号与块注释跨行保留。
+
+编辑提供 //、/* */、结构/引用/反引号配对、关键词建议；第三个双引号不额外生成引用，
+不猜测泛型尖括号、类型解析、缩进函数运行结果或实验性编译选项。
+保留既有词法 Kind/Class 分离，原始引用 Context.Literal 禁用反斜杠闭合判断，插值恢复代码上下文。
+
+依据为 [Kotlin strings](https://kotlinlang.org/docs/strings.html)、
+[Kotlin 2.2 稳定多美元插值](https://kotlinlang.org/docs/whatsnew22.html)、
+[语法规格](https://kotlinlang.org/spec/syntax-and-grammar.html)（页面为 1.9-rfc+0.1，现代插值另查新文档），
+以及 [Kotlin.flex](https://github.com/JetBrains/kotlin/blob/master/compiler/psi/parser/src/org/jetbrains/kotlin/lexer/Kotlin.flex)
+（2026-11-02 核对 requiredInterpolationPrefix、RAW_STRING 及注释深度）。
+参考 [Monaco v0.52.2 Kotlin](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/kotlin/kotlin.ts)
+的状态分解，不复制其正则，也不把旧版本的语法范围当成当前 Kotlin 的完整承诺。

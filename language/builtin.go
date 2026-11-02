@@ -118,6 +118,18 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case Kotlin:
+			d.Tokenizer = ktTokenizer{}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+			d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+			d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return c.Selected || c.Context.String || c.Typed != `"` || !strings.HasSuffix(c.Before, `""`)
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case JSX, TSX:
 			d.Tokenizer = jsxTokenizer{info.ID}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -283,6 +295,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell,
 		"rb":              Ruby,
 		"javascriptreact": JSX, "typescriptreact": TSX,
+		"kt": Kotlin, "kts": Kotlin,
 	} {
 		table[alias] = definitions[id]
 	}
@@ -302,6 +315,8 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
+	case Kotlin:
+		table = ktKeywords
 	case PowerShell:
 		table = psKeywords
 	case Ruby:

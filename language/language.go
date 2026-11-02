@@ -44,6 +44,7 @@ const (
 	PHP        ID = "php"
 	JSX        ID = "jsx"
 	TSX        ID = "tsx"
+	Kotlin     ID = "kotlin"
 	Markdown   ID = "markdown"
 )
 
@@ -128,6 +129,7 @@ var builtins = []Info{
 	{ID: PHP, Name: "PHP", Extensions: []string{".php", ".phtml"}, MIMETypes: []string{"application/x-httpd-php"}},
 	{ID: JSX, Name: "JSX", Extensions: []string{".jsx"}, MIMETypes: []string{"text/jsx", "text/javascript-jsx"}},
 	{ID: TSX, Name: "TSX", Extensions: []string{".tsx"}, MIMETypes: []string{"text/tsx", "text/typescript-jsx"}},
+	{ID: Kotlin, Name: "Kotlin", Extensions: []string{".kt", ".kts"}, MIMETypes: []string{"text/x-kotlin"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -180,6 +182,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "kotlin" {
+		return Kotlin
+	}
 	if interpreter == "ruby" {
 		return Ruby
 	}

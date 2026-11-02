@@ -49,6 +49,7 @@ func TestGuess(t *testing.T) {
 		{"script", "#!/usr/bin/env pwsh", PowerShell},
 		{"index.PHP", "", PHP}, {"page.phtml", "", PHP}, {"", "<?php echo 1;", PHP}, {"", "<?= 1 ?>", PHP}, {"", "<?phpfoo", Plain},
 		{"app.jsx", "", JSX}, {"app.TSX", "", TSX}, {"app.js", "<A/>", JavaScript}, {"app.ts", "<T,>(x:T)=>x", TypeScript},
+		{"hello.kt", "", Kotlin}, {"build.gradle.kts", "", Kotlin}, {"script", "#!/usr/bin/env kotlin", Kotlin},
 		{"hello.rb", "", Ruby}, {"Gemfile", "", Ruby}, {"Rakefile", "", Ruby}, {"app.gemspec", "", Ruby}, {"config.ru", "", Ruby}, {"script", "#!/usr/bin/env ruby", Ruby},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
@@ -140,6 +141,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{PHP, `<?php "hello $name`, true, false, false}, {PHP, `<?php "{$row['key']`, false, false, false}, {PHP, `<?php /* note`, false, true, false},
 		{JSX, `const x=<A>text`, true, false, true}, {JSX, `const x=<A title="raw`, true, false, true},
 		{JSX, `const x=<A>{true`, false, false, false}, {TSX, `const x=<A>{/* note`, false, true, false},
+		{Kotlin, `val s="""raw`, true, false, true}, {Kotlin, `val s=$$"hi $${if`, false, false, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -232,6 +234,7 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{JSX, `const x=<A title="{raw}">{true}</A>;`, "{raw}", ClassString},
 		{JSX, `const x=<A>{true}</A>;`, "true", 0},
 		{TSX, `const x=<A>{true}</A>;`, "{true}", ClassDelimiter},
+		{Kotlin, `val s="hi $name ${true}"`, "$name", ClassString}, {Kotlin, `val s="hi $name ${true}"`, "true", 0},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -379,6 +382,37 @@ func TestJSXFencesAndEditing(t *testing.T) {
 		for _, p := range l.Editing().Brackets {
 			if p.Open == "<" {
 				t.Fatal("JSX guesses generic angle pairs")
+			}
+		}
+	}
+}
+
+func TestThirdBatchFences(t *testing.T) {
+	builtin, _ := Builtin(Markdown)
+	custom, err := NewMarkdown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, md := range []*Language{builtin, custom} {
+		for _, tc := range []struct {
+			name    string
+			id      ID
+			keyword string
+		}{
+			{"kotlin", Kotlin, "fun"}, {"kt", Kotlin, "val"}, {"kts", Kotlin, "class"},
+		} {
+			scanner := md.Tokenizer()
+			fence := "```" + tc.name
+			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err = scanner.Scan(Input{Text: tc.keyword, Limit: len(tc.keyword), LineEnd: true}, r.State)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.State.Context().Embedded.ID() != tc.id || len(r.Tokens) != 1 || r.Tokens[0].Kind != KindKeyword || r.Tokens[0].Start != 0 || r.Tokens[0].End != len(tc.keyword) {
+				t.Fatalf("%s: %+v", tc.name, r)
 			}
 		}
 	}

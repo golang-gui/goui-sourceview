@@ -28,6 +28,7 @@ func sampleDocuments() []exampleDocument {
 		"hello.rb",
 		"hello.php",
 		"app.jsx", "app.tsx",
+		"hello.kt",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
