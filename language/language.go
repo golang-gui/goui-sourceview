@@ -152,7 +152,7 @@ var builtins = []Info{
 	{ID: JSON, Name: "JSON", Extensions: []string{".json"}, MIMETypes: []string{"application/json"}},
 	{ID: JSONC, Name: "JSON with comments", Extensions: []string{".jsonc"}, MIMETypes: []string{"application/jsonc"}},
 	{ID: JSONLines, Name: "JSON Lines", Extensions: []string{".jsonl", ".ndjson"}, MIMETypes: []string{"application/jsonl", "application/x-ndjson"}},
-	{ID: XML, Name: "XML", Extensions: []string{".xml", ".xhtml", ".svg", ".xsd", ".xsl"}, MIMETypes: []string{"application/xml", "text/xml", "image/svg+xml"}},
+	{ID: XML, Name: "XML", Extensions: []string{".xml", ".xhtml", ".svg", ".xsd", ".xsl", ".xaml", ".axaml", ".resx", ".csproj", ".vbproj", ".fsproj", ".vcxproj", ".props", ".targets", ".nuspec", ".ui", ".rss", ".atom"}, MIMETypes: []string{"application/xml", "text/xml", "image/svg+xml"}},
 	{ID: HTML, Name: "HTML", Extensions: []string{".html", ".htm"}, MIMETypes: []string{"text/html"}},
 	{ID: TOML, Name: "TOML", Extensions: []string{".toml"}, MIMETypes: []string{"application/toml"}},
 	{ID: YAML, Name: "YAML", Extensions: []string{".yaml", ".yml"}, MIMETypes: []string{"application/yaml"}},
@@ -254,6 +254,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == "Cargo.lock":
+		return TOML
 	case base == "crontab":
 		return Crontab
 	case base == "ssh_config" || strings.HasPrefix(base, "ssh_config.") || base == "config" && filepath.Base(filepath.Dir(filename)) == ".ssh":

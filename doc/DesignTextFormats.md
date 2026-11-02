@@ -143,3 +143,12 @@ HTML-like label 作为完整字符串分类，跟踪角括号、属性引用和 
 不运行 Graphviz，不验证属性与图结构，不将 HTML label 当作可执行标记。
 
 依据 [Graphviz DOT Language](https://graphviz.org/doc/info/lang.html)（2026-10-02 更新）。
+
+## 文件关联
+
+XML 继续处理 XAML/Avalonia、ResX、MSBuild 项目/props/targets、NuSpec、Qt/GTK UI、RSS/Atom 的明确后缀。
+Cargo.lock 使用 TOML。只扩充识别，不增加 ID 或扫描器，不把其他 .lock/.config 或任意 config 文件推断为这些格式。
+二进制 plist 等非 UTF-8 输入不在此范围。
+依据 [MSBuild XML 项目格式](https://learn.microsoft.com/en-us/dotnet/core/project-sdk/overview#project-files)、
+[Qt UI XML 格式](https://doc.qt.io/qt-6/designer-ui-file-format.html) 和
+[Cargo lockfile](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)（读取 2026-11-02）。

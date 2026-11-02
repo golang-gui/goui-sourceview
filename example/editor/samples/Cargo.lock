@@ -1,0 +1,13 @@
+# Original, illustrative Cargo lockfile; the editor never runs Cargo.
+version = 4
+
+[[package]]
+name = "sourceview-example"
+version = "0.1.0"
+dependencies = [
+ "editor-model",
+]
+
+[[package]]
+name = "editor-model"
+version = "0.1.0"

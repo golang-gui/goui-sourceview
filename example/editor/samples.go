@@ -70,6 +70,7 @@ func sampleDocuments() []exampleDocument {
 		"jobs.crontab",
 		"flow.mmd",
 		"graph.dot",
+		"View.xaml", "Cargo.lock",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

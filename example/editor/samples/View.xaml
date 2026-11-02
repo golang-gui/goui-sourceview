@@ -1,0 +1,8 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SourceView" Width="640" Height="480">
+  <StackPanel>
+    <TextBlock Text="A native code editor" />
+    <Button Content="Edit document" />
+  </StackPanel>
+</Window>
