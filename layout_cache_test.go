@@ -871,6 +871,8 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.JavaScript, "const", "const", 0, language.KindKeyword},
 		{language.TypeScript, "interface", "interface", 0, language.KindKeyword},
 		{language.CSS, ".name", ".name", 0, language.KindTag},
+		{language.C, "return", "return", 0, language.KindKeyword},
+		{language.Cpp, "auto x=R\"tag(\nbody\n)tag\";", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

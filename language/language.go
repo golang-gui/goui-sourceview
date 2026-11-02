@@ -33,6 +33,8 @@ const (
 	JavaScript ID = "javascript"
 	TypeScript ID = "typescript"
 	CSS        ID = "css"
+	C          ID = "c"
+	Cpp        ID = "cpp"
 	Markdown   ID = "markdown"
 )
 
@@ -106,6 +108,8 @@ var builtins = []Info{
 	{ID: JavaScript, Name: "JavaScript", Extensions: []string{".js", ".mjs", ".cjs"}, MIMETypes: []string{"text/javascript", "application/javascript"}},
 	{ID: TypeScript, Name: "TypeScript", Extensions: []string{".ts", ".mts", ".cts"}, MIMETypes: []string{"text/typescript", "application/typescript"}},
 	{ID: CSS, Name: "CSS", Extensions: []string{".css"}, MIMETypes: []string{"text/css"}},
+	{ID: C, Name: "C", Extensions: []string{".c", ".i"}, MIMETypes: []string{"text/x-csrc"}},
+	{ID: Cpp, Name: "C++", Extensions: []string{".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".h++", ".ipp", ".inl", ".ixx", ".cppm", ".ii"}, MIMETypes: []string{"text/x-c++src", "text/x-c++hdr", "text/x-chdr"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -134,6 +138,10 @@ func Guess(filename string, sample []byte) ID {
 		return Dockerfile
 	case base == "nginx.conf" || strings.HasSuffix(base, ".nginx.conf"):
 		return Nginx
+	}
+	// Uppercase .C is a conventional C++ suffix, even on case-sensitive hosts.
+	if filepath.Ext(filename) == ".C" {
+		return Cpp
 	}
 	ext := strings.ToLower(filepath.Ext(filename))
 	for _, info := range builtins {

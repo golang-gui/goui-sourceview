@@ -303,6 +303,9 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Python, "x = '''open\nbody\n'''\ny = True", "'''", "'", "body", language.KindPlain},
 		{language.JavaScript, "const x = `open\nbody\n`;\nlet y=1", "`", "\"", "body", language.KindPlain},
 		{language.SQL, "SELECT $tag$open\nbody\n$tag$;", "$tag$", "'", "body", language.KindString},
+		{language.C, "/* open\n body\n */\nreturn 1;", "/*", "//", "body", language.KindPlain},
+		{language.C, "// note \\\ncontinued\nint n;", "\\", "", "continued", language.KindPlain},
+		{language.Cpp, "auto x = R\"tag(open\nbody\n)tag\";\nreturn 1;", ")tag", ")miss", "return", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -601,6 +604,71 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		_, reference := scanAll(tc.id, tc.prefix, 7)
 		if !before.Equal(reference) {
 			t.Fatalf("%s scan mutated incoming snapshot", tc.id)
+		}
+	}
+}
+
+func TestProgrammingLanguageKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.C, "#include <stdio.h>\nint main(void) { return 0x1.fp+2f; }", "include", language.KindMeta},
+		{language.C, "#include <stdio.h>", "stdio", language.KindString},
+		{language.C, "const char *s = u8\"hello\";", "u8", language.KindString},
+		{language.C, "unsigned n=0b1010'0011u;", "0b1010'0011u", language.KindNumber},
+		{language.C, "// note \\\\\ncontinued\nint x;", "continued", language.KindComment},
+		{language.C, "#define SUM(a,b) \\\n ((a)+(b))\nint n;", "int", language.KindKeyword},
+		{language.Cpp, "constexpr auto text = u8R\"tag(raw \"text\"\n)no\" still)tag\";", "still", language.KindString},
+		{language.Cpp, "auto x = R\"(raw)\"; return 1'000ULL;", "return", language.KindKeyword},
+		{language.Cpp, "auto x = R\"(raw)\"; return 1'000ULL;", "1'000", language.KindNumber},
+	} {
+		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
+			for _, chunk := range []int{1, 3, 31, ChunkSize} {
+				tokens, _ := scanAll(tc.id, tc.text, chunk)
+				at := strings.Index(tc.text, tc.needle)
+				if at < 0 || kindAt(tokens, at) != tc.kind {
+					t.Fatalf("chunk %d: %q want %s: %v", chunk, tc.text, tc.kind, tokens)
+				}
+			}
+		})
+	}
+}
+
+func TestProgrammingLanguageFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+		language.C:   {"#include <stdio.h>\n#define SUM(a,b) \\\n ((a)+(b))\n// note \\\\\nstill\nconst char *x=u8\"abc\\n\"; wchar_t ch=L'字';", "/*" + strings.Repeat("字", ChunkSize) + "*/ int n;"},
+		language.Cpp: {"template<class T> concept Value = requires(T t) { t.x; };\nauto x=u8R\"0123456789abcdef(raw\n)wrong\" )0123456789abcdef\"; return 1'000ULL;", "auto x=R\"(" + strings.Repeat("\"\\字", ChunkSize) + ")\";"},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens equal=%v states equal=%v\ngot %v\nwant %v\ngot state %#v\nwant state %#v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws), got, want, gs.raw, ws.raw)
+				}
+			}
+		}
+	}
+}
+
+func TestProgrammingLanguageMalformedFragments(t *testing.T) {
+	random := rand.New(rand.NewSource(20261102))
+	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
+	for _, id := range []language.ID{language.C, language.Cpp} {
+		for round := 0; round < 300; round++ {
+			var b strings.Builder
+			for n := random.Intn(500); n > 0; n-- {
+				b.WriteRune(alphabet[random.Intn(len(alphabet))])
+			}
+			text := b.String()
+			want, ws := scanAll(id, text, 1024)
+			got, gs := scanAll(id, text, 1+random.Intn(17))
+			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+				t.Fatalf("%s malformed %q: got %v want %v\ngot state %#v\nwant state %#v", id, text, got, want, gs.raw, ws.raw)
+			}
 		}
 	}
 }

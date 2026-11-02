@@ -366,3 +366,81 @@ Markdown 的默认围栏表包含全部内置非 Markdown 语言及 `js/ts/py/go
 [Protobuf spec](https://protobuf.dev/reference/protobuf/proto3-spec/)、
 [PostgreSQL 17 lexical structure](https://www.postgresql.org/docs/17/sql-syntax-lexical.html)、
 [CSS Syntax Level 3](https://www.w3.org/TR/css-syntax-3/)。SQL 参考 PG 的引用机制，但不把整个综合 profile 宣称为 PG 兼容解析器。
+
+## 12. C、C++、Java、Rust、C#、Lua
+
+新增 `language.C/Cpp/Java/Rust/CSharp/Lua`，沿用 `Builtin`、`Document.SetLanguage` 和
+声明式 Language 属性，不增加注册中心、解析器依赖或 GOUI 接口。
+各语言分别提供元数据、扫描器、注释规则、静态词汇和默认 Markdown 围栏。
+使用现有 Keyword/String/Escape/Number/Comment/Meta/Variable/Delimiter 配色，
+ClassString/ClassComment/ClassDelimiter 决定编辑行为，不从颜色或标识符首字母猜测语义类型。
+
+| 语言 | 编辑期词法范围与取舍 |
+| --- | --- |
+| C | C23 常用关键字和保留字、数值及后缀、字符/字符串编码前缀、两种注释；行首预处理指令名用 Meta，include 的引用头文件用 String。保留反斜杠续行中的短字符串、行注释和指令状态；移除末尾反斜杠时按实际字符调整引用转义奇偶。 |
+| C++ | 独立词汇表，包含协程、concept/requires 等词汇；复用 C 普通词法，增加数字分隔符、原始字符串和编码前缀。原始 delimiter 最多 16 个合法字符，正文仅在完整 `)delimiter"` 结束。 |
+| Java | SE 25 关键字及常用上下文词汇、注解、数值、字符、普通字符串和三引号 text block；Unicode 转义先于词法处理，可以生成关键字、引号、注释或虚拟换行。遵守反斜杠资格与非递归转换规则；连续 u 只计状态，四位 hex 和 UTF-16 surrogate pair 转为逻辑字符，token 坐标仍指向原始 UTF-8 文本。 |
+| Rust | 关键字、原始标识符、生命周期、字符/byte 字符串、普通/C/raw/byte raw/C raw 字符串、嵌套块注释；raw delimiter 记录 0–255 个 `#`，逐字符匹配结束。生命周期按 Variable，宏调用名称按 Meta；不展开宏或解析类型。 |
+| C# | 关键字及常用上下文词汇、`@identifier`、数值、字符、普通/逐字/插值字符串、raw string。raw delimiter 的引号数量和 `$` 数量分别决定结束与插值括号数量；多行 raw 结束符需在行首空白之后。插值使用不可变栈恢复外层引用，表达式内独立处理注释、字符串、结构括号和条件表达式；冒号格式段按 String，不构造完整格式语法树。行首预处理指令按 Meta，不执行条件编译。 |
+| Lua | Lua 5.4 关键字、常见十进制/十六进制数值、短引用和转义、`\\z` 跨行空白、行注释、长字符串/长注释。长括号记录等号数量，关闭时严格匹配同一层级；不设置任意 delimiter 长度截断。 |
+
+这是词法编辑 profile，不是编译器：不评估 C/C++/C# 条件编译，不检查数值后缀组合、
+text block/raw string 的完整缩进合法性或上下文关键字的语法位置，不承诺 C/C++
+跨物理行拼接形成新 token 的全套预处理变换、trigraph 或 Java 预览版字符串模板。
+普通源码续行和多行引用有明确状态；错误输入按物理行或已经确认的多行结束符恢复。
+颜色及 Class 不等同于编译诊断，也不新增通用折叠器、类型推断或语言服务。
+
+### 12.1 扫描与生命周期
+
+`scan_c.go` 共享 C/C++ 机械逻辑和独立词汇；Java 的 Unicode 转换、Rust、C#、Lua
+各自维护状态，不向既有 JS/SQL/Python 的状态结构继续添加无关语言字段。
+复用 `scanLimit`、`scanWord` 和 `tokenWriter`；扫描仍采用驱动的 16 KiB 工作片段及
+最多 32 byte 预读，没有整行正则或完整正文副本。
+
+标识符保留最多 128 byte 候选拼写及完整范围；C++ delimiter 按规范有界，Rust 只存 hash 数，
+Lua 只存等号数，C# 只存引号/美元/括号数及插值栈，Java 只存转换进度及待配对 surrogate。
+正文长度不增加这些状态的存储。C# 栈随语法嵌套深度增长，由行缓存的状态快照持有；
+节点不可变，Equal 比较节点内容，可跳过已经共享的尾部。语言定义为只读共享对象，
+每个 Engine 拥有自己的词法状态、token 缓存和失效范围，不跨文档共享可变分析结果。
+仍通过既有行状态收敛和事件循环预算增量发布；本批不修改调度或原生排版。
+
+尚未确认的长 opener 可暂用候选样式，确认后通过同一逻辑行的 ReplaceFrom 修正；
+不会跨行回写 token。只有真正消费到物理行尾时才执行行尾恢复，不把预读范围等同于已消费范围。
+插入/删除开闭符号由既有行入/出状态传播处理，状态键包含所有影响后续扫描的值。
+
+### 12.2 接入与编辑规则
+
+识别 `.c/.i`；`.C` 专门识别为 C++，其余 C++ 后缀包括 `.cpp/.cc/.cxx/.c++/.hpp/.hh/.hxx/.h++/.ipp/.inl/.ixx/.cppm/.ii`。
+含糊的 `.h` 默认 C++，调用方可显式选择 C。新增 `.java/.rs/.cs/.csx/.lua`，
+Lua 另识别 lua/luajit 及数字版本 shebang。已知扩展名仍优先于内容，Guess 不读取文件。
+Markdown 识别规范 ID 及 `c++/cc/rs/cs/c#` 别名，显式自定义围栏表不被扩充。
+
+这些语言默认使用 `()[]{}` 结构配对；C++/Java/Rust/C# 不猜测泛型尖括号。
+Rust 禁用单独输入 `'` 的自动闭合，选中后以单引号包围仍可用，避免破坏生命周期输入。
+Java/C# 输入第三个双引号时不额外生成闭合引用；引用和注释中的补全、配对继续由词法上下文约束。
+Lua 提供 `--` 与 `--[[ ]]` 注释规则；其余使用 `//` 与 `/* */`。
+每个语言使用独立原创示例，editor 共 28 份内置样本；不调用编译器或执行样本。
+
+### 12.3 依据与验证范围
+
+2026-11-02 核对：[GtkSourceView 5（5.22.1）语言上下文](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/lang-reference.html)
+支持按引用、注释等状态组织规则的思路；
+[Monaco v0.52.2 C# 源码](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/csharp/csharp.ts)
+将普通、逐字和插值引用分开处理；该版本的规则没有覆盖现代 raw string 的完整语法，
+本项目依据语言规范自行实现，不直接移植其表。
+[Lexilla Rust 源码](https://github.com/ScintillaOrg/lexilla/blob/1666f9bff3c13d428914adb449b97cfce8d58f16/lexers/LexRust.cxx)
+（2026-11-02 核对的该文件最近提交）用于核对生命周期/字符、嵌套注释和 raw/byte/C 字符串的独立状态；
+未引入这些项目的源码、语法资源或运行时依赖。
+
+语言依据：[C23 N3096 工作草案 §6.4](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3096.pdf)、
+[C++ 字符串](https://eel.is/c++draft/lex.string)、
+[翻译阶段](https://eel.is/c++draft/lex.phases)（在线工作草案，含较新 whitespace splice 规则；
+本 profile 只支持反斜杠直接接换行的通用部分）、
+[JLS SE 25 §3](https://docs.oracle.com/javase/specs/jls/se25/html/jls-3.html)、
+[Rust tokens](https://doc.rust-lang.org/reference/tokens.html)、
+[Rust comments](https://doc.rust-lang.org/reference/comments.html)、
+[C# raw string](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/tokens/raw-string)、
+[C# interpolation](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/tokens/interpolated)、
+[Lua 5.4 §3.1](https://www.lua.org/manual/5.4/manual.html#3.1)。
+文档定义语法边界，参考源码帮助选择状态；本项目的正确性还需独立预期、分片、增量与窗口测试验证，
+实际结果记录于 [语言验证](PlanLanguages.md)，不把参考编辑器的能力当成本项目已验证能力。

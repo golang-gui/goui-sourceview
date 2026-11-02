@@ -40,6 +40,10 @@ func TestGuess(t *testing.T) {
 		{"events.JSONL", "", JSONLines}, {"events.ndjson", "true\nnull", JSONLines},
 		{"events.jsonl", "#!/bin/sh", JSONLines}, {"events.json", "true\nnull", JSON},
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
+		{"main.c", "", C}, {"main.C", "", Cpp}, {"lib.H", "", Cpp}, {"module.cppm", "", Cpp},
+		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp},
+
+		{"script", "#!/usr/bin/luatic", Plain}, {"script.c", "#!/bin/lua", C},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
 		{"", " <!DOCTYPE HTML>", HTML}, {"", "{\"a\":1}", JSON},
 		{"", "words", Plain},
@@ -116,6 +120,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Protobuf, "/* open", false, true, false}, {Go, "`raw", true, false, true},
 		{Python, `f"{True`, false, false, false}, {JavaScript, "`text ${true", false, false, false},
 		{TypeScript, "/* open", false, true, false}, {CSS, `.x { content: "open`, true, false, false},
+		{C, "/* open", false, true, false}, {Cpp, `auto s=R"tag(raw`, true, false, true},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -158,7 +163,7 @@ func TestBuiltinMarkdownAddedFences(t *testing.T) {
 	}
 	builtin, _ := Builtin(Markdown)
 	for _, l := range []*Language{builtin, custom} {
-		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS} {
+		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp} {
 			scanner := l.Tokenizer()
 			fence := "```" + name
 			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -174,6 +179,87 @@ func TestBuiltinMarkdownAddedFences(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestProgrammingLanguageClasses(t *testing.T) {
+	for _, tc := range []struct {
+		id           ID
+		text, needle string
+		class        Class
+	}{
+		{C, `#include <stdio.h>`, "stdio", ClassString},
+		{Cpp, `R"tag({ /* literal */ })tag"`, "{", ClassString},
+	} {
+		l, _ := Builtin(tc.id)
+		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
+			scanner := l.Tokenizer()
+			state := scanner.InitialState()
+			var tokens []Token
+			for at := 0; at < len(tc.text); {
+				limit := min(chunk, len(tc.text)-at)
+				for at+limit < len(tc.text) && !utf8.RuneStart(tc.text[at+limit]) {
+					limit++
+				}
+				end := min(len(tc.text), at+limit+32)
+				for end < len(tc.text) && !utf8.RuneStart(tc.text[end]) {
+					end++
+				}
+				in := Input{Text: tc.text[at:end], Offset: at, Limit: limit, LineEnd: end == len(tc.text), DocumentEnd: end == len(tc.text)}
+				r, err := scanner.Scan(in, state)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = ValidateResult(in, r); err != nil {
+					t.Fatalf("%s chunk %d: %v", tc.id, chunk, err)
+				}
+				if r.ReplaceFrom != nil {
+					cut := *r.ReplaceFrom
+					for len(tokens) > 0 && tokens[len(tokens)-1].End > cut {
+						last := &tokens[len(tokens)-1]
+						if last.Start < cut {
+							last.End = cut
+							break
+						}
+						tokens = tokens[:len(tokens)-1]
+					}
+				}
+				tokens = append(tokens, r.Tokens...)
+				at += r.Consumed
+				state = r.State
+			}
+			at := strings.Index(tc.text, tc.needle)
+			got := Class(0)
+			for _, tok := range tokens {
+				if tok.Start <= at && at < tok.End {
+					got = tok.Class
+					break
+				}
+			}
+			if got != tc.class {
+				t.Fatalf("%s chunk %d %q: class %v want %v; %v", tc.id, chunk, tc.text, got, tc.class, tokens)
+			}
+		}
+	}
+}
+
+func TestProgrammingLanguageEditingRules(t *testing.T) {
+	for _, id := range []ID{C, Cpp} {
+		l, _ := Builtin(id)
+		rules := l.Editing()
+		line, block := "//", "/*"
+		if rules.Comments.Line != line || rules.Comments.Block.Open != block {
+			t.Fatalf("%s: comments %+v", id, rules.Comments)
+		}
+		for _, pair := range rules.Brackets {
+			if pair.Open == "<" {
+				t.Fatalf("%s guesses generic angle brackets", id)
+			}
+		}
+		if len(l.Suggestions(Context{})) == 0 {
+			t.Fatalf("%s missing vocabulary", id)
+		}
+	}
+
 }
 
 func TestHTTPNestedBodyContext(t *testing.T) {

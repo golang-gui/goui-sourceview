@@ -1,15 +1,12 @@
-// Built-in language integration verification. Requires a desktop/window manager,
-// native typography and fonts. Run: go run ./tests/window/editor/languages
-// [-dark]. Linux without IME service: XMODIFIERS=@im=none. Starts one editable
-// view, switches documents, requests builtin completion, accepts it by
-// Enter, checks undo and types quotes/brackets through the normal input path.
-// Checks readonly and semantic text/selection, then closes automatically.
-// Color correctness has independent native bitmap tests; this program does not
-// infer pixel acceptance from window startup. Physical IME/system shortcuts
-// remain manual. Logs actual typography/painter/scale. No clipboard, file or
-// settings changes; restart resets. Early close or failed assertion exits nonzero.
-// Each completion waits up to 8 seconds for an allocated viewport before
-// inspecting virtual rows; Show does not imply the first layout has completed.
+// 内置语言集成验证，需要桌面、窗口管理器、原生排版及字体。
+// 启动：go run ./tests/window/editor/languages [-dark]；Linux 无 IME 服务时设置
+// XMODIFIERS=@im=none。初始为一个可编辑视图，程序自动切换文档，经正常事件路径
+// 触发补全、方向键选中、Enter 接受、撤销，再输入引用与括号并断言文本和光标。
+// 引用输入按对应语言的配对规则检查，不能多插闭合引用。
+// 另检查只读拒绝、语义文本/选区；全部断言完成后自动关闭，提前关闭或失败则非零退出。
+// 补全逐个等待已分配的可视区域，最多 8 秒；Show 返回不能代替布局完成。
+// 记录实际 typography/painter/scale；颜色另有原生位图断言，不能用窗口启动代替像素验收。
+// 不访问剪贴板、文件或设置；重新启动复位。真实 IME 和系统快捷键仍需手工验证。
 package main
 
 import (
@@ -104,6 +101,7 @@ func main() {
 		{language.Protobuf, "mes", "message"}, {language.Go, "pack", "package"},
 		{language.Python, "whil", "while"}, {language.JavaScript, "cons", "const"},
 		{language.TypeScript, "interf", "interface"}, {language.CSS, ".x { backg", ".x { background"},
+		{language.C, "retu", "return"}, {language.Cpp, "conste", "constexpr"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
