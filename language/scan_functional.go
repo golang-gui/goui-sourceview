@@ -14,6 +14,7 @@ const (
 	fnLineComment
 	fnBlockComment
 	fnNumber
+	fnVariable
 
 	fnPrefix
 )
@@ -60,8 +61,8 @@ func (s fnState) Equal(other State) bool {
 	return s == t
 }
 func (s fnState) Context() Context {
-	return Context{String: s.mode == fnString,
-		Literal: s.mode == fnString && s.literal.raw && s.id != Elixir,
+	return Context{String: s.mode == fnString || s.mode == fnVariable,
+		Literal: s.mode == fnString && s.literal.raw && s.id != Julia && s.id != Elixir,
 		Comment: s.mode == fnLineComment || s.mode == fnBlockComment || s.literal.comment}
 }
 
@@ -73,6 +74,7 @@ var functionalWords = map[ID]map[string]bool{
 	FSharp: words("abstract and as assert base begin class default delegate do done downcast downto elif else end exception extern false finally fixed for fun function global if in inherit inline interface internal lazy let match member module mutable namespace new not null of open or override private public rec return select sig static struct then to true try type upcast use val void when while with yield async task seq"),
 	Elixir: words("after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end false fn for if import in nil not or quote raise receive require rescue super true try unless unquote unquote_splicing use when with"),
 	Erlang: words("after begin case catch cond end fun if let of receive try when and andalso band bnot bor bsl bsr bxor div not or orelse rem xor maybe else true false"),
+	Julia:  words("abstract baremodule begin break catch const continue do else elseif end export false finally for function global if import in isa let local macro module mutable primitive public quote return struct true try using where while type"),
 }
 
 func functionalVocabulary(id ID) []string {
@@ -89,7 +91,7 @@ func functionalEditing(id ID) EditingRules {
 	case FSharp:
 		d.Comments = Comments{Line: "", Block: Pair{Open: "(*", Close: "*)"}}
 
-	case Elixir:
+	case Elixir, Julia:
 		d.Comments.Line = "#"
 	case Erlang:
 		d.Comments.Line = "%"
@@ -97,13 +99,15 @@ func functionalEditing(id ID) EditingRules {
 	if id == FSharp {
 		d.Comments.Line = "//"
 	}
-
+	if id == Julia {
+		d.Comments.Block = Pair{Open: "#=", Close: "=#"}
+	}
 	d.Word = func(r rune) bool { return fnName(id, r) || id == Elixir && r == ':' }
 	d.AllowPair = func(c PairContext) bool {
 		if c.Selected || c.Context.String {
 			return true
 		}
-		if c.Typed == "'" && (id == FSharp) {
+		if c.Typed == "'" && (id == FSharp || id == Julia) {
 			return false
 		}
 		return c.Typed != "\"" || !strings.HasSuffix(c.Before, "\"\"")
@@ -128,6 +132,8 @@ func fnComment(id ID) (string, string) {
 	case FSharp:
 		return "(*", "*)"
 
+	case Julia:
+		return "#=", "=#"
 	}
 	return "", ""
 }
@@ -139,7 +145,7 @@ func fnLine(id ID) string {
 	case Erlang:
 		return "%"
 
-	case Elixir:
+	case Julia, Elixir:
 		return "#"
 	}
 	return ""
@@ -289,7 +295,14 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			s.prefix, s.literal, s.mode = 0, fnLiteral{}, fnCode
 			continue
-
+		case fnVariable:
+			if IdentifierRune(r) {
+				add(i, i+n, KindVariable, ClassString)
+				i += n
+				continue
+			}
+			s.mode = fnString
+			continue
 		case fnString:
 			k, class := KindString, ClassString
 			if s.literal.comment {
@@ -314,7 +327,18 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				if s.id == Elixir && strings.HasPrefix(text[i:], "#{") {
 					size = 2
 				}
-
+				if s.id == Julia && strings.HasPrefix(text[i:], "$"+"(") {
+					size, close = 2, ')'
+				}
+				if s.id == Julia && c == '$' && i+1 < len(text) {
+					next, _ := utf8.DecodeRuneInString(text[i+1:])
+					if IdentifierRune(next) {
+						add(i, i+1, KindVariable, class)
+						i++
+						s.mode = fnVariable
+						continue
+					}
+				}
 				if s.id == FSharp {
 					if s.literal.arity == 1 && (strings.HasPrefix(text[i:], "{{") || strings.HasPrefix(text[i:], "}}")) {
 						add(i, i+2, KindEscape, class)
@@ -374,7 +398,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				endString()
 				continue
 			}
-			if c == '\\' && (!s.literal.raw || s.id == Elixir) {
+			if c == '\\' && (!s.literal.raw || s.id == Julia || s.id == Elixir) {
 				if !s.literal.raw {
 					k = KindEscape
 				}
@@ -403,7 +427,21 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				i += n
 				continue
 			}
-
+			if s.id == Julia && c == '"' {
+				w.add(s.word.start, in.Offset+i, KindMeta, 0)
+				s.word, s.wordOn = scanWord{}, false
+				s.literal = fnLiteral{raw: true}
+				s.mode = fnString
+				s.literal.quote = '"'
+				s.literal.triple = strings.HasPrefix(text[i:], "\"\"\"")
+				size := 1
+				if s.literal.triple {
+					size = 3
+				}
+				add(i, i+size, KindString, ClassString)
+				i += size
+				continue
+			}
 			finish(in.Offset + i)
 			continue
 		}
@@ -478,15 +516,15 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			s.value = true
 			continue
 		}
-		if s.id == Erlang && c == '-' && s.atStart {
+		if s.id == Julia && c == '@' || s.id == Erlang && c == '-' && s.atStart {
 			s.word = scanWord{start: in.Offset + i, kind: KindMeta}
 			s.wordOn = true
 			s.word.add(text[i : i+n])
 			i += n
 			continue
 		}
-		if c == '\'' && (s.id == FSharp) {
-			if size := fnCharacter(text[i:]); size > 0 {
+		if c == '\'' && (s.id == FSharp || s.id == Julia) {
+			if size := fnCharacter(text[i:]); size > 0 && (s.id != Julia || !s.value) {
 				add(i, i+size, KindString, ClassString)
 				i += size
 				s.value = true
@@ -494,10 +532,10 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 		}
-		if c == '"' || c == '\'' && (s.id == Elixir || s.id == Erlang) {
+		if c == '"' || c == '\'' && (s.id == Elixir || s.id == Erlang) || s.id == Julia && c == 0x60 {
 			s.mode = fnString
-			s.literal = fnLiteral{quote: c, arity: 1, interpolate: s.id == Elixir}
-			s.literal.triple = (s.id == FSharp || s.id == Elixir || s.id == Erlang) && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
+			s.literal = fnLiteral{quote: c, arity: 1, interpolate: s.id == Elixir || s.id == Julia}
+			s.literal.triple = (s.id == FSharp || s.id == Elixir || s.id == Julia || s.id == Erlang) && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
 			if s.id == FSharp && s.literal.triple {
 				s.literal.raw = true
 			}
@@ -586,7 +624,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		add(i, i+n, k, class)
 		i += n
 
-		s.value = strings.ContainsRune(")]}", r)
+		s.value = strings.ContainsRune(")]}", r) || s.id == Julia && c == '\''
 		s.atStart = false
 	}
 
@@ -599,6 +637,9 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == fnNumber {
 			s.mode = fnCode
 
+		}
+		if s.mode == fnVariable {
+			s.mode = fnString
 		}
 
 		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp) {

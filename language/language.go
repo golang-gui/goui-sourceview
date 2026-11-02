@@ -78,6 +78,7 @@ const (
 	FSharp        ID = "fsharp"
 	Elixir        ID = "elixir"
 	Erlang        ID = "erlang"
+	Julia         ID = "julia"
 
 	Markdown ID = "markdown"
 )
@@ -197,6 +198,7 @@ var builtins = []Info{
 	{ID: FSharp, Name: "F#", Extensions: []string{".fs", ".fsi", ".fsx"}},
 	{ID: Elixir, Name: "Elixir", Extensions: []string{".ex", ".exs"}},
 	{ID: Erlang, Name: "Erlang", Extensions: []string{".erl", ".hrl"}},
+	{ID: Julia, Name: "Julia", Extensions: []string{".jl"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
@@ -283,6 +285,8 @@ func Guess(filename string, sample []byte) ID {
 		return Elixir
 	case "escript":
 		return Erlang
+	case "julia":
+		return Julia
 
 	case "fsharpi":
 		return FSharp

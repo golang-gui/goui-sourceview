@@ -1019,3 +1019,9 @@ atom、heredoc、单 ASCII 字母 sigil 及嵌套插值，非 ASCII 输入保持
 atom、变量、字符、基数数值与三引号；与 Elixir 保持独立词汇/引用规则。
 保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
 参考[官方规范/源码](https://github.com/erlang/otp/blob/OTP-28.0/lib/stdlib/src/erl_scan.erl)（读取 2026-11-02）。
+
+### Julia
+
+宏、三引号、非标准字符串、插值、嵌套注释及字符/转置区别。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://github.com/JuliaLang/julia/blob/v1.11.7/src/julia-parser.scm)（读取 2026-11-02）。
