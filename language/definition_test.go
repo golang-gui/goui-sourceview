@@ -85,7 +85,7 @@ func TestScanResultValidation(t *testing.T) {
 	}
 }
 func TestBuiltinDefinitions(t *testing.T) {
-	for _, id := range []language.ID{language.Plain, language.JSON, language.JSONC, language.JSONLines, language.XML, language.HTML, language.TOML, language.YAML, language.Shell, language.HTTP, language.Makefile, language.CMake, language.Nginx, language.INI, language.Dockerfile, language.SQL, language.Protobuf, language.Go, language.Python, language.JavaScript, language.TypeScript, language.CSS, language.C, language.Cpp, language.Markdown} {
+	for _, id := range []language.ID{language.Plain, language.JSON, language.JSONC, language.JSONLines, language.XML, language.HTML, language.TOML, language.YAML, language.Shell, language.HTTP, language.Makefile, language.CMake, language.Nginx, language.INI, language.Dockerfile, language.SQL, language.Protobuf, language.Go, language.Python, language.JavaScript, language.TypeScript, language.CSS, language.C, language.Cpp, language.Java, language.Markdown} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {
 			t.Fatalf("missing %q", id)

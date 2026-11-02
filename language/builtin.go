@@ -118,10 +118,23 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
-		case C, Cpp:
-			d.Tokenizer = cTokenizer{info.ID}
+		case C, Cpp, Java:
+			switch info.ID {
+			case C, Cpp:
+				d.Tokenizer = cTokenizer{info.ID}
+			case Java:
+				d.Tokenizer = javaTokenizer{}
+			}
 			d.AllowWordSuggestions = codeWordSuggestions
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			if info.ID == Java {
+				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
+			}
+			if info.ID == Java {
+				d.Editing.AllowPair = func(c PairContext) bool {
+					return c.Selected || c.Context.String || c.Typed != `"` || !strings.HasSuffix(c.Before, `""`)
+				}
+			}
 			vocabulary := codeVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
 		case SQL, Protobuf, Go, Python, JavaScript, TypeScript, CSS:
@@ -193,6 +206,8 @@ func codeVocabulary(id ID) []string {
 		table = cKeywords
 	case Cpp:
 		table = cppKeywords
+	case Java:
+		table = javaKeywords
 	case Go:
 		table = goKeywords
 	case Python:

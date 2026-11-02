@@ -41,7 +41,7 @@ func TestGuess(t *testing.T) {
 		{"events.jsonl", "#!/bin/sh", JSONLines}, {"events.json", "true\nnull", JSON},
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"main.c", "", C}, {"main.C", "", Cpp}, {"lib.H", "", Cpp}, {"module.cppm", "", Cpp},
-		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp},
+		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp}, {"Main.java", "", Java},
 
 		{"script", "#!/usr/bin/luatic", Plain}, {"script.c", "#!/bin/lua", C},
 		{"", "\xef\xbb\xbf <?xml version='1.0'?>", XML},
@@ -121,6 +121,8 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Python, `f"{True`, false, false, false}, {JavaScript, "`text ${true", false, false, false},
 		{TypeScript, "/* open", false, true, false}, {CSS, `.x { content: "open`, true, false, false},
 		{C, "/* open", false, true, false}, {Cpp, `auto s=R"tag(raw`, true, false, true},
+		{Java, `\u002f\u002f note`, false, true, false},
+		{Java, `""`, false, false, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -163,7 +165,7 @@ func TestBuiltinMarkdownAddedFences(t *testing.T) {
 	}
 	builtin, _ := Builtin(Markdown)
 	for _, l := range []*Language{builtin, custom} {
-		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp} {
+		for name, id := range map[string]ID{"jsonc": JSONC, "jsonlines": JSONLines, "jsonl": JSONLines, "ndjson": JSONLines, "http": HTTP, "makefile": Makefile, "cmake": CMake, "nginx": Nginx, "ini": INI, "dockerfile": Dockerfile, "sql": SQL, "proto": Protobuf, "go": Go, "py": Python, "js": JavaScript, "ts": TypeScript, "css": CSS, "c": C, "cpp": Cpp, "c++": Cpp, "cc": Cpp, "java": Java} {
 			scanner := l.Tokenizer()
 			fence := "```" + name
 			r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -189,6 +191,9 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 	}{
 		{C, `#include <stdio.h>`, "stdio", ClassString},
 		{Cpp, `R"tag({ /* literal */ })tag"`, "{", ClassString},
+		{Java, `\u002f\u002f comment`, "comment", ClassComment},
+		{Java, `"\u0022; {}`, "{", ClassDelimiter},
+		{Java, `"\\u0022 still"`, "still", ClassString},
 	} {
 		l, _ := Builtin(tc.id)
 		for _, chunk := range []int{1, 2, 3, 7, 31, 16384} {
@@ -243,7 +248,7 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 }
 
 func TestProgrammingLanguageEditingRules(t *testing.T) {
-	for _, id := range []ID{C, Cpp} {
+	for _, id := range []ID{C, Cpp, Java} {
 		l, _ := Builtin(id)
 		rules := l.Editing()
 		line, block := "//", "/*"

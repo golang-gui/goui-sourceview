@@ -873,6 +873,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.CSS, ".name", ".name", 0, language.KindTag},
 		{language.C, "return", "return", 0, language.KindKeyword},
 		{language.Cpp, "auto x=R\"tag(\nbody\n)tag\";", "body", 1, language.KindString},
+		{language.Java, `cl\u0061ss`, `cl\u0061ss`, 0, language.KindKeyword},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {
