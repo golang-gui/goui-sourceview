@@ -86,6 +86,9 @@ AutoClosingPairs、SurroundingPairs、Brackets 是三个独立列表，空列表
 `NotInString/NotInComment`、AutoCloseBefore 与纯 AllowPair 回调控制自动插入；
 选区包裹保留方向，字符串中可显式包裹，注释排除仍有效。
 控件负责生成闭合端所有权、逐段跳过、删除、随编辑映射、IME 边界与撤销，应用不接管状态机。
+`QuoteEscape` 指定判断引号是否被转义的 Unicode 字符；零值为反斜杠，PowerShell 为反引号。
+Context.Literal 在当前位置禁用此判断。配置拒绝无效 rune 和换行，不改变实际文本；
+该规则用于自动生成引号的跳过判断，扫描器仍负责各类字符串的完整转义语法。
 结构匹配沿用两侧各 64 KiB、有类型栈与未知状态不猜测的规则。
 
 Newline 回调收到有界 Before/After、Indent、当前视图 Unit 及语法上下文。

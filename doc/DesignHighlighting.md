@@ -462,6 +462,11 @@ here-string 开头后只允许空白和真正行尾；关闭标记必须在物�
 不共享文档间可变状态。没有整行正则、运行时执行、完整参数模式解析或类型推断。
 编辑规则提供 `#`/`<# #>`、结构和引用配对、适用的词边界及关键词建议；不预设补全快捷键。
 
+`EditingRules.QuoteEscape` 指定跳过自动闭合引号前使用的转义字符；零值沿用反斜杠，
+PowerShell 显式设为反引号。匹配按 Unicode rune 计奇偶，保持既有 16 KiB 上限和截断处保守处理；
+Context.Literal 仍表示此位置不应用该转义判断。该字段只影响引用跳过，不解释文本或替代扫描器，
+使内置和自定义语言共用同一规则，不在 SourceView 中硬编码 PowerShell ID。
+
 2026-11-02 核对 [PowerShell 7.5 引用规则](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules?view=powershell-7.5)、
 [注释规则](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comments?view=powershell-7.5)
 及 [v7.5.0 tokenizer.cs](https://github.com/PowerShell/PowerShell/blob/v7.5.0/src/System.Management.Automation/engine/parser/tokenizer.cs)

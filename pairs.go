@@ -146,11 +146,21 @@ func (v *SourceView) quoteEscaped(at int) bool {
 		start++
 	}
 	text, _ := m.Slice(textedit.Range{Start: start, End: at})
-	n := 0
-	for i := len(text) - 1; i >= 0 && text[i] == '\\'; i-- {
-		n++
+	escape := v.definitionAt(at).Editing().QuoteEscape
+	if escape == 0 {
+		escape = '\\'
 	}
-	return n%2 != 0 || n == len(text) && start > r.Start
+	n := 0
+	left := len(text)
+	for left > 0 {
+		r, size := utf8.DecodeLastRuneInString(text[:left])
+		if r != escape {
+			break
+		}
+		n++
+		left -= size
+	}
+	return n%2 != 0 || left == 0 && start > r.Start
 }
 
 func (v *SourceView) newline() error {

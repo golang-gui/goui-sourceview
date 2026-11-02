@@ -162,6 +162,8 @@ func main() {
 		{language.Rust, "fn get<", "'a", "fn get<'a"},
 		{language.PowerShell, "$x = ", "'it''s'", "$x = 'it''s'"},
 		{language.Ruby, "x = ", "'it\\'s'", "x = 'it\\'s'"},
+		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
+		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)
@@ -177,6 +179,18 @@ func main() {
 			log.Printf("PASS %s quote typing", tc.id)
 		})
 	}
+	steps = append(steps, func() {
+		d := source.NewDocument("")
+		must(d.SetLanguage(language.PowerShell))
+		v.SetDocument(d)
+		v.SetSelection(textedit.Selection{})
+	})
+	steps = append(steps, func() {
+		must(win.CommitText(`"`))
+		must(win.CommitText("a`"))
+		must(win.CommitText(`"`))
+		check(v.Document().Model().Text() == "\"a`\"\"" && v.Selection().Caret == 4, "escaped PowerShell quote consumed generated closer")
+	})
 	steps = append(steps, func() {
 		d := source.NewDocument("")
 		must(d.SetLanguage(language.Shell))

@@ -346,6 +346,24 @@ func TestQuoteEscapeAndPairNewline(t *testing.T) {
 	}
 }
 
+func TestCustomQuoteEscape(t *testing.T) {
+	l, err := language.New(language.Definition{Info: language.Info{ID: "custom", Name: "Custom"}, Editing: language.EditingRules{QuoteEscape: '§'}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := NewSourceView()
+	v.Document().SetLanguageDefinition(l)
+	for _, tc := range []struct {
+		text    string
+		escaped bool
+	}{{"x§", true}, {"x§§", false}, {"x\\", false}, {"§§§", true}} {
+		v.Document().Model().SetText(tc.text)
+		if got := v.quoteEscaped(len(tc.text)); got != tc.escaped {
+			t.Fatalf("%q: %t", tc.text, got)
+		}
+	}
+}
+
 func TestConfigurationAndShellQuoteTyping(t *testing.T) {
 	for _, tc := range []struct {
 		id                   language.ID
@@ -356,6 +374,9 @@ func TestConfigurationAndShellQuoteTyping(t *testing.T) {
 		{language.TOML, "text = ", "'\\'", "text = '\\'"},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},
 		{language.Shell, "echo ", "'\\'", "echo '\\'"},
+		{language.Ruby, "x = ", "'it\\'s'", "x = 'it\\'s'"},
+		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
+		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
 		t.Run(string(tc.id)+tc.typed, func(t *testing.T) {
 			v := NewSourceView()

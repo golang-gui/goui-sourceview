@@ -130,6 +130,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		case PowerShell:
 			d.Tokenizer = psTokenizer{}
+			d.Editing.QuoteEscape = '`'
 			d.Editing.Comments = Comments{Line: "#", Block: Pair{Open: "<#", Close: "#>"}}
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("-$:", r) }
 			d.AllowWordSuggestions = codeWordSuggestions

@@ -105,6 +105,20 @@ func TestBuiltinDefinitions(t *testing.T) {
 	}
 }
 
+func TestQuoteEscapeValidation(t *testing.T) {
+	for _, r := range []rune{0, '\\', '`', '§', -1, '\n', '\r', 0xd800, 0x110000} {
+		d := language.Definition{Info: language.Info{ID: "test", Name: "Test"}, Editing: language.EditingRules{QuoteEscape: r}}
+		l, err := language.New(d)
+		valid := r == 0 || r == '\\' || r == '`' || r == '§'
+		if (err == nil) != valid {
+			t.Fatalf("%U: %v", r, err)
+		}
+		if valid && l.Editing().QuoteEscape != r {
+			t.Fatal("lost quote escape")
+		}
+	}
+}
+
 func TestCompletionTriggersBelongToDefinition(t *testing.T) {
 	custom, err := language.New(language.Definition{Info: language.Info{ID: language.HTML, Name: "Custom"}})
 	if err != nil {

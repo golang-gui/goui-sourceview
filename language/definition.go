@@ -110,9 +110,12 @@ type EditingRules struct {
 	Word                                         func(rune) bool
 	AutoClosingPairs, SurroundingPairs, Brackets []Pair
 	AutoCloseBefore                              string
-	AllowPair                                    func(PairContext) bool
-	Newline                                      func(NewlineContext) (edit NewlineEdit, handled bool)
-	Comments                                     Comments
+	// QuoteEscape is the escape character checked before overtyping a generated
+	// quote. Zero uses backslash. Context.Literal disables this escaping rule.
+	QuoteEscape rune
+	AllowPair   func(PairContext) bool
+	Newline     func(NewlineContext) (edit NewlineEdit, handled bool)
+	Comments    Comments
 }
 
 // Definition is editable input. New/Definition copy metadata and all slices.
@@ -142,6 +145,9 @@ func New(d Definition) (*Language, error) {
 	}
 	if d.Info.Name == "" {
 		return nil, fmt.Errorf("language: name is required")
+	}
+	if r := d.Editing.QuoteEscape; !utf8.ValidRune(r) || r == '\n' || r == '\r' {
+		return nil, fmt.Errorf("language: invalid quote escape %U", r)
 	}
 	for _, kind := range d.Styles {
 		if !kind.Valid() {

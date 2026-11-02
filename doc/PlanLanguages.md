@@ -260,3 +260,14 @@ Ruby 非插值短引用仍允许转义结束符，Context.Literal 不将这类�
 新增 heredoc 原生亮暗 1× 位图断言通过；独立 Software 浅色 1× 窗口程序通过 29 种语言建议、
 接受和撤销，以及新增 Ruby 转义单引号输入和原有全部断言。
 环境、依赖、日志目录与桌面隔离方式同 PowerShell；本组未单独运行 macOS/Windows。
+
+### 语言引用转义规则
+
+补齐 EditingRules.QuoteEscape，保留零值的反斜杠行为，PowerShell 配置反引号。
+旧实现新增回归 `GOWORK=off go test . -run TestConfigurationAndShellQuoteTyping -count=1`
+复现失败：输入 PowerShell 尾部反斜杠字符串后，多保留一个生成的闭合引号。
+修正后该用例、反引号转义、Ruby 默认转义、Unicode 自定义转义及配置校验全部通过。
+`GOWORK=off go test ./...`、`GOWORK=off go test -race . ./language` 通过。
+独立浅色 1× 正常事件窗口验证通过，并逐步断言：输入反引号转义的双引号后，
+生成的另一个闭合引号仍在，光标停在它之前；不是只比较整段输入后的最终文本。
+没有按语言 ID 在控件中加入特例，也未修改 GOUI。
