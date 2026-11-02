@@ -124,7 +124,7 @@ func (s codeState) Context() Context {
 		mode = s.styleVariableBack
 	}
 	return Context{String: mode == codeQuoted || mode == codeRegexp || mode == codeRegexpFlags || mode == codeDollarBody || mode == codeURL,
-		Comment: mode == codeLineComment || mode == codeBlockComment, Literal: mode == codeDollarBody || mode == codeQuoted && s.raw}
+		Comment: mode == codeLineComment || mode == codeBlockComment, Literal: mode == codeDollarBody || mode == codeQuoted && s.raw && s.id != Starlark}
 }
 
 type codeTokenizer struct{ id ID }
@@ -144,6 +144,8 @@ func codeKeyword(id ID, word string) bool {
 		return goKeywords[word]
 	case Python:
 		return pythonKeywords[word]
+	case Starlark:
+		return starlarkKeywords[word]
 	case JavaScript:
 		return jsKeywords[word]
 	case TypeScript:
@@ -159,7 +161,17 @@ func codeKeyword(id ID, word string) bool {
 	}
 	return false
 }
-func cssLanguage(id ID) bool { return id == CSS || id == SCSS || id == Less }
+func cssLanguage(id ID) bool    { return id == CSS || id == SCSS || id == Less }
+func pythonLanguage(id ID) bool { return id == Python || id == Starlark }
+
+var starlarkKeywords = words("and break continue def elif else for if in lambda load not or pass return as assert async await class del except finally from global import is nonlocal raise try while with yield False True None")
+
+func codeStringPrefix(id ID, text string) bool {
+	if id == Python {
+		return pythonStringPrefix(text)
+	}
+	return id == Starlark && (text == "r" || text == "b" || text == "br" || text == "rb")
+}
 
 var scssKeywords = words("true false null and or not from through to in as with using !default !global !optional")
 var lessKeywords = words("when and not true false iscolor isnumber isstring iskeyword isurl ispixel ispercentage isem lighten darken saturate desaturate fade mix spin round ceil floor percentage")
@@ -231,7 +243,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 	finishWord := func(end int) { finishCodeWord(&s, &w, end) }
 	startQuote := func(quote byte, raw, formatted bool) {
 		s.mode, s.quote, s.raw, s.formatted, s.escape = codeQuoted, quote, raw, formatted, false
-		s.triple = b.id == Python && strings.HasPrefix(text[i:], strings.Repeat(string(quote), 3))
+		s.triple = pythonLanguage(b.id) && strings.HasPrefix(text[i:], strings.Repeat(string(quote), 3))
 		n := 1
 		if s.triple {
 			n = 3
@@ -444,14 +456,14 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			if s.escape {
 				s.escape = false
 				kind := KindEscape
-				if s.raw && b.id == Python {
+				if s.raw && pythonLanguage(b.id) {
 					kind = KindString
 				}
 				add(i, i+n, kind, ClassString)
 				i += n
 				continue
 			}
-			if c == '\\' && (!s.raw || b.id == Python) {
+			if c == '\\' && (!s.raw || pythonLanguage(b.id)) {
 				s.escape = true
 				kind := KindEscape
 				if s.raw {
@@ -523,11 +535,11 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 				i += n
 				continue
 			}
-			if b.id == Python && (c == '\'' || c == '"') && pythonStringPrefix(s.word.text) {
+			if (c == '\'' || c == '"') && codeStringPrefix(b.id, s.word.text) {
 				prefix := strings.ToLower(s.word.text)
 				w.add(s.word.start, in.Offset+i, KindString, ClassString)
 				s.word, s.wordOn = scanWord{}, false
-				startQuote(c, strings.Contains(prefix, "r"), strings.ContainsAny(prefix, "ft"))
+				startQuote(c, strings.Contains(prefix, "r"), b.id == Python && strings.ContainsAny(prefix, "ft"))
 				continue
 			}
 			url := preprocessor && strings.EqualFold(s.word.text, "url") && c == '('
@@ -560,15 +572,15 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			i += n
 			continue
 		}
-		if b.id == Python && c == '#' || b.id == SQL && strings.HasPrefix(text[i:], "--") || js && in.Offset+i == 0 && strings.HasPrefix(text[i:], "#!") {
+		if pythonLanguage(b.id) && c == '#' || b.id == SQL && strings.HasPrefix(text[i:], "--") || js && in.Offset+i == 0 && strings.HasPrefix(text[i:], "#!") {
 			s.mode = codeLineComment
 			continue
 		}
-		if b.id != Python && b.id != CSS && b.id != SQL && strings.HasPrefix(text[i:], "//") {
+		if !pythonLanguage(b.id) && b.id != CSS && b.id != SQL && strings.HasPrefix(text[i:], "//") {
 			s.mode = codeLineComment
 			continue
 		}
-		if b.id != Python && strings.HasPrefix(text[i:], "/*") {
+		if !pythonLanguage(b.id) && strings.HasPrefix(text[i:], "/*") {
 			s.mode = codeBlockComment
 			s.blockDepth = 1
 			add(i, i+2, KindComment, ClassComment)

@@ -131,6 +131,7 @@ func main() {
 		{language.GoMod, "requi", "require"}, {language.GoWork, "us", "use"},
 		{language.Dotenv, "expo", "export"},
 		{language.GitAttributes, "*.txt te", "*.txt text"},
+		{language.Starlark, "retu", "return"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -212,6 +213,8 @@ func main() {
 		{language.GoMod, "replace a => ", "`../dir`", "replace a => `../dir`"},
 		{language.GoWork, "use ", `"./dir"`, `use "./dir"`},
 		{language.GoSum, "path v1.0.0 h1:", "{", "path v1.0.0 h1:{"},
+		{language.Starlark, "value=", `"""`, `value="""`},
+		{language.Starlark, "value=", `r"\""`, `value=r"\""`},
 		{language.Properties, "key=", `"`, `key="`},
 		{language.GitIgnore, "", "[", "["},
 		{language.GitAttributes, "", `"file name" text`, `"file name" text`},

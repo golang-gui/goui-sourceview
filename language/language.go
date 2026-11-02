@@ -66,6 +66,7 @@ const (
 	Properties    ID = "properties"
 	GitIgnore     ID = "gitignore"
 	GitAttributes ID = "gitattributes"
+	Starlark      ID = "starlark"
 	Markdown      ID = "markdown"
 )
 
@@ -172,6 +173,7 @@ var builtins = []Info{
 	{ID: Properties, Name: "Java Properties", Extensions: []string{".properties"}, MIMETypes: []string{"text/x-java-properties"}},
 	{ID: GitIgnore, Name: "Git Ignore", Extensions: []string{".gitignore"}, MIMETypes: []string{"text/x-gitignore"}},
 	{ID: GitAttributes, Name: "Git Attributes", Extensions: []string{".gitattributes"}, MIMETypes: []string{"text/x-gitattributes"}},
+	{ID: Starlark, Name: "Starlark", Extensions: []string{".bzl", ".star", ".bazel"}, MIMETypes: []string{"text/x-starlark"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -192,6 +194,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == "BUILD" || base == "WORKSPACE":
+		return Starlark
 	case strings.HasPrefix(base, ".env."):
 		return Dotenv
 	case base == "go.mod":

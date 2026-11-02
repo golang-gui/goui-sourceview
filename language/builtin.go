@@ -402,14 +402,14 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := codeVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
-		case SQL, Protobuf, Go, Python, JavaScript, TypeScript, CSS:
+		case SQL, Protobuf, Go, Python, Starlark, JavaScript, TypeScript, CSS:
 			d.Tokenizer = codeTokenizer{info.ID}
 			d.AllowWordSuggestions = codeWordSuggestions
 			if info.ID == JavaScript || info.ID == TypeScript {
 				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
 			}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
-			if info.ID == Python {
+			if pythonLanguage(info.ID) {
 				d.Editing.Comments = Comments{Line: "#"}
 			}
 			if info.ID == SQL {
@@ -424,7 +424,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 				d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
 				d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
 			}
-			if info.ID == Python {
+			if pythonLanguage(info.ID) {
 				d.Editing.AllowPair = func(c PairContext) bool {
 					return c.Selected || c.Context.String || !(c.Typed == `"` || c.Typed == "'") || !strings.HasSuffix(c.Before, c.Typed+c.Typed)
 				}
@@ -460,6 +460,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"bzl": Starlark, "bazel": Starlark,
 		"env":    Dotenv,
 		"go.mod": GoMod, "go.work": GoWork, "go.sum": GoSum,
 		"patch": Diff,
@@ -555,6 +556,8 @@ func codeVocabulary(id ID) []string {
 		table = goKeywords
 	case Python:
 		table = pythonKeywords
+	case Starlark:
+		table = starlarkKeywords
 	case JavaScript:
 		table = jsKeywords
 	case TypeScript:
@@ -574,6 +577,9 @@ func codeVocabulary(id ID) []string {
 		for word := range jsKeywords {
 			out = append(out, word)
 		}
+	}
+	if id == Starlark {
+		out = append(out, strings.Fields("len str int float bool bytes dict list tuple range enumerate sorted zip repr fail struct depset select glob rule provider Label attr native module_extension repository_rule tag_class")...)
 	}
 	slices.Sort(out)
 	return slices.Compact(out)

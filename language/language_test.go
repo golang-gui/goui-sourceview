@@ -68,6 +68,7 @@ func TestGuess(t *testing.T) {
 		{"messages.properties", "", Properties},
 		{".gitignore", "", GitIgnore}, {"rules.gitignore", "", GitIgnore},
 		{".gitattributes", "", GitAttributes},
+		{"BUILD", "", Starlark}, {"BUILD.bazel", "", Starlark}, {"MODULE.bazel", "", Starlark}, {"WORKSPACE", "", Starlark}, {"rules.bzl", "", Starlark}, {"script.star", "", Starlark},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -184,6 +185,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Properties, `key="literal`, true, false, true},
 		{GitIgnore, `[a-z]`, true, false, true},
 		{GitAttributes, `*.txt text eol=lf`, true, false, true},
+		{Starlark, `value=r"raw`, true, false, false}, {Starlark, `value="""raw`, true, false, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -462,6 +464,7 @@ func TestToolingLanguageFences(t *testing.T) {
 		{"properties", Properties, "key", KindProperty},
 		{"gitignore", GitIgnore, "literal", KindString},
 		{"gitattributes", GitAttributes, "literal", KindString},
+		{"starlark", Starlark, "load", KindKeyword}, {"bzl", Starlark, "def", KindKeyword}, {"bazel", Starlark, "return", KindKeyword},
 	} {
 		scanner := md.Tokenizer()
 		fence := "```" + tc.name

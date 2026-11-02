@@ -905,6 +905,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Properties, "key=value\\\nbody", "body", 1, language.KindString},
 		{language.GitIgnore, "literal", "literal", 0, language.KindString},
 		{language.GitAttributes, "literal", "literal", 0, language.KindString},
+		{language.Starlark, "value='''\nbody\n'''", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

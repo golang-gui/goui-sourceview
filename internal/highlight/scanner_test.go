@@ -655,6 +655,11 @@ func TestSixthBatchKinds(t *testing.T) {
 		text, needle string
 		kind         language.Kind
 	}{
+		{language.Starlark, `load("//tools:rules.bzl", "rule") # note`, "load", language.KindKeyword},
+		{language.Starlark, `x=10 // 2; y=3 /* not comment */; def f(): pass`, "def", language.KindKeyword},
+		{language.Starlark, `x=f"{True}"`, "True", language.KindString},
+		{language.Starlark, `x=rb"\n"`, `\n`, language.KindString},
+		{language.Starlark, `x=r"\"raw"; def f(): pass`, "def", language.KindKeyword},
 		{language.GitAttributes, `"file name" text eol=lf`, "text", language.KindProperty},
 		{language.GitAttributes, `"file name" text eol=lf`, "lf", language.KindString},
 		{language.GitAttributes, `[attr]binary -diff -merge -text`, "[attr]", language.KindMeta},
@@ -701,6 +706,7 @@ func TestSixthBatchKinds(t *testing.T) {
 
 func TestSixthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
+		language.Starlark:      {"load(\"//tools:rules.bzl\",\"rule\")\ndef f(x):\n  return x // 2\nx=rb\"\\n\"; y=f\"{True}\"\nz=\"\"\"multi\nbody\n\"\"\"", "value=r'''" + strings.Repeat("字\\", ChunkSize) + "'''\ndef real(): pass"},
 		language.GitAttributes: {"  # note\n*.txt text eol=lf\n\"file name\\040with\\\"quote\" -diff !text\n[attr]binary -diff -merge -text\nfile\\ name text", "\"" + strings.Repeat("字", ChunkSize) + " file\" text eol=lf\n* " + strings.Repeat("a", ChunkSize) + "=value"},
 		language.GitIgnore:     {"# note\n\\#literal\n!keep\n/**/build/\n*.log\n[a-z]name\nfile\\ name\\ \n #literal", strings.Repeat("字", ChunkSize) + "/**/*[a-z]\\ file\n!keep"},
 		language.Properties:    {"# note\nkey\\ with\\:colon : text # !\ncontinued=value\\\n  # literal\\\n  tail\nkey\\\n !name=value\nnext=\\u0041\\ntext\n!comment\\\nnew=value", strings.Repeat("k", ChunkSize) + "=" + strings.Repeat("字", ChunkSize) + "\\\n continued", "key=value\\\r\n  #continued\r\nnew=value"},

@@ -923,3 +923,16 @@ GoMod/GoWork/GoSum 使用独立 ID、共享扫描设施，分别按 go.mod、go.
 依据 [gitattributes](https://git-scm.com/docs/gitattributes) 和
 [Git v2.51.1 attr.c](https://github.com/git/git/blob/v2.51.1/attr.c) 的 parse_attr_line
 （读取 2026-11-02），明确与 gitignore 的模式、空白及属性语义边界。
+
+## 36. Starlark
+
+新增 BUILD/WORKSPACE、.bzl/.star/.bazel、starlark/bzl/bazel 围栏，独立 ID 与关键词/建议。
+复用 Python 的基础引用/三引号、注释、数字和结构扫描，保留 Starlark 的小写 r/b/rb/br 前缀，
+不启用 Python 的 f/t 字符串插值、装饰器或块注释；// 是运算符。
+原始引用的反斜杠保留正文颜色，但仍保护闭合引号，因此 Context.Literal 不开启。
+编辑使用 #、结构和引用配对、三引号输入，建议含常见 Starlark/Bazel 名称，不解析加载目标或执行规则。
+词法高亮不判定不同 Bazel/解释器版本的 bytes、保留字或预声明名称可用性。
+
+依据 [Starlark 语言规范](https://github.com/bazelbuild/starlark/blob/master/spec.md)
+与 [Bazel Starlark](https://bazel.build/rules/language)（读取 2026-11-02），
+沿用现有 Python 状态设施及分片契约，不将 Python 语言对象当作 Starlark 别名。

@@ -598,3 +598,11 @@ Node.js 源码引用行为及未闭合引用的编辑恢复边界已记录，没
 `GOWORK=off go test ./...`、Pango 亮暗正文颜色断言通过。
 独立浅色 1× 的 -language gitattributes 通过 text 建议接受/撤销、带空格路径原样输入及公共断言。
 复用模式设施后的 Git Ignore 回归保持通过，没有读取/修改仓库属性或执行 Git 匹配。
+
+### Starlark
+
+新增文件/围栏、独立词汇、引用前缀规则与 rules.bzl，示例共 56 份。
+独立预期覆盖 load、// 除法、非块注释、f 前缀不插值、raw/bytes、转义引用及三引号；长行和极小分片通过。
+`GOWORK=off go test ./...`、Pango 亮暗三引号正文颜色断言通过。
+独立浅色 1× 的 -language starlark 通过 return 建议、三引号与原始引用中的反斜杠/引号输入及公共断言。
+Context.Literal 按原始引用的实际闭合语义设置，既有 Python 规则保持独立，没有执行构建或加载目标。
