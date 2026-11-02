@@ -90,7 +90,7 @@ func TestBuiltinDefinitions(t *testing.T) {
 		language.HTTP, language.Makefile, language.CMake, language.Nginx, language.INI, language.Dockerfile, language.SQL, language.Protobuf,
 		language.Go, language.Python, language.JavaScript, language.TypeScript, language.CSS, language.C, language.Cpp, language.Java, language.Rust,
 		language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Markdown,
-		language.Kotlin, language.Swift, language.Dart, language.R,
+		language.Kotlin, language.Swift, language.Dart, language.R, language.Zig,
 	} {
 		l, ok := language.Builtin(id)
 		if !ok || l.ID() != id || l.Info().Name == "" {

@@ -631,6 +631,46 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 	}
 }
 
+func TestFourthBatchKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.Zig, `const x: u4096 = @intCast(1);`, "u4096", language.KindKeyword},
+		{language.Zig, `const @"a b" = @import("std");`, "a b", language.KindVariable},
+		{language.Zig, `const x=@import("std");`, "@import", language.KindMeta},
+		{language.Zig, "const x=\\\\${raw} \\n\nconst y=1;", "${raw}", language.KindString},
+		{language.Zig, "/* not a comment */ const y=1;", "const", language.KindKeyword},
+		{language.Zig, `const x="\u{1F600} \x41";`, "1F600", language.KindEscape},
+		{language.Zig, "//! documentation\nconst x=0x1.fp+2;", "documentation", language.KindComment},
+	} {
+		for _, chunk := range []int{1, 3, 31, ChunkSize} {
+			tokens, _ := scanAll(tc.id, tc.text, chunk)
+			if got := kindAt(tokens, strings.Index(tc.text, tc.needle)); got != tc.kind {
+				t.Fatalf("%s %q chunk %d: %s want %s", tc.id, tc.needle, chunk, got, tc.kind)
+			}
+		}
+	}
+}
+
+func TestFourthBatchFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+		language.Zig: {"//! module\nconst @\"name 字\"=\\\\body ${raw} \\n\n\\\\continued\nconst n:u12=0x1.fp+2; const c='\\u{1234}'; const s=\"\\x41\";", "const s=\\\\" + strings.Repeat("字\\{}", ChunkSize) + "\nconst yes=true;"},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens=%v states=%v\ngot %v\nwant %v\ngot %#v want %#v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws), got, want, gs.raw, ws.raw)
+				}
+			}
+		}
+	}
+}
+
 func TestProgrammingLanguageKinds(t *testing.T) {
 	for _, tc := range []struct {
 		id           language.ID
@@ -809,7 +849,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift, language.Dart, language.R, language.Zig} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

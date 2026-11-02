@@ -680,3 +680,17 @@ Swift 使用独立不可变状态，支持 `.swift`、文本 `.swiftinterface` �
 [Lexilla LexR.cxx](https://github.com/ScintillaOrg/lexilla/blob/4b654f6c86f2129cc646b0c4a1e65c8d0c8ce8a7/lexers/LexR.cxx)
 也使用匹配字符与短横线计数，采用此有限状态思路，不复制其源码或规则资源。
 本批继续使用已有 token/Class/增量协议，没有公共分词器契约或 GOUI 改动。
+
+## 21. Zig
+
+新增 Zig、`.zig`、zig 围栏、行注释/基础配对和关键词建议。独立状态处理普通字符串、字符、
+`@"name"` 引用名称、`@builtin`、Unicode/十六进制转义、数值及 `\\` 多行字符串。
+Zig 每个逻辑行独立分词：普通引用和 `\\` 正文在真实行尾结束；工作片段边界不重置。
+`//`、`///`、`//!` 使用注释 Class，不把 `/* */` 当作块注释；原始行正文不解释转义或插值。
+整数类型识别 i/u 加数字的词法形式，不验证位宽是否合法；常见历史关键词仍提供词法颜色，
+不承诺通过特定 Zig 编译器的语法检查。词候选最多保留 128 byte，正文不进入状态副本。
+
+2026-11-02 核对 [Zig 0.17.0 语言参考](https://ziglang.org/documentation/0.17.0/)
+的注释、引用名称、字面量和多行字符串；参考
+[Lexilla LexZig.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexZig.cxx)
+对各引用/注释模式的区分。采用本模块的分片/增量协议，不复制规则资源、引入编译器或依赖 GOUI 改动。

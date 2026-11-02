@@ -1,5 +1,6 @@
 // 内置语言集成验证，需要桌面、窗口管理器、原生排版及字体。
 // 启动：go run ./tests/window/editor/languages [-dark]；Linux 无 IME 服务时设置
+// -language zig 等参数只运行该语言的补全/引用场景；省略时验收全部场景。
 // XMODIFIERS=@im=none。初始为一个可编辑视图，程序自动切换文档，经正常事件路径
 // 触发补全、方向键选中、Enter 接受、撤销，再输入引用与括号并断言文本和光标。
 // Java/C#/Kotlin/Swift/Dart 三引号不能多插闭合引用，Rust 生命周期不能补成字符引用。
@@ -54,6 +55,7 @@ func completionInfo(info gui.WidgetInfo) gui.WidgetInfo {
 func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "Modern dark appearance")
+	filter := flag.String("language", "", "run completion and quote cases for one language ID")
 	flag.Parse()
 	app, err := gui.NewApplication("org.golanggui.SourceViewLanguages")
 	must(err)
@@ -114,11 +116,17 @@ func main() {
 		{language.Swift, "filepr", "fileprivate"},
 		{language.Dart, "requi", "required"},
 		{language.R, "funct", "function"},
+		{language.Zig, "comp", "comptime"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
 	var viewportDeadline time.Time
+	matched := 0
 	for _, tc := range fixtures {
+		if *filter != "" && string(tc.id) != *filter {
+			continue
+		}
+		matched++
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.text)
 			must(d.SetLanguage(tc.id))
@@ -156,6 +164,7 @@ func main() {
 			log.Printf("PASS %s completion and undo", tc.id)
 		})
 	}
+	check(matched > 0, "selected language has no completion case")
 	for _, tc := range []struct {
 		id                  language.ID
 		prefix, typed, want string
@@ -180,9 +189,13 @@ func main() {
 		{language.Dart, "var s = ", "r'\\'", "var s = r'\\'"},
 		{language.R, "x <- ", `r"--(raw)--"`, `x <- r"--(raw)--"`},
 		{language.R, "x <- ", "'it\\'s'", "x <- 'it\\'s'"},
+		{language.Zig, "const s = ", "\"a\\\"b\"", "const s = \"a\\\"b\""},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
+		if *filter != "" && string(tc.id) != *filter {
+			continue
+		}
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)
 			must(d.SetLanguage(tc.id))

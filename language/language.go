@@ -48,6 +48,7 @@ const (
 	Swift      ID = "swift"
 	Dart       ID = "dart"
 	R          ID = "r"
+	Zig        ID = "zig"
 	Markdown   ID = "markdown"
 )
 
@@ -136,6 +137,7 @@ var builtins = []Info{
 	{ID: Swift, Name: "Swift", Extensions: []string{".swift", ".swiftinterface"}, MIMETypes: []string{"text/x-swift"}},
 	{ID: Dart, Name: "Dart", Extensions: []string{".dart"}, MIMETypes: []string{"text/x-dart"}},
 	{ID: R, Name: "R", Extensions: []string{".r", ".rscript"}, MIMETypes: []string{"text/x-r-source"}},
+	{ID: Zig, Name: "Zig", Extensions: []string{".zig"}, MIMETypes: []string{"text/x-zig"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

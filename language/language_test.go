@@ -53,6 +53,7 @@ func TestGuess(t *testing.T) {
 		{"hello.swift", "", Swift}, {"API.swiftinterface", "", Swift}, {"script", "#!/usr/bin/env swift", Swift},
 		{"binary.swiftmodule", "", Plain},
 		{"hello.dart", "", Dart}, {"script", "#!/usr/bin/env dart", Dart},
+		{"hello.zig", "", Zig},
 		{"hello.R", "", R}, {"hello.r", "", R}, {"hello.Rscript", "", R}, {".Rprofile", "", R},
 		{"script", "#!/usr/bin/env -S Rscript --vanilla", R},
 		{"report.Rmd", "", Plain}, {"report.qmd", "", Plain}, {"data.RData", "", Plain}, {"build.gradle", "", Plain},
@@ -151,6 +152,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{Swift, `let s=##"raw`, true, false, true}, {Swift, `let s="hi \(true`, false, false, false},
 		{Dart, `var s=r'''raw`, true, false, true}, {Dart, `var s='hi ${true`, false, false, false},
 		{R, `x <- r"--(raw`, true, false, true}, {R, "`a b", true, false, false},
+		{Zig, `const s=\\raw`, true, false, true}, {Zig, `const @"a b`, true, false, false},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -400,7 +402,7 @@ func TestJSXFencesAndEditing(t *testing.T) {
 	}
 }
 
-func TestThirdBatchFences(t *testing.T) {
+func TestProgrammingLanguageFences(t *testing.T) {
 	builtin, _ := Builtin(Markdown)
 	custom, err := NewMarkdown(nil)
 	if err != nil {
@@ -416,6 +418,7 @@ func TestThirdBatchFences(t *testing.T) {
 			{"swift", Swift, "func"},
 			{"dart", Dart, "void"},
 			{"r", R, "function"}, {"R", R, "TRUE"},
+			{"zig", Zig, "comptime"},
 		} {
 			scanner := md.Tokenizer()
 			fence := "```" + tc.name
