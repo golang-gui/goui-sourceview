@@ -55,4 +55,4 @@
 各批语言的验收状态见语言验证记录。优先复用现有 token、上下文和
 分片协议，新增语言不以引入解析器框架或语言服务为前置。
 
-7. Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq：已有词法、相应编辑规则和样本；本批其他语言继续逐项接入。
+7. Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq、PromQL：已有词法、相应编辑规则和样本；本批其他语言继续逐项接入。

@@ -913,6 +913,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.DesktopEntry, "body", "body", 0, language.KindProperty},
 		{language.Nix, "value=''\nbody\n''", "body", 1, language.KindString},
 		{language.JQ, "\"body\"", "\"body\"", 0, language.KindString},
+		{language.PromQL, "\x60first\nbody\nlast\x60", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

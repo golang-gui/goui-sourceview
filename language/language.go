@@ -74,6 +74,7 @@ const (
 	DesktopEntry  ID = "desktop"
 	Nix           ID = "nix"
 	JQ            ID = "jq"
+	PromQL        ID = "promql"
 
 	Markdown ID = "markdown"
 )
@@ -189,6 +190,7 @@ var builtins = []Info{
 	{ID: DesktopEntry, Name: "Desktop Entry", Extensions: []string{".desktop", ".directory"}, MIMETypes: []string{"application/x-desktop"}},
 	{ID: Nix, Name: "Nix", Extensions: []string{".nix"}},
 	{ID: JQ, Name: "jq", Extensions: []string{".jq"}},
+	{ID: PromQL, Name: "PromQL", Extensions: []string{".promql"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }

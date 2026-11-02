@@ -136,7 +136,7 @@ func main() {
 		{language.Groovy, "de", "def"},
 		{language.GoTemplate, "{{pri", "{{print"}, {language.Jinja2, "{% endi", "{% endif"},
 		{language.Systemd, "ExecSta", "ExecStart"}, {language.DesktopEntry, "Termi", "Terminal"},
-		{language.Nix, "inhe", "inherit"}, {language.JQ, "sel", "select"},
+		{language.Nix, "inhe", "inherit"}, {language.JQ, "sel", "select"}, {language.PromQL, "ira", "irate"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -194,6 +194,7 @@ func main() {
 		{language.DesktopEntry, "Name=", "[text]", "Name=[text]"},
 		{language.Nix, "value=", "\"${true}\"", "value=\"${true}\""},
 		{language.JQ, "", "\"value \\(true)\"", "\"value \\(true)\""},
+		{language.PromQL, "metric{label=", "\"ok\"", "metric{label=\"ok\""},
 
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},

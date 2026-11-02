@@ -1,0 +1,9 @@
+# Original PromQL sample for SourceView.
+sum by (language) (
+  rate(editor_operations_total{result="ok", language=~"json|xml|html"}[5m])
+)
+/
+on (language) group_left
+sum by (language) (
+  rate(editor_operations_total[5m] offset 1h)
+)

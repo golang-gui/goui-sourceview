@@ -18,14 +18,16 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		}
 		switch info.ID {
 
-		case Nix, JQ:
+		case Nix, JQ, PromQL:
 			d.Tokenizer = queryTokenizer{info.ID}
 			d.Editing.Comments.Line = "#"
 			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: "\"", Close: "\"", NotInString: true, NotInComment: true})
 			if info.ID == Nix {
 				d.Editing.Comments.Block = Pair{Open: "/*", Close: "*/"}
 			}
-
+			if info.ID == PromQL {
+				d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, Pair{Open: "'", Close: "'", NotInString: true, NotInComment: true}, Pair{Open: "\x60", Close: "\x60", NotInString: true, NotInComment: true})
+			}
 			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
 			id := info.ID
 			d.Editing.Word = func(r rune) bool { return queryName(id, r) || r == '$' || r == '@' }

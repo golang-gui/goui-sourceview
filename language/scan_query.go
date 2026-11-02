@@ -53,6 +53,7 @@ func (b queryTokenizer) InitialState() State { return queryState{id: b.id} }
 
 var nixWords = words("if then else assert with let in rec inherit or true false null import builtins derivation")
 var jqWords = words("def as if then elif else end reduce foreach try catch label break module import include and or true false null empty select map map_values keys values length type tostring tonumber sort sort_by group_by unique unique_by add any all has in del path paths getpath setpath error debug halt first last limit range inputs input")
+var promWords = words("and or unless by without on ignoring group_left group_right bool offset sum min max avg group stddev stdvar count count_values bottomk topk quantile limitk limit_ratio rate irate increase delta idelta changes resets deriv predict_linear histogram_quantile label_replace label_join sum_over_time avg_over_time max_over_time min_over_time count_over_time absent absent_over_time scalar vector time timestamp sort sort_desc start end step range min_of max_of")
 
 func queryWords(id ID) map[string]bool {
 	switch id {
@@ -61,7 +62,7 @@ func queryWords(id ID) map[string]bool {
 	case JQ:
 		return jqWords
 	default:
-		return nil
+		return promWords
 	}
 }
 func sortedQueryWords(id ID) []string {
@@ -73,7 +74,7 @@ func sortedQueryWords(id ID) []string {
 	return out
 }
 func queryName(id ID, r rune) bool {
-	return IdentifierRune(r) || id == Nix && (r == '-' || r == '\'')
+	return IdentifierRune(r) || id == Nix && (r == '-' || r == '\'') || id == PromQL && r == ':'
 }
 func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 	s, ok := state.(queryState)
@@ -95,7 +96,9 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 		if k == KindPlain && !s.member && queryWords(s.id)[s.word.text] {
 			k = KindKeyword
 		}
-
+		if s.id == PromQL && (strings.EqualFold(s.word.text, "inf") || strings.EqualFold(s.word.text, "nan")) {
+			k = KindNumber
+		}
 		w.add(s.word.start, end, k, 0)
 		s.word, s.wordOn, s.member = scanWord{}, false, false
 	}
@@ -211,7 +214,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			i += 2
 			continue
 		}
-		if c == '"' || s.id == Nix && strings.HasPrefix(text[i:], "''") {
+		if c == '"' || s.id == PromQL && (c == '\'' || c == 0x60) || s.id == Nix && strings.HasPrefix(text[i:], "''") {
 			s.mode, s.quote = queryString, c
 			s.indent = s.id == Nix && c == '\''
 			size := 1
@@ -288,7 +291,9 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == queryLineComment || s.mode == queryNumber || s.mode == queryPath {
 			s.mode, s.quote = queryCode, 0
 		}
-
+		if s.mode == queryString && s.id == PromQL && s.quote != 0x60 {
+			s.mode, s.quote = queryCode, 0
+		}
 		s.escape, s.last, s.member = false, 0, false
 	}
 	return w.result(i, s), nil
