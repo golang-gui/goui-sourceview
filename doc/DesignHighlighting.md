@@ -965,3 +965,9 @@ slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复�
 动作、变量、管道、裁剪、引用和块注释；显式纯文本/HTML 宿主。
 保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
 参考[官方规范/源码](https://github.com/golang/go/blob/go1.25.0/src/text/template/parse/lex.go)（读取 2026-11-02）。
+
+### Jinja2
+
+表达式、语句、注释、过滤器和 raw/endraw；显式纯文本/HTML 宿主。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://github.com/pallets/jinja/blob/3.1.6/src/jinja2/lexer.py)（读取 2026-11-02）。

@@ -343,6 +343,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.GitAttributes, `"file name" text`, `"`, "", "name", language.KindProperty},
 		{language.Starlark, "value='''first\nbody\n'''", "'''", "'", "body", language.KindPlain},
 		{language.GoTemplate, "{{/*open\nbody\n*/}}", "/*", "", "body", language.KindPlain},
+		{language.Jinja2, "{% raw %}\n{{true}}\n{% endraw %}", "raw", "if", "true", language.KindKeyword},
 
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
@@ -637,6 +638,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 	}{
 		{language.TOML, "a = [1, { b = ", "true }, 2]"},
 		{language.GoTemplate, "{{printf \"open", "body\"}}"},
+		{language.Jinja2, "{% raw %}{{true", "}}{% endraw %}"},
 
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
@@ -673,6 +675,11 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.GoTemplate, "{{ $name | printf \"}}\" }}", "$name", language.KindVariable},
 		{language.GoTemplate, "{{/* multi\n comment }} */}} {{true}}", "comment", language.KindComment},
 		{language.GoTemplate, "{{printf \"}}\"}} {{true}}", "true", language.KindKeyword},
+		{language.Jinja2, "{% if active %}{{ name|upper }}{% endif %}", "if", language.KindKeyword},
+		{language.Jinja2, "{# comment {{true}} #}{{false}}", "comment", language.KindComment},
+		{language.Jinja2, "{% raw %}{{true}}{% if false %}{% endraw %}{{none}}", "false", language.KindPlain},
+		{language.Jinja2, "{% raw %}{{true}}{% if false %}{% endraw %}{{none}}", "none", language.KindKeyword},
+		{language.Jinja2, "{{ {'a': true} }}", "true", language.KindKeyword},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -687,6 +694,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
 
 		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
+		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {
@@ -704,7 +712,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {

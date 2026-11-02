@@ -1,0 +1,13 @@
+<!-- Original Jinja HTML template sample for SourceView. -->
+<main class="editor">
+  {# Template comments may contain {{ literal expressions }}. #}
+  {% if enabled %}
+  <h1>{{ title | upper }}</h1>
+  <ul>
+    {% for name in languages %}
+    <li>{{ name }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% raw %}<code>{{ untouched }}</code>{% endraw %}
+</main>

@@ -11,6 +11,10 @@ import (
 // Nil selects plain text. The host's markup tag matching and folding are disabled.
 func NewGoTemplate(host *Language) (*Language, error) { return newTemplate(GoTemplate, host) }
 
+// NewJinja2 creates a template using Jinja's default delimiters and an explicit
+// plain-text or HTML host. Nil selects plain text.
+func NewJinja2(host *Language) (*Language, error) { return newTemplate(Jinja2, host) }
+
 func newTemplate(id ID, host *Language) (*Language, error) {
 	if host != nil && host.Tokenizer() != nil {
 		b, ok := host.Tokenizer().(builtinTokenizer)
@@ -29,9 +33,11 @@ func newTemplate(id ID, host *Language) (*Language, error) {
 	d := Definition{Info: info, Tokenizer: templateTokenizer{id, host}, Editing: defaultEditing(), AllowWordSuggestions: codeWordSuggestions}
 	d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
 	d.Editing.AllowPair = func(c PairContext) bool { return c.Selected || c.Context.Data == true }
-
-	d.Editing.Comments.Block = Pair{Open: "{{/*", Close: "*/}}"}
-
+	if id == GoTemplate {
+		d.Editing.Comments.Block = Pair{Open: "{{/*", Close: "*/}}"}
+	} else {
+		d.Editing.Comments.Block = Pair{Open: "{#", Close: "#}"}
+	}
 	d.Suggest = func(c Context) []string {
 		if c.Embedded != nil {
 			return c.Embedded.Suggestions(c)
@@ -45,26 +51,28 @@ func newTemplate(id ID, host *Language) (*Language, error) {
 }
 
 func templateWords(id ID) []string {
-
-	return goTemplateWords
-
+	if id == GoTemplate {
+		return goTemplateWords
+	}
+	return jinjaWords
 }
 
 var goTemplateWords = strings.Fields("if else end range with template block define break continue nil true false and or not len index slice printf print println eq ne lt le gt ge call html js urlquery")
+var jinjaWords = strings.Fields("if else elif endif for endfor in not and or is true false none True False None block endblock extends include import from as macro endmacro set endset filter endfilter call endcall with endwith autoescape endautoescape raw endraw recursive")
 
 type templateTokenizer struct {
 	id   ID
 	host *Language
 }
 type templateState struct {
-	id          ID
-	host        *Language
-	body        builtinState
-	mode, quote byte
-	escape      bool
-	depth       int
-	word        scanWord
-	wordOn      bool
+	id                         ID
+	host                       *Language
+	body                       builtinState
+	mode, quote                byte
+	escape, raw, rawEnd, first bool
+	depth                      int
+	word                       scanWord
+	wordOn                     bool
 }
 
 func (s templateState) Equal(other State) bool {
@@ -76,7 +84,7 @@ func (s templateState) Equal(other State) bool {
 	return s == t
 }
 func (s templateState) Context() Context {
-	if s.mode == 0 {
+	if s.mode == 0 || s.raw {
 		c := s.body.Context()
 		if c.Embedded == nil {
 			c.Embedded = s.host
@@ -108,30 +116,40 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 		if slices.Contains(templateWords(s.id), s.word.text) {
 			k = KindKeyword
 		}
-
+		if s.raw && s.word.text != "endraw" {
+			k = KindPlain
+		}
 		w.add(s.word.start, end, k, 0)
-
+		if s.first && s.mode == '%' {
+			if s.word.text == "raw" && !s.raw {
+				s.rawEnd = true
+			}
+			if s.word.text == "endraw" && s.raw {
+				s.rawEnd = true
+			}
+		}
+		s.first = false
 		s.word, s.wordOn = scanWord{}, false
 	}
 	for i < limit {
 		c := text[i]
 		r, n := utf8.DecodeRuneInString(text[i:])
 		if s.mode == 0 {
-			open := strings.HasPrefix(text[i:], "{{")
-			if open {
+			open := strings.HasPrefix(text[i:], "{{") || s.id == Jinja2 && (strings.HasPrefix(text[i:], "{%") || strings.HasPrefix(text[i:], "{#"))
+			if open && (!s.raw || strings.HasPrefix(text[i:], "{%")) {
 				// Complete a suspended JS/CSS word before publishing template tokens.
 				if s.body.code != nil && s.body.code.wordOn {
 					v := *s.body.code
 					finishCodeWord(&v, &w, in.Offset+i)
 					s.body.code = &v
 				}
-				s.mode = text[i+1]
+				s.mode, s.first, s.rawEnd = text[i+1], true, false
 				add(i, i+2, KindMeta, 0)
 				i += 2
 				continue
 			}
 			end := i + n
-			for end < len(text) && !(text[end] == '{' && end+1 < len(text) && (text[end+1] == '{')) {
+			for end < len(text) && !(text[end] == '{' && end+1 < len(text) && (text[end+1] == '{' && !s.raw || s.id == Jinja2 && (text[end+1] == '%' || text[end+1] == '#' && !s.raw))) {
 				end += runeSize(text, end)
 			}
 			used := min(end-i, limit-i)
@@ -154,15 +172,17 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 		if s.mode == '#' {
 			close := "#}"
-
-			close = "*/"
-
+			if s.id == GoTemplate {
+				close = "*/"
+			}
 			if strings.HasPrefix(text[i:], close) {
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
-
-				s.mode = '{'
-
+				if s.id == GoTemplate {
+					s.mode = '{'
+				} else {
+					s.mode = 0
+				}
 			} else {
 				add(i, i+n, KindComment, ClassComment)
 				i += n
@@ -201,17 +221,29 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 			add(i, i+2, KindMeta, 0)
 			i += 2
 			s.mode = 0
-
+			if s.rawEnd {
+				s.raw = !s.raw
+			}
 			continue
 		}
-
-		if strings.HasPrefix(text[i:], "/*") {
+		if s.raw {
+			if IdentifierRune(r) {
+				s.word = scanWord{start: in.Offset + i}
+				s.wordOn = true
+				s.word.add(text[i : i+n])
+				i += n
+				continue
+			}
+			i += n
+			continue
+		}
+		if s.id == GoTemplate && strings.HasPrefix(text[i:], "/*") {
 			s.mode = '#'
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
-		if c == '"' || c == '\'' || c == 0x60 {
+		if c == '"' || c == '\'' || s.id == GoTemplate && c == 0x60 {
 			s.quote = c
 			add(i, i+1, KindString, ClassString)
 			i++

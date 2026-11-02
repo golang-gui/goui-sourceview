@@ -69,6 +69,7 @@ const (
 	Starlark      ID = "starlark"
 	Groovy        ID = "groovy"
 	GoTemplate    ID = "gotemplate"
+	Jinja2        ID = "jinja2"
 
 	Markdown ID = "markdown"
 )
@@ -179,6 +180,7 @@ var builtins = []Info{
 	{ID: Starlark, Name: "Starlark", Extensions: []string{".bzl", ".star", ".bazel"}, MIMETypes: []string{"text/x-starlark"}},
 	{ID: Groovy, Name: "Groovy", Extensions: []string{".groovy", ".gvy", ".gy", ".gsh", ".gradle"}, MIMETypes: []string{"text/x-groovy"}},
 	{ID: GoTemplate, Name: "Go Template", Extensions: []string{".gotmpl", ".gohtml"}},
+	{ID: Jinja2, Name: "Jinja2", Extensions: []string{".j2", ".jinja", ".jinja2"}},
 
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }

@@ -51,7 +51,8 @@ func sampleDocuments() []exampleDocument {
 		"rules.gitattributes",
 		"rules.bzl",
 		"build.gradle",
-		"page.gohtml"} {
+		"page.gohtml", "page.html.j2",
+	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
 			panic(err)
@@ -76,7 +77,9 @@ func setTemplateHost(doc *source.Document, name string) error {
 	if strings.HasSuffix(name, ".gohtml") {
 		makeTemplate = language.NewGoTemplate
 	}
-
+	if strings.HasSuffix(name, ".html.j2") || strings.HasSuffix(name, ".html.jinja") || strings.HasSuffix(name, ".html.jinja2") {
+		makeTemplate = language.NewJinja2
+	}
 	if makeTemplate == nil {
 		return nil
 	}
