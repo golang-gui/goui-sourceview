@@ -39,6 +39,7 @@ func TestGuess(t *testing.T) {
 		{"a.JSONC", "", JSONC}, {"request.rest", "", HTTP}, {"project.mk", "", Makefile},
 		{"events.JSONL", "", JSONLines}, {"events.ndjson", "true\nnull", JSONLines},
 		{"events.jsonl", "#!/bin/sh", JSONLines}, {"events.json", "true\nnull", JSON},
+		{"export.csv", "", CSV},
 		{"project.cmake", "", CMake}, {"app.ini", "", INI}, {"app.dockerfile", "", Dockerfile},
 		{"main.c", "", C}, {"main.C", "", Cpp}, {"lib.H", "", Cpp}, {"module.cppm", "", Cpp},
 		{"main.cxx", "", Cpp}, {"header.hpp", "", Cpp}, {"Main.java", "", Java},

@@ -17,6 +17,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case CSV:
+			d.Tokenizer = csvTokenizer{}
+			d.Editing = EditingRules{Word: IdentifierRune}
+			d.AllowWordSuggestions = func(Context, bool) bool { return false }
 		case FSharp, Elixir, Erlang, Julia, Clojure, Haskell, OCaml:
 			d.Tokenizer = functionalTokenizer{info.ID}
 			d.Editing = functionalEditing(info.ID)

@@ -852,6 +852,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		row        int
 		kind       language.Kind
 	}{
+		{language.CSV, "\"first\nbody\nlast\"", "body", 1, language.KindString},
 		{language.TOML, "text = '''\nbody\n'''", "body", 1, language.KindString},
 		{language.YAML, "text: |\n  body\nnext: true", "  body", 1, language.KindString},
 		{language.Shell, "$HOME", "$HOME", 0, language.KindVariable},

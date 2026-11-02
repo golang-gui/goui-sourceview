@@ -191,6 +191,7 @@ func main() {
 		id                  language.ID
 		prefix, typed, want string
 	}{
+		{language.CSV, "", "\"a\"\"b\",x", "\"a\"\"b\",x"},
 		{language.GoTemplate, "{{printf ", "\"hello\"}}", "{{printf \"hello\"}}"},
 		{language.Jinja2, "{% raw %}", "{{true}}", "{% raw %}{{true}}"},
 		{language.Systemd, "Description=", "\"text\"", "Description=\"text\""},

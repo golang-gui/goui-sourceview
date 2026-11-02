@@ -1,0 +1,4 @@
+name,note,enabled
+SourceView,"A code editor, for Go",true
+"Quoted ""name""","A field with
+multiple lines",false

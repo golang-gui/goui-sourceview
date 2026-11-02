@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.CSV, "\"first\nbody,x\",end", "\"", "", ",", language.KindDelimiter},
 		{language.TOML, "s = \"\"\"open\ntext\nend\nnext = true", `"""`, `"`, "next", language.KindProperty},
 		{language.YAML, "key: |\n  body\nnext: true", "|", "plain", "body", language.KindPlain},
 		{language.Shell, "cat <<END\n$USER\nEND", "<<END", "<<'END'", "$USER", language.KindString},
@@ -394,6 +395,45 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 				t.Fatalf("%s row %d diverged", tc.id, row)
 			}
 		}
+	}
+}
+
+// 每个预期来自格式规则，另检查极小分片、UTF-8 边界及不可变快照。
+var textFormatCases = []struct {
+	id           language.ID
+	text, needle string
+	kind         language.Kind
+}{
+	{language.CSV, "name,\"a,b\",next", ",", language.KindDelimiter},
+	{language.CSV, "\"first\nbody\",\"a\"\"b\"", "body", language.KindString},
+	{language.CSV, "\"a\"\"b\",next", "\"\"", language.KindEscape},
+	{language.CSV, "a\"b,c", "\"", language.KindInvalid},
+}
+
+func TestTextFormats(t *testing.T) {
+	for _, tc := range textFormatCases {
+		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
+			want, final := scanAll(tc.id, tc.text, ChunkSize)
+			if got := kindAt(want, strings.Index(tc.text, tc.needle)); got != tc.kind {
+				t.Fatalf("%q: %s, want %s; %+v", tc.needle, got, tc.kind, want)
+			}
+			for _, chunk := range []int{1, 2, 3, 7, 31} {
+				got, state := scanAll(tc.id, tc.text, chunk)
+				if !reflect.DeepEqual(got, want) || !state.Equal(final) {
+					t.Fatalf("chunk=%d tokens/state differ: %+v / %+v", chunk, got, want)
+				}
+				for _, token := range got {
+					if token.Start < 0 || token.End > len(tc.text) || token.Start >= token.End || !utf8.ValidString(tc.text[token.Start:token.End]) {
+						t.Fatalf("invalid token: %+v", token)
+					}
+				}
+				snapshot := state
+				_, _, _ = Scan(tc.id, state, "\"#{}你好", 7, true)
+				if !snapshot.Equal(state) {
+					t.Fatal("published state mutated")
+				}
+			}
+		})
 	}
 }
 
