@@ -25,10 +25,15 @@ func editorScrollRules(base style.StyleSheet) []style.Rule {
 	var rules []style.Rule
 	for _, part := range []string{"frame", "trough", "thumb"} {
 		name := "scroll-view"
+		states := []style.State{style.Normal, style.Focused, style.FocusVisible, style.Disabled}
 		if part == "frame" {
 			name = "text-view"
+			// Resolved hover/press defaults would overwrite the focused frame.
+			// Official editor frames have no separate pointer-state appearance.
+		} else {
+			states = append(states, style.Hovered, style.Pressed)
 		}
-		for _, state := range []style.State{style.Normal, style.Focused, style.FocusVisible, style.Disabled, style.Hovered, style.Pressed} {
+		for _, state := range states {
 			rule := style.Rule{Sel: style.Sel{Name: "source-view", Part: part, State: state},
 				Style: base.Resolve(style.Sel{Name: name, Part: part, State: state})}
 			if part != "frame" {

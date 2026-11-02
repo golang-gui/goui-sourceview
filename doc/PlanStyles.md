@@ -78,3 +78,29 @@ GOUI `go test ./...` 和主题 race 通过，但 `go vet ./...` 有 222 条既�
 
 Windows/macOS 实际桌面外观、物理输入、IME、分数及混合 DPI 尚未验收；
 Linux 本轮运行不覆盖真实输入法候选窗口或桌面合成效果。
+
+## SourceView 焦点外框与鼠标状态（2026-11-02）
+
+修正 frame 的完整解析结果被重新登记为 Hovered/Pressed 规则后，普通边框覆盖焦点色/宽度的问题。
+只复制官方外框实际使用的 Normal、Focused、FocusVisible、Disabled；滚动条继续保留鼠标状态。
+旧代码运行 `GOWORK=off go test . -run '^TestEditorFrameAndScrollBarThemeParts$' -count=1`
+在组合状态 5（Focused | Hovered）失败。修正后 Basic、Modern 亮暗共 60 组外框状态与已有滚动条断言通过。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8：`go test ./...`（工作区 GOUI b49049d）、
+`GOWORK=off go test ./...`（已发布 GOUI v0.5.0）、`GOWORK=off go vet ./...`，以及
+`GOWORK=off go test -race . -run '^TestEditorFrameAndScrollBarThemeParts$' -count=1` 均通过。
+本次没有修改 GOUI 或模块依赖；前文早期版本的缺口属于历史记录。
+
+关闭工作区构建 `tests/window/editor/frame` 与 editor。在专用 TigerVNC :87 / Xfwm4 compositor on /
+Pango / Software 下，Basic 1×、Modern 浅色 1×、Modern 深色 1.5× 均通过：
+正常 PointerMove/点击路径的焦点与悬停状态、正文尺寸稳定、2× RenderWidget 顶部直边中心的
+不透明 NRGBA 零误差采样，以及原有滚轮、双轴拖动、禁用、换行、内容收缩与主题切换断言。
+采样避开圆角和抗锯齿边缘，无字体金图，不以离屏图像代替桌面显示。
+
+另在 editor 浅色 1× 上真实移动鼠标，观察并采样桌面顶部边框：进入、离开时均为
+本会话系统主题色 #3584E4，两行像素保持不变。首次采样脚本错误地使用 Modern 零值色 #4682DC，
+颜色断言失败；检查 editor 的 AccentColor 来自 settings 后，以实际主题色重新验证通过。
+源码内的窗口回归始终使用对应官方主题的独立预期，没有放宽容差。
+
+日志、二进制与截图位于 `/tmp/sourceview-focus-frame-qBwy2J/`；未执行 macOS/Windows 原生运行或真实 IME。
+关闭本次示例、专用窗口管理器与 X11，不操作用户桌面、剪贴板或系统设置。

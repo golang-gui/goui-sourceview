@@ -42,16 +42,21 @@ scroll.SetChild(sourceview.NewSourceView())
 // 声明式：ui.ScrollView(sourceui.SourceView()).Style("source-view")
 ```
 
-Basic / Modern 注册分别从官方 `text-view/frame` 复制 frame 的各状态，
+Basic / Modern 注册分别从官方 `text-view/frame` 复制普通、Focused、FocusVisible、Disabled 状态，
 从 `scroll-view/trough`、`scroll-view/thumb` 复制滚动条外观。代码正文仍无
 外框，原有 `border` part 只控制侧栏分隔等代码装饰，不替代 `frame`。
 FindBar 和补全弹窗保留独立容器及样式。显式 Scheme 只改变正文，外框保持
 当前 GUI 主题；需要共同自定义时，调用方也为宿主的 `frame` part 提供规则。
 
+官方外框没有单独的悬停/按下外观，因此不生成这两种 frame 规则。复制的是完整解析结果，
+其中包含普通状态的回退字段；若将悬停/按下的完整结果重新登记为规则，组合状态下会覆盖
+已有的焦点边框色和宽度。鼠标进入、离开及按下时保持焦点边框，失焦才恢复普通外框；
+Disabled 沿 GOUI 的状态归一化契约处理。滚动条保留独立的悬停、按下规则，应用仍可显式覆盖 frame。
+
 ScrollView 在所有焦点/禁用状态间预留稳定圆角安全内区，聚焦只改变外观，
 不改变正文宽度或换行。主题变化沿既有 StyleChanged 重新计算；框架机制见
-[GOUI 外框设计](../../goui/doc/DesignScrollFrame.md)。该机制需要 GOUI 本次
-尚未发布的变更，单独依赖 v0.2.0 不具备此组合效果；本地使用双仓工作区。
+[GOUI 外框设计](../../goui/doc/DesignScrollFrame.md)。当前声明的 GOUI v0.5.0 已提供
+该机制，无需本地工作区。
 
 选区默认保留 token 前景；SelectionForeground.A==0 表示不覆盖，255 表示活动选区
 统一前景，其他 alpha 返回错误。Basic/Modern 的 selection part 显式写入零值前景，

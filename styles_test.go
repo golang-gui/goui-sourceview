@@ -177,14 +177,18 @@ func TestCustomStyleKeyFollowsDefinitionAndDocument(t *testing.T) {
 
 func TestEditorFrameAndScrollBarThemeParts(t *testing.T) {
 	for _, sheet := range []style.StyleSheet{basic.Sheet(), modern.Sheet(modern.Options{}), modern.Sheet(modern.Options{Dark: true})} {
-		for _, state := range []style.State{style.Normal, style.Focused, style.FocusVisible, style.Disabled} {
-			frame := sheet.Resolve(style.Sel{Name: "source-view", Part: "frame", State: state})
-			want := sheet.Resolve(style.Sel{Name: "text-view", Part: "frame", State: state})
-			if !reflect.DeepEqual(frame, want) {
-				t.Fatalf("editor frame differs from official theme: state=%v", state)
-			}
-			if width, _ := frame.BorderWidth(); width <= 0 {
-				t.Fatalf("missing editor frame in state %v", state)
+		// 焦点与鼠标状态必须组合解析，单独验证各状态无法发现悬停覆盖焦点边框。
+		for _, focus := range []style.State{style.Normal, style.Focused, style.FocusVisible, style.Disabled, style.Disabled | style.FocusVisible} {
+			for _, pointer := range []style.State{style.Normal, style.Hovered, style.Pressed, style.Hovered | style.Pressed} {
+				state := focus | pointer
+				frame := sheet.Resolve(style.Sel{Name: "source-view", Part: "frame", State: state})
+				want := sheet.Resolve(style.Sel{Name: "text-view", Part: "frame", State: state})
+				if !reflect.DeepEqual(frame, want) {
+					t.Fatalf("editor frame differs from official theme: state=%v", state)
+				}
+				if width, _ := frame.BorderWidth(); width <= 0 {
+					t.Fatalf("missing editor frame in state %v", state)
+				}
 			}
 		}
 		for _, part := range []string{"trough", "thumb"} {

@@ -8,6 +8,9 @@
 // TextView／SourceView 另验证宽首行／短次行：短行向窗口外拖选不横滚，长行仍横滚。
 // 每步断言视口、两条滚动条都在同一外框内，聚焦/禁用不改变正文宽高，
 // 语义树仅暴露真实正文，滚动范围和拖动后偏移符合预期。
+// 另以正常指针事件进入/离开 SourceView、切换焦点，断言状态和视口不变；
+// RenderWidget 以 2× 采样外框顶部直边中心，比较官方主题不透明边框的 NRGBA，零误差。
+// 采样避开圆角和抗锯齿边缘，不依赖字体金图；不代替桌面合成器的外观检查。
 // 自动验证通过后关闭；超时、提前关闭或断言失败返回非零。手动检查时滚动、
 // 缩放窗口并在两编辑器间切换焦点，边框及圆角不得被正文或滚动条覆盖。
 // 各平台/绘制后端需各自原生运行；本程序不代表真实 IME 或混合 DPI 验收。
@@ -18,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"math"
 	"os"
@@ -110,6 +114,26 @@ func main() {
 		}
 		panic("missing structural scrollbar")
 	}
+	verifyFocusFrame := func(focused, hovered bool) {
+		host := hosts[1]
+		check(code.Focused() == focused && host.ContainsFocus() == focused, "pointer movement changed editor focus")
+		check(host.State().Has(style.Hovered) == hovered, "frame hover state did not follow pointer")
+		state := host.State()
+		if focused {
+			state |= style.Focused
+		}
+		want := sheet().Resolve(style.Sel{Name: "text-view", Part: "frame", State: state})
+		edge, _ := want.BorderColor()
+		width, _ := want.BorderWidth()
+		wantColor := color.NRGBAModel.Convert(edge).(color.NRGBA)
+		check(width > 0 && wantColor.A == 255, "frame probe requires an opaque official border")
+		img, err := gui.RenderWidget(host, 2)
+		must(err)
+		bounds := img.Bounds()
+		// 2× 下直边中部像素完整落在边框内，颜色不受圆角或文字抗锯齿影响。
+		got := color.NRGBAModel.Convert(img.At(bounds.Min.X+bounds.Dx()/2, bounds.Min.Y+int(width))).(color.NRGBA)
+		check(got == wantColor, fmt.Sprintf("frame color: focused=%t hovered=%t got=%v want=%v", focused, hovered, got, wantColor))
+	}
 	verify := func() {
 		for i, host := range hosts {
 			inset := float32(1)
@@ -147,6 +171,7 @@ func main() {
 	timer := app.NewTimer()
 	defer timer.Stop()
 	stage, frames, previous := 0, 0, 0
+	focusStage := 0
 	dragChecks := 0
 	var outside geometry.Point
 	done := false
@@ -161,6 +186,40 @@ func main() {
 		}
 		previous = frames
 		verify()
+		if focusStage < 5 {
+			pointer := func(i int) geometry.Point {
+				r := editors[i].Snapshot().Bounds
+				return geometry.Point{X: r.X + 100, Y: r.Y + 14}
+			}
+			move := func(p geometry.Point) {
+				must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: p}))
+			}
+			switch focusStage {
+			case 0:
+				stable[1] = viewport(1)
+				click(pointer(1))
+				move(pointer(0))
+			case 1:
+				verifyFocusFrame(true, false)
+				move(pointer(1))
+			case 2:
+				verifyFocusFrame(true, true)
+				move(pointer(0))
+			case 3:
+				verifyFocusFrame(true, false)
+				click(pointer(0))
+				move(pointer(1))
+			case 4:
+				verifyFocusFrame(false, true)
+				r := hosts[1].Snapshot().Bounds
+				move(geometry.Point{X: r.X - 8, Y: r.Y + 14})
+				verifyFocusFrame(false, false)
+				log.Print("PASS focused hover/leave and unfocused frame colors")
+			}
+			check(viewport(1) == stable[1], "pointer/focus changed content bounds")
+			focusStage++
+			return
+		}
 		switch stage {
 		case 0:
 			for _, host := range hosts {
