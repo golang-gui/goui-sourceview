@@ -336,3 +336,16 @@ Kotlin 补全接受/撤销、三引号输入、已有语言和最终语义/只�
 输入经 Window.DispatchEvent/CommitText，不使用 DevServer，无剪贴板或用户桌面输入。
 日志和产物放在 `/tmp/sourceview-language-batch3-Yg4xpq/`；本阶段未运行 macOS/Windows 原生验证。
 没有新增第三方依赖或修改 GOUI。Swift、Dart、R 继续按设计实施。
+
+### Swift
+
+新增 Swift、swiftinterface/shebang、围栏识别、编辑规则和 hello.swift，示例共 35 份。
+独立断言覆盖普通/扩展/三引号引用、精确哈希数插值、嵌套插值、嵌套注释、反引号与简写参数，
+以及正则字符类、扩展正则和除法；32 KiB 哈希前缀/转义/闭合参与完整与极小分片对照。
+增量恢复、快照、畸形随机输入、Class、围栏及原生亮暗正文 RGBA 断言通过。
+
+同上述环境，`GOWORK=off go test ./...`、
+`GOWORK=off go test -race ./language ./internal/highlight` 通过。
+独立 X11 / Pango / Software / 浅色 1× 通过 Swift 建议接受/撤销、三引号和扩展原始引用输入，
+同时通过全部旧语言、语义、只读及括号断言。日志 swift-test.log、swift-window.log 位于本批临时目录。
+裸正则的词法歧义边界见设计；不将高亮推断描述为编译器解析。

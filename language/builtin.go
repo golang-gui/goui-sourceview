@@ -118,6 +118,24 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case Swift:
+			d.Tokenizer = swiftTokenizer{}
+			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
+			for _, pairs := range []*[]Pair{&d.Editing.AutoClosingPairs, &d.Editing.SurroundingPairs} {
+				filtered := (*pairs)[:0]
+				for _, p := range *pairs {
+					if p.Open != "'" {
+						filtered = append(filtered, p)
+					}
+				}
+				*pairs = append(filtered, Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true})
+			}
+			d.Editing.AllowPair = func(c PairContext) bool {
+				return c.Selected || c.Context.String || c.Typed != `"` || !strings.HasSuffix(c.Before, `""`) && !strings.HasSuffix(c.Before, "#")
+			}
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Kotlin:
 			d.Tokenizer = ktTokenizer{}
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -317,6 +335,8 @@ func codeVocabulary(id ID) []string {
 	switch id {
 	case Kotlin:
 		table = ktKeywords
+	case Swift:
+		table = swiftKeywords
 	case PowerShell:
 		table = psKeywords
 	case Ruby:

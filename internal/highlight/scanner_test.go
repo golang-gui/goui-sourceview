@@ -320,6 +320,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.JSX, "const x=<A/>;\nconst n=1;", "/>", ">", "const n", language.KindPlain},
 		{language.TSX, "const f=<T,>(x:T)=>x;\nconst n=1;", ",", "", "const n", language.KindPlain},
 		{language.Kotlin, "val s=\"\"\"open\nbody\n\"\"\"\nval n=1", "\"\"\"", "\"", "body", language.KindPlain},
+		{language.Swift, "let s=#\"\"\"\nbody\n\"\"\"#\nlet n=1", "\"\"\"", "\"", "body", language.KindPlain},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -615,6 +616,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
 		{language.JSX, "const x=<A>{true ? <B title={", "1}/> : null}"},
 		{language.Kotlin, `val s="outer ${"inner ${`, "true}"},
+		{language.Swift, `let s="outer \("inner \(`, "true)"},
 	} {
 		_, before := scanAll(tc.id, tc.prefix, 3)
 		_, _, _ = Scan(tc.id, before, tc.next, len(tc.next), true)
@@ -730,6 +732,15 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.Kotlin, "val `class`=1; loop@ for (x in 1..<3) break@loop", "class", language.KindVariable},
 		{language.Kotlin, `val x=42.toString(); val n=0x2e+3`, "toString", language.KindPlain},
 		{language.Kotlin, `val x=42.toString(); val n=0x2e+3`, "+", language.KindDelimiter},
+		{language.Swift, `@MainActor func f(){ let s=#"hi \#(true ? "ok" : "no")"# }`, "true", language.KindKeyword},
+		{language.Swift, `let s=##"literal \#(true) and \##(false)"##`, "true", language.KindString},
+		{language.Swift, `let s=##"literal \#(true) and \##(false)"##`, "false", language.KindKeyword},
+		{language.Swift, `let r = /[a-z\/]+/; let n = 10 / 2`, "a-z", language.KindString},
+		{language.Swift, `let r = /[a-z\/]+/; let n = 10 / 2`, "/ 2", language.KindDelimiter},
+		{language.Swift, "let r=#/a / b\n[c]/#; return true", "true", language.KindKeyword},
+		{language.Swift, "/* outer /* inner */ still */ let `class` = $0", "still", language.KindComment},
+		{language.Swift, "let `class` = $0", "$0", language.KindVariable},
+		{language.Swift, "let `class` = $0", "class", language.KindVariable},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -758,6 +769,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 	fixtures[language.JSX] = []string{"const x=<><UI.Button aria-label=\"a>b &gt;\" {...props}>{items.map(x=><Item key={x.id}/>)}</UI.Button>{/[}]/.test(x) ? `hi ${<B/>}` : null}</>; const y=a < b; const ratio=<A/> / 2;", "const x=<A title=\"\nbody\\\n\"/>;", "const x=<A>" + strings.Repeat("字", ChunkSize) + " &amp;</A>;"}
 	fixtures[language.TSX] = []string{"interface Props {readonly name:string;}\nconst f=<T,>(x:T):T=>x; const g=<T extends unknown>(x:T)=><A value={x}/>; const x=<T extends={true}/>;", "const f=<T" + strings.Repeat(" ", ChunkSize*2) + ",>(x:T)=><A/>;"}
 	fixtures[language.Kotlin] = []string{"@file:JvmName(\"Demo\")\n/* outer /* inner */ still */\nfun main(){ val s=\"hi $name ${if (true) \"${1}\" else name}\"; val raw=$$\"\"\"$literal $${true} $$$name\nraw\\n\"\"\"; val `class`=42.toString(); loop@ for(x in 1..<3)break@loop }", "val s=" + strings.Repeat("$", ChunkSize*2) + "\"" + strings.Repeat("$", ChunkSize*2) + "{true}\"", "val s=\"\"\"" + strings.Repeat("字", ChunkSize) + strings.Repeat("\"", 100) + "; val n=1"}
+	fixtures[language.Swift] = []string{"@MainActor func f(){ let s=##\"raw \\##(true ? \"nested \\(1)\" : \"no\")\"##; let m=\"\"\"\nbody\n\"\"\"; let r=/[a-z\\/]+/; let n=10 / 2; /* outer /* inner */ still */ #if DEBUG\n#endif }", "let s=" + strings.Repeat("#", ChunkSize*2) + "\"body\\" + strings.Repeat("#", ChunkSize*2) + "(true)\"" + strings.Repeat("#", ChunkSize*2) + "; let x=1", "let r=##/a / b\n[()]/##; let x=0x1.fp+2"}
 	for id, texts := range fixtures {
 		for _, text := range texts {
 			want, ws := scanAll(id, text, ChunkSize*8)
@@ -774,7 +786,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby, language.PHP, language.JSX, language.TSX, language.Kotlin, language.Swift} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {

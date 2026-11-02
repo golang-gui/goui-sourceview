@@ -596,3 +596,23 @@ TSX 为同一物理行中可确认的 `<T,>`、`<T=...>` 和 `<T extends ...>` �
 （2026-11-02 核对 requiredInterpolationPrefix、RAW_STRING 及注释深度）。
 参考 [Monaco v0.52.2 Kotlin](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/kotlin/kotlin.ts)
 的状态分解，不复制其正则，也不把旧版本的语法范围当成当前 Kotlin 的完整承诺。
+
+## 18. Swift
+
+Swift 使用独立不可变状态，支持 `.swift`、文本 `.swiftinterface` 与 swift shebang；
+不识别二进制 `.swiftmodule`。普通/三引号字符串与扩展 `#` 定界符使用计数状态，
+`\(` 或对应数量的 `\#(` 进入带括号深度的插值表达式；嵌套引用、注释不会提前结束插值。
+支持反引号名称、`$0` 简写参数、属性/编译指令、关键词、数字及嵌套块注释。
+
+裸 `/…/` 正则采用表达式起点的词法判别，优先排除注释、空白和 `/=`；
+扩展 `#/…/#` 使用匹配的 `#` 数量，正文内的反斜杠仍属于正则语法，字符类中的斜杠不提前关闭。
+此处是高亮器，不承诺编译器级运算符歧义消解或正则内部语义校验；不将正则内容当作字符串插值。
+双引号与反引号参与基础自动配对，单引号不作为 Swift 字符引用；第三个双引号不多插闭合引用。
+扩展原始引用由用户输入完整定界符，不在 `#` 后生成无法匹配的普通闭合引号。
+复用现有 EditingRules.AllowPair，不增加动态配对公共接口或 GOUI 扩展。
+
+参考 [Swift Book 词法结构](https://github.com/swiftlang/swift-book/blob/0bb7be94c7237ff0f9a4c2512a4fd3d4f23ad5cf/TSPL.docc/ReferenceManual/LexicalStructure.md)
+及 [SE-0354](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0354-regex-literals.md)
+（Swift 5.7 实现，裸斜杠语法还受语言模式影响；读取 2026-11-02），
+并核对 [Monaco v0.52.2 Swift](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/swift/swift.ts)。
+采用词法状态和定界符计数，不复制其规则资源或依赖，不推断类型及调用目标。

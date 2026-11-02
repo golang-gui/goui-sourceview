@@ -49,5 +49,5 @@
 2. PowerShell、Ruby、PHP、JSX/TSX：已有对应引用、插值、heredoc 与混合语言规则，具体范围见高亮设计；验收结果见语言验证记录。
 3. Kotlin、Swift、Dart、R；Scala、Perl、Zig、Objective-C 根据实际使用需求安排。
 
-第三批按语言推进，Kotlin 已实现，Swift、Dart、R 待实施；各语言的验收状态见语言验证记录。优先复用现有 token、上下文和
+第三批按语言推进，Kotlin、Swift 已实现，Dart、R 待实施；各语言的验收状态见语言验证记录。优先复用现有 token、上下文和
 分片协议，新增语言不以引入解析器框架或语言服务为前置。
