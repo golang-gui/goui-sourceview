@@ -290,3 +290,106 @@ func (sshTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	return w.result(i, s), nil
 }
+
+type cronTokenizer struct{}
+
+type cronState struct {
+	phase           byte
+	fields          int
+	inField, escape bool
+}
+
+func (s cronState) Equal(other State) bool { t, ok := other.(cronState); return ok && s == t }
+func (s cronState) Context() Context {
+	return Context{String: s.phase == 'v' || s.phase == 'c', Literal: s.phase == 'v' || s.phase == 'c', Comment: s.phase == '#'}
+}
+func (cronTokenizer) InitialState() State { return cronState{} }
+
+var cronWords = strings.Fields("@reboot @yearly @annually @monthly @weekly @daily @midnight @hourly SHELL PATH MAILTO MAILFROM CRON_TZ RANDOM_DELAY")
+
+func (cronTokenizer) Scan(in Input, previous State) (Result, error) {
+	s, ok := previous.(cronState)
+	if !ok {
+		return Result{}, fmt.Errorf("language: foreign crontab state")
+	}
+	limit, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	for i := 0; i < limit; {
+		c, n := in.Text[i], runeSize(in.Text, i)
+		at := in.Offset + i
+		if s.phase == 0 {
+			if space(c) {
+				i += n
+				continue
+			}
+			switch {
+			case c == '#':
+				s.phase = '#'
+			case c == '@':
+				s.phase = 'm'
+			case alpha(c) || c == '_':
+				s.phase = 'k'
+			default:
+				s.phase = 's'
+			}
+		}
+		kind, class := KindPlain, Class(0)
+		switch s.phase {
+		case '#':
+			kind, class = KindComment, ClassComment
+		case 'k':
+			if c == '=' {
+				s.phase, kind = 'v', KindDelimiter
+			} else if !space(c) {
+				kind = KindProperty
+			}
+		case 'v':
+			kind, class = KindString, ClassString
+		case 'c':
+			kind, class = KindString, ClassString
+			if s.escape {
+				s.escape = false
+			} else if c == '\\' {
+				s.escape = true
+			} else if c == '%' {
+				kind = KindMeta
+			}
+		case 'm':
+			kind = KindKeyword
+			if space(c) {
+				s.phase, kind = 'c', KindPlain
+			}
+		case 's':
+			if space(c) {
+				if s.inField {
+					s.fields++
+					s.inField = false
+					if s.fields == 5 {
+						s.phase = 'c'
+					}
+				}
+			} else {
+				s.inField = true
+				switch {
+				case digit(c):
+					kind = KindNumber
+				case alpha(c):
+					kind = KindKeyword
+				case strings.ContainsRune("*/,-", rune(c)):
+					kind = KindDelimiter
+				default:
+					kind = KindInvalid
+				}
+			}
+		}
+		w.add(at, at+n, kind, class)
+		i += n
+	}
+	if in.LineEnd && limit == len(in.Text) {
+		s = cronState{}
+	}
+	return w.result(limit, s), nil
+}

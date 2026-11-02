@@ -115,3 +115,12 @@ Host/Match 模式与远端命令保持参数文本，单引号不承担配置引
 提供指令建议，不读取 Include、不执行 Match exec、不连接远端或应用配置。
 
 依据 [OpenBSD ssh_config(5)](https://man.openbsd.org/ssh_config)。
+
+## crontab
+
+识别 crontab、.crontab/.cron，crontab/cron 围栏。区分环境赋值、五段时间、月/星期名、宏与命令正文。
+# 仅在首个非空白位置开启注释；赋值/命令后的 # 保留文本，不套用 Shell 注释与引号规则。
+命令中的未转义 % 单独标记，\% 保留正文；不执行命令、不安装任务或应用环境设置。
+默认以用户 crontab 的五段时间边界分类；系统 crontab 的额外用户名作为命令区域的普通文本，不冒充完整方言校验。
+
+依据 [crontab(5)](https://man7.org/linux/man-pages/man5/crontab.5.html)（Cronie）。

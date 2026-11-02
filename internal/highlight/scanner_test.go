@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.Crontab, "0 1 * * * echo #body", "0 1 * * * echo ", "", "body", language.KindComment},
 		{language.SSHConfig, "User=\"name #body\"", "\"", "", "body", language.KindComment},
 		{language.GitConfig, "key=one\\\nbody", "\\", "", "body", language.KindProperty},
 		{language.EDN, "#_(\nbody\n) true", "#_", "", "body", language.KindPlain},
@@ -415,6 +416,12 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.Crontab, "*/15 9-17 * * MON-FRI echo body", "15", language.KindNumber},
+	{language.Crontab, "0 1 * * * echo # body", "body", language.KindString},
+	{language.Crontab, "MAILTO=value # body", "body", language.KindString},
+	{language.Crontab, "@reboot echo ready", "@reboot", language.KindKeyword},
+	{language.Crontab, "0 1 * * * echo %input", "%", language.KindMeta},
+	{language.Crontab, "0 1 * * * echo \\%input", "%", language.KindString},
 	{language.SSHConfig, "ProxyCommand echo a=b", "=", language.KindString},
 	{language.SSHConfig, "hOsT dev-*", "hOsT", language.KindKeyword},
 	{language.SSHConfig, "User = contributor # note", "note", language.KindComment},

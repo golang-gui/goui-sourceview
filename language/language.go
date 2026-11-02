@@ -94,6 +94,7 @@ const (
 	EDN              ID = "edn"
 	GitConfig        ID = "gitconfig"
 	SSHConfig        ID = "sshconfig"
+	Crontab          ID = "crontab"
 	Markdown         ID = "markdown"
 )
 
@@ -228,6 +229,7 @@ var builtins = []Info{
 	{ID: EDN, Name: "EDN", Extensions: []string{".edn"}, MIMETypes: []string{"application/edn"}},
 	{ID: GitConfig, Name: "Git config", Extensions: []string{".gitconfig", ".gitmodules"}},
 	{ID: SSHConfig, Name: "SSH config", Extensions: []string{".sshconfig"}},
+	{ID: Crontab, Name: "crontab", Extensions: []string{".crontab", ".cron"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -248,6 +250,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == "crontab":
+		return Crontab
 	case base == "ssh_config" || strings.HasPrefix(base, "ssh_config.") || base == "config" && filepath.Base(filepath.Dir(filename)) == ".ssh":
 		return SSHConfig
 	case base == ".gitconfig" || base == ".gitmodules" || (base == "config" || base == "config.worktree") && filepath.Base(filepath.Dir(filename)) == ".git":

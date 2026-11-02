@@ -1,0 +1,10 @@
+# Example user crontab; displayed, never installed.
+SHELL=/bin/sh
+MAILTO="editor@example.invalid"
+CRON_TZ=UTC
+
+# minute hour day month weekday command
+*/15 9-17 * * MON-FRI echo "Check editor"
+30  2     1 * *       echo "Monthly check"
+@reboot echo "Ready # this belongs to the command"
+0 12 * * * printf "date\%Y-\%m-\%d%input text"

@@ -852,6 +852,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		row        int
 		kind       language.Kind
 	}{
+		{language.Crontab, "# body", "# body", 0, language.KindComment},
 		{language.SSHConfig, "# body", "# body", 0, language.KindComment},
 		{language.GitConfig, "key=one\\\nbody", "body", 1, language.KindString},
 		{language.EDN, "#_(\nbody\n)", "body", 1, language.KindComment},

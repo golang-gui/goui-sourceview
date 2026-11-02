@@ -17,6 +17,11 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Crontab:
+			d.Tokenizer = cronTokenizer{}
+			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '@' }, Comments: Comments{Line: "#"}}
+			d.AllowWordSuggestions = codeWordSuggestions
+			d.Suggest = func(Context) []string { return cronWords }
 		case SSHConfig:
 			d.Tokenizer = sshTokenizer{}
 			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: "#"}}
@@ -582,6 +587,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
+		"cron":             Crontab,
 		"ssh-config":       SSHConfig,
 		"pot":              Gettext,
 		"gettext":          Gettext,
