@@ -17,6 +17,11 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case Diff:
+			d.Tokenizer = diffTokenizer{}
+			d.Editing = EditingRules{Word: IdentifierRune}
+			d.Styles = []Kind{KindAdded, KindRemoved}
+			d.AllowWordSuggestions = func(Context, bool) bool { return false }
 		case Markdown:
 			l, err := newMarkdown(builtinFences(out))
 			if err != nil {
@@ -363,7 +368,8 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
-		"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
+		"patch": Diff,
+		"sh":    Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go,
 		"proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines,
 		"c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp,
 		"ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell,

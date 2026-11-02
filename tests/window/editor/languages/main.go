@@ -168,7 +168,6 @@ func main() {
 			log.Printf("PASS %s completion and undo", tc.id)
 		})
 	}
-	check(matched > 0, "selected language has no completion case")
 	for _, tc := range []struct {
 		id                  language.ID
 		prefix, typed, want string
@@ -199,12 +198,14 @@ func main() {
 		{language.Scala, "val s = ", `"""`, `val s = """`},
 		{language.Scala, "val code = ", "'{true}", "val code = '{true}"},
 		{language.Perl, "my $s = ", "'it\\'s'", "my $s = 'it\\'s'"},
+		{language.Diff, "+ ", "{'x'}", "+ {'x'}"},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {
 		if *filter != "" && string(tc.id) != *filter {
 			continue
 		}
+		matched++
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)
 			must(d.SetLanguage(tc.id))
@@ -219,6 +220,7 @@ func main() {
 			log.Printf("PASS %s quote typing", tc.id)
 		})
 	}
+	check(matched > 0, "selected language has no integration case")
 	steps = append(steps, func() {
 		d := source.NewDocument("")
 		must(d.SetLanguage(language.PowerShell))

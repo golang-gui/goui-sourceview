@@ -98,6 +98,7 @@ var light = builtin(Definition{
 		language.KindNumber: rgb(0x0550ae), language.KindKeyword: rgb(0x8250df), language.KindDelimiter: rgb(0x57606a),
 		language.KindTag: rgb(0x116329), language.KindAttribute: rgb(0x953800), language.KindEntity: rgb(0x8250df),
 		language.KindVariable: rgb(0x953800), language.KindMeta: rgb(0x8250df), language.KindComment: rgb(0x6e7781), language.KindInvalid: rgb(0xcf222e),
+		language.KindAdded: rgb(0x116329), language.KindRemoved: rgb(0xcf222e),
 	},
 })
 
@@ -114,6 +115,7 @@ var dark = builtin(Definition{
 		language.KindNumber: rgb(0xb5cea8), language.KindKeyword: rgb(0x569cd6), language.KindDelimiter: rgb(0xd4d4d4),
 		language.KindTag: rgb(0x569cd6), language.KindAttribute: rgb(0x9cdcfe), language.KindEntity: rgb(0xd7ba7d),
 		language.KindVariable: rgb(0x9cdcfe), language.KindMeta: rgb(0xc586c0), language.KindComment: rgb(0x6a9955), language.KindInvalid: rgb(0xf44747),
+		language.KindAdded: rgb(0x89d185), language.KindRemoved: rgb(0xf48771),
 	},
 })
 

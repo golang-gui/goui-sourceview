@@ -640,6 +640,45 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 	}
 }
 
+func TestFifthBatchKinds(t *testing.T) {
+	for _, tc := range []struct {
+		id           language.ID
+		text, needle string
+		kind         language.Kind
+	}{
+		{language.Diff, "--- a/file\n+++ b/file\n@@ -1 +1 @@\n--- old\n+++ new\n--- a/next", "--- old", language.KindRemoved},
+		{language.Diff, "--- a/file\n+++ b/file\n@@ -1 +1 @@\n--- old\n+++ new\n--- a/next", "+++ new", language.KindAdded},
+		{language.Diff, "@@ -1 +1 @@\n-old\n+new\n--- a/next", "--- a/next", language.KindHeading},
+		{language.Diff, "@@ -0,0 +1,2 @@\n+new\n+again\n+++ b/next", "+++ b/next", language.KindHeading},
+		{language.Diff, "diff --git a/a b/a", "diff", language.KindMeta},
+		{language.Diff, "\\ No newline at end of file", "No newline", language.KindComment},
+	} {
+		for _, chunk := range []int{1, 3, 31, ChunkSize} {
+			tokens, _ := scanAll(tc.id, tc.text, chunk)
+			if got := kindAt(tokens, strings.Index(tc.text, tc.needle)); got != tc.kind {
+				t.Fatalf("%s %q chunk %d: %s want %s", tc.id, tc.needle, chunk, got, tc.kind)
+			}
+		}
+	}
+}
+
+func TestFifthBatchFragments(t *testing.T) {
+	fixtures := map[language.ID][]string{
+		language.Diff: {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,2 +1,2 @@ function\n--- old\n+++ new\n same\n--- a/b\n+++ b/b\n@@ -0,0 +1 @@\n+new\n\\ No newline at end of file", "@@ -1 +1 @@ " + strings.Repeat("字", ChunkSize) + "\n-" + strings.Repeat("x", ChunkSize*2) + "\n+new", "@@ -1," + strings.Repeat("9", ChunkSize) + " +1 @@\n+new"},
+	}
+	for id, texts := range fixtures {
+		for _, text := range texts {
+			want, ws := scanAll(id, text, ChunkSize*8)
+			for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
+				got, gs := scanAll(id, text, chunk)
+				if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
+					t.Fatalf("%s chunk %d: tokens=%v states=%v", id, chunk, reflect.DeepEqual(got, want), gs.Equal(ws))
+				}
+			}
+		}
+	}
+}
+
 func TestFourthBatchKinds(t *testing.T) {
 	for _, tc := range []struct {
 		id           language.ID

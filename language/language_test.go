@@ -57,6 +57,7 @@ func TestGuess(t *testing.T) {
 		{"hello.mm", "", ObjectiveCpp},
 		{"hello.scala", "", Scala}, {"build.sbt", "", Scala}, {"script", "#!/usr/bin/env scala-cli", Scala},
 		{"hello.pl", "", Perl}, {"Module.pm", "", Perl}, {"script", "#!/usr/bin/env perl", Perl}, {"script", "#!/usr/bin/perl5.40.0", Perl},
+		{"change.diff", "", Diff}, {"change.patch", "", Diff},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
@@ -413,6 +414,32 @@ func TestJSXFencesAndEditing(t *testing.T) {
 			if p.Open == "<" {
 				t.Fatal("JSX guesses generic angle pairs")
 			}
+		}
+	}
+}
+
+func TestToolingLanguageFences(t *testing.T) {
+	md, _ := Builtin(Markdown)
+	for _, tc := range []struct {
+		name string
+		id   ID
+		text string
+		kind Kind
+	}{
+		{"diff", Diff, "+new", KindAdded}, {"patch", Diff, "@@", KindMeta},
+	} {
+		scanner := md.Tokenizer()
+		fence := "```" + tc.name
+		r, err := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err = scanner.Scan(Input{Text: tc.text, Limit: len(tc.text), LineEnd: true}, r.State)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.State.Context().Embedded.ID() != tc.id || len(r.Tokens) != 1 || r.Tokens[0].Kind != tc.kind || r.Tokens[0].End != len(tc.text) {
+			t.Fatalf("%s: %+v", tc.name, r)
 		}
 	}
 }

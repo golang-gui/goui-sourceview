@@ -765,3 +765,18 @@ Ruby 的扫描器和语言状态保持独立。闭合行必须整行匹配，`<<
 [Lexilla LexPerl.cxx](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexPerl.cxx)
 对 heredoc 和引用模式的分离。另用本机 Perl 5.34.0 的独立小片段核对定界符/字符类及 `$]` 的解释，
 不将引用结束判断交给正则内部字符类。采用现有分片、增量和上下文契约，不复制规则资源或增加依赖。
+
+## 25. Diff/Patch
+
+Diff 支持 `.diff/.patch` 和 diff/patch 围栏，以 unified patch 及 Git 文件元数据为本批范围。
+新增 diff.added / diff.removed 样式键，亮暗 Scheme 分别提供绿/红前景；元数据、文件头、
+hunk 头及缺少换行提示使用已有样式，不把删除行当作语法错误。
+按声明的旧/新行数跟踪 unified hunk，内容中的 +++/--- 仍属增加/删除正文，
+计数完成后下一文件头恢复元数据颜色。hunk 头只留前 128 byte 以读取范围；
+畸形、溢出或超出此前缀的范围保守退回行首识别，不声称校验补丁可应用性。
+不解析二进制补丁，也不承诺 context/combined diff 的完整范围语义。
+
+补丁正文不是可直接执行的子语言，Class/Context 保持字面文本，关闭默认建议、注释与自动配对。
+不根据路径猜测并重新解释增删行里的源码；自定义配色继续通过现有 Scheme.Tokens 完成。
+参考 [Git diff-format](https://git-scm.com/docs/diff-format)（读取 2026-11-02，页面最后更新 2.55.0）
+和 Lexilla LexDiff.cxx 的按行分类思路；采用本项目有界分片和增量状态，不复制其规则或增加依赖。

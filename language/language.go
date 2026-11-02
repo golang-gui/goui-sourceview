@@ -53,6 +53,7 @@ const (
 	ObjectiveCpp ID = "objective-cpp"
 	Scala        ID = "scala"
 	Perl         ID = "perl"
+	Diff         ID = "diff"
 	Markdown     ID = "markdown"
 )
 
@@ -146,6 +147,7 @@ var builtins = []Info{
 	{ID: ObjectiveCpp, Name: "Objective-C++", Extensions: []string{".mm"}, MIMETypes: []string{"text/x-objc++src"}},
 	{ID: Scala, Name: "Scala", Extensions: []string{".scala", ".sbt"}, MIMETypes: []string{"text/x-scala"}},
 	{ID: Perl, Name: "Perl", Extensions: []string{".pl", ".pm"}, MIMETypes: []string{"text/x-perl"}},
+	{ID: Diff, Name: "Diff", Extensions: []string{".diff", ".patch"}, MIMETypes: []string{"text/x-diff", "text/x-patch"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

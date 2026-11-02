@@ -465,3 +465,19 @@ ChromeInfo 确认 Integrated enabled，未见正文或工具栏裁切。截图�
 未执行真实 IME、macOS/Windows 原生验证；交叉构建只证明可编译，不代替原生验收。
 没有 GOUI 或依赖改动；原有未跟踪 doc/Doing.md、example/temp/ 保留并排除于提交。
 语言歧义和词法范围见设计，不承诺编译器解析或语言服务能力。
+
+## 第五批语言（2026-11-02）
+
+### Diff/Patch
+
+新增文件/围栏识别、unified hunk 范围状态、增加/删除专用样式及 change.diff，示例共 43 份。
+独立断言覆盖正文与文件头同形的 +++/---、省略行数、空旧范围、Git 元数据和缺少换行提示；
+长行、长 hunk 头及极小分片对照通过。Pango 亮暗 1× 增删行 RGBA 断言通过。
+首次全仓测试发现新增样式尚未加入标准 token 部件，补齐 styles.go 后原断言及全仓复跑通过。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8，`GOWORK=off go test ./...`（GOUI v0.5.0）通过。
+独立 TigerVNC :87 / Xfwm4 compositor on / Pango / Software / 浅色 1× 下，
+`-language diff` 通过补丁正文不生成配对和公共括号/语义/只读断言。
+语言筛选现在也接受只有输入场景、没有建议场景的语言；未知筛选仍失败。
+日志与产物在 `/tmp/sourceview-language-batch5-xOXtDs/`，未修改 GOUI 或依赖。
+Windows Batch、HCL/Terraform、GraphQL、SCSS、Less 继续依次实现。
