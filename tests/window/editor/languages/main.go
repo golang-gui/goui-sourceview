@@ -138,7 +138,7 @@ func main() {
 		{language.Systemd, "ExecSta", "ExecStart"}, {language.DesktopEntry, "Termi", "Terminal"},
 		{language.Nix, "inhe", "inherit"}, {language.JQ, "sel", "select"}, {language.PromQL, "ira", "irate"},
 		{language.FSharp, "modu", "module"}, {language.Elixir, "defm", "defmodule"}, {language.Erlang, "rece", "receive"},
-		{language.Julia, "funct", "function"},
+		{language.Julia, "funct", "function"}, {language.Clojure, "(defm", "(defmacro"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -201,6 +201,7 @@ func main() {
 		{language.Elixir, "text=", "~S\"literal #{true}\"", "text=~S\"literal #{true}\""},
 		{language.Erlang, "Value=", "'atom'", "Value='atom'"},
 		{language.Julia, "matrix", "'", "matrix'"},
+		{language.Clojure, "", "'name", "'name"},
 
 		{language.TOML, "text = ", `"""`, `text = """`},
 		{language.YAML, "text: ", "'it''s'", "text: 'it''s'"},

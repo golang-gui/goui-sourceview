@@ -353,6 +353,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Elixir, "\"\"\"first\nbody\n\"\"\"", "\"\"\"", "1", "body", language.KindPlain},
 		{language.Erlang, "'first\nbody\n'", "'", "", "body", language.KindProperty},
 		{language.Julia, "#= open\nbody\n=#", "#=", "", "body", language.KindPlain},
+		{language.Clojure, "#_(\nbody\n)", "#_", "", "body", language.KindPlain},
 
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
@@ -657,6 +658,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.Elixir, "text=\"outer #{\"inner #{", "true}\"}"},
 		{language.Erlang, "Text=\"\"\"first", "body\"\"\"."},
 		{language.Julia, "text=\"outer $(\"inner $(", "true)\")\""},
+		{language.Clojure, "#_(#_ ignored", "also-ignored) (def real true)"},
 
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
@@ -738,6 +740,15 @@ func TestSeventhBatchKinds(t *testing.T) {
 		{language.Julia, "function hello(name)\n \"hello $(true ? \"yes\" : \"no\")\"\nend", "true", language.KindKeyword},
 		{language.Julia, "text = raw\"literal $name\"; transposed = matrix'; result = true", "result", language.KindPlain},
 		{language.Julia, "#= outer #= inner =# body =# function hello() end", "body", language.KindComment},
+		{language.Clojure, "(defn hello [name] (str \"Hello \" name))", "defn", language.KindKeyword},
+		{language.Clojure, "#_(defn ignored [x] (str \"x\" x)) (def real true)", "ignored", language.KindComment},
+		{language.Clojure, "#_(defn ignored [x] (str \"x\" x)) (def real true)", "def real", language.KindKeyword},
+		{language.Clojure, "#_ #_ ignored also-ignored (def real true)", "also-ignored", language.KindComment},
+		{language.Clojure, "#_ ^:meta ignored (def real true)", "def real", language.KindKeyword},
+		{language.Clojure, "#_ #inst \"2020\" (def real true)", "def real", language.KindKeyword},
+		{language.Clojure, "#_ #:editor{:name \"ignored\"} (def real true)", "ignored", language.KindComment},
+		{language.Clojure, "#_ #?(:clj (def ignored true)) (def real true)", "ignored", language.KindComment},
+		{language.Clojure, "#_ #?(:clj (def ignored true)) (def real true)", "def real", language.KindKeyword},
 	} {
 		for _, chunk := range []int{1, 2, 3, 7, 31, ChunkSize} {
 			tokens, _ := scanAll(tc.id, tc.text, chunk)
@@ -759,6 +770,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 		language.Elixir:       {"defmodule Editor do\n@name :editor\ndef hello(name), do: \"hello #{if true, do: \"yes\", else: \"no\"}\"\nraw=~S\"literal #{true}\"\nr=~r{outer {inner} text}u\nend", "text=\"\"\"" + strings.Repeat("字", ChunkSize) + " #{true}\"\"\""},
 		language.Erlang:       {"-module(editor).\nhello(Value) -> case Value of true -> 'quoted atom'; _ -> 16#FF end.\nchars=[$a,$\\n,\"text\"]. % note", "Text=\"\"\"" + strings.Repeat("字", ChunkSize) + "\"\"\"."},
 		language.Julia:        {"#= outer #= inner =# body =#\nfunction hello(name)\n \"hello $(true ? \"yes\" : \"no\")\"\nend\nrawtext=raw\"literal $name\"; result=matrix'", "text=\"\"\"" + strings.Repeat("字", ChunkSize) + " $(true)\"\"\""},
+		language.Clojure:      {"#_ #_ ignored also-ignored\n#_(defn ignored [x] (str \"x\" x))\n#_ ^:meta target\n#_ #inst \"2020\"\n(defn hello [x] {:name x :pattern #\"[a-z]\"})", "(#_ [" + strings.Repeat("word ", ChunkSize) + "] (def real true))"},
 
 		language.GoTemplate: {"head {{- if $x }}{{printf \"}}\"}} {{/* comment\nbody */}} {{end}} tail", "{{printf \"" + strings.Repeat("字", ChunkSize) + "\"}}"},
 		language.Jinja2:     {"{% raw %}{{true}}{% unknown %}{% endraw %}{{ {'x':true} }}{# note\nbody #} {% if name %}x{% endif %}", "{% raw %}" + strings.Repeat("字", ChunkSize) + "{% endraw %}{{true}}"},
@@ -779,7 +791,7 @@ func TestSeventhBatchFragments(t *testing.T) {
 func TestSeventhBatchMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261103))
 	alphabet := []rune("letdefiftrue0123_'\"\\$#@%!?*+-[]{}():,;=/|<>~ \t\n你好")
-	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp, language.Elixir, language.Erlang, language.Julia} {
+	for _, id := range []language.ID{language.GoTemplate, language.Jinja2, language.Systemd, language.DesktopEntry, language.Nix, language.JQ, language.PromQL, language.FSharp, language.Elixir, language.Erlang, language.Julia, language.Clojure} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(450); n > 0; n-- {

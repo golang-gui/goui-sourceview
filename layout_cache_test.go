@@ -918,6 +918,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Elixir, "text=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 		{language.Erlang, "Text=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
 		{language.Julia, "text=\"\"\"\nbody\n\"\"\"", "body", 1, language.KindString},
+		{language.Clojure, "#_(\nbody\n)", "body", 1, language.KindComment},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

@@ -32,17 +32,20 @@ type fnExpr struct {
 	close          byte
 	depth, matched int
 }
-
+type fnDiscard struct {
+	parent      *fnDiscard
+	depth, need int
+}
 type fnState struct {
-	braceStart int
-	id         ID
-	mode, last byte
-	literal    fnLiteral
-	expr       *fnExpr
-
-	commentDepth, braces, prefix   int
-	escape, wordOn, value, atStart bool
-	word                           scanWord
+	braceStart                                 int
+	id                                         ID
+	mode, last                                 byte
+	literal                                    fnLiteral
+	expr                                       *fnExpr
+	discard                                    *fnDiscard
+	commentDepth, braces, prefix               int
+	escape, wordOn, wordPrefix, value, atStart bool
+	word                                       scanWord
 }
 
 func (s fnState) Equal(other State) bool {
@@ -55,15 +58,21 @@ func (s fnState) Equal(other State) bool {
 			return false
 		}
 	}
+	for a, b := s.discard, t.discard; a != b; a, b = a.parent, b.parent {
+		if a == nil || b == nil || a.depth != b.depth || a.need != b.need {
+			return false
+		}
+	}
 
 	s.expr, t.expr = nil, nil
+	s.discard, t.discard = nil, nil
 
 	return s == t
 }
 func (s fnState) Context() Context {
 	return Context{String: s.mode == fnString || s.mode == fnVariable,
 		Literal: s.mode == fnString && s.literal.raw && s.id != Julia && s.id != Elixir,
-		Comment: s.mode == fnLineComment || s.mode == fnBlockComment || s.literal.comment}
+		Comment: s.mode == fnLineComment || s.mode == fnBlockComment || s.literal.comment || s.discard != nil}
 }
 
 type functionalTokenizer struct{ id ID }
@@ -71,10 +80,11 @@ type functionalTokenizer struct{ id ID }
 func (b functionalTokenizer) InitialState() State { return fnState{id: b.id, atStart: true} }
 
 var functionalWords = map[ID]map[string]bool{
-	FSharp: words("abstract and as assert base begin class default delegate do done downcast downto elif else end exception extern false finally fixed for fun function global if in inherit inline interface internal lazy let match member module mutable namespace new not null of open or override private public rec return select sig static struct then to true try type upcast use val void when while with yield async task seq"),
-	Elixir: words("after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end false fn for if import in nil not or quote raise receive require rescue super true try unless unquote unquote_splicing use when with"),
-	Erlang: words("after begin case catch cond end fun if let of receive try when and andalso band bnot bor bsl bsr bxor div not or orelse rem xor maybe else true false"),
-	Julia:  words("abstract baremodule begin break catch const continue do else elseif end export false finally for function global if import in isa let local macro module mutable primitive public quote return struct true try using where while type"),
+	FSharp:  words("abstract and as assert base begin class default delegate do done downcast downto elif else end exception extern false finally fixed for fun function global if in inherit inline interface internal lazy let match member module mutable namespace new not null of open or override private public rec return select sig static struct then to true try type upcast use val void when while with yield async task seq"),
+	Elixir:  words("after alias and case catch cond def defdelegate defexception defguard defimpl defmacro defmodule defp defprotocol defstruct do else end false fn for if import in nil not or quote raise receive require rescue super true try unless unquote unquote_splicing use when with"),
+	Erlang:  words("after begin case catch cond end fun if let of receive try when and andalso band bnot bor bsl bsr bxor div not or orelse rem xor maybe else true false"),
+	Julia:   words("abstract baremodule begin break catch const continue do else elseif end export false finally for function global if import in isa let local macro module mutable primitive public quote return struct true try using where while type"),
+	Clojure: words("def defn defn- defmacro defonce defmulti defmethod defrecord deftype defprotocol fn fn* let letfn loop recur if if-not if-let when when-not when-let cond condp case do doseq dotimes for lazy-seq binding with-open try catch finally throw new set! ns in-ns require import quote var nil true false and or not"),
 }
 
 func functionalVocabulary(id ID) []string {
@@ -91,6 +101,8 @@ func functionalEditing(id ID) EditingRules {
 	case FSharp:
 		d.Comments = Comments{Line: "", Block: Pair{Open: "(*", Close: "*)"}}
 
+	case Clojure:
+		d.Comments.Line = ";"
 	case Elixir, Julia:
 		d.Comments.Line = "#"
 	case Erlang:
@@ -107,7 +119,7 @@ func functionalEditing(id ID) EditingRules {
 		if c.Selected || c.Context.String {
 			return true
 		}
-		if c.Typed == "'" && (id == FSharp || id == Julia) {
+		if c.Typed == "'" && (id == FSharp || id == Julia || id == Clojure) {
 			return false
 		}
 		return c.Typed != "\"" || !strings.HasSuffix(c.Before, "\"\"")
@@ -119,7 +131,8 @@ func fnName(id ID, r rune) bool {
 		return true
 	}
 	switch id {
-
+	case Clojure:
+		return strings.ContainsRune("*+!_?-./:$%&=<>", r)
 	case FSharp:
 		return r == '\''
 	case Elixir:
@@ -144,7 +157,8 @@ func fnLine(id ID) string {
 
 	case Erlang:
 		return "%"
-
+	case Clojure:
+		return ";"
 	case Julia, Elixir:
 		return "#"
 	}
@@ -186,10 +200,22 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 	w := tokenWriter{base: in.Offset}
 	text, i := in.Text, 0
 	add := func(a, z int, k Kind, c Class) {
-
+		if s.discard != nil {
+			k, c = KindComment, ClassComment
+		}
 		w.add(in.Offset+a, in.Offset+z, k, c)
 	}
-
+	formDone := func() {
+		if s.discard != nil && s.discard.depth == 0 {
+			f := *s.discard
+			f.need--
+			if f.need == 0 {
+				s.discard = f.parent
+			} else {
+				s.discard = &f
+			}
+		}
+	}
 	finish := func(end int) {
 		if !s.wordOn {
 			return
@@ -198,7 +224,9 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		if (k == KindPlain || s.id == Erlang && k == KindProperty) && functionalWords[s.id][s.word.text] {
 			k = KindKeyword
 		}
-
+		if s.discard != nil {
+			k = KindComment
+		}
 		class := Class(0)
 		if k == KindComment {
 			class = ClassComment
@@ -206,8 +234,10 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			class = ClassString
 		}
 		w.add(s.word.start, end, k, class)
-
-		s.word, s.wordOn, s.value, s.atStart = scanWord{}, false, true, false
+		if !s.wordPrefix {
+			formDone()
+		}
+		s.word, s.wordOn, s.wordPrefix, s.value, s.atStart = scanWord{}, false, false, true, false
 	}
 	endString := func() {
 		wasComment := s.literal.comment
@@ -217,8 +247,9 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		s.value = true
 		if wasComment {
 			s.mode = fnBlockComment
+		} else {
+			formDone()
 		}
-
 	}
 
 	for i < limit {
@@ -419,7 +450,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			s.mode = fnCode
 			s.value = true
-
+			formDone()
 		}
 		if s.wordOn {
 			if fnName(s.id, r) {
@@ -445,7 +476,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			finish(in.Offset + i)
 			continue
 		}
-		if space(c) {
+		if space(c) || s.id == Clojure && c == ',' {
 			i += n
 			continue
 		}
@@ -465,7 +496,45 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += len(open)
 			continue
 		}
-
+		if s.id == Clojure && strings.HasPrefix(text[i:], "#_") {
+			s.discard = &fnDiscard{parent: s.discard, need: 1}
+			add(i, i+2, KindComment, ClassComment)
+			i += 2
+			continue
+		}
+		if s.id == Clojure && strings.HasPrefix(text[i:], "#?") {
+			size := 2
+			if i+2 < len(text) && text[i+2] == '@' {
+				size = 3
+			}
+			add(i, i+size, KindMeta, 0)
+			i += size
+			continue
+		}
+		if s.id == Clojure && c == '^' && s.discard != nil && s.discard.depth == 0 {
+			v := *s.discard
+			v.need++
+			s.discard = &v
+		}
+		if s.id == Clojure && c == '\\' {
+			s.word = scanWord{start: in.Offset + i, kind: KindString}
+			s.wordOn = true
+			s.word.add(text[i : i+n])
+			i += n
+			if i < len(text) {
+				z := i + runeSize(text, i)
+				s.word.add(text[i:z])
+				i = z
+			}
+			continue
+		}
+		if s.id == Clojure && c == '#' && i+1 < len(text) && (unicode.IsLetter(rune(text[i+1])) || text[i+1] == ':') {
+			s.word = scanWord{start: in.Offset + i, kind: KindMeta}
+			s.wordOn, s.wordPrefix = true, true
+			s.word.add("#")
+			i++
+			continue
+		}
 		if s.id == FSharp && (c == '$' || c == '@') {
 			s.mode = fnPrefix
 			s.prefix = 0
@@ -528,7 +597,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				add(i, i+size, KindString, ClassString)
 				i += size
 				s.value = true
-
+				formDone()
 				continue
 			}
 		}
@@ -547,7 +616,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			i += size
 			continue
 		}
-		if digit(c) {
+		if digit(c) || s.id == Clojure && (c == '-' || c == '+') && i+1 < len(text) && digit(text[i+1]) {
 			s.mode, s.last = fnNumber, c
 			add(i, i+1, KindNumber, 0)
 			i++
@@ -555,7 +624,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 		if fnName(s.id, r) || s.id == Elixir && (c == ':' || c == '@') {
 			k := KindPlain
-			if s.id == Elixir && c == ':' {
+			if s.id == Clojure && c == ':' || s.id == Elixir && c == ':' {
 				k = KindProperty
 			}
 			if s.id == Elixir && c == '@' {
@@ -614,16 +683,31 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 				s.expr = &v
 			}
 		}
-
+		if s.id == Clojure && s.discard != nil && strings.ContainsRune("([{", r) {
+			v := *s.discard
+			v.depth++
+			s.discard = &v
+		}
 		class := Class(0)
 		if strings.ContainsRune("()[]{}", r) {
 			class = ClassDelimiter
 		}
 		k := KindDelimiter
-
+		if s.id == Clojure && strings.ContainsRune("'@^#~", r) {
+			k = KindMeta
+		}
 		add(i, i+n, k, class)
 		i += n
-
+		if s.id == Clojure && s.discard != nil && strings.ContainsRune(")]}", r) {
+			v := *s.discard
+			if v.depth > 0 {
+				v.depth--
+			}
+			s.discard = &v
+			if v.depth == 0 {
+				formDone()
+			}
+		}
 		s.value = strings.ContainsRune(")]}", r) || s.id == Julia && c == '\''
 		s.atStart = false
 	}
@@ -636,7 +720,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 		if s.mode == fnNumber {
 			s.mode = fnCode
-
+			formDone()
 		}
 		if s.mode == fnVariable {
 			s.mode = fnString

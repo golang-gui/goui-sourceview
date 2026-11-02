@@ -714,3 +714,9 @@ atom、变量、字符、基数数值与三引号；与 Elixir 保持独立词�
 宏、三引号、非标准字符串、插值、嵌套注释及字符/转置区别。
 同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.jl 样本。
 本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。
+
+### Clojure
+
+读取器形式及完整 #_ 丢弃，包括嵌套丢弃、metadata、tagged literal 与 reader conditional。
+同步增加识别、围栏、独立预期、相应编辑规则、原生颜色及 hello.clj 样本。
+本提交完整快照在关闭工作区后运行 GOWORK=off go test ./... 通过。

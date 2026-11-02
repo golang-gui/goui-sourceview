@@ -77,10 +77,10 @@ func TestGuess(t *testing.T) {
 		{"default.nix", "", Nix}, {"filter.jq", "", JQ}, {"query.promql", "", PromQL},
 		{"App.fs", "", FSharp}, {"Types.fsi", "", FSharp}, {"script.fsx", "", FSharp},
 		{"app.ex", "", Elixir}, {"mix.exs", "", Elixir}, {"app.erl", "", Erlang}, {"types.hrl", "", Erlang},
-		{"app.jl", "", Julia},
+		{"app.jl", "", Julia}, {"app.clj", "", Clojure}, {"app.cljs", "", Clojure}, {"app.cljc", "", Clojure},
 
 		{"script", "#!/usr/bin/env elixir", Elixir}, {"script", "#!/usr/bin/env escript", Erlang}, {"script", "#!/usr/bin/env julia", Julia},
-
+		{"script", "#!/usr/bin/env bb", Clojure},
 		{"script", "#!/usr/bin/env jq -f", JQ}, {"script", "#!/usr/bin/env fsharpi", FSharp},
 		{"script", "#!/usr/bin/perl5.", Plain}, {"script", "#!/usr/bin/perl5.debug", Plain},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
@@ -196,7 +196,7 @@ func TestTemplateHosts(t *testing.T) {
 
 func TestSeventhBatchFences(t *testing.T) {
 	md, _ := Builtin(Markdown)
-	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2, "systemd": Systemd, "desktop": DesktopEntry, "nix": Nix, "jq": JQ, "promql": PromQL, "fsharp": FSharp, "f#": FSharp, "elixir": Elixir, "erlang": Erlang, "julia": Julia} {
+	for name, id := range map[string]ID{"gotemplate": GoTemplate, "gotmpl": GoTemplate, "jinja2": Jinja2, "jinja": Jinja2, "j2": Jinja2, "systemd": Systemd, "desktop": DesktopEntry, "nix": Nix, "jq": JQ, "promql": PromQL, "fsharp": FSharp, "f#": FSharp, "elixir": Elixir, "erlang": Erlang, "julia": Julia, "clojure": Clojure, "clj": Clojure} {
 		scanner := md.Tokenizer()
 		fence := "\x60\x60\x60" + name
 		r, e := scanner.Scan(Input{Text: fence, Limit: len(fence), LineEnd: true}, scanner.InitialState())
@@ -388,6 +388,8 @@ func TestProgrammingLanguageClasses(t *testing.T) {
 		{Elixir, "text=~S\"#{literal}\"", "{literal}", ClassString},
 		{Erlang, "Atom='[literal]'", "[literal]", ClassString},
 		{Julia, "text=\"$(true)\"", "true", 0},
+		{Clojure, "#_ [ignored] [real]", "ignored", ClassComment},
+		{Clojure, "#_ [ignored] [real]", "[real]", ClassDelimiter},
 
 		{C, `#include <stdio.h>`, "stdio", ClassString},
 		{Cpp, `R"tag({ /* literal */ })tag"`, "{", ClassString},
