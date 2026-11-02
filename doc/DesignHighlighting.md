@@ -616,3 +616,20 @@ Swift 使用独立不可变状态，支持 `.swift`、文本 `.swiftinterface` �
 （Swift 5.7 实现，裸斜杠语法还受语言模式影响；读取 2026-11-02），
 并核对 [Monaco v0.52.2 Swift](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/swift/swift.ts)。
 采用词法状态和定界符计数，不复制其规则资源或依赖，不推断类型及调用目标。
+
+## 19. Dart
+
+新增 `.dart`、dart shebang 和 dart 围栏。独立状态处理单双引号及三引号、
+小写 `r` 原始引用、短变量与 `${…}` 插值、嵌套引用/块注释、注解和符号字面量。
+原始引用同时禁用转义和插值；其他引用的 Unicode/十六进制转义保持字符串 Class。
+插值栈只保存外层引用与括号深度，不积累正文，不把注释和字符串内的括号当结构括号。
+数字包括十六进制、指数和分隔符，成员访问和级联点号不会被数字吞入。
+基础配对、注释和建议复用现有规则；单双三引号均避免第三次输入多插一个闭合引用。
+不推断 Flutter 类型、导入目标或模式的语义，不引入分析器。
+
+依据 [Dart 字符串与数字](https://dart.dev/language/built-in-types)、
+[官方注释说明](https://github.com/dart-lang/site-www/blob/main/src/content/language/comments.md)
+与 [SDK 扫描器](https://github.com/dart-lang/sdk/blob/876f4d842286d3ea42dd1a02590bea544cb96634/pkg/_fe_analyzer_shared/lib/src/scanner/string_scanner.dart)
+（读取 2026-11-02；数字分隔符要求 Dart 3.6+），并参考
+[Monaco v0.52.2 Dart](https://github.com/microsoft/monaco-editor/blob/v0.52.2/src/basic-languages/dart/dart.ts)
+的词法呈现边界。所有样本为本项目原创，没有复制第三方规则资源或增加依赖。

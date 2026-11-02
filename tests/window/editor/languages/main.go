@@ -111,6 +111,7 @@ func main() {
 		{language.JSX, "const x=<di", "const x=<div"}, {language.TSX, "const x=<A classN", "const x=<A className"},
 		{language.Kotlin, "overr", "override"},
 		{language.Swift, "filepr", "fileprivate"},
+		{language.Dart, "requi", "required"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -173,6 +174,8 @@ func main() {
 		{language.Kotlin, "val s = ", `"""`, `val s = """`},
 		{language.Swift, "let s = ", `"""`, `let s = """`},
 		{language.Swift, "let s = #", `"raw"#`, `let s = #"raw"#`},
+		{language.Dart, "var s = ", "'''", "var s = '''"},
+		{language.Dart, "var s = ", "r'\\'", "var s = r'\\'"},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {

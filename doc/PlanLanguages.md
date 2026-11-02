@@ -349,3 +349,15 @@ Kotlin 补全接受/撤销、三引号输入、已有语言和最终语义/只�
 独立 X11 / Pango / Software / 浅色 1× 通过 Swift 建议接受/撤销、三引号和扩展原始引用输入，
 同时通过全部旧语言、语义、只读及括号断言。日志 swift-test.log、swift-window.log 位于本批临时目录。
 裸正则的词法歧义边界见设计；不将高亮推断描述为编译器解析。
+
+### Dart
+
+新增 Dart、文件/shebang/围栏识别、编辑规则与 hello.dart，示例共 36 份。
+独立预期检查单双/三引号、原始引用禁用转义和插值、嵌套表达式/注释、注解和符号、
+Unicode/十六进制转义、成员/级联点号、指数与十六进制数。
+原始引用正文颜色、Class、围栏、状态快照、增量恢复、长行与随机畸形分片断言通过。
+
+同上述环境，`GOWORK=off go test ./...`、
+`GOWORK=off go test -race ./language ./internal/highlight` 通过。
+独立 X11 / Pango / Software / 浅色 1× 通过 Dart 建议接受/撤销、单三引号和原始尾反斜杠输入，
+以及全部旧语言与最终断言。日志 dart-test.log、dart-window.log 位于本批临时目录。

@@ -46,6 +46,7 @@ const (
 	TSX        ID = "tsx"
 	Kotlin     ID = "kotlin"
 	Swift      ID = "swift"
+	Dart       ID = "dart"
 	Markdown   ID = "markdown"
 )
 
@@ -132,6 +133,7 @@ var builtins = []Info{
 	{ID: TSX, Name: "TSX", Extensions: []string{".tsx"}, MIMETypes: []string{"text/tsx", "text/typescript-jsx"}},
 	{ID: Kotlin, Name: "Kotlin", Extensions: []string{".kt", ".kts"}, MIMETypes: []string{"text/x-kotlin"}},
 	{ID: Swift, Name: "Swift", Extensions: []string{".swift", ".swiftinterface"}, MIMETypes: []string{"text/x-swift"}},
+	{ID: Dart, Name: "Dart", Extensions: []string{".dart"}, MIMETypes: []string{"text/x-dart"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -184,6 +186,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "dart" {
+		return Dart
+	}
 	if interpreter == "swift" {
 		return Swift
 	}
