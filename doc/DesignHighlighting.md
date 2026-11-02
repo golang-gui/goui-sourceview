@@ -983,3 +983,9 @@ slashy/dollar-slashy 的其他反斜杠保持字面文本；表达式内恢复�
 本地化键、值转义、分号列表与 Exec 字段代码；保持与 systemd 续行规则的区别。
 保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
 参考[官方规范/源码](https://specifications.freedesktop.org/desktop-entry/latest-single/)（读取 2026-11-02）。
+
+### Nix
+
+双引号/缩进字符串、特殊转义、路径和嵌套插值。
+保留有界单词、跨行状态、极小 UTF-8 分片和编辑后的失效恢复，词法高亮不执行输入。
+参考[官方规范/源码](https://github.com/NixOS/nix/blob/2.24.0/src/libexpr/lexer.l)（读取 2026-11-02）。

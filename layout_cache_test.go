@@ -911,6 +911,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.Jinja2, "{#\nbody\n#}", "body", 1, language.KindComment},
 		{language.Systemd, "Description=one\\\nbody", "body", 1, language.KindString},
 		{language.DesktopEntry, "body", "body", 0, language.KindProperty},
+		{language.Nix, "value=''\nbody\n''", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

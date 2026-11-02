@@ -18,6 +18,20 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		}
 		switch info.ID {
 
+		case Nix:
+			d.Tokenizer = queryTokenizer{info.ID}
+			d.Editing.Comments.Line = "#"
+			d.Editing.AutoClosingPairs = append(slices.Clone(d.Editing.Brackets), Pair{Open: "\"", Close: "\"", NotInString: true, NotInComment: true})
+			if info.ID == Nix {
+				d.Editing.Comments.Block = Pair{Open: "/*", Close: "*/"}
+			}
+
+			d.Editing.SurroundingPairs = slices.Clone(d.Editing.AutoClosingPairs)
+			id := info.ID
+			d.Editing.Word = func(r rune) bool { return queryName(id, r) || r == '$' || r == '@' }
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := sortedQueryWords(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case Systemd, DesktopEntry:
 			d.Tokenizer = unitTokenizer{info.ID}
 			d.Editing = EditingRules{Word: func(r rune) bool { return IdentifierRune(r) || r == '-' || r == '.' }, Comments: Comments{Line: "#"}}

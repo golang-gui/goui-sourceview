@@ -53,7 +53,7 @@ func sampleDocuments() []exampleDocument {
 		"build.gradle",
 		"page.gohtml", "page.html.j2",
 		"editor.service", "editor.desktop",
-	} {
+		"default.nix"} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
 			panic(err)
