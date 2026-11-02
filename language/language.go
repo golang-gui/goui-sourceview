@@ -86,6 +86,7 @@ const (
 	TSV              ID = "tsv"
 	AsciiDoc         ID = "asciidoc"
 	ReStructuredText ID = "rst"
+	LaTeX            ID = "latex"
 	Markdown         ID = "markdown"
 )
 
@@ -212,6 +213,7 @@ var builtins = []Info{
 	{ID: TSV, Name: "TSV", Extensions: []string{".tsv"}, MIMETypes: []string{"text/tab-separated-values"}},
 	{ID: AsciiDoc, Name: "AsciiDoc", Extensions: []string{".adoc", ".asciidoc", ".asc"}},
 	{ID: ReStructuredText, Name: "reStructuredText", Extensions: []string{".rst", ".rest"}},
+	{ID: LaTeX, Name: "TeX/LaTeX", Extensions: []string{".tex", ".ltx", ".sty", ".cls", ".dtx", ".ins"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

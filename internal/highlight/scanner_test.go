@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.LaTeX, "\\begin{verbatim}\n%body\n\\end{verbatim}", "verbatim", "text", "body", language.KindComment},
 		{language.ReStructuredText, "Example::\n\n    body\nafter", "::", ":", "body", language.KindPlain},
 		{language.AsciiDoc, "----\nbody\n----\nafter", "----", "text", "body", language.KindPlain},
 		{language.TSV, "name\tvalue", "\t", ",", ",", language.KindString},
@@ -407,6 +408,12 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.LaTeX, "\\section{Title}", "section", language.KindKeyword},
+	{language.LaTeX, "text $a+b$ after", "a+b", language.KindNumber},
+	{language.LaTeX, "\\begin{equation}\nx+y\n\\end{equation}\nafter", "x+y", language.KindNumber},
+	{language.LaTeX, "\\begin{verbatim}\n% body\n\\end{verbatim}\n% note", "body", language.KindString},
+	{language.LaTeX, "\\verb|% literal| % note", "literal", language.KindString},
+	{language.LaTeX, "\\% outside % note", "note", language.KindComment},
 	{language.AsciiDoc, "See <<target,label>>.", "target", language.KindLink},
 	{language.ReStructuredText, "* item", "item", language.KindPlain},
 	{language.ReStructuredText, "Title\n=====", "=====", language.KindHeading},

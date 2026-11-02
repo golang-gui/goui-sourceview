@@ -44,3 +44,12 @@ SRT/WebVTT、iCalendar/vCard 后置，当前不声明支持。
 注释续行按相同缩进边界处理。代码块使用代码正文颜色，不执行指令、include 或 Sphinx 扩展，不提供完整文档 AST。
 
 依据 [Docutils reStructuredText Markup Specification](https://docutils.sourceforge.io/docs/ref/rst/restructuredtext.html)（revision 10399，2026-09-05）。
+
+## TeX/LaTeX
+
+以 latex 为 ID，tex 为围栏别名，复用一个 TeX/LaTeX profile。支持控制词/控制符、% 注释、转义、结构括号、
+$ / $$ / \( / \[ 数学区域及常见数学环境；数学正文使用数值颜色，命令保持独立。
+verb 与 verbatim/verbatim*、lstlisting、minted 正文使用原样字符串规则，闭合环境跨分片识别。
+仅结构括号自动配对；不把排版引号当作程序字符串，不解释宏、catcode、include 或第三方包定义。
+
+依据 [LaTeX 文档](https://www.latex-project.org/help/documentation/)、[ltmiscen.dtx](https://github.com/latex3/latex2e/blob/develop/base/ltmiscen.dtx)（2025/04/28 v1.2h）和 [ltmath.dtx](https://github.com/latex3/latex2e/blob/develop/base/ltmath.dtx)（2026/06/01 v1.2p）。
