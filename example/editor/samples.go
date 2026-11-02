@@ -58,6 +58,7 @@ func sampleDocuments() []exampleDocument {
 		"export.csv",
 		"export.tsv",
 		"guide.adoc",
+		"guide.rst",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {

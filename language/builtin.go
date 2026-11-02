@@ -17,6 +17,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Tokenizer = builtinTokenizer{info.ID}
 		}
 		switch info.ID {
+		case ReStructuredText:
+			d.Tokenizer = rstTokenizer{}
+			d.Styles = []Kind{KindHeading, KindCode, KindMarker, KindEmphasis, KindLink}
+			d.Editing = EditingRules{Word: IdentifierRune, Comments: Comments{Line: ".."}}
 		case AsciiDoc:
 			d.Tokenizer = adocTokenizer{}
 			d.Styles = []Kind{KindHeading, KindMarker, KindCode, KindFence, KindEmphasis, KindLink}
@@ -522,8 +526,10 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		}
 	}
 	for alias, id := range map[string]ID{
-		"adoc": AsciiDoc,
-		"f#":   FSharp, "fs": FSharp, "ex": Elixir, "erl": Erlang, "jl": Julia,
+		"rest":             ReStructuredText,
+		"restructuredtext": ReStructuredText,
+		"adoc":             AsciiDoc,
+		"f#":               FSharp, "fs": FSharp, "ex": Elixir, "erl": Erlang, "jl": Julia,
 		"clj": Clojure, "cljs": Clojure, "cljc": Clojure, "hs": Haskell, "ml": OCaml,
 		"systemd-unit": Systemd, "desktop-entry": DesktopEntry,
 		"gotmpl": GoTemplate, "go-html-template": GoTemplate, "jinja": Jinja2, "j2": Jinja2,

@@ -35,3 +35,12 @@ SRT/WebVTT、iCalendar/vCard 后置，当前不声明支持。
 行内未闭合标记在行末恢复，不实现完整 Asciidoctor 替换和文档结构解析。
 
 依据 [AsciiDoc Delimited Blocks](https://docs.asciidoctor.org/asciidoc/latest/blocks/delimited/) 与 [Source Blocks](https://docs.asciidoctor.org/asciidoc/latest/verbatim/source-blocks/)。
+
+## reStructuredText
+
+识别 .rst/.rest 与 rst/rest/restructuredtext 围栏。为标题装饰线、列表、强调、行内 literal/引用、指令和注释着色；
+标题正文不根据下一行反向改色，遵守不能修改前一逻辑行的扫描契约。
+双冒号和 code/code-block/sourcecode/raw 指令开启缩进 literal 块，空行保留块状态，回到父级缩进后恢复正文；
+注释续行按相同缩进边界处理。代码块使用代码正文颜色，不执行指令、include 或 Sphinx 扩展，不提供完整文档 AST。
+
+依据 [Docutils reStructuredText Markup Specification](https://docutils.sourceforge.io/docs/ref/rst/restructuredtext.html)（revision 10399，2026-09-05）。

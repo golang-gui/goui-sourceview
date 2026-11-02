@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.ReStructuredText, "Example::\n\n    body\nafter", "::", ":", "body", language.KindPlain},
 		{language.AsciiDoc, "----\nbody\n----\nafter", "----", "text", "body", language.KindPlain},
 		{language.TSV, "name\tvalue", "\t", ",", ",", language.KindString},
 		{language.CSV, "\"first\nbody,x\",end", "\"", "", ",", language.KindDelimiter},
@@ -406,6 +407,14 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.AsciiDoc, "See <<target,label>>.", "target", language.KindLink},
+	{language.ReStructuredText, "* item", "item", language.KindPlain},
+	{language.ReStructuredText, "Title\n=====", "=====", language.KindHeading},
+	{language.ReStructuredText, ".. code-block:: python\n\n    print('body')\nafter", "body", language.KindCode},
+	{language.ReStructuredText, "Example::\n\n    literal\n\noutside", "outside", language.KindPlain},
+	{language.ReStructuredText, ".. note:: text", "note", language.KindMeta},
+	{language.ReStructuredText, ".. comment\n   body\nafter", "body", language.KindComment},
+	{language.ReStructuredText, "Text ``literal`` and *strong*", "literal", language.KindCode},
 	{language.AsciiDoc, "= Heading", "Heading", language.KindHeading},
 	{language.AsciiDoc, "----\ncode *literal*\n----\n* list", "literal", language.KindCode},
 	{language.AsciiDoc, "////\ncomment\n////\ntext", "comment", language.KindComment},
