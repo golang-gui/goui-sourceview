@@ -52,7 +52,7 @@ type codeState struct {
 	lastNumber                                  byte
 	dollar                                      string
 	dollarMatch, dollarStart                    int
-	dollarCapture                               *shText
+	dollarCapture                               *scanText
 	css                                         *cssFrame
 	cssDeclaration, cssValue, cssGroup          bool
 }
@@ -147,7 +147,7 @@ func (b codeTokenizer) Scan(in Input, state State) (Result, error) {
 	var capture strings.Builder
 	flushCapture := func() {
 		if capture.Len() > 0 {
-			s.dollarCapture = &shText{previous: s.dollarCapture, text: capture.String()}
+			s.dollarCapture = &scanText{previous: s.dollarCapture, text: capture.String()}
 			capture.Reset()
 		}
 	}

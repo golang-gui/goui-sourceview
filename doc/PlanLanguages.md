@@ -246,3 +246,17 @@ Ubuntu 22.04.5 amd64 / Go 1.25.8 / Pango：`go test ./...`、
 关闭工作区构建窗口程序使用 GOUI v0.5.0；工作区联调用相邻 GOUI b49049d。
 本组未单独进行 macOS/Windows 原生运行；最终批次再记录其余组合验证。
 日志和构建位于 `/tmp/sourceview-language-batch2-JqwBCh/`，独立会话供本批后续组继续验证。
+
+### Ruby
+
+新增 Ruby、ruby/rb 围栏、识别与基础编辑规则；新增 hello.rb，示例共 30 份。
+引用/百分号字面量、symbol、正则/除法、块注释、数据段、长变量、长 delimiter、
+63 个同一行排队的 heredoc，以及 heredoc 插值内再次声明 heredoc 均有独立预期。
+复用分片/随机/增量/Class/状态不变性测试；提取 scanText 后 Shell/SQL 原有测试保留并通过。
+Ruby 非插值短引用仍允许转义结束符，Context.Literal 不将这类引用当成完全禁用反斜杠。
+
+同上 Linux/Pango 环境，`go test ./...`、`GOWORK=off go test ./...`、
+`GOWORK=off go test -race ./language ./internal/highlight` 通过。
+新增 heredoc 原生亮暗 1× 位图断言通过；独立 Software 浅色 1× 窗口程序通过 29 种语言建议、
+接受和撤销，以及新增 Ruby 转义单引号输入和原有全部断言。
+环境、依赖、日志目录与桌面隔离方式同 PowerShell；本组未单独运行 macOS/Windows。

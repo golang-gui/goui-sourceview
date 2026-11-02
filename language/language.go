@@ -40,6 +40,7 @@ const (
 	CSharp     ID = "csharp"
 	Lua        ID = "lua"
 	PowerShell ID = "powershell"
+	Ruby       ID = "ruby"
 	Markdown   ID = "markdown"
 )
 
@@ -120,6 +121,7 @@ var builtins = []Info{
 	{ID: CSharp, Name: "C#", Extensions: []string{".cs", ".csx"}, MIMETypes: []string{"text/x-csharp"}},
 	{ID: Lua, Name: "Lua", Extensions: []string{".lua"}, MIMETypes: []string{"text/x-lua"}},
 	{ID: PowerShell, Name: "PowerShell", Extensions: []string{".ps1", ".psm1", ".psd1"}, MIMETypes: []string{"application/x-powershell"}},
+	{ID: Ruby, Name: "Ruby", Extensions: []string{".rb", ".rbw", ".rake", ".gemspec", ".ru"}, MIMETypes: []string{"text/x-ruby"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -148,6 +150,8 @@ func Guess(filename string, sample []byte) ID {
 		return Dockerfile
 	case base == "nginx.conf" || strings.HasSuffix(base, ".nginx.conf"):
 		return Nginx
+	case base == "Gemfile" || base == "Rakefile":
+		return Ruby
 	}
 	// Uppercase .C is a conventional C++ suffix, even on case-sensitive hosts.
 	if filepath.Ext(filename) == ".C" {
@@ -170,6 +174,9 @@ func Guess(filename string, sample []byte) ID {
 		return Shell
 	}
 	interpreter := shebangInterpreter(sample)
+	if interpreter == "ruby" {
+		return Ruby
+	}
 	if interpreter == "pwsh" || interpreter == "powershell" {
 		return PowerShell
 	}

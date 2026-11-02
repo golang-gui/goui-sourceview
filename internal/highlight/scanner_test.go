@@ -1,6 +1,7 @@
 package highlight
 
 import (
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -314,6 +315,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.CSharp, `var s=$$"""raw {{true}}""";`, "$$", "$$$", "true", language.KindString},
 		{language.Lua, "local x=[=[open\nbody\n]=]\nreturn x", "]=]", "]==]", "return", language.KindString},
 		{language.PowerShell, "$x=@'\nbody\n'@\nfunction f {}", "'@", " '@", "function", language.KindString},
+		{language.Ruby, "x=<<~TXT\nbody\n TXT\nclass Demo; end", " TXT", " MISS", "class", language.KindString},
 	} {
 		m := textedit.NewModel(tc.text)
 		e := New(m, tc.id)
@@ -606,6 +608,7 @@ func TestNewLanguageSnapshotsRemainImmutable(t *testing.T) {
 		{language.TOML, "a = [1, { b = ", "true }, 2]"},
 		{language.YAML, "key: |\n  first", "next: true"},
 		{language.Shell, "cat <<A <<'B'\nfirst", "A"},
+		{language.Ruby, "puts(<<A, <<B)\n#{true", "}"},
 	} {
 		_, before := scanAll(tc.id, tc.prefix, 3)
 		_, _, _ = Scan(tc.id, before, tc.next, len(tc.next), true)
@@ -670,6 +673,20 @@ func TestProgrammingLanguageKinds(t *testing.T) {
 		{language.PowerShell, "<# outer <# inner #> function f {}", "function", language.KindKeyword},
 		{language.PowerShell, "$x='first\nsecond'; function f {}", "second", language.KindString},
 		{language.PowerShell, "Write-Output ‘foo#bar’; function f {}", "foo", language.KindString},
+		{language.Ruby, "class Demo\n def hello(name)\n  \"hi #{true ? name : 'x'}\"\n end\nend", "class", language.KindKeyword},
+		{language.Ruby, "x=%q{literal #{true} {nested}}", "true", language.KindString},
+		{language.Ruby, "x=%Q{interpolate #{true} {nested}}", "true", language.KindKeyword},
+		{language.Ruby, "x=%r{[/]+\\w{2}}im; y=10 / 2", "[/]", language.KindString},
+		{language.Ruby, "x=10 / 2", "/", language.KindDelimiter},
+		{language.Ruby, "puts(<<A, <<-'B')\n#{true}\nA\n#{false}\n B\nclass Demo;end", "true", language.KindKeyword},
+		{language.Ruby, "puts(<<A, <<-'B')\n#{true}\nA\n#{false}\n B\nclass Demo;end", "false", language.KindString},
+		{language.Ruby, "puts(<<A, <<-'B')\n#{true}\nA\n#{false}\n B\nclass Demo;end", "class", language.KindKeyword},
+		{language.Ruby, "x=<<A\n#{puts <<B}\ninner\nB\nouter\nA\nclass Demo;end", "inner", language.KindString},
+		{language.Ruby, "x=<<A\n#{puts <<B}\ninner\nB\nouter\nA\nclass Demo;end", "class", language.KindKeyword},
+		{language.Ruby, "=begin\nclass Fake\n=end\nclass Real;end", "Fake", language.KindComment},
+		{language.Ruby, "__END__\nclass data", "class", language.KindString},
+		{language.Ruby, "x=:name; @@value=$name; x=1..2", "name", language.KindProperty},
+		{language.Ruby, `x=?\u{5b57}; x!=y`, `?\u{5b57}`, language.KindString},
 	} {
 		t.Run(string(tc.id)+"/"+tc.needle, func(t *testing.T) {
 			for _, chunk := range []int{1, 3, 31, ChunkSize} {
@@ -693,6 +710,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 		language.Lua:    {"local x=[==[raw ]=] text\n]==]\n--[=[ comment\n]=]\nlocal s='a\\z \n b'; return 0x1.fp+2", "local x=[" + strings.Repeat("=", ChunkSize*2) + "[body]" + strings.Repeat("=", ChunkSize*2) + "]; return x"},
 	}
 	fixtures[language.PowerShell] = []string{"function Greet { param($name) \"hi $name$($(\"nested\")) ${env:PATH}\"; if ($true -AND $false) { 1..3 } }\n$x=@\"\nbody $env:PATH $(if (1) { \"x\" })\n\"@\n$x=@'\nliteral $name\n '@\n'@", "$x=‘it’’s’\n<# a <# b #> function f {}\n$x=\"a`\"b\"", "$x=@'\n" + strings.Repeat("字", ChunkSize) + "\n'@"}
+	fixtures[language.Ruby] = []string{"class Demo\n def hi(name)\n \"#{true ? %Q{nested #{1}} : name} #@value\"\n end\nend\nx=%r[[/]]im; y=10 / 2\nputs(<<A, <<-'B')\n#{true}\nA\n#{false}\n B\nclass Real;end", "x=<<A\n#{puts <<B}\ninner\nB\nouter\nA\nclass Demo;end", "x=<<'" + strings.Repeat("字", ChunkSize) + "'\nbody\n" + strings.Repeat("字", ChunkSize) + "\nclass Demo;end", "x=\"#@" + strings.Repeat("name", ChunkSize) + "\""}
 	for id, texts := range fixtures {
 		for _, text := range texts {
 			want, ws := scanAll(id, text, ChunkSize*8)
@@ -709,7 +727,7 @@ func TestProgrammingLanguageFragments(t *testing.T) {
 func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 	random := rand.New(rand.NewSource(20261102))
 	alphabet := []rune("Rurcb0129_'\"\\$#@!*+-[]{}():,;=/ \t\n你好")
-	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell} {
+	for _, id := range []language.ID{language.C, language.Cpp, language.Java, language.Rust, language.CSharp, language.Lua, language.PowerShell, language.Ruby} {
 		for round := 0; round < 300; round++ {
 			var b strings.Builder
 			for n := random.Intn(500); n > 0; n-- {
@@ -720,6 +738,33 @@ func TestProgrammingLanguageMalformedFragments(t *testing.T) {
 			got, gs := scanAll(id, text, 1+random.Intn(17))
 			if !reflect.DeepEqual(got, want) || !gs.Equal(ws) {
 				t.Fatalf("%s malformed %q: got %v want %v\ngot state %#v\nwant state %#v", id, text, got, want, gs.raw, ws.raw)
+			}
+		}
+	}
+}
+
+func TestRubyQueuedHeredocs(t *testing.T) {
+	var text strings.Builder
+	text.WriteString("puts(")
+	for i := 0; i < 63; i++ {
+		if i > 0 {
+			text.WriteString(",")
+		}
+		fmt.Fprintf(&text, "<<E%d", i)
+	}
+	text.WriteString(")\n")
+	for i := 0; i < 63; i++ {
+		fmt.Fprintf(&text, "body%d\nE%d\n", i, i)
+	}
+	text.WriteString("class Real; end")
+	for _, chunk := range []int{1, 7, ChunkSize} {
+		tokens, _ := scanAll(language.Ruby, text.String(), chunk)
+		if kindAt(tokens, strings.LastIndex(text.String(), "class")) != language.KindKeyword {
+			t.Fatal("heredoc queue did not restore code")
+		}
+		for i := 0; i < 63; i++ {
+			if kindAt(tokens, strings.Index(text.String(), fmt.Sprintf("body%d\n", i))) != language.KindString {
+				t.Fatalf("heredoc %d lost", i)
 			}
 		}
 	}

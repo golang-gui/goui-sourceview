@@ -105,6 +105,7 @@ func main() {
 		{language.Java, "synch", "synchronized"}, {language.Rust, "matc", "match"},
 		{language.CSharp, "namesp", "namespace"}, {language.Lua, "funct", "function"},
 		{language.PowerShell, "funct", "function"},
+		{language.Ruby, "unles", "unless"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -160,6 +161,7 @@ func main() {
 		{language.CSharp, "var text = ", `"""`, `var text = """`},
 		{language.Rust, "fn get<", "'a", "fn get<'a"},
 		{language.PowerShell, "$x = ", "'it''s'", "$x = 'it''s'"},
+		{language.Ruby, "x = ", "'it\\'s'", "x = 'it\\'s'"},
 	} {
 		steps = append(steps, func() {
 			d := source.NewDocument(tc.prefix)

@@ -878,6 +878,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		{language.CSharp, "var x=\"\"\"\nbody\n\"\"\";", "body", 1, language.KindString},
 		{language.Lua, "local x=[=[\nbody\n]=]", "body", 1, language.KindString},
 		{language.PowerShell, "$x=@'\nbody\n'@", "body", 1, language.KindString},
+		{language.Ruby, "x=<<~'TXT'\nbody\n TXT", "body", 1, language.KindString},
 	} {
 		for _, colors := range []*scheme.Scheme{scheme.Light(), scheme.Dark()} {
 			func() {

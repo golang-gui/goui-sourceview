@@ -24,11 +24,6 @@ type shFrame struct {
 	depth  int
 }
 
-// Delimiter spelling is immutable chunks, with no fixed maximum length.
-type shText struct {
-	previous *shText
-	text     string
-}
 type shDelimiter struct {
 	parts  []string
 	length int
@@ -56,7 +51,7 @@ type shellState struct {
 	stack    *shFrame
 	pending  []shHere
 	active   *shHere
-	spelling *shText
+	spelling *scanText
 }
 
 func shDepth(p *shFrame) int {
@@ -154,18 +149,6 @@ func equalShell(a, b *shellState) bool {
 	}
 	return x.shellLexical == y.shellLexical
 }
-func captureText(p *shText) string {
-	var parts []string
-	for p != nil {
-		parts = append(parts, p.text)
-		p = p.previous
-	}
-	var b strings.Builder
-	for i := len(parts) - 1; i >= 0; i-- {
-		b.WriteString(parts[i])
-	}
-	return b.String()
-}
 func (s *shellState) activate() {
 	depth := shDepth(s.stack)
 	for i, d := range s.pending {
@@ -221,7 +204,7 @@ func scanShell(state builtinState, input string, limit int, lineEnd bool) ([]lex
 	var captured strings.Builder
 	flushCapture := func() {
 		if captured.Len() > 0 {
-			s.spelling = &shText{previous: s.spelling, text: captured.String()}
+			s.spelling = &scanText{previous: s.spelling, text: captured.String()}
 			captured.Reset()
 		}
 	}

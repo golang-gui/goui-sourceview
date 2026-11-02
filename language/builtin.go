@@ -118,6 +118,16 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
+		case Ruby:
+			d.Tokenizer = rbTokenizer{}
+			d.Editing.Comments = Comments{Line: "#"}
+			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || strings.ContainsRune("@$!?", r) }
+			p := Pair{Open: "`", Close: "`", NotInString: true, NotInComment: true}
+			d.Editing.AutoClosingPairs = append(d.Editing.AutoClosingPairs, p)
+			d.Editing.SurroundingPairs = append(d.Editing.SurroundingPairs, p)
+			d.AllowWordSuggestions = codeWordSuggestions
+			vocabulary := codeVocabulary(info.ID)
+			d.Suggest = func(Context) []string { return vocabulary }
 		case PowerShell:
 			d.Tokenizer = psTokenizer{}
 			d.Editing.Comments = Comments{Line: "#", Block: Pair{Open: "<#", Close: "#>"}}
@@ -209,6 +219,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines,
 		"c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp,
 		"ps1": PowerShell, "pwsh": PowerShell, "ps": PowerShell,
+		"rb": Ruby,
 	} {
 		table[alias] = definitions[id]
 	}
@@ -230,6 +241,8 @@ func codeVocabulary(id ID) []string {
 	switch id {
 	case PowerShell:
 		table = psKeywords
+	case Ruby:
+		table = rbKeywords
 	case C:
 		table = cKeywords
 	case Cpp:

@@ -470,3 +470,31 @@ here-string 开头后只允许空白和真正行尾；关闭标记必须在物�
 分离普通引用和 here-string 的状态，但自行实现片段与插值栈，不复制其正则或依赖。
 保留 [GtkSourceView 5.22.1](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/lang-reference.html)
 按词法上下文组织语言的思路，最终仍遵守本项目 Tokenizer/State 契约。
+
+## 14. Ruby
+
+新增 `language.Ruby`，识别 `.rb/.rbw/.rake/.gemspec/.ru`、Gemfile/Rakefile、ruby shebang，
+提供 ruby/rb 围栏、`#` 注释、引用/结构配对、适用词边界和关键词建议。
+支持关键字、实例/类/全局变量、symbol、常用数字/字符字面量、单双/反引号、
+`%q/%Q/%w/%W/%i/%I/%r/%s/%x` 和默认 `%` 引用、正则 flags、字符串插值、
+列首 `=begin/=end` 注释及 `__END__` 数据段。
+百分号配对 delimiter 计嵌套，正则保留字符类和转义状态；`#{}` 使用不可变恢复栈，
+代码中的字符串/注释不改变外层括号深度，`#@name/#$name` 使用流式变量状态。
+
+`<<`、`<<-`、`<<~` 分别记录 delimiter、结束缩进许可和单引号禁用插值规则。
+同一物理行的多个 heredoc 按声明顺序启动；正文内插值再次声明 heredoc 时，保存当前
+正文/表达式及剩余队列，子正文结束后恢复。结束候选与正文词法并行检查，只有整行匹配
+才修正本行 token 并恢复上下文，不把正文中相同前缀误认为关闭。
+缩进剥离是解释器值语义，本控件保留全部原始空白与坐标。
+
+队列使用私有的不可变追加树，插入和索引随队列长度对数增长，不在每个字符复制队列，
+不在换行时一次反转整串待处理声明；节点随声明数量增长，消费完成后释放当前引用。
+delimiter 的完整拼写通过共用 scanText 不可变片段保留，不截断长名字；该机械工具由
+Shell、SQL、Ruby 共用，规则与可变状态仍分别维护。正文不进入状态，Equal 比较完整语义值。
+命令调用/位移、正则/除法使用词法上下文，错误或歧义源码不承诺完整 Ruby parser 结果，
+也不推断 Rails DSL、常量类型或自动生成 end。
+
+2026-11-02 核对 [Ruby 3.4 literals](https://docs.ruby-lang.org/en/3.4/syntax/literals_rdoc.html)，
+参考 [Lexilla LexRuby 6645c18](https://github.com/ScintillaOrg/lexilla/blob/6645c18df16077f1ea19cabdf1e8bc6b2a4409be/lexers/LexRuby.cxx)
+的引用、preferRE、heredoc 上下文划分。该源码的 HereDocCls 使用固定 delimiter 数组，
+本项目不沿用长度限制，采用既有不可变分片协议。未复制其实现或依赖解释器。

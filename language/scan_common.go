@@ -81,3 +81,23 @@ func words(text string) map[string]bool {
 	}
 	return out
 }
+
+// scanText retains immutable spelling fragments without copying a long prefix
+// on each scan. State equality compares spelling rather than chunk boundaries.
+type scanText struct {
+	previous *scanText
+	text     string
+}
+
+func captureText(p *scanText) string {
+	var parts []string
+	for p != nil {
+		parts = append(parts, p.text)
+		p = p.previous
+	}
+	var b strings.Builder
+	for i := len(parts) - 1; i >= 0; i-- {
+		b.WriteString(parts[i])
+	}
+	return b.String()
+}

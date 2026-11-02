@@ -25,6 +25,7 @@ func sampleDocuments() []exampleDocument {
 		"Dockerfile", "query.sql", "hello.go", "hello.py", "app.js", "app.ts", "theme.css", "events.jsonl",
 		"hello.c", "hello.cpp", "Hello.java", "hello.rs", "Hello.cs", "hello.lua",
 		"hello.ps1",
+		"hello.rb",
 	} {
 		text, err := samples.ReadFile("samples/" + name)
 		if err != nil {
