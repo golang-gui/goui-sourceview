@@ -37,6 +37,7 @@ const (
 	Cpp        ID = "cpp"
 	Java       ID = "java"
 	Rust       ID = "rust"
+	CSharp     ID = "csharp"
 	Markdown   ID = "markdown"
 )
 
@@ -114,6 +115,7 @@ var builtins = []Info{
 	{ID: Cpp, Name: "C++", Extensions: []string{".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".h++", ".ipp", ".inl", ".ixx", ".cppm", ".ii"}, MIMETypes: []string{"text/x-c++src", "text/x-c++hdr", "text/x-chdr"}},
 	{ID: Java, Name: "Java", Extensions: []string{".java"}, MIMETypes: []string{"text/x-java"}},
 	{ID: Rust, Name: "Rust", Extensions: []string{".rs"}, MIMETypes: []string{"text/x-rust"}},
+	{ID: CSharp, Name: "C#", Extensions: []string{".cs", ".csx"}, MIMETypes: []string{"text/x-csharp"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 

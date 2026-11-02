@@ -2,7 +2,7 @@
 // 启动：go run ./tests/window/editor/languages [-dark]；Linux 无 IME 服务时设置
 // XMODIFIERS=@im=none。初始为一个可编辑视图，程序自动切换文档，经正常事件路径
 // 触发补全、方向键选中、Enter 接受、撤销，再输入引用与括号并断言文本和光标。
-// 引用输入按对应语言的配对规则检查，不能多插闭合引用。
+// Java/C# 三引号不能多插闭合引用，Rust 生命周期不能被自动补成字符引用。
 // 另检查只读拒绝、语义文本/选区；全部断言完成后自动关闭，提前关闭或失败则非零退出。
 // 补全逐个等待已分配的可视区域，最多 8 秒；Show 返回不能代替布局完成。
 // 记录实际 typography/painter/scale；颜色另有原生位图断言，不能用窗口启动代替像素验收。
@@ -103,6 +103,7 @@ func main() {
 		{language.TypeScript, "interf", "interface"}, {language.CSS, ".x { backg", ".x { background"},
 		{language.C, "retu", "return"}, {language.Cpp, "conste", "constexpr"},
 		{language.Java, "synch", "synchronized"}, {language.Rust, "matc", "match"},
+		{language.CSharp, "namesp", "namespace"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -155,7 +156,7 @@ func main() {
 		{language.Python, "text = ", `"""`, `text = """`},
 		{language.Go, "text := ", "`raw`", "text := `raw`"},
 		{language.Java, "String text = ", `"""`, `String text = """`},
-
+		{language.CSharp, "var text = ", `"""`, `var text = """`},
 		{language.Rust, "fn get<", "'a", "fn get<'a"},
 	} {
 		steps = append(steps, func() {

@@ -118,7 +118,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
-		case C, Cpp, Java, Rust:
+		case C, Cpp, Java, Rust, CSharp:
 			switch info.ID {
 			case C, Cpp:
 				d.Tokenizer = cTokenizer{info.ID}
@@ -126,6 +126,8 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 				d.Tokenizer = javaTokenizer{}
 			case Rust:
 				d.Tokenizer = rustTokenizer{}
+			case CSharp:
+				d.Tokenizer = csTokenizer{}
 			}
 			d.AllowWordSuggestions = codeWordSuggestions
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -137,7 +139,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			if info.ID == Java {
 				d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
 			}
-			if info.ID == Java {
+			if info.ID == Java || info.ID == CSharp {
 				d.Editing.AllowPair = func(c PairContext) bool {
 					return c.Selected || c.Context.String || c.Typed != `"` || !strings.HasSuffix(c.Before, `""`)
 				}
@@ -190,7 +192,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 			table[string(id)] = l
 		}
 	}
-	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines, "c++": Cpp, "cc": Cpp, "rs": Rust} {
+	for alias, id := range map[string]ID{"sh": Shell, "bash": Shell, "yml": YAML, "js": JavaScript, "ts": TypeScript, "py": Python, "golang": Go, "proto": Protobuf, "make": Makefile, "docker": Dockerfile, "jsonl": JSONLines, "ndjson": JSONLines, "c++": Cpp, "cc": Cpp, "rs": Rust, "cs": CSharp, "c#": CSharp} {
 		table[alias] = definitions[id]
 	}
 	return table
@@ -217,6 +219,8 @@ func codeVocabulary(id ID) []string {
 		table = javaKeywords
 	case Rust:
 		table = rustKeywords
+	case CSharp:
+		table = csKeywords
 	case Go:
 		table = goKeywords
 	case Python:
