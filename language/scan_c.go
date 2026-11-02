@@ -48,12 +48,15 @@ var objcKeywords = words("id Class SEL BOOL instancetype YES NO nil Nil self sup
 var objcDirectives = words("interface implementation end class protocol property synthesize dynamic selector encode defs optional required public protected private package try catch finally throw synchronized autoreleasepool import available compatibility_alias YES NO true false")
 
 func cBaseID(id ID) ID {
+	if id == ObjectiveCpp {
+		return Cpp
+	}
 	if id == ObjectiveC {
 		return C
 	}
 	return id
 }
-func cObjective(id ID) bool { return id == ObjectiveC }
+func cObjective(id ID) bool { return id == ObjectiveC || id == ObjectiveCpp }
 
 func cPrefix(id ID, word string, quote byte) (raw, ok bool) {
 	if cObjective(id) && word == "@" && quote == '"' {

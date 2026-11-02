@@ -712,3 +712,8 @@ Objective-C 复用第 12 章的 C 扫描器，增加语言身份及 `@` 词法�
 和 [Clang Objective-C 字面量](https://clang.llvm.org/docs/ObjectiveCLiterals.html)
 （后者注明 LLVM Clang 3.1 / Apple LLVM 4.0 起提供相关字面量）。
 C/C++ 基础状态及参考框架沿用第 12 章，不引入 Clang、Cocoa 或其他运行依赖。
+
+Objective-C++ 使用独立 ID objective-cpp，`.mm` 直接识别；围栏接受
+objective-cpp/objective-c++/objcpp/objc++。同一 C 扫描器选择 C++ 基础规则，
+在正常代码状态增加上述 Objective-C 语法，保留 C++ 原始引用及预处理。
+原始引用正文中的 @ 指令不进入代码状态；两种语言身份的状态不能互换。

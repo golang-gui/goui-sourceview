@@ -639,6 +639,9 @@ func TestFourthBatchKinds(t *testing.T) {
 	}{
 		{language.Zig, `const x: u4096 = @intCast(1);`, "u4096", language.KindKeyword},
 		{language.ObjectiveC, `@interface Demo : NSObject @end`, "@interface", language.KindKeyword},
+		{language.ObjectiveCpp, `template<class T> id box(T x){return @(x);} auto s=R"tag(@interface literal)tag";`, "template", language.KindKeyword},
+		{language.ObjectiveCpp, `auto s=R"tag(@interface literal)tag"; @implementation Demo @end`, "literal", language.KindString},
+		{language.ObjectiveCpp, `auto s=R"tag(@interface literal)tag"; @implementation Demo @end`, "@implementation", language.KindKeyword},
 		{language.ObjectiveC, `id s=@"a {literal}"; NSArray *a=@[@42,@YES];`, "literal", language.KindString},
 		{language.ObjectiveC, `id s=@"a {literal}"; NSArray *a=@[@42,@YES];`, "@42", language.KindNumber},
 		{language.ObjectiveC, `NSArray *a=@[@-42,@YES];`, "@YES", language.KindKeyword},
@@ -661,8 +664,9 @@ func TestFourthBatchKinds(t *testing.T) {
 
 func TestFourthBatchFragments(t *testing.T) {
 	fixtures := map[language.ID][]string{
-		language.ObjectiveC: {"#import <Foundation/Foundation.h>\n@interface Demo : NSObject\n@property(copy) NSString *name;\n@end\n@implementation Demo\n- (id)value { @autoreleasepool { return @{ @\"key\": @[@42,@-1,@YES,@(1+2)] }; } }\n@end", "id s=@\"" + strings.Repeat("字\\n", ChunkSize) + "\"; /* comment */ return nil;"},
-		language.Zig:        {"//! module\nconst @\"name 字\"=\\\\body ${raw} \\n\n\\\\continued\nconst n:u12=0x1.fp+2; const c='\\u{1234}'; const s=\"\\x41\";", "const s=\\\\" + strings.Repeat("字\\{}", ChunkSize) + "\nconst yes=true;"},
+		language.ObjectiveCpp: {"#import <Foundation/Foundation.h>\n#include <vector>\ntemplate<class T> id box(T x){return @(x);} auto s=u8R\"tag(raw\n@interface fake )wrong\" still)tag\"; @interface Real : NSObject @end", "auto s=R\"0123456789abcdef(" + strings.Repeat("字@\"", ChunkSize) + ")0123456789abcdef\"; @end"},
+		language.ObjectiveC:   {"#import <Foundation/Foundation.h>\n@interface Demo : NSObject\n@property(copy) NSString *name;\n@end\n@implementation Demo\n- (id)value { @autoreleasepool { return @{ @\"key\": @[@42,@-1,@YES,@(1+2)] }; } }\n@end", "id s=@\"" + strings.Repeat("字\\n", ChunkSize) + "\"; /* comment */ return nil;"},
+		language.Zig:          {"//! module\nconst @\"name 字\"=\\\\body ${raw} \\n\n\\\\continued\nconst n:u12=0x1.fp+2; const c='\\u{1234}'; const s=\"\\x41\";", "const s=\\\\" + strings.Repeat("字\\{}", ChunkSize) + "\nconst yes=true;"},
 	}
 	for id, texts := range fixtures {
 		for _, text := range texts {

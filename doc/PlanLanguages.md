@@ -415,3 +415,10 @@ Unicode/十六进制转义、成员/级联点号、指数与十六进制数。
 `GOWORK=off go test ./...` 及原生 Pango 亮暗 1× 指令颜色断言通过。
 同本批独立 X11 / Software / 浅色 1×，`-language objective-c` 的 @interface 建议、接受/撤销、
 对象引用输入及公共断言通过。自动识别保留 MATLAB/无特征 .m 的 Plain 和 .h 的 C++ 约定。
+
+### Objective-C++
+
+新增独立 Objective-C++ ID、.mm、默认围栏/别名及 hello.mm，示例共 40 份。
+C++ 原始字符串与 @ 语法混合、长引用、模板词汇、真实行尾状态恢复和分片对照通过。
+`GOWORK=off go test ./...` 与原生 Pango 亮暗 1× 原始引用正文颜色断言通过。
+同本批独立浅色 1× 会话，`-language objective-cpp` 建议接受/撤销、对象引用输入和公共断言通过。

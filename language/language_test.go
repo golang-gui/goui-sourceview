@@ -54,6 +54,7 @@ func TestGuess(t *testing.T) {
 		{"binary.swiftmodule", "", Plain},
 		{"hello.dart", "", Dart}, {"script", "#!/usr/bin/env dart", Dart},
 		{"hello.zig", "", Zig},
+		{"hello.mm", "", ObjectiveCpp},
 		{"hello.m", "#import <Foundation/Foundation.h>", ObjectiveC}, {"hello.m", "@interface Demo : NSObject", ObjectiveC},
 		{"plot.m", "function y=f(x)\ny=x+1;\nend", Plain}, {"empty.m", "", Plain}, {"shared.h", "@interface Demo", Cpp},
 		{"hello.R", "", R}, {"hello.r", "", R}, {"hello.Rscript", "", R}, {".Rprofile", "", R},
@@ -156,6 +157,7 @@ func TestAddedLanguageContextsAndSnapshots(t *testing.T) {
 		{R, `x <- r"--(raw`, true, false, true}, {R, "`a b", true, false, false},
 		{Zig, `const s=\\raw`, true, false, true}, {Zig, `const @"a b`, true, false, false},
 		{ObjectiveC, `id s=@"text`, true, false, false},
+		{ObjectiveCpp, `auto s=R"tag(raw`, true, false, true},
 	} {
 		t.Run(string(tc.id), func(t *testing.T) {
 			l, _ := Builtin(tc.id)
@@ -423,6 +425,7 @@ func TestProgrammingLanguageFences(t *testing.T) {
 			{"r", R, "function"}, {"R", R, "TRUE"},
 			{"zig", Zig, "comptime"},
 			{"objc", ObjectiveC, "@interface"}, {"objective-c", ObjectiveC, "@end"},
+			{"objcpp", ObjectiveCpp, "namespace"}, {"objc++", ObjectiveCpp, "@end"}, {"objective-cpp", ObjectiveCpp, "template"},
 		} {
 			scanner := md.Tokenizer()
 			fence := "```" + tc.name

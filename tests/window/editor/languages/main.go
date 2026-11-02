@@ -118,6 +118,7 @@ func main() {
 		{language.R, "funct", "function"},
 		{language.Zig, "comp", "comptime"},
 		{language.ObjectiveC, "@interf", "@interface"},
+		{language.ObjectiveCpp, "namesp", "namespace"},
 	}
 	var steps []func()
 	var pendingViewport func() bool
@@ -192,6 +193,7 @@ func main() {
 		{language.R, "x <- ", "'it\\'s'", "x <- 'it\\'s'"},
 		{language.Zig, "const s = ", "\"a\\\"b\"", "const s = \"a\\\"b\""},
 		{language.ObjectiveC, "id s = ", `@"hello"`, `id s = @"hello"`},
+		{language.ObjectiveCpp, "id s = ", `@"hello"`, `id s = @"hello"`},
 		{language.PowerShell, "$x = ", "\"a`\"b\"", "$x = \"a`\"b\""},
 		{language.PowerShell, "$x = ", "\"C:\\\"", "$x = \"C:\\\""},
 	} {

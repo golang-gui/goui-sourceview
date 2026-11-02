@@ -118,7 +118,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			}
 			vocabulary := configVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
-		case ObjectiveC:
+		case ObjectiveC, ObjectiveCpp:
 			d.Tokenizer = cTokenizer{info.ID}
 			d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '@' }
 			d.Editing.Comments = Comments{Line: "//", Block: Pair{Open: "/*", Close: "*/"}}
@@ -351,6 +351,7 @@ func builtinFences(definitions map[ID]*Language) map[string]*Language {
 		"javascriptreact": JSX, "typescriptreact": TSX,
 		"kt": Kotlin, "kts": Kotlin,
 		"objc": ObjectiveC, "objectivec": ObjectiveC,
+		"objcpp": ObjectiveCpp, "objc++": ObjectiveCpp, "objective-c++": ObjectiveCpp,
 	} {
 		table[alias] = definitions[id]
 	}
@@ -370,7 +371,7 @@ func defaultEditing() EditingRules {
 func codeVocabulary(id ID) []string {
 	var table map[string]bool
 	switch id {
-	case ObjectiveC:
+	case ObjectiveC, ObjectiveCpp:
 		out := codeVocabulary(cBaseID(id))
 		for word := range objcKeywords {
 			out = append(out, word)

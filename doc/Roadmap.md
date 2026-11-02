@@ -48,7 +48,7 @@
 1. C、C++、Java、Rust、C#、Lua：已有识别、引用/注释状态、编辑规则、建议及样本。
 2. PowerShell、Ruby、PHP、JSX/TSX：已有对应引用、插值、heredoc 与混合语言规则，具体范围见高亮设计；验收结果见语言验证记录。
 3. Kotlin、Swift、Dart、R：已有词法、编辑规则及示例。
-4. Zig、Objective-C、Objective-C++、Scala、Perl：逐语言实施与验收，Zig 已接入，其他待完成。
+4. Zig、Objective-C、Objective-C++、Scala、Perl：前三种已接入，Scala、Perl 待完成。
 
 第三批 Kotlin、Swift、Dart、R 已实现；各语言的验收状态见语言验证记录。优先复用现有 token、上下文和
 分片协议，新增语言不以引入解析器框架或语言服务为前置。
