@@ -97,3 +97,12 @@ EDN 使用独立 ID、词汇和编辑规则，复用 Clojure 扫描设施中的�
 保留不可变丢弃帧，嵌套丢弃不提前恢复正文，字符串正文不累计副本。词法数值着色不代替 EDN 数字合法性校验。
 
 依据 [edn-format/edn 规范](https://github.com/edn-format/edn)。
+
+## Git config
+
+识别 .gitconfig、.gitmodules、.git/config 与 config.worktree，其他泛化 config 不猜测为 Git。
+区分节/引用子节、变量和值；引号外 #/; 开始注释，引号内保留正文，值的末尾反斜杠延续下一物理行。
+子节与值的转义分开处理，节不会跨行；不将单引号当作引用，不把值交给 Shell。
+支持常用变量名建议，配置正文不自动插入代码括号；不读 include、不访问 Git 仓库或应用配置。
+
+依据 [git-config Syntax](https://git-scm.com/docs/git-config#_syntax)（页面 2.56.0）。

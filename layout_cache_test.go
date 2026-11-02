@@ -852,6 +852,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 		row        int
 		kind       language.Kind
 	}{
+		{language.GitConfig, "key=one\\\nbody", "body", 1, language.KindString},
 		{language.EDN, "#_(\nbody\n)", "body", 1, language.KindComment},
 		{language.JSON5, "\"first\\\nbody\"", "body\"", 1, language.KindString},
 		{language.EditorConfig, "# body", "# body", 0, language.KindComment},

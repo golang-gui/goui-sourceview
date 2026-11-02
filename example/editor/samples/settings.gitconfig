@@ -1,0 +1,14 @@
+# Example Git configuration
+[user]
+    name = GOUI Contributor
+    email = editor@example.invalid
+[core]
+    autocrlf = input
+    editor = "sourceview --wait" # comment outside quotes
+[remote "origin"]
+    url = https://github.com/golang-gui/goui-sourceview
+    fetch = +refs/heads/*:refs/remotes/origin/*
+[alias]
+    summary = log --oneline \
+              --decorate
+    literal = "# value; still text"

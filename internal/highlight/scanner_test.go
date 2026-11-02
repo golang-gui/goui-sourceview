@@ -291,6 +291,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		text, old, replacement, needle string
 		kind                           language.Kind
 	}{
+		{language.GitConfig, "key=one\\\nbody", "\\", "", "body", language.KindProperty},
 		{language.EDN, "#_(\nbody\n) true", "#_", "", "body", language.KindPlain},
 		{language.JSON5, "/* first\nbody */ true", "/*", "", "body", language.KindInvalid},
 		{language.EditorConfig, "key=one #body", "=one", " one", "body", language.KindProperty},
@@ -413,6 +414,11 @@ var textFormatCases = []struct {
 	text, needle string
 	kind         language.Kind
 }{
+	{language.GitConfig, "[remote \"my origin\"]", "origin", language.KindString},
+	{language.GitConfig, "url=\"https://host/#value\"; comment", "value", language.KindString},
+	{language.GitConfig, "url=\"https://host/#value\"; comment", "comment", language.KindComment},
+	{language.GitConfig, "key=one\\\nbody", "body", language.KindString},
+	{language.GitConfig, "[core]\nfilemode", "filemode", language.KindProperty},
 	{language.EDN, "{:key true :other nil}", ":key", language.KindProperty},
 	{language.EDN, "{:key true}", "true", language.KindKeyword},
 	{language.EDN, "(defn x)", "defn", language.KindPlain},

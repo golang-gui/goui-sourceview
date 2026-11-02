@@ -73,3 +73,101 @@ func (editorConfigTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	return w.result(limit, s), nil
 }
+
+type gitConfigTokenizer struct{}
+type gitConfigState struct {
+	phase                  byte
+	quote, escape, comment bool
+}
+
+func (s gitConfigState) Equal(other State) bool { t, ok := other.(gitConfigState); return ok && s == t }
+func (s gitConfigState) Context() Context {
+	return Context{String: s.phase == 2 || s.quote, Comment: s.comment, Value: s.phase == 2}
+}
+func (gitConfigTokenizer) InitialState() State { return gitConfigState{} }
+
+var gitConfigWords = strings.Fields("name email editor autocrlf ignorecase filemode bare repositoryformatversion url fetch pushurl path branch remote merge rebase defaultBranch signingkey gpgsign")
+
+func (gitConfigTokenizer) Scan(in Input, previous State) (Result, error) {
+	s, ok := previous.(gitConfigState)
+	if !ok {
+		return Result{}, fmt.Errorf("language: foreign Git config state")
+	}
+	limit, err := scanLimit(in)
+	if err != nil {
+		return Result{}, err
+	}
+	w := tokenWriter{base: in.Offset}
+	for i := 0; i < limit; {
+		c, n := in.Text[i], runeSize(in.Text, i)
+		at := in.Offset + i
+		if s.comment {
+			w.add(at, at+n, KindComment, ClassComment)
+			i += n
+			continue
+		}
+		if s.phase == 0 {
+			if space(c) {
+				i += n
+				continue
+			}
+			s.phase = 1
+			if c == '[' {
+				s.phase = 3
+			}
+		}
+		if s.escape {
+			kind := KindEscape
+			if s.phase != 3 && !strings.ContainsRune("ntb\\\"", rune(c)) {
+				kind = KindInvalid
+			}
+			w.add(at, at+n, kind, ClassString)
+			s.escape = false
+			i += n
+			continue
+		}
+		if !s.quote && (c == '#' || c == ';') {
+			s.comment = true
+			continue
+		}
+		if c == '\\' && (s.phase == 2 || s.quote) {
+			s.escape = true
+			w.add(at, at+n, KindEscape, ClassString)
+			i += n
+			continue
+		}
+		if c == '"' && (s.phase == 2 || s.phase == 3) {
+			s.quote = !s.quote
+			w.add(at, at+n, KindString, ClassString)
+			i += n
+			continue
+		}
+		kind, class := KindProperty, Class(0)
+		switch {
+		case s.quote:
+			kind, class = KindString, ClassString
+		case s.phase == 3:
+			kind = KindMeta
+			if c == ']' {
+				s.phase = 0
+			}
+		case s.phase == 2:
+			kind, class = KindString, ClassString
+		case c == '=':
+			kind, s.phase = KindDelimiter, 2
+		case space(c):
+			i += n
+			continue
+		}
+		w.add(at, at+n, kind, class)
+		i += n
+	}
+	if in.LineEnd && limit == len(in.Text) {
+		if s.escape && s.phase == 2 && !s.comment {
+			s.escape = false
+		} else {
+			s = gitConfigState{}
+		}
+	}
+	return w.result(limit, s), nil
+}

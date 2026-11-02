@@ -92,6 +92,7 @@ const (
 	EditorConfig     ID = "editorconfig"
 	JSON5            ID = "json5"
 	EDN              ID = "edn"
+	GitConfig        ID = "gitconfig"
 	Markdown         ID = "markdown"
 )
 
@@ -224,6 +225,7 @@ var builtins = []Info{
 	{ID: EditorConfig, Name: "EditorConfig", Extensions: []string{".editorconfig"}},
 	{ID: JSON5, Name: "JSON5", Extensions: []string{".json5"}, MIMETypes: []string{"application/json5"}},
 	{ID: EDN, Name: "EDN", Extensions: []string{".edn"}, MIMETypes: []string{"application/edn"}},
+	{ID: GitConfig, Name: "Git config", Extensions: []string{".gitconfig", ".gitmodules"}},
 	{ID: Markdown, Name: "Markdown", Extensions: []string{".md", ".markdown"}, MIMETypes: []string{"text/markdown"}},
 }
 
@@ -244,6 +246,8 @@ func Lookup(id ID) (Info, bool) {
 func Guess(filename string, sample []byte) ID {
 	base := filepath.Base(filename)
 	switch {
+	case base == ".gitconfig" || base == ".gitmodules" || (base == "config" || base == "config.worktree") && filepath.Base(filepath.Dir(filename)) == ".git":
+		return GitConfig
 	case base == ".editorconfig":
 		return EditorConfig
 	case base == "Jenkinsfile":
