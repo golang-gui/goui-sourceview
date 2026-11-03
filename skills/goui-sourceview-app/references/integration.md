@@ -18,9 +18,9 @@
 
 当前 SourceViewView 按 GOUI 新声明契约只实现 WidgetView 的 Mount／Update／Unmount；
 自定义组合组件使用 ComposeView.Build(ctx)，不要给 WidgetView 添加 return self 的
-Build 占位方法。当前开发源码依赖 GOUI v0.5.0，包含四边 Padding、
+Build 占位方法。SourceView v0.3.0 依赖 GOUI v0.6.0，包含四边 Padding、
 局部选区绑定及长段落排版接口；无需相邻 GOUI 检出或本地工作区。
-已发布的 SourceView v0.2.0 仍依赖 GOUI v0.4.0。旧版 SourceView 应参考
+SourceView v0.2.0 依赖 GOUI v0.4.0。旧版 SourceView 应参考
 对应版本的接口和示例，不能直接套用 main 的声明契约。
 
 命令式 SetPadding 接受 `geometry.Insets`，等边使用 `geometry.UniformInsets(n)`；

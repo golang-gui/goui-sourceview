@@ -12,14 +12,12 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer. SourceView v0.2.0 depends on GOUI v0.4.0,
+Requires Go 1.24 or newer. SourceView v0.3.0 depends on GOUI v0.6.0,
 which Go downloads automatically.
 
 ```sh
-go get github.com/golang-gui/goui-sourceview@v0.2.0
+go get github.com/golang-gui/goui-sourceview@v0.3.0
 ```
-
-The development branch depends on GOUI v0.5.0, which Go downloads automatically.
 
 ## Features
 
