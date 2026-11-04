@@ -32,6 +32,10 @@ type Document struct {
 	engine                       *highlight.Engine
 	connection                   signal.Handle
 	views                        map[*SourceView]struct{}
+	marks                        map[LineMarkID]*trackedLineMark
+	nextMark                     LineMarkID
+	markConnection               signal.Handle
+	marksChanged                 signal.Signal0
 	driver                       gui.Root
 	lastFrame                    time.Time
 	observed                     uint64
