@@ -32,7 +32,7 @@ func main() {
 					Content(
 						base.VBox(
 							base.HeaderBar(base.Label("Declarative SourceView")).Padding(8),
-							base.ScrollView(sourceui.SourceView().ID("editor").Document(document).
+							base.ScrollView(sourceui.SourceView().ID("editor").Document(document).ShowMinimap(true).
 								BindSelection(&selection).
 								AcceptsTab(true).
 								IndentOptions(sourceui.IndentOptions{TabWidth: 4, IndentWidth: 4, InsertSpaces: false}).

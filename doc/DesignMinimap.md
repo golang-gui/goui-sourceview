@@ -62,3 +62,25 @@ Basic 和 Modern 使用 minimap-background、minimap-viewport、minimap-border �
 逻辑验证配置、采样预算、UTF-8/Tab、颜色与片段复用、折叠映射、长折行、独立视图、
 revision/配色/卸载失效。独立 X11 窗口验证点击拖动、滚轮、选区保持、开关、宽高变化、
 短/多行/超长单行、亮暗主题与 1/1.5 缩放。其他平台原生运行不计为本机通过。
+
+## 2026-11-04 验证记录
+
+环境：Linux X11 / 独立 Xvnc :87 / Xfwm4 合成 / 软件绘制 / Pango，GOUI v0.6.0。
+使用自己的临时显示服务、DBus 会话和临时目录，结束后回收这些进程；未修改原桌面、
+用户文件、剪贴板、显示缩放或系统设置。截图为 example/debug 的实际桌面显示。
+
+- `go test ./...`、`GOWORK=off go test ./...`：通过。
+- `go test -race . ./ui -run 'LineMark|ExecutionAnchor|Minimap' -count=1`：通过。
+- `GOWORK=off CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...`：通过。
+- `GOWORK=off CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./...`：通过。
+- `tests/window/editor/minimap`：Basic、Modern light/dark × 1/1.5 六组通过。
+  包括点击、拖动、滚轮、焦点/选区保持、宽高改变、关闭再开启、480000 字节单行的
+  中间输入、输入后采样收敛及远处导航；通过 RenderWidget 和桌面截图检查呈现。
+- `tests/window/editor/line_marks -theme dark -minimap`：1/1.5 两组通过，组合验证
+  行标记请求、折叠汇总、执行位置与标记叠加、RevealLine 及编辑后的锚点跟随。
+- Windows/macOS 原生窗口未运行；交叉构建不能代替原生运行。
+
+窗口程序日志中的输入耗时从 Window.DispatchEvent / CommitText 入口计至返回，
+阶段耗时还包含定时器等待、正文排版、高亮和地图工作，不等同于地图自身耗时或上屏时间。
+本机长行输入仍观察到数十毫秒的同步处理；本批没有据此宣称解决全部正文编辑延迟，
+也没有把单次数字作为跨平台性能保证。地图自身不新增全文排版和同步全文扫描。

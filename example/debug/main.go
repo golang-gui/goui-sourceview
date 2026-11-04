@@ -50,6 +50,7 @@ func main() {
 	editor := source.NewSourceView()
 	editor.SetDocument(doc)
 	editor.SetShowLineMarks(true)
+	editor.SetShowMinimap(true)
 	bindings := editor.KeyBindings()
 	bindings[source.CommandToggleLineMark] = []gui.KeyGesture{{Key: gui.KeyF9}}
 	must(editor.SetKeyBindings(bindings))

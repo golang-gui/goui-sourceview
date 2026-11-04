@@ -1,5 +1,5 @@
 // 行标记窗口验收，需要桌面、窗口管理器、原生排版与字体。
-// 启动：go run ./tests/window/editor/line_marks [-theme basic|light|dark]。
+// 启动：go run ./tests/window/editor/line_marks [-theme basic|light|dark] [-minimap]。
 // Linux 独立 X11 设置 XMODIFIERS=@im=none，分别 GOUI_PLAT_SCALE=1/1.5 验证。
 // 初始：Integrated 窗口、可滚动 JSON 文档、一个断点及同位置执行箭头。
 // 自动通过 Window.DispatchEvent 点击、Shift-click、右键、F9 和行号；断言
@@ -44,6 +44,7 @@ func check(ok bool, msg string) {
 func main() {
 	runtime.LockOSThread()
 	theme := flag.String("theme", "light", "basic, light or dark")
+	minimap := flag.Bool("minimap", false, "also verify with the minimap visible")
 	flag.Parse()
 	app, err := gui.NewApplication("org.golanggui.SourceViewLineMarks")
 	must(err)
@@ -61,6 +62,7 @@ func main() {
 	v := source.NewSourceView()
 	v.SetDocument(doc)
 	v.SetShowLineMarks(true)
+	v.SetShowMinimap(*minimap)
 	v.SetAutomaticCompletion(false)
 	id, err := doc.AddLineMark(source.LineMark{Line: 2})
 	must(err)
