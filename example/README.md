@@ -195,3 +195,24 @@ Edits and marks stay in memory. Closing the window exits; restart resets the sam
 `debug` 展示应用管理的断点与视图内执行位置，右侧色块地图只导航、不改变选区。点击标记栏或按 F9 请求断点，
 Shift+点击切换状态，右键创建条件断点、日志点或书签。Verify pending 和 Step
 模拟调试器结果，不启动调试器或子进程。修改仅在内存中，关闭窗口退出，重启复位。
+
+## External semantic analysis / 外部语义分析
+
+Run `GOWORK=off go run ./example/semantic` (add `-dark` for dark appearance).
+The application uses Go's parser and type checker outside SourceView. Change
+`"hello"` to `42` to recolor both the declaration and references of `value`.
+Type `person.` or press F2 for members and symbols derived from type/scope analysis.
+Edit the `Person` fields and try completion again. Slow analysis makes delayed
+updates easier to observe. Reset restores the sample; close cancels pending work.
+
+运行 `GOWORK=off go run ./example/semantic`，加 `-dark` 使用暗色。把 `"hello"` 改成
+`42`，观察 `value` 声明和引用改色；输入 `person.` 或按 F2，检查基于类型与作用域的
+补全。修改 `Person` 的字段后再次补全。Slow analysis 用于观察延迟更新，Reset 复位，
+关闭窗口取消分析。只分析内存中的单文件（最多 256 KiB），不加载 imports 或执行代码。
+
+This is an API exercise: the current immutable tokenizer API requires a new
+language definition to publish external colors, which closes an open completion
+popup. The example exposes this limitation instead of hiding it with popup hacks.
+
+这是接口验证示例：现有高亮接口需要更换语言定义才能发布外部着色，因而会关闭已打开的
+补全弹窗。示例明确保留并展示这个接口缺口，不把它包装成完善的语言服务接入方案。
