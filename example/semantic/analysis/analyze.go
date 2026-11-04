@@ -16,6 +16,7 @@ import (
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
+	"github.com/golang-gui/goui/gui/textedit"
 )
 
 const MaxBytes = 256 * 1024
@@ -40,6 +41,7 @@ type Span struct {
 	Kind       language.Kind
 }
 type Result struct {
+	Highlights  *source.Highlights
 	Snapshot    Snapshot
 	Spans       []Span
 	Diagnostics []string
@@ -155,7 +157,12 @@ func Analyze(ctx context.Context, s Snapshot) (Result, error) {
 		}
 	}
 	sort.Slice(out.Spans, func(i, j int) bool { return out.Spans[i].Start < out.Spans[j].Start })
-	return out, nil
+	spans := make([]source.HighlightSpan, len(out.Spans))
+	for i, s := range out.Spans {
+		spans[i] = source.HighlightSpan{Range: textedit.Range{Start: s.Start, End: s.End}, Kind: s.Kind}
+	}
+	out.Highlights, err = source.NewHighlights(s.Text, spans)
+	return out, err
 }
 
 // Complete checks a repaired copy at the requested word. The sentinel allows

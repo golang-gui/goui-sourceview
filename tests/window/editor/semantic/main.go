@@ -4,19 +4,20 @@
 // 改变变量类型和结构体成员、请求并确认补全、快速连续输入，验证修订一致性。
 // RenderWidget 在正文中统计指定语义前景的 NRGBA 实心像素（每类至少 5 个），
 // 不依赖字形边缘抗锯齿或跨平台金图。确认外部着色确实应用到了绘制。
-// 专门复现当前公开 API 缺口：同一修订发布新语言定义会关闭已显示的补全。
-// 此项打印 KNOWN API GAP，是接口评估结论，不代表理想交互已经实现。
+// 延迟发布独立颜色层必须保留原补全弹窗、选中项目；显式刷新须原位更新。
 // 30 秒未完成、提前关闭或断言失败返回非零，成功自动退出。重启复位。
 // 不执行源码，不修改文件、剪贴板或系统配置；关闭时取消后台分析。
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"image/color"
 	"log"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	source "github.com/golang-gui/goui-sourceview"
@@ -76,15 +77,36 @@ func main() {
 	service := analysis.NewService(app.Post, func(r analysis.Result, err error) {
 		must(err)
 		check(r.Snapshot.DocumentID == doc.ID() && r.Snapshot.Revision == doc.Model().Revision(), "过期结果进入 GUI")
-		definition, err := analysis.Definition(r)
+		applied, err := doc.SetHighlights(r.Snapshot.Revision, r.Highlights)
 		must(err)
-		doc.SetLanguageDefinition(definition)
+		check(applied, "当前颜色快照未应用")
 		result = r
 		published++
 	})
 	defer service.Close()
 	win.ConnectDestroy(service.Close)
-	v.SetCompletionProvider(service.Provider())
+	var filtered atomic.Bool
+	provider := service.Provider()
+	original := provider.Complete
+	provider.Complete = func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
+		items, err := original(ctx, c)
+		if filtered.Load() {
+			check(c.Explicit && c.Trigger == "", "刷新没有保留手动请求语义")
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+			for _, item := range items {
+				if item.Label == "Score" {
+					return []source.Completion{item}, err
+				}
+			}
+			return nil, err
+		}
+		return items, err
+	}
+	v.SetCompletionProvider(provider)
 	v.ConnectError(func(err error) { panic(err) })
 	submit := func(delay time.Duration) {
 		service.Submit(analysis.Snapshot{DocumentID: doc.ID(), Revision: doc.Model().Revision(), Text: doc.Model().Text()}, delay)
@@ -161,6 +183,7 @@ func main() {
 	}
 	ready := func() bool { return published > 0 && result.Snapshot.Revision == doc.Model().Revision() }
 	stage, targetPublications := 0, 0
+	var kept gui.Popover
 	done := false
 	deadline := time.Now().Add(30 * time.Second)
 	timer := app.NewTimer()
@@ -201,14 +224,30 @@ func main() {
 				return
 			}
 			check(has(items, "Score") && !has(items, "Age"), "修改类型后补全未更新")
+			key(events.KeyArrowDown)
+			kept = win.Popovers()[0]
 		case 5:
 			if published < targetPublications {
 				return
 			}
-			check(len(win.Popovers()) == 0, "预期重新评估已改变：语言定义更新不再关闭弹窗")
-			log.Print("KNOWN API GAP: delayed semantic colors after an edit close the new-revision completion popup")
+			check(len(win.Popovers()) == 1 && win.Popovers()[0] == kept, "延迟颜色关闭或替换了补全弹窗")
+			filtered.Store(true)
+			must(v.RefreshCompletion())
+			must(v.RefreshCompletion()) // 合并取消中的请求，只保留最新一项。
+			check(role(kept.Widget().Snapshot(), "completion-list").Attributes["sourceview.completion.pending"] == true, "刷新未标记等待状态")
+			before := doc.Model().Text()
+			key(events.KeyEnter)
+			check(doc.Model().Text() == before, "等待时提交了旧候选")
 			analysisDelay = 150 * time.Millisecond
 		case 6:
+			if len(labels()) == 0 {
+				return
+			}
+			check(len(win.Popovers()) == 1 && win.Popovers()[0] == kept, "刷新重建了弹窗")
+			check(len(labels()) == 1 && labels()[0] == "Score", "外部索引更新没有替换候选")
+			key(events.KeyEnter)
+			check(strings.Contains(doc.Model().Text(), "println(person.Score)"), "刷新没有保留已选中的 Score")
+			filtered.Store(false)
 			replace("42", `"done"`)
 			replace(`"done"`, "99")
 		case 7:
@@ -217,8 +256,10 @@ func main() {
 			}
 			check(countColor(pink) == 0, "旧异步着色覆盖了新修订")
 			submit(2 * time.Second)
+			must(v.RefreshCompletion())
+			check(len(win.Popovers()) == 0, "无会话刷新打开了弹窗")
 			done = true
-			log.Printf("PASS semantic colors, member completion, type updates, revision guards, known API gap; dark=%v", *dark)
+			log.Printf("PASS semantic colors, member completion, type updates, revision guards, retained popup and refreshed selection; dark=%v", *dark)
 			win.Destroy()
 			return
 		}

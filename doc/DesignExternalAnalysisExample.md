@@ -33,39 +33,21 @@
 go/parser、go/types 单次调用不能中途取消，检查前后核对 context，输入大小和单 worker
 约束限制积压；不把此例包装成具有严格时间上限的通用语言服务。
 
-## 高亮接口的实际适配代价
+## 独立高亮和补全刷新
 
-现有 Language/Tokenizer 是不可变配置，Scan 输入只有逻辑行内的片段及 Offset，
-没有文档修订和绝对位置。它适合增量词法分析，不是异步语义结果的提交接口。
+最初的接口验证确认了两处缺口：颜色必须适配 Tokenizer 并更换语言定义，导致弹窗关闭；
+外部索引更新也缺少重查当前会话的入口。现在示例使用新的公开接口，删除行状态适配器：
 
-为检验现有 API，示例将每份分析结果转换为新的不可变 Language：
+- Analyze 在 worker 中把类型检查产生的绝对范围交给 NewHighlights；构造和校验不占 GUI。
+- 服务核对 generation；GUI 核对 DocumentID/Revision 后 SetHighlights。语言仍是内置 Go，
+  外部 Kind 直接由 Style 解析，不把临时语义结果注册为语言配置。
+- 示例发布后显式调用 RefreshCompletion；它只刷新存在的会话，没有会话时不弹窗。
+- 编辑后未相交的旧颜色暂时保留，局部失效退回词法颜色；新分析结果完整替换。旧颜色
+  只供显示，补全依旧分析请求所对应的准确快照。
 
-- 复用内置 Go Tokenizer，状态额外记录逻辑行的绝对起点，将外部跨度适配回行内范围。
-- 两组有序范围合并，语义结果仅覆盖 Kind，保留底层字符串/注释/括号的 Class 与 Context。
-- 原文片段与分析快照不符后，整个后缀只使用词法颜色，等待新结果。匹配的前缀可能暂时
-  保留上次语义结果，属于延迟呈现，不参与语义编辑判断。
-- 接受新结果调用 SetLanguageDefinition；没有修改一个已发布 Tokenizer 的内部可变数据。
-- 绝对位置进入 State.Equal，会使插入导致后续状态变化，牺牲原有词法状态快速收敛。
-  这是示例适配代价，不能作为大文件或生产语言服务接入的推荐方式。
-
-## 接口评估结论
-
-补全侧的 DocumentID/Revision、取消、后台执行、Range/Detail 和应用拥有过滤排序的契约
-足以实现本例的类型驱动补全；使用方需要自行维护完整文本或项目索引，这个边界合理。
-
-高亮侧存在明确缺口：发布颜色只能伪装成切换语言定义。当前 document.go 的
-SetLanguageDefinition 会清理折叠、配对和补全，重新分析词法；因此即便正文修订不变，
-外部结果到达也会关闭已有补全弹窗。窗口验证修改结构体字段后先显示新修订的补全，
-再等待延迟的颜色结果，专门复现该行为，记录为 KNOWN API GAP，
-不绕过内部状态重开弹窗，不将其当作完整交互已通过。
-
-此外，已打开的补全没有外部索引更新后的独立重查通知。当前示例每次请求重新检查，
-无需此能力；项目索引独立更新时需要进一步设计，不能靠更换 Provider/Language 隐式驱动。
-
-后续建议（未实现）：在文档侧提供带 revision 的外部着色结果入口，与词法 Language
-分离，只更新颜色层，不重置补全、折叠或括号状态。需要进一步明确范围校验、替换/清空、
-编辑后失效、共享文档、主题键与可见范围更新契约，再决定完整快照还是范围更新。
-本例不为完成演示而提前新增 SemanticProvider、LSP 客户端或通用装饰体系。
+本例补全使用标准库在请求时重查，外部项目索引可以在相同修订更新后显式刷新。
+它不要求把整个检查结果塞进 CompletionContext，也不增加 Provider 注册或通知体系。
+契约详见 [外部高亮快照](DesignExternalHighlights.md) 和 [补全设计](DesignCompletion.md)。
 
 ## 参考证据
 
@@ -78,18 +60,23 @@ SetLanguageDefinition 会清理折叠、配对和补全，重新分析词法；�
 
 ## 本机验证（2026-11-04）
 
-- `GOWORK=off go test ./...`：通过。
-- `GOWORK=off go test -race ./example/semantic/analysis -count=1`：通过。覆盖声明/引用类型变化、作用域与成员候选、未知控件词法状态下排除注释/字符串、UTF-8 分片、旧结果/销毁后回调及输入上限。
-- `GOWORK=off CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./example/semantic/... ./tests/window/editor/semantic`：通过。
-- 同上将目标改为 `GOOS=darwin GOARCH=arm64`：通过；两平台原生窗口未执行。
-- 独立 Xvnc :87 + Xfwm4 合成、软件绘制、Pango，Modern 亮色 100% 和暗色 150%：
-  实际输入后声明/引用改色、成员补全更新、Enter 接受、连续编辑及退出取消均通过；
-  RenderWidget 实心前景像素验证通过，实际示例窗口截图已检查。
-- **补全弹窗保持不受着色影响：不满足。** 修改结构体后，新修订的成员补全先出现，
-  随后延迟的高亮发布关闭弹窗。窗口程序成功复现并记录此接口缺口，不算理想行为通过。
-- `go test ./...`（本地 go.work 联调）：构建失败，错误为相邻 GOUI 当前工作区
-  `platform/graphics/opengl/painter.go:388:29: undefined: nanovgo.BoxShadowVarying`。
-  没有修改相邻仓库或 go.work；依赖 v0.6.0 的独立验证不受此工作区问题影响。
+- `GOWORK=off go test ./...`：通过，使用 go.mod 声明的 GOUI v0.6.0。
+- `GOWORK=off go test -race . ./ui ./example/semantic/analysis`：通过。
+- `GOWORK=off CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...`：通过。
+- 同上改为 `GOOS=darwin GOARCH=arm64`：通过；Windows/macOS 原生运行未执行。
+- 独立 Xvnc :87 + Xfwm4 合成、software 绘制、Pango，Modern 亮色 100%、暗色 150%：
+  以下真实输入、像素及会话断言均通过。检查了示例实际窗口截图，关闭后回收专用会话进程。
+- `go test ./...`（本地 go.work）：失败。相邻 GOUI HEAD 为 `ef6bb38` 时，工作区
+  圆角契约已变化，既有 completion_list.go/styles.go 使用的 `Style.Radius` 不再存在，
+  `DrawBoxShadow` 的圆角参数也已变为 `geometry.CornerRadius`。这些调用不是本次新增。
+  未修改相邻仓库或 go.work；这是本地新版 GOUI 的兼容性缺口，不能把独立依赖验证
+  写成双仓联调通过。本次接口只依赖已发布 v0.6.0 的公开能力。
 
-窗口验证只使用自己的临时 X11/DBus 会话，结束回收进程；没有改变原有桌面、文件、
-剪贴板或系统缩放。构建产物、日志和截图保存在仓库外临时目录。
+本机 Go 1.25.8、Linux amd64。构建、截图和日志均在仓库外临时目录，未改原有桌面、
+剪贴板、文件或系统缩放。窗口程序运行前后不依赖 DevServer。
+
+窗口程序通过 Window.DispatchEvent / CommitText 改变变量类型、结构体字段、接受候选，
+用 RenderWidget 实心 NRGBA 像素确认声明/引用的实际颜色。延迟颜色到达后检查原 Popover
+身份；随后模拟同修订的外部索引可用项变化，连续刷新，只保留新候选；等待期间 Enter
+不得提交旧内容，完成后仍接受之前选中的等价 Score 编辑。另验连续编辑、过期发布、
+无会话刷新不打开弹窗和关闭时取消后台任务。

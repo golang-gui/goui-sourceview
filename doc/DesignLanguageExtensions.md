@@ -140,6 +140,6 @@ Edits 是原始文档坐标，排序且不重叠，同位置插入应先合并�
 ## 外部语法/语义结果的应用验证
 
 [外部分析示例](DesignExternalAnalysisExample.md) 使用 Go parser/type checker 验证真实
-类型着色及作用域/成员补全。补全可直接接入现有异步 Provider；外部着色目前需要
-适配不可变 Tokenizer 并更换 Language，会连带关闭补全及重置语言相关状态。
-这是现有接口的缺口，示例适配不应视为生产语义高亮的推荐架构。
+类型着色及作用域/成员补全。外部颜色通过 Document.SetHighlights 独立发布，
+不更换 Language 或 Tokenizer；接口和编辑后提示规则见 [外部高亮快照](DesignExternalHighlights.md)。
+项目索引更新可调用 SourceView.RefreshCompletion 原位刷新现有会话。

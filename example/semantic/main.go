@@ -2,8 +2,8 @@
 // Linux Integrated chrome needs a compositor. Edit the in-memory Go sample:
 // change "hello" to 42, add declarations, type person. or press F2 for checked
 // scope/member completion. Semantic colors arrive after external analysis.
-// Slow analysis makes stale-result handling and the current API's popup-close
-// limitation visible. Imports and project loading are deliberately unsupported.
+// Slow analysis exposes delayed colors without interrupting completion.
+// Imports and project loading are deliberately unsupported.
 // No source is executed and no file, clipboard or system setting is modified.
 // Reset restores the sample; close the window to cancel analysis and exit.
 package main
@@ -70,12 +70,18 @@ func main() {
 		if result.Snapshot.DocumentID != doc.ID() || result.Snapshot.Revision != doc.Model().Revision() {
 			return
 		}
-		definition, err := analysis.Definition(result)
+		applied, err := doc.SetHighlights(result.Snapshot.Revision, result.Highlights)
 		if err != nil {
 			status.SetText(err.Error())
 			return
 		}
-		doc.SetLanguageDefinition(definition)
+		if !applied {
+			return
+		}
+		if err := editor.RefreshCompletion(); err != nil {
+			status.SetText(err.Error())
+			return
+		}
 		status.SetText(fmt.Sprintf("Semantic revision %d · %d identifiers · %d diagnostics", result.Snapshot.Revision, len(result.Spans), len(result.Diagnostics)))
 		message := "No syntax/type errors · single file, no imports"
 		if len(result.Diagnostics) > 0 {
@@ -130,7 +136,7 @@ func main() {
 	header := gui.NewHeaderBar()
 	header.SetChild(gui.NewLabel("Go editor · external parser and type checker"))
 	hint := gui.NewLabel("String variables: pink · numeric variables: blue · F2 / person. for semantic completion")
-	limitation := gui.NewLabel("API limitation: publishing new semantic colors currently closes completion.")
+	limitation := gui.NewLabel("Semantic colors update independently; pending completion stays visible.")
 	limitation.SetStyleName(modern.MutedText)
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")

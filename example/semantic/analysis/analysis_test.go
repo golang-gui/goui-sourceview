@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
@@ -101,81 +100,54 @@ func TestCheckedCompletion(t *testing.T) {
 		t.Fatal("推荐了尚未进入作用域的局部变量")
 	}
 }
-func TestTokenizerFragmentsAndStaleSuffix(t *testing.T) {
-	text := "package p\nfunc f(){值:=42;println(值)}\n"
+func TestExternalHighlightsKeepLanguageAndUnicode(t *testing.T) {
+	text := "package p\nfunc f(){值:=42;println(值);println(\"hello\")}\n"
 	r := analyze(t, text)
-	definition, err := Definition(r)
-	if err != nil {
+	d := source.NewDocument(text)
+	if err := d.SetLanguage(language.Go); err != nil {
 		t.Fatal(err)
 	}
+	definition, revision := d.LanguageDefinition(), d.Model().Revision()
+	if ok, err := d.SetHighlights(revision, r.Highlights); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if d.LanguageDefinition() != definition || d.Model().Revision() != revision {
+		t.Fatal("语义结果改变词法定义或修订")
+	}
+	seen := 0
+	for _, s := range r.Spans {
+		if text[s.Start:s.End] == "值" {
+			seen++
+			if s.Kind != NumberVariable {
+				t.Fatal("Unicode 引用类型错误")
+			}
+		}
+	}
+	if seen != 2 {
+		t.Fatal("遗漏 Unicode 声明或引用")
+	}
+	// 字符串上下文仍由原词法器提供，不用语义颜色推断编辑行为。
 	tok := definition.Tokenizer()
 	state := tok.InitialState()
-	absolute := 0
-	seen := 0
-	for _, line := range strings.Split(text, "\n") {
-		colors := make([]language.Kind, len(line))
-		for offset := 0; ; {
-			limit := min(3, len(line)-offset)
-			for offset+limit < len(line) && !utf8.RuneStart(line[offset+limit]) {
-				limit++
-			}
-			result, err := tok.Scan(language.Input{Text: line[offset:], Offset: offset, Limit: limit, LineEnd: true, DocumentEnd: absolute+len(line) == len(text)}, state)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if result.ReplaceFrom != nil {
-				clear(colors[*result.ReplaceFrom:])
-			}
-			for _, token := range result.Tokens {
-				if token.Start < 0 || token.End > len(line) || token.Start >= token.End {
-					t.Fatal("非法 token 范围")
-				}
-				for i := token.Start; i < token.End; i++ {
-					colors[i] = token.Kind
-				}
-			}
-			state = result.State
-			offset += result.Consumed
-			if offset == len(line) {
-				break
-			}
-			if result.Consumed == 0 {
-				t.Fatal("扫描没有进展")
-			}
-		}
-		for _, kind := range colors {
-			if kind == NumberVariable {
-				seen++
-			}
-		}
-		absolute += len(line) + 1
-	}
-	if seen != 2*len("值") {
-		t.Fatalf("分片遗漏 Unicode 标识符: %d", seen)
-	}
-	first, _ := tok.Scan(language.Input{Text: "package q", Limit: 9, LineEnd: true}, tok.InitialState())
-	second, _ := tok.Scan(language.Input{Text: "func f(){值:=42;println(值)}", Limit: len("func f(){值:=42;println(值)}"), LineEnd: true}, first.State)
-	for _, token := range second.Tokens {
-		if token.Kind == NumberVariable {
-			t.Fatal("变更后的后缀复用了旧绝对坐标颜色")
-		}
-	}
-	// 词法字符串/括号角色由内置扫描器拥有，语义着色不得覆盖 Class。
-	normal := analyze(t, "package p\nfunc f(){println(\"hello\")}")
-	definition, _ = Definition(normal)
-	state = definition.Tokenizer().InitialState()
 	found := false
-	for _, line := range strings.Split(normal.Snapshot.Text, "\n") {
-		r, _ := definition.Tokenizer().Scan(language.Input{Text: line, Limit: len(line), LineEnd: true}, state)
-		state = r.State
-		for _, tok := range r.Tokens {
-			if tok.Class&language.ClassString != 0 {
+	for _, line := range strings.Split(text, "\n") {
+		result, err := tok.Scan(language.Input{Text: line, Limit: len(line), LineEnd: true}, state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state = result.State
+		for _, token := range result.Tokens {
+			if token.Class&language.ClassString != 0 {
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Fatal("语义适配丢失词法字符串角色")
+		t.Fatal("丢失词法字符串角色")
+	}
+	d.Model().ReplaceAtomic(textedit.Range{}, "// changed\n")
+	if ok, err := d.SetHighlights(revision, r.Highlights); ok || err != nil {
+		t.Fatal("接受过期的绝对坐标颜色")
 	}
 }
 func TestServiceDropsPostedResultsAndCloses(t *testing.T) {
