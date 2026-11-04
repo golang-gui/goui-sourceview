@@ -42,7 +42,8 @@ type Document struct {
 	folding                      *foldingQueue
 	foldGeneration, foldRevision uint64
 	foldReady                    bool
-	foldRanges                   []language.FoldRange
+	foldSnapshot                 *Folds
+	externalFolds                bool
 	foldDue                      time.Time
 
 	highlightRoot                     *highlightNode
@@ -234,6 +235,8 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 	}
 	d.highlightRoot = nil
 	d.highlightEpoch++
+	d.externalFolds = false
+	d.foldSnapshot = nil
 	d.definition, d.language = l, l.ID()
 	d.requestFolding(true)
 	d.languageEpoch++
@@ -248,6 +251,7 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 		if v.document != d || !v.mounted {
 			continue
 		}
+
 		v.clearFolds()
 		v.pairs, v.brackets = nil, bracketState{}
 		v.closeCompletion()
@@ -278,9 +282,13 @@ func (d *Document) acquire(v *SourceView) {
 	v.observed = d.observed
 	v.selectionRevision = d.model.Revision()
 	v.selection = v.clampSelection(v.selection)
+	if v.foldClear || v.foldRevision != d.model.Revision() {
+		v.foldClear = false
+		v.clearFolds()
+	}
 	d.requestWork()
 	if d.foldReady && d.foldRevision == d.model.Revision() {
-		v.acceptFolds(d.foldRanges)
+		v.queueFolds(d.foldSnapshot)
 	} else {
 		d.requestFolding(true)
 	}

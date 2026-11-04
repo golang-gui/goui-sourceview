@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，实施与验证见 [本轮计划](PlanEditorFeatures.md)。依赖 GOUI v0.2.0。
+状态：已确认设计，实施与验证见 [本轮计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.6.0。
 
 ## 范围与所有权
 
@@ -15,7 +15,7 @@ Document 共享候选范围与分析任务；SourceView 独立保存折叠状态
 ## 分析与失效
 
 首次挂载请求分析；连续编辑合并等待 150ms。每个 Document 最多一个 worker 和一个最新请求。
-GUI 生成独立字符串快照，后台只访问快照、不可变规则和 context。通过 gui.App.Post 回到
+GUI 按 64 KiB/步复制固定修订的字符串片段，worker 组装快照；后台只访问快照、不可变规则和 context。通过 gui.App.Post 回到
 GUI 后验证文档身份、修订、语言定义身份和任务代次。取消/过期不是错误；有效失败经现有
 ConnectError 报告一次。最后视图卸载取消任务并解除 owner 引用。
 
@@ -94,11 +94,13 @@ Edits 一一对应时采用增量；分析索引尚在重建、变更缺失或�
 4176 退回 4032 DIP 并错误排入锚点恢复，修正后保留原高度且 caret 仍在视口。
 修正后 JSON/XML/HTML 各 10 MiB 的 53 步窗口断言全部通过。具体复验矩阵见实施记录。
 
-## 配置与常用代码语言
+## 独立结果与扩展语言（P0）
 
-新增 JSONC/JSON5、YAML、TOML、Go、JavaScript/TypeScript、CSS、Python 的折叠。
-扫描复用实际词法器，排除字符串、注释与块标量中的伪结构。YAML 尊重文档边界与零缩进序列，
-TOML 按连续源节处理，不合并不相邻 dotted key；Python 区分缩进块和括号/反斜杠续行。
-Go/JS/TS/CSS/Python 在明确注释行上识别 region/endregion，交叉 region 舍弃。
+`NewFolds(text, []FoldRange)` 在 worker 复制、校验并预计算字节端点；`Document.SetFolds(revision, snapshot)`
+显式覆盖默认 FoldingFunc。nil 恢复内置，非 nil 空快照关闭本次候选。只更换候选，不更换 Language，
+不影响颜色、历史或补全。视图分步协调（256 项/2ms 软预算）后整体生效，按精确源边界继承各自折叠意图。
+编辑后未相交区域继续映射，外部模式不会自动回退内置；Reset 保留来源选择，换语言退出外部覆盖。
 
-逻辑验证覆盖精确行范围、引用/注释、多行数组/字符串、未闭合结构及取消。
+新增 JSONC/JSON5、YAML、TOML、Go、JS/TS、CSS、Python 的折叠。引用/注释/块标量使用实际词法器；
+TOML 源节不按 dotted key 合成不连续区域，Python 续行与块缩进分别处理。Go/JS/TS/CSS/Python 支持
+注释中的 region/endregion，跨越已确认结构的 region 舍弃。边界与压力验证见 [P0 设计](DesignP0Editing.md)。

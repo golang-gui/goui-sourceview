@@ -9,6 +9,8 @@ import (
 // Declarative configuration uses the same types as the imperative control.
 // Aliases preserve identity, methods and ownership; they add no parallel state.
 type (
+	Folds              = source.Folds
+	FoldRange          = source.FoldRange
 	Highlights         = source.Highlights
 	HighlightSpan      = source.HighlightSpan
 	Document           = source.Document
@@ -148,3 +150,6 @@ func DefaultCompletions(c CompletionContext) []Completion { return source.Defaul
 func NewHighlights(text string, spans []HighlightSpan) (*Highlights, error) {
 	return source.NewHighlights(text, spans)
 }
+
+// NewFolds creates an immutable external folding snapshot.
+func NewFolds(text string, ranges []FoldRange) (*Folds, error) { return source.NewFolds(text, ranges) }

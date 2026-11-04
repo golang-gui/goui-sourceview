@@ -143,3 +143,9 @@ Edits 是原始文档坐标，排序且不重叠，同位置插入应先合并�
 类型着色及作用域/成员补全。外部颜色通过 Document.SetHighlights 独立发布，
 不更换 Language 或 Tokenizer；接口和编辑后提示规则见 [外部高亮快照](DesignExternalHighlights.md)。
 项目索引更新可调用 SourceView.RefreshCompletion 原位刷新现有会话。
+
+## 独立折叠与批量缩进
+
+外部分析结果通过 `NewFolds(snapshotText, ranges)` 和 `Document.SetFolds(revision, folds)` 发布，
+与 Highlights 一样不需要替换不可变语言定义。应用另外核对 Document.ID 与分析代次；过期修订正常拒绝。
+`example/semantic` 从 Go AST 构造代码块范围，和语义颜色、补全分别更新。

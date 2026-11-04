@@ -111,6 +111,9 @@ type SourceView struct {
 	reveal                     *operationState
 
 	// Folding and editing assistance.
+	foldIntake                                                                        *foldIntake
+	foldClear                                                                         bool
+	foldState                                                                         uint64
 	foldColumn                                                                        float32
 	foldingEnabled                                                                    bool
 	folds                                                                             []foldEntry
@@ -187,6 +190,7 @@ func NewSourceView() *SourceView {
 	v.ConnectUnmount(v.unmount)
 	v.ConnectFocused(func(focused bool) {
 		if !focused {
+
 			v.pendingInput = nil
 			v.closeCompletion()
 			v.cancelPreedit()
@@ -219,6 +223,7 @@ func (v *SourceView) SetDocument(d *Document) {
 		return
 	}
 	v.cancelPaste()
+
 	v.hideMenu()
 	v.closeCompletion()
 	if !state.valid(v) {
@@ -234,6 +239,8 @@ func (v *SourceView) SetDocument(d *Document) {
 	if v.search != nil {
 		v.search.SetRange(nil)
 	}
+	v.foldIntake = nil
+	v.foldClear = false
 	v.folds = nil
 	v.hiddenLines = nil
 	v.foldRevision = d.model.Revision()
@@ -340,6 +347,7 @@ func (v *SourceView) setSelectionKeepingCompletion(s textedit.Selection, upstrea
 	v.selectionRevision = v.document.model.Revision()
 	v.selectionEpoch++
 	v.cancelPaste()
+
 	if keep != nil && v.completion == keep && !foldingChanged && s.Anchor == s.Caret && s.Caret >= keep.range_.Start && s.Caret <= keep.range_.End {
 		keep.state = v.operationState()
 		keep.pending = true // Old candidates cannot be committed from selection callbacks.
@@ -379,6 +387,7 @@ func (v *SourceView) SetReadOnly(value bool) {
 		v.closeCompletion()
 		v.cancelPreedit()
 		v.cancelPaste()
+
 	}
 	v.updateMenu()
 	v.RequestPaint()
@@ -403,6 +412,7 @@ func (v *SourceView) SetIndentOptions(o IndentOptions) error {
 	}
 	value := IndentOptions{normalized.TabWidth, normalized.IndentWidth, normalized.InsertSpaces}
 	if value != v.indent {
+
 		v.indent = value
 		v.invalidateLayout()
 	}
@@ -586,6 +596,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		return
 	}
 	v.cancelPaste()
+
 	v.currentMatch = nil
 	v.updateMenu()
 	old := v.selection
@@ -694,6 +705,7 @@ func (v *SourceView) mount() {
 }
 
 func (v *SourceView) unmount() {
+	v.foldIntake = nil
 	v.execution = nil
 	v.minimap = nil
 	v.pendingInput = nil
@@ -702,6 +714,7 @@ func (v *SourceView) unmount() {
 	v.mountEpoch++
 	v.reveal = nil
 	v.cancelPaste()
+
 	v.hideMenu()
 	v.closeCompletion()
 	if v.completionQueue != nil {

@@ -41,6 +41,7 @@ type Span struct {
 	Kind       language.Kind
 }
 type Result struct {
+	Folds       *source.Folds
 	Highlights  *source.Highlights
 	Snapshot    Snapshot
 	Spans       []Span
@@ -160,6 +161,24 @@ func Analyze(ctx context.Context, s Snapshot) (Result, error) {
 	spans := make([]source.HighlightSpan, len(out.Spans))
 	for i, s := range out.Spans {
 		spans[i] = source.HighlightSpan{Range: textedit.Range{Start: s.Start, End: s.End}, Kind: s.Kind}
+	}
+	var folds []source.FoldRange
+	if c.file != nil {
+		ast.Inspect(c.file, func(n ast.Node) bool {
+			block, ok := n.(*ast.BlockStmt)
+			if !ok || !block.Rbrace.IsValid() {
+				return true
+			}
+			a, b := c.set.PositionFor(block.Lbrace, false), c.set.PositionFor(block.Rbrace, false)
+			if a.Line < b.Line {
+				folds = append(folds, source.FoldRange{StartLine: a.Line - 1, EndLine: b.Line - 1})
+			}
+			return true
+		})
+	}
+	out.Folds, err = source.NewFolds(s.Text, folds)
+	if err != nil {
+		return out, err
 	}
 	out.Highlights, err = source.NewHighlights(s.Text, spans)
 	return out, err

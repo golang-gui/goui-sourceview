@@ -26,13 +26,13 @@ func TestFoldWorkerDiscardsStaleAndDetachedResults(t *testing.T) {
 	if ctx.Err() != context.Canceled || q.active != nil {
 		t.Fatal("edit retained obsolete job")
 	}
-	q.finish([]language.FoldRange{{StartLine: 0, EndLine: 5}}, nil)
+	q.finish(job, &Folds{}, nil)
 	if len(v.folds) != 2 || v.folds[0].StartLine != 1 {
 		t.Fatal("stale result replaced mapped regions", v.FoldingRegions())
 	}
 	q.owner = nil
 	q.active = job
-	q.finish([]language.FoldRange{{StartLine: 0, EndLine: 5}}, nil)
+	q.finish(job, &Folds{}, nil)
 	if len(v.folds) != 2 || v.folds[0].StartLine != 1 {
 		t.Fatal("detached queue published result")
 	}
@@ -300,5 +300,169 @@ func BenchmarkFoldMapping(b *testing.B) {
 				v.mapFolds(c, splices)
 			}
 		})
+	}
+}
+
+func finishFoldIntake(t *testing.T, v *SourceView) {
+	t.Helper()
+	for i := 0; v.foldIntake != nil && i < 10000; i++ {
+		v.foldingIntakeStep()
+	}
+	if v.foldIntake != nil {
+		t.Fatal("折叠结果未收敛")
+	}
+}
+func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
+	v := foldingFixture(t)
+	d := v.document
+	b := NewSourceView()
+	b.SetDocument(d)
+	observe(t, b)
+	text := d.model.Text()
+	ranges := []FoldRange{{0, 5}, {1, 4}, {1, 3}}
+	f, err := NewFolds(text, ranges)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranges[0].EndLine = 1
+	v.SetSelection(textedit.Selection{})
+	if !v.Fold(1) {
+		t.Fatal("未折叠")
+	}
+	b.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+	revision, definition := d.model.Revision(), d.definition
+	if ok, err := d.SetFolds(revision, f); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	finishFoldIntake(t, v)
+	finishFoldIntake(t, b)
+	if d.definition != definition || d.model.Revision() != revision || !v.folds[1].Collapsed || b.folds[1].Collapsed || len(v.folds) != 2 {
+		t.Fatal("来源或视图状态串扰", v.folds, b.folds)
+	}
+	if ok, err := d.SetFolds(revision+1, nil); ok || err != nil {
+		t.Fatal("过期结果")
+	}
+	bad, _ := NewFolds("a\nb", nil)
+	if ok, err := d.SetFolds(revision, bad); ok || err == nil {
+		t.Fatal("大小错误未拒绝")
+	}
+	if d.foldSnapshot != f {
+		t.Fatal("非法结果覆盖旧值")
+	}
+	if err := d.model.Replace(textedit.Range{}, "prefix\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !d.externalFolds || len(v.folds) != 2 || v.folds[1].StartLine != 2 || !v.folds[1].Collapsed {
+		t.Fatal("编辑映射", v.folds)
+	}
+	next, _ := NewFolds(d.model.Text(), []FoldRange{{1, 6}, {2, 5}})
+	d.SetFolds(d.model.Revision(), next)
+	finishFoldIntake(t, v)
+	if !v.folds[1].Collapsed {
+		t.Fatal("重新发布丢失折叠意图")
+	}
+	empty, _ := NewFolds(d.model.Text(), nil)
+	d.SetFolds(d.model.Revision(), empty)
+	finishFoldIntake(t, v)
+	if !d.externalFolds || len(v.folds) != 0 || len(v.hiddenLines) != 0 {
+		t.Fatal("空覆盖没有清除")
+	}
+	d.SetFolds(d.model.Revision(), nil)
+	if d.externalFolds || d.foldReady {
+		t.Fatal("没有恢复内置来源")
+	}
+	d.SetFolds(d.model.Revision(), next)
+	d.SetLanguage(language.Plain)
+	if d.externalFolds {
+		t.Fatal("换语言保留旧来源")
+	}
+}
+func TestNewFoldsCanonicalAndCrossing(t *testing.T) {
+	f, err := NewFolds("a\r\nb\r\nc", []FoldRange{{0, 2}, {0, 1}, {0, 2}, {0, 1}})
+	if err != nil || len(f.entries) != 1 || f.entries[0].end != 5 {
+		t.Fatal(f, err)
+	}
+	for _, ranges := range [][]FoldRange{{{0, 2}, {1, 3}}, {{-1, 2}}, {{0, 0}}, {{0, 4}}} {
+		if _, err := NewFolds("a\nb\nc\nd", ranges); err == nil {
+			t.Fatal("非法范围", ranges)
+		}
+	}
+}
+func TestFoldIntakeCancelledAndSelectionProtected(t *testing.T) {
+	v := foldingFixture(t)
+	d := v.document
+	v.SetSelection(textedit.Selection{})
+	v.Fold(0)
+	f, _ := NewFolds(d.model.Text(), []FoldRange{{0, 5}})
+	d.SetFolds(d.model.Revision(), f)
+	v.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+	finishFoldIntake(t, v)
+	if v.folds[0].Collapsed {
+		t.Fatal("隐藏了新选区")
+	}
+	d.SetFolds(d.model.Revision(), f)
+	d.model.SetText("other")
+	finishFoldIntake(t, v)
+	if len(v.folds) != 0 || !d.externalFolds {
+		t.Fatal("Reset 结果复活")
+	}
+}
+
+func TestFoldBatchMappingAndUndo(t *testing.T) {
+	v := NewSourceView()
+	d := v.document
+	original := "a\nb\n{\nx\n}\ntail"
+	d.model.SetText(original)
+	observe(t, v)
+	v.acceptFolds([]language.FoldRange{{2, 4}})
+	v.SetSelection(textedit.Selection{})
+	v.Fold(2)
+	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "AA\nA"}, {Range: textedit.Range{Start: 2, End: 3}, Text: "B\nB"}}, textedit.BatchOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(v.folds) != 1 || v.folds[0].StartLine != 4 || v.folds[0].EndLine != 6 || v.folds[0].start != 9 || !v.folds[0].Collapsed {
+		t.Fatal("批量前缀移动", v.folds)
+	}
+	d.model.Undo()
+	if d.model.Text() != original || len(v.folds) != 1 || v.folds[0].StartLine != 2 || v.folds[0].start != 4 || !v.folds[0].Collapsed {
+		t.Fatal("批量撤销映射", v.folds)
+	}
+	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "prefix"}, {Range: textedit.Range{Start: 6, End: 7}, Text: "body"}}, textedit.BatchOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(v.folds) != 0 {
+		t.Fatal("保留了被批量编辑触及的范围")
+	}
+}
+
+func TestExternalFoldClearWaitsForPreedit(t *testing.T) {
+	v := foldingFixture(t)
+	d := v.document
+	v.SetSelection(textedit.Selection{})
+	v.Fold(1)
+	f, _ := NewFolds(d.model.Text(), []FoldRange{{0, 5}, {1, 4}})
+	d.SetFolds(d.model.Revision(), f)
+	finishFoldIntake(t, v)
+	v.projection = textedit.NewProjection(d.model, v.Selection())
+	d.SetFolds(d.model.Revision(), nil)
+	if len(v.hiddenLines) == 0 || !v.foldClear {
+		t.Fatal("预编辑期间改变了隐藏映射")
+	}
+	v.projection = nil
+	v.resumeFolding()
+	if len(v.hiddenLines) != 0 || v.foldClear {
+		t.Fatal("预编辑结束后没有清理")
+	}
+}
+func TestFoldIntakeNotificationReentry(t *testing.T) {
+	v := foldingFixture(t)
+	d := v.document
+	f, _ := NewFolds(d.model.Text(), []FoldRange{{0, 5}})
+	other := NewDocument("other")
+	v.ConnectFoldingChanged(func() { v.SetDocument(other) })
+	d.SetFolds(d.model.Revision(), f)
+	finishFoldIntake(t, v)
+	if v.document != other || len(v.folds) != 0 || v.foldIntake != nil {
+		t.Fatal("重入提交覆盖了新文档")
 	}
 }

@@ -78,6 +78,10 @@ func main() {
 		if !applied {
 			return
 		}
+		if _, err := doc.SetFolds(result.Snapshot.Revision, result.Folds); err != nil {
+			status.SetText(err.Error())
+			return
+		}
 		if err := editor.RefreshCompletion(); err != nil {
 			status.SetText(err.Error())
 			return

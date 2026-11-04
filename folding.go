@@ -39,9 +39,6 @@ func normalizeFolds(ranges []language.FoldRange, lines int) ([]language.FoldRang
 			return nil, fmt.Errorf("sourceview: invalid fold range %v", r)
 		}
 	}
-	if len(ranges) > lines {
-		return nil, fmt.Errorf("sourceview: more fold headers than lines")
-	}
 	slices.SortFunc(ranges, func(a, b language.FoldRange) int {
 		if a.StartLine != b.StartLine {
 			return a.StartLine - b.StartLine
@@ -203,6 +200,7 @@ func (v *SourceView) foldedLines() []lineInterval {
 }
 
 func (v *SourceView) refreshFoldGeometry() {
+	v.foldState++
 	v.hiddenLines = v.foldedLines()
 	if v.anchor.valid {
 		row := v.document.model.LineAt(v.anchor.offset)
@@ -273,6 +271,9 @@ func (v *SourceView) mapFolds(c textedit.Change, splices []highlight.Splice) {
 	// untouched fold only needs the line-count delta of edits before it, not
 	// two document position queries for every candidate on every keystroke.
 	incremental := v.foldRevision+1 == c.Revision && len(splices) == len(c.Edits)
+	if incremental && len(c.Edits) > 1 && v.mapFoldBatch(c, splices) {
+		return
+	}
 	out := v.folds[:0]
 	for _, r := range v.folds {
 		valid := true
@@ -373,39 +374,209 @@ func (v *SourceView) unfoldDeleteBoundary(forward bool) bool {
 
 func (v *SourceView) resumeFolding() {
 	d := v.document
-	if d.foldReady && d.foldRevision == d.model.Revision() && (d.folding == nil || !d.folding.busy) {
-		v.acceptFolds(d.foldRanges)
+	if v.foldClear {
+		v.foldClear = false
+		v.clearFolds()
+		v.foldingSignal.Emit()
+		if v.document != d || v.Destroyed() {
+			return
+		}
 	}
+	if d.foldReady && d.foldRevision == d.model.Revision() && (d.folding == nil || !d.folding.busy) {
+		v.queueFolds(d.foldSnapshot)
+	}
+}
+
+// Folds is an immutable, worker-safe folding snapshot. It retains ranges and
+// normalized byte endpoints, never the source text or a mutable model.
+type Folds struct {
+	entries       []foldEntry
+	length, lines int
+}
+
+// FoldRange uses zero-based logical lines and an inclusive final line.
+type FoldRange = language.FoldRange
+
+// NewFolds copies and validates candidates against normalized UTF-8/LF text.
+// Duplicate headers retain their outermost range; crossing ranges are invalid.
+func NewFolds(text string, ranges []FoldRange) (*Folds, error) {
+	text = textedit.Normalize(text)
+	starts := []int{0}
+	for at := 0; at < len(text); {
+		n := strings.IndexByte(text[at:], '\n')
+		if n < 0 {
+			break
+		}
+		at += n + 1
+		starts = append(starts, at)
+	}
+	ranges, err := normalizeFolds(ranges, len(starts))
+	if err != nil {
+		return nil, err
+	}
+	f := &Folds{length: len(text), lines: len(starts), entries: make([]foldEntry, len(ranges))}
+	for i, r := range ranges {
+		end := len(text)
+		if r.EndLine+1 < len(starts) {
+			end = starts[r.EndLine+1] - 1
+		}
+		f.entries[i] = foldEntry{FoldRegion: FoldRegion{StartLine: r.StartLine, EndLine: r.EndLine}, start: starts[r.StartLine], end: end}
+	}
+	return f, nil
+}
+
+// SetFolds publishes analysis for revision on the document's owning sequence.
+// A non-nil empty snapshot suppresses built-in folds; nil restores them. Stale
+// revisions return false, nil. Callers also check their own analysis generation.
+func (d *Document) SetFolds(revision uint64, folds *Folds) (bool, error) {
+	if revision != d.model.Revision() {
+		return false, nil
+	}
+	if folds != nil && (folds.length != d.model.Len() || folds.lines != d.model.LineCount()) {
+		return false, fmt.Errorf("sourceview: folds do not match document size")
+	}
+	d.cancelFolding()
+	d.externalFolds = folds != nil
+	d.foldSnapshot = folds
+	d.foldRevision = revision
+	d.foldReady = folds != nil
+	generation := d.foldGeneration
+	for v := range d.views {
+		if d.foldGeneration != generation {
+			break
+		}
+		if folds == nil {
+			if v.projection != nil {
+				v.foldClear = true
+				v.foldIntake = nil
+			} else {
+				v.clearFolds()
+				v.foldingSignal.Emit()
+			}
+		} else {
+			v.queueFolds(folds)
+		}
+	}
+	if folds == nil {
+		d.requestFolding(true)
+	} else {
+		d.requestWork()
+	}
+	return true, nil
+}
+
+func (d *Document) hasFolding() bool { return d.externalFolds || d.definition.Folding() != nil }
+
+type foldIntake struct {
+	snapshot                    *Folds
+	generation, revision, state uint64
+	old                         map[[2]int]bool
+	entries                     []foldEntry
+	oldAt, at                   int
+}
+
+func (v *SourceView) queueFolds(f *Folds) {
+	if f == nil {
+		return
+	}
+	v.foldIntake = &foldIntake{snapshot: f, generation: v.document.foldGeneration, revision: v.document.model.Revision(), state: v.foldState, old: make(map[[2]int]bool)}
+	v.document.requestWork()
+}
+func (v *SourceView) foldingIntakeStep() {
+	q, d := v.foldIntake, v.document
+	if q == nil || v.projection != nil {
+		return
+	}
+	if q.generation != d.foldGeneration || q.revision != d.model.Revision() {
+		v.foldIntake = nil
+		return
+	}
+	if q.state != v.foldState {
+		v.queueFolds(q.snapshot)
+		return
+	}
+	deadline := time.Now().Add(2 * time.Millisecond)
+	for n := 0; n < 256 && time.Now().Before(deadline); n++ {
+		if q.oldAt < len(v.folds) {
+			r := v.folds[q.oldAt]
+			q.old[[2]int{r.start, r.end}] = r.Collapsed
+			q.oldAt++
+			continue
+		}
+		if q.at == len(q.snapshot.entries) {
+			break
+		}
+		r := q.snapshot.entries[q.at]
+		r.Collapsed = q.old[[2]int{r.start, r.end}]
+		q.entries = append(q.entries, r)
+		q.at++
+	}
+	if q.oldAt < len(v.folds) || q.at < len(q.snapshot.entries) {
+		return
+	}
+	// Selection may have moved during intake. Never hide either endpoint.
+	a, b := d.model.LineAt(v.Selection().Anchor), d.model.LineAt(v.Selection().Caret)
+	for i := range q.entries {
+		r := &q.entries[i]
+		if a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine {
+			r.Collapsed = false
+		}
+	}
+	v.foldIntake = nil
+	v.folds = q.entries
+	v.foldRevision = q.revision
+	v.foldDefinition = d.definition
+	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.total == v.displayCount() && v.heights.Count() == v.visibleLines.count {
+		v.RequestLayout()
+		v.RequestPaint()
+	} else {
+		v.refreshFoldGeometry()
+	}
+	v.foldingSignal.Emit()
 }
 
 type foldingJob struct {
 	revision, epoch uint64
 	definition      *language.Language
 	cancel          context.CancelFunc
+	ctx             context.Context
+	chunks          []string
+	copied          int
 }
-
 type foldingQueue struct {
 	owner  *Document
 	busy   bool
 	active *foldingJob
 }
 
-func (d *Document) requestFolding(immediate bool) {
+func (d *Document) cancelFolding() {
 	if d.folding != nil && d.folding.active != nil {
 		d.folding.active.cancel()
 		d.folding.active = nil
 	}
 	d.foldGeneration++
+}
+func (d *Document) requestFolding(immediate bool) {
+	if d.externalFolds && d.foldReady && d.foldRevision == d.model.Revision() {
+		return
+	}
+	d.cancelFolding()
 	d.foldReady = false
 	d.foldDue = time.Now().Add(150 * time.Millisecond)
 	if immediate {
 		d.foldDue = time.Now()
 	}
+	if d.externalFolds {
+		d.foldSnapshot = nil
+		d.foldReady = true
+	}
 	d.requestWork()
 }
-
 func (d *Document) foldingStep() {
-	if d.foldReady || d.definition.Folding() == nil || gui.App == nil {
+	for v := range d.views {
+		v.foldingIntakeStep()
+	}
+	if d.externalFolds || d.foldReady || d.definition.Folding() == nil || gui.App == nil {
 		return
 	}
 	wanted := false
@@ -423,68 +594,82 @@ func (d *Document) foldingStep() {
 		d.requestWork()
 		return
 	}
-	d.foldReady = true // active job owns this revision; later edits request again
-	ctx, cancel := context.WithCancel(context.Background())
-	job := &foldingJob{revision: d.model.Revision(), epoch: d.foldGeneration, definition: d.definition, cancel: cancel}
-	text, fn, post := d.model.Text(), d.definition.Folding(), gui.App.Post
-	q.active = job
-	q.busy = true
-	go func() { ranges, err := fn(ctx, text); post(func() { q.finish(ranges, err) }) }()
-}
-
-func (q *foldingQueue) finish(ranges []language.FoldRange, err error) {
-	q.busy = false
 	job := q.active
-	q.active = nil
-	d := q.owner
-	if job != nil {
-		job.cancel()
-		if d != nil && len(d.views) > 0 && d.model.Revision() == job.revision && d.foldGeneration == job.epoch && d.definition == job.definition {
-			if err == nil {
-				ranges, err = normalizeFolds(ranges, d.model.LineCount())
-			}
-			if !errors.Is(err, context.Canceled) {
-				if err != nil {
-					ranges = nil
-				}
-				d.foldRanges = ranges
-				d.foldRevision = job.revision
-				d.foldReady = true
-				views := make([]*SourceView, 0, len(d.views))
-				for v := range d.views {
-					views = append(views, v)
-				}
-				for _, v := range views {
-					if !v.mounted || v.document != d || d.model.Revision() != job.revision || d.definition != job.definition {
-						continue
-					}
-					if err != nil {
-						v.clearFolds()
-						v.report(err)
-					} else {
-						v.acceptFolds(ranges)
-					}
-				}
-			}
-		}
+	if job == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		job = &foldingJob{revision: d.model.Revision(), epoch: d.foldGeneration, definition: d.definition, cancel: cancel, ctx: ctx}
+		q.active = job
 	}
-	if d != nil {
+	// Model access stays on GUI; joining and analysis happen on the worker.
+	end := min(d.model.Len(), job.copied+64*1024)
+	for !d.model.IsRuneBoundary(end) {
+		end--
+	}
+	chunk, _ := d.model.Slice(textedit.Range{Start: job.copied, End: end})
+	job.chunks = append(job.chunks, chunk)
+	job.copied = end
+	if end < d.model.Len() {
 		d.requestWork()
+		return
 	}
-}
-
-func (d *Document) stopFolding() {
-	if d.folding != nil {
-		if d.folding.active != nil {
-			d.folding.active.cancel()
-			d.folding.active = nil
+	d.foldReady = true
+	q.busy = true
+	fn, post := d.definition.Folding(), gui.App.Post
+	go func() {
+		text := strings.Join(job.chunks, "")
+		job.chunks = nil
+		ranges, err := fn(job.ctx, text)
+		var f *Folds
+		if err == nil {
+			err = job.ctx.Err()
 		}
+		if err == nil {
+			f, err = NewFolds(text, ranges)
+		}
+		post(func() { q.finish(job, f, err) })
+	}()
+}
+func (q *foldingQueue) finish(job *foldingJob, f *Folds, err error) {
+	q.busy = false
+	job.cancel()
+	d := q.owner
+	if q.active == job {
+		q.active = nil
+	}
+	if d == nil {
+		return
+	}
+	if d.model.Revision() == job.revision && d.foldGeneration == job.epoch && d.definition == job.definition && !errors.Is(err, context.Canceled) {
+		d.foldSnapshot = f
+		d.foldRevision = job.revision
+		d.foldReady = true
+		for v := range d.views {
+			if d.foldGeneration != job.epoch {
+				break
+			}
+			if !v.mounted || v.document != d {
+				continue
+			}
+			if err != nil {
+				v.clearFolds()
+				v.report(err)
+			} else {
+				v.queueFolds(f)
+			}
+		}
+	}
+	d.requestWork()
+}
+func (d *Document) stopFolding() {
+	d.cancelFolding()
+	if d.folding != nil {
 		d.folding.owner = nil
 		d.folding = nil
 	}
-	d.foldRanges = nil
-	d.foldReady = false
-	d.foldGeneration++
+	if !d.externalFolds {
+		d.foldSnapshot = nil
+		d.foldReady = false
+	}
 }
 
 func (v *SourceView) partColor(part string, fallback color.NRGBA) color.NRGBA {
@@ -585,7 +770,7 @@ func (v *SourceView) foldAtCaret(collapsed bool) bool {
 func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 	meta := info.Attributes["goui.sourceview"].(map[string]any)
 	meta["foldingEnabled"] = v.foldingEnabled
-	meta["foldingPending"] = v.document.definition.Folding() != nil && (!v.document.foldReady || v.document.folding != nil && v.document.folding.busy)
+	meta["foldingPending"] = v.foldIntake != nil || !v.document.externalFolds && v.document.definition.Folding() != nil && (!v.document.foldReady || v.document.folding != nil && v.document.folding.busy)
 	meta["foldRegionCount"] = len(v.folds)
 	if v.projection != nil {
 		if len(v.hiddenLines) > 0 {
@@ -624,4 +809,63 @@ func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 	if len(v.hiddenLines) > 0 {
 		meta["visibleSpans"] = spans
 	}
+}
+
+// Monotone non-overlapping batch notifications can be mapped in O(E+F log E).
+// Undo publishes ascending sequential coordinates; normalize those before
+// searching. Ordinary arbitrary sequential changes retain the general path.
+func (v *SourceView) mapFoldBatch(c textedit.Change, splices []highlight.Splice) bool {
+	type change struct {
+		edit         textedit.Edit
+		bytes, lines int
+	}
+	changes := make([]change, len(c.Edits))
+	ascending := c.Edits[0].Range.Start < c.Edits[1].Range.Start
+	delta := 0
+	for i, e := range c.Edits {
+		size := len(e.Text) - (e.Range.End - e.Range.Start)
+		if ascending {
+			e.Range.Start -= delta
+			e.Range.End -= delta
+			delta += size
+		}
+		at := i
+		if !ascending {
+			at = len(changes) - 1 - i
+		}
+		changes[at] = change{e, size, splices[i].Added - splices[i].Removed}
+	}
+	bytes, lines := make([]int, len(changes)+1), make([]int, len(changes)+1)
+	for i, e := range changes {
+		if i > 0 && (e.edit.Range.Start <= changes[i-1].edit.Range.Start || e.edit.Range.Start < changes[i-1].edit.Range.End) {
+			return false
+		}
+		bytes[i+1] = bytes[i] + e.bytes
+		lines[i+1] = lines[i] + e.lines
+	}
+	out := v.folds[:0]
+	for _, r := range v.folds {
+		at := sort.Search(len(changes), func(i int) bool { return changes[i].edit.Range.End >= r.start })
+		next := at
+		if at < len(changes) {
+			e := changes[at].edit
+			if e.Range.Start == r.start && e.Range.End == r.start && strings.HasSuffix(e.Text, "\n") {
+				next++
+			}
+		}
+		if next < len(changes) && changes[next].edit.Range.Start <= r.end {
+			continue
+		}
+		r.start += bytes[next]
+		r.end += bytes[next]
+		r.StartLine += lines[next]
+		r.EndLine += lines[next]
+		out = append(out, r)
+	}
+	v.folds = out
+	v.foldRevision = c.Revision
+	if len(v.hiddenLines) > 0 || len(v.foldedLines()) > 0 {
+		v.refreshFoldGeometry()
+	}
+	return true
 }

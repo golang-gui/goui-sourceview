@@ -128,6 +128,9 @@ func (q *frameQueue) frame(_ time.Time) {
 			continue
 		}
 		d.foldingStep()
+		if d.engine == nil || d.driver != q.root {
+			continue
+		}
 		if d.engine.Pending() && time.Now().Before(deadline) {
 			until := minTime(deadline, time.Now().Add(2*time.Millisecond))
 			d.engine.Advance(until)
@@ -199,10 +202,15 @@ func (q *frameQueue) requestAnalysis() {
 }
 
 func (d *Document) analysisPending() bool {
+	for v := range d.views {
+		if v.foldIntake != nil && v.projection == nil {
+			return true
+		}
+	}
 	if d.engine != nil && d.engine.Pending() {
 		return true
 	}
-	if gui.App != nil && !d.foldReady && d.definition.Folding() != nil {
+	if gui.App != nil && !d.externalFolds && !d.foldReady && d.definition.Folding() != nil {
 		for v := range d.views {
 			if v.foldingEnabled {
 				return true
@@ -240,6 +248,9 @@ func (q *frameQueue) advanceAnalysis(deadline time.Time) bool {
 		seen[d] = true
 		d.lastFrame = time.Now()
 		d.foldingStep()
+		if d.engine == nil || d.driver != q.root {
+			continue
+		}
 		e := d.engine
 		ready := e.Ready()
 		if e.Pending() && (deadline.IsZero() || time.Now().Before(deadline)) {

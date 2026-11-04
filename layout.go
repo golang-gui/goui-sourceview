@@ -66,7 +66,7 @@ func (v *SourceView) updateGutter() {
 		v.markColumn = max(24, min(32, v.lineHeight*1.35))
 		v.gutter += v.markColumn
 	}
-	if v.foldingEnabled && v.document.definition.Folding() != nil {
+	if v.foldingEnabled && v.document.hasFolding() {
 		v.foldColumn = max(16, min(24, v.lineHeight))
 		v.gutter += v.foldColumn
 	}

@@ -80,6 +80,9 @@ func main() {
 		applied, err := doc.SetHighlights(r.Snapshot.Revision, r.Highlights)
 		must(err)
 		check(applied, "当前颜色快照未应用")
+		applied, err = doc.SetFolds(r.Snapshot.Revision, r.Folds)
+		must(err)
+		check(applied, "当前折叠快照未应用")
 		result = r
 		published++
 	})
