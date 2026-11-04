@@ -63,6 +63,14 @@ const (
 	CommandGoTo
 	// Applications may bind F9; there is no default breakpoint binding.
 	CommandToggleLineMark
+	CommandMoveWordPartLeft
+	CommandMoveWordPartRight
+	CommandSelectWordPartLeft
+	CommandSelectWordPartRight
+	CommandDeleteWordPartLeft
+	CommandDeleteWordPartRight
+	CommandExpandSelection
+	CommandShrinkSelection
 	commandLimit
 )
 
@@ -245,6 +253,14 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		}
 	}
 	switch command {
+	case CommandMoveWordPartLeft, CommandMoveWordPartRight, CommandSelectWordPartLeft, CommandSelectWordPartRight:
+		v.MoveWordPart(command == CommandMoveWordPartRight || command == CommandSelectWordPartRight, command == CommandSelectWordPartLeft || command == CommandSelectWordPartRight)
+	case CommandDeleteWordPartLeft, CommandDeleteWordPartRight:
+		run(func() error { return v.DeleteWordPart(command == CommandDeleteWordPartRight) })
+	case CommandExpandSelection:
+		v.ExpandSelection()
+	case CommandShrinkSelection:
+		v.ShrinkSelection()
 	case CommandToggleLineMark:
 		row := v.document.model.LineAt(v.Selection().Caret)
 		v.requestLineMark(row, LineMarkToggle, v.lineMarkRect(row).Pos)

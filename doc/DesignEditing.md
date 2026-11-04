@@ -365,3 +365,8 @@ heredoc 按字符串处理，命令替换内部恢复代码上下文。Literal �
 TOML 连续第三个引号按原文输入形成三引号，不再生成另一组空字符串；YAML 结束单引号
 之后紧接的单引号按原文输入形成 doubled quote。只追踪本视图生成的单字节配对，
 不新增三引号补全模板或多字节配对状态机。String token 中的括号不参与代码括号匹配。
+
+## P0 结构编辑与显式整理
+
+新增 `MoveWordPart` / `DeleteWordPart` 和 `ExpandSelection` / `ShrinkSelection`，以及同名 Command/ui 别名。
+子词不改变原按词命令；结构选择只使用可靠词法/标签证据，实际轨迹可精确缩回，外部选区或正文变化失效。

@@ -76,6 +76,14 @@ const (
 
 // Command values are shared with SourceView; this package does not allocate IDs.
 const (
+	CommandMoveWordPartLeft    = source.CommandMoveWordPartLeft
+	CommandMoveWordPartRight   = source.CommandMoveWordPartRight
+	CommandSelectWordPartLeft  = source.CommandSelectWordPartLeft
+	CommandSelectWordPartRight = source.CommandSelectWordPartRight
+	CommandDeleteWordPartLeft  = source.CommandDeleteWordPartLeft
+	CommandDeleteWordPartRight = source.CommandDeleteWordPartRight
+	CommandExpandSelection     = source.CommandExpandSelection
+	CommandShrinkSelection     = source.CommandShrinkSelection
 	CommandUndo                = source.CommandUndo
 	CommandRedo                = source.CommandRedo
 	CommandCut                 = source.CommandCut

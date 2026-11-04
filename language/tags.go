@@ -187,3 +187,26 @@ func foldTagASCII(text string) string {
 	}
 	return text
 }
+
+// SelectionRanges returns confirmed element content and full-element ranges
+// enclosing a selection in a complete markup region. It performs no I/O.
+func (t *TagRules) SelectionRanges(text string, selection NameRange) []NameRange {
+	pairs, _ := t.tags(text)
+	var out []NameRange
+	for _, p := range pairs {
+		a, ok := readMarkupTag(text, p.Opening.Start-1)
+		if !ok {
+			continue
+		}
+		b, ok := readMarkupTag(text, p.Closing.Start-2)
+		if !ok {
+			continue
+		}
+		for _, r := range []NameRange{{a.end, p.Closing.Start - 2}, {p.Opening.Start - 1, b.end}} {
+			if r.Start <= selection.Start && r.End >= selection.End {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
+}

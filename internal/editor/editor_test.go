@@ -348,3 +348,27 @@ func BenchmarkLeadingIndentOnLongLine(b *testing.B) {
 		}
 	}
 }
+
+func TestWordPartBoundaries(t *testing.T) {
+	for _, parts := range [][]string{
+		{"get", "HTTP", "Response", "2"}, {"XML", "Parser"}, {"foo", "__", "bar"}, {"中文", "_", "name"}, {"e\u0301", "Value", "12"}, {strings.Repeat("a", 9000), "B"},
+	} {
+		text := strings.Join(parts, "")
+		m := textedit.NewModel(text)
+		at := 0
+		for _, part := range parts {
+			want := at + len(part)
+			if got := WordPartBoundary(m, at, true, false, nil); got != want {
+				t.Fatalf("正向边界 %d != %d", got, want)
+			}
+			at = want
+		}
+		for i := len(parts) - 1; i >= 0; i-- {
+			want := at - len(parts[i])
+			if got := WordPartBoundary(m, at, false, false, nil); got != want {
+				t.Fatalf("反向边界 %d != %d", got, want)
+			}
+			at = want
+		}
+	}
+}

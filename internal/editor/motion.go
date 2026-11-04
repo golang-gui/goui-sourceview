@@ -184,3 +184,69 @@ func InsertLine(m *textedit.Model, s textedit.Selection, below bool) (Plan, erro
 	}
 	return Plan{Before: s, After: textedit.Selection{Anchor: caret, Caret: caret}, Edits: []textedit.Edit{{Range: textedit.Range{Start: at, End: at}, Text: text}}}, nil
 }
+
+// WordPartBoundary traverses code-word components without copying a logical line.
+// Combining marks stay with their base; native cluster snapping remains in the view.
+func WordPartBoundary(m *textedit.Model, at int, forward, deleting bool, word func(rune) bool) int {
+	c := wordCursor{m: m, at: at, word: word}
+	r, n := c.peek(forward)
+	if n == 0 {
+		return at
+	}
+	if c.class(r) != 2 {
+		return WordBoundaryWith(m, at, forward, deleting, word)
+	}
+	if forward {
+		c.at += n
+	} else {
+		c.at -= n
+	}
+	for c.at > 0 && c.at < m.Len() {
+		if wordPartBreak(&c) {
+			break
+		}
+		_, n = c.peek(forward)
+		if forward {
+			c.at += n
+		} else {
+			c.at -= n
+		}
+	}
+	return c.at
+}
+func wordPartBreak(c *wordCursor) bool {
+	right, n := c.peek(true)
+	if unicode.IsMark(right) {
+		return false
+	}
+	saved := c.at
+	left, size := c.peek(false)
+	for unicode.IsMark(left) && size > 0 {
+		c.at -= size
+		left, size = c.peek(false)
+	}
+	c.at = saved
+	a, b := c.class(left), c.class(right)
+	if a != b {
+		return true
+	}
+	if a != 2 {
+		return left == '\n' || right == '\n'
+	}
+	if left == '_' || right == '_' {
+		return left != right
+	}
+	if unicode.IsDigit(left) != unicode.IsDigit(right) {
+		return true
+	}
+	if unicode.IsLower(left) && unicode.IsUpper(right) {
+		return true
+	}
+	if unicode.IsUpper(left) && unicode.IsUpper(right) {
+		c.at += n
+		next, _ := c.peek(true)
+		c.at = saved
+		return unicode.IsLower(next)
+	}
+	return false
+}

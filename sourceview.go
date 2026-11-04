@@ -61,6 +61,7 @@ type SourceView struct {
 	windowFocus            signal.Handle
 
 	// Selection and editing options.
+	selectionTrail                    selectionTrail
 	selection                         textedit.Selection
 	selectionRevision, selectionEpoch uint64
 	upstream                          bool

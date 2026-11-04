@@ -307,7 +307,7 @@ func (v *SourceView) inputKey(event events.KeyEvent) bool {
 		switch command {
 		case CommandUndo, CommandRedo, CommandCut, CommandPaste, CommandDeleteSelection, CommandMoveLinesUp, CommandMoveLinesDown,
 			CommandDuplicateLinesUp, CommandDuplicateLinesDown, CommandDeleteLines, CommandToggleLineComment, CommandToggleBlockComment,
-			CommandIndent, CommandOutdent, CommandInsertLineAbove, CommandInsertLineBelow, CommandDeleteWordLeft, CommandDeleteWordRight:
+			CommandIndent, CommandOutdent, CommandInsertLineAbove, CommandInsertLineBelow, CommandDeleteWordLeft, CommandDeleteWordRight, CommandDeleteWordPartLeft, CommandDeleteWordPartRight:
 			mutates = true
 		}
 	} else if event.Modifiers&^events.ModifierShift == 0 {
