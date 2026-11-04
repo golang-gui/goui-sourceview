@@ -210,9 +210,9 @@ updates easier to observe. Reset restores the sample; close cancels pending work
 补全。修改 `Person` 的字段后再次补全。Slow analysis 用于观察延迟更新，Reset 复位，
 关闭窗口取消分析。只分析内存中的单文件（最多 256 KiB），不加载 imports 或执行代码。
 
-This is an API exercise: the current immutable tokenizer API requires a new
-language definition to publish external colors, which closes an open completion
-popup. The example exposes this limitation instead of hiding it with popup hacks.
+External colors are published as immutable document snapshots, independently of
+lexical language rules. Delayed analysis keeps completion open; refresh updates
+the existing list and preserves an equivalent selected edit.
 
-这是接口验证示例：现有高亮接口需要更换语言定义才能发布外部着色，因而会关闭已打开的
-补全弹窗。示例明确保留并展示这个接口缺口，不把它包装成完善的语言服务接入方案。
+外部颜色通过不可变文档快照发布，与词法语言规则独立。延迟分析不会关闭补全；
+刷新原位更新列表，并保留仍然有效的选中编辑。
