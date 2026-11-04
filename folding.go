@@ -515,7 +515,7 @@ func (v *SourceView) foldBadgeRect(row int, p *paragraph) geometry.Rectangle {
 	if v.showLineEndings {
 		r.X += 12
 	}
-	if v.wrap != WrapNone && r.X+r.Width > v.viewport.Width-padding {
+	if v.wrap != WrapNone && r.X+r.Width > v.textRight()-padding {
 		return geometry.Rectangle{}
 	}
 	return r

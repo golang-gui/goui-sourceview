@@ -26,6 +26,8 @@ type SourceViewView struct {
 	wrap                                                                 *WrapMode
 	lineNumbers                                                          *bool
 	lineMarks                                                            *bool
+	minimap                                                              *bool
+	minimapOptions                                                       *MinimapOptions
 	executionLine                                                        *int
 	onLineMarkAction                                                     func(LineMarkEvent)
 	colors                                                               *scheme.Scheme
@@ -65,7 +67,12 @@ func (v *SourceViewView) IndentOptions(o IndentOptions) *SourceViewView {
 }
 func (v *SourceViewView) WrapMode(w WrapMode) *SourceViewView    { v.wrap = &w; return v }
 func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView { v.lineNumbers = &b; return v }
-func (v *SourceViewView) ShowLineMarks(b bool) *SourceViewView   { v.lineMarks = &b; return v }
+func (v *SourceViewView) ShowMinimap(show bool) *SourceViewView  { v.minimap = &show; return v }
+func (v *SourceViewView) MinimapOptions(options MinimapOptions) *SourceViewView {
+	v.minimapOptions = &options
+	return v
+}
+func (v *SourceViewView) ShowLineMarks(b bool) *SourceViewView { v.lineMarks = &b; return v }
 
 // ExecutionLine uses zero-based lines; -1 explicitly clears the location.
 func (v *SourceViewView) ExecutionLine(line int) *SourceViewView { v.executionLine = &line; return v }
@@ -225,6 +232,14 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 		d = s.document
 	}
 	w.SetDocument(d)
+	if v.minimapOptions != nil {
+		if err := w.SetMinimapOptions(*v.minimapOptions); err != nil {
+			panic(err)
+		}
+	}
+	if v.minimap != nil {
+		w.SetShowMinimap(*v.minimap)
+	}
 	if v.lineMarks != nil {
 		w.SetShowLineMarks(*v.lineMarks)
 	}

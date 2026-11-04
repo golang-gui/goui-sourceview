@@ -193,3 +193,22 @@ func (s *selectionState) Set(value TextSelection) {
 	s.writes++
 	s.value = value
 }
+
+func TestMinimapConfiguration(t *testing.T) {
+	ctx := &context{}
+	v := SourceView().ShowMinimap(true).MinimapOptions(MinimapOptions{Width: 100, MaxColumns: 80})
+	w := v.Mount(ctx).(*source.SourceView)
+	defer v.Unmount(ctx, w)
+	v.Update(ctx, w)
+	if !w.ShowMinimap() || w.MinimapOptions().Width != 100 {
+		t.Fatal("声明式地图配置丢失")
+	}
+	SourceView().Update(ctx, w)
+	if !w.ShowMinimap() || w.MinimapOptions().MaxColumns != 80 {
+		t.Fatal("省略配置错误地覆盖现状")
+	}
+	SourceView().ShowMinimap(false).MinimapOptions(MinimapOptions{}).Update(ctx, w)
+	if w.ShowMinimap() || w.MinimapOptions().Width != 120 {
+		t.Fatal("显式关闭或默认配置未生效")
+	}
+}

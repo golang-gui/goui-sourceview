@@ -11,6 +11,7 @@ import (
 type (
 	Document           = source.Document
 	IndentOptions      = source.IndentOptions
+	MinimapOptions     = source.MinimapOptions
 	WrapMode           = source.WrapMode
 	WhitespaceMode     = source.WhitespaceMode
 	SearchQuery        = source.SearchQuery

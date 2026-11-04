@@ -88,11 +88,22 @@ func (q *frameQueue) frame(_ time.Time) {
 		if activeFocus(v) && v.blink != nil && !v.blink.Active() {
 			v.resetBlink()
 		}
-		if v.dragging && (v.dragPoint.Y < 0 || v.dragPoint.Y > v.viewport.Height || !v.dragGutter && (v.dragPoint.X < v.gutter || v.dragPoint.X > v.viewport.Width)) {
+		if v.dragging && (v.dragPoint.Y < 0 || v.dragPoint.Y > v.viewport.Height || !v.dragGutter && (v.dragPoint.X < v.gutter || v.dragPoint.X > v.textRight())) {
 			v.dragSelection(v.dragPoint)
 			v.RequestPaint()
 			if !v.mounted {
 				continue
+			}
+		}
+		v.prepareMinimap()
+		if v.minimapPending() && v.projection == nil {
+			if q.analysisTimer != nil {
+				q.requestAnalysis()
+			} else {
+				v.minimapStep(until)
+				if v.minimapPending() {
+					v.RequestPaint()
+				}
 			}
 		}
 		d := v.document
@@ -215,6 +226,11 @@ func (q *frameQueue) advanceAnalysis(deadline time.Time) bool {
 		if !v.mounted || v.Destroyed() || v.Root() != q.root || !visible(v) {
 			continue
 		}
+		v.prepareMinimap()
+		if v.projection == nil {
+			v.minimapStep(minTime(deadline, time.Now().Add(500*time.Microsecond)))
+			pending = pending || v.minimapPending()
+		}
 		d := v.document
 		if seen[d] || d.engine == nil || d.driver != q.root {
 			continue
@@ -227,6 +243,17 @@ func (q *frameQueue) advanceAnalysis(deadline time.Time) bool {
 		if e.Pending() && (deadline.IsZero() || time.Now().Before(deadline)) {
 			e.Advance(deadline)
 			for view := range d.views {
+				if view.minimap != nil && view.projection == nil {
+					view.minimap.refresh = true
+					pending = true
+					if other := queues[view.Root()]; other != nil && other != q {
+						if other.analysisTimer != nil {
+							other.requestAnalysis()
+						} else {
+							view.RequestPaint()
+						}
+					}
+				}
 				if view.mounted && view.document == d && visible(view) && (ready != e.Ready() || view.analysisPaintNeeded()) {
 					view.RequestPaint()
 				}
