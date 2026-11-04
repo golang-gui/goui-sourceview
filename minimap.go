@@ -95,14 +95,16 @@ func (v *SourceView) minimapHit(p geometry.Point) bool {
 type minimapGeneration struct {
 	document                     *Document
 	revision, geometry, language uint64
+	highlights, highlightStyle   uint64
 	scheme                       *scheme.Scheme
 	width, height, lineHeight    float32
 	columns, tab                 int
 }
 type minimapRowKey struct {
-	id, version, language uint64
-	start, columns, tab   int
-	scheme                *scheme.Scheme
+	id, version, language      uint64
+	highlights, highlightStyle uint64
+	start, columns, tab        int
+	scheme                     *scheme.Scheme
 }
 type minimapState struct {
 	generation                                   minimapGeneration
@@ -123,7 +125,7 @@ func (v *SourceView) prepareMinimap() {
 		return
 	}
 	v.ensureHeights()
-	g := minimapGeneration{v.document, v.document.model.Revision(), v.minimapGeometry, v.document.languageEpoch, v.appliedScheme, v.minimapWidth(), v.viewport.Height, v.lineHeight, v.MinimapOptions().MaxColumns, v.indent.TabWidth}
+	g := minimapGeneration{v.document, v.document.model.Revision(), v.minimapGeometry, v.document.languageEpoch, v.document.highlightEpoch, v.highlightStyleEpoch, v.appliedScheme, v.minimapWidth(), v.viewport.Height, v.lineHeight, v.MinimapOptions().MaxColumns, v.indent.TabWidth}
 	s := v.minimap
 	if s == nil {
 		s = &minimapState{cache: make(map[minimapRowKey][]color.NRGBA)}
@@ -198,7 +200,7 @@ func (v *SourceView) minimapStep(deadline time.Time) {
 }
 func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimapState) []color.NRGBA {
 	e := v.document.engine
-	key := minimapRowKey{start: start, columns: s.generation.columns, tab: max(1, v.indent.TabWidth), scheme: v.appliedScheme, language: v.document.languageEpoch}
+	key := minimapRowKey{highlights: v.document.highlightEpoch, highlightStyle: v.highlightStyleEpoch, start: start, columns: s.generation.columns, tab: max(1, v.indent.TabWidth), scheme: v.appliedScheme, language: v.document.languageEpoch}
 	if e != nil && e.Ready() {
 		if line := e.Line(row); line != nil {
 			key.id = line.ID
@@ -231,6 +233,8 @@ func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimap
 			}
 		}
 	}
+	spans := v.document.highlightSpans(textedit.Range{Start: r.Start + start, End: end})
+	si := 0
 	column := 0
 	for at := 0; at < len(text) && column < key.columns; {
 		ch, size := utf8.DecodeRuneInString(text[at:])
@@ -241,6 +245,13 @@ func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimap
 				c := v.colors.Foreground
 				if tokenAt != nil {
 					c = tokenAt(start + at)
+				}
+				absolute := r.Start + start + at
+				for si < len(spans) && spans[si].Range.End <= absolute {
+					si++
+				}
+				if si < len(spans) && spans[si].Range.Start <= absolute {
+					c = v.highlightColor(spans[si].Kind)
 				}
 				// Ordinary sRGB NRGBA; alpha makes the overview quieter than source text.
 				c.A = uint8(uint16(c.A) * 180 / 255)

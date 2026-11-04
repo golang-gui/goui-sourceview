@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"errors"
+	"image/color"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
@@ -84,6 +85,8 @@ type SourceView struct {
 
 	// Effective appearance.
 	explicitScheme, appliedScheme, themeScheme *scheme.Scheme
+	highlightColors                            map[language.Kind]color.NRGBA
+	highlightStyleEpoch                        uint64
 	colors                                     scheme.Definition
 	font                                       typography.FontInfo
 	digitWidth, lineHeight, spaceWidth, gutter float32
