@@ -186,6 +186,7 @@ func run() error {
 			editor.SetWrapMode(wrap)
 		}},
 		{"Line numbers", true, editor.SetShowLineNumbers},
+		{"Minimap", false, editor.SetShowMinimap},
 		{"Read only", false, func(b bool) { editor.SetReadOnly(b); update() }},
 	} {
 		choice := widgets.NewCheckButton()

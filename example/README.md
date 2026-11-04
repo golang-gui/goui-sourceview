@@ -71,10 +71,10 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
   从 Sample 下拉列表选择语言与样本文件，支持滚动、方向键、Enter 确认和 Escape 取消。
   弹窗最大高度为 560 DIP，实际高度仍受桌面可用区域限制。
   编辑后切换回来，确认内容和撤销历史保留。
-- Toggle Word wrap, Line numbers and Read only; the footer shows language, LF/CRLF/CR,
+- Toggle Word wrap, Line numbers, Minimap and Read only; the footer shows language, LF/CRLF/CR,
   line, Unicode character column, line count, output byte count and editing mode. The displayed
   column counts Unicode code points, rather than bytes or visual tab columns.
-  切换折行、行号及只读；底部显示语言、LF/CRLF/CR、行列、行数、输出字节数和模式。
+  切换折行、行号、色块地图及只读；底部显示语言、LF/CRLF/CR、行列、行数、输出字节数和模式。
   显示列按 Unicode 码点计数，不是模型字节偏移或 Tab 展开后的视觉列。
 - Use Find / Replace or platform shortcuts; try `editor` in JSON or `feature`
   in HTML. Replace one/all and Undo. Escape closes the floating panel.
@@ -99,10 +99,10 @@ system-reserved shortcuts in the user's desktop environment.
 ## Declarative
 
 `declarative` is a minimal `ui.Run` composition: stable Document, HeaderBar,
-ScrollView and SourceView with built-in find, replace and go-to UI. Its stylesheet follows system settings.
+ScrollView and SourceView with a minimap and built-in find, replace and go-to UI. Its stylesheet follows system settings.
 Use Ctrl/Cmd+F to open the built-in find UI; editing uses the same widget as the imperative example.
 
-`declarative` 展示最小声明式组合及稳定 Document，样式随系统设置重建。
+`declarative` 展示最小声明式组合及稳定 Document，包含色块地图，样式随系统设置重建。
 Ctrl/Cmd+F 打开查找栏；编辑行为由同一个命令式控件提供。
 
 Selection uses a stable `ui.State` with `BindSelection`. The footer updates in
@@ -186,11 +186,12 @@ Template samples include deployment.yaml.gotmpl/deployment.yaml.j2, settings.tom
 ## Debug presentation / 调试呈现
 
 `debug` demonstrates application-owned breakpoints and view-local execution positions.
+The minimap scrolls without moving the selection.
 Click the marker gutter or press F9 to request a breakpoint; Shift-click toggles its state.
 Right-click the marker gutter for conditional breakpoints, logpoints and bookmarks.
 Verify pending and Step simulate adapter results; no debugger or child process is started.
 Edits and marks stay in memory. Closing the window exits; restart resets the sample.
 
-`debug` 展示应用管理的断点与视图内执行位置。点击标记栏或按 F9 请求断点，
+`debug` 展示应用管理的断点与视图内执行位置，右侧色块地图只导航、不改变选区。点击标记栏或按 F9 请求断点，
 Shift+点击切换状态，右键创建条件断点、日志点或书签。Verify pending 和 Step
 模拟调试器结果，不启动调试器或子进程。修改仅在内存中，关闭窗口退出，重启复位。
