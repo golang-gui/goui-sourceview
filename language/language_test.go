@@ -1190,3 +1190,70 @@ func TestMarkupNameCasePolicyPreservesNonASCII(t *testing.T) {
 		t.Fatal(ranges, err)
 	}
 }
+
+func TestConfigurationAndCodeFolds(t *testing.T) {
+	cases := []struct {
+		id   ID
+		text string
+		want []FoldRange
+	}{
+		{JSONC, "{\n // }\n \"x\": [\n  1\n ]\n}", []FoldRange{{0, 5}, {2, 4}}},
+		{JSON5, "{\n key: ['}',\n 2],\n /* [\n ] */\n}", []FoldRange{{0, 5}, {1, 2}, {3, 4}}},
+		{YAML, "root:\n  a: 1\n  child:\n    x: 2\nnext: 3", []FoldRange{{0, 3}, {2, 3}}},
+		{YAML, "items:\n- name: a\n  value: 1\n- name: b\n  value: 2\nnext: 3", []FoldRange{{0, 4}, {1, 2}, {3, 4}}},
+		{YAML, "text: |2\n  # [\n  key: value\nnext: 3", []FoldRange{{0, 2}}},
+		{YAML, "a:\n  b: 1\n\n# separate\n---\nx: 2", []FoldRange{{0, 1}}},
+		{TOML, "[a]\nx = [\n 1,\n 2\n]\n\n# next\n[b]\ny=2", []FoldRange{{0, 4}, {1, 4}, {7, 8}}},
+		{TOML, "[a]\nx = \"\"\"\n[fake]\n\"\"\"\n[b]\ny=2", []FoldRange{{0, 3}, {1, 3}, {4, 5}}},
+		{Go, "func f() {\n s := `}`\n /* {\n } */\n}", []FoldRange{{0, 4}, {2, 3}}},
+		{JavaScript, "function f() {\n const re = /[{}]/;\n return 1;\n}", []FoldRange{{0, 3}}},
+		{Python, "def f():\n    x = {\n      'a': 1\n    }\n    return x\nnext = 1", []FoldRange{{0, 4}, {1, 3}}},
+	}
+	for _, c := range cases {
+		t.Run(string(c.id)+c.text, func(t *testing.T) {
+			l, _ := Builtin(c.id)
+			if l.Folding() == nil {
+				t.Fatal("缺少折叠规则")
+			}
+			got, err := l.Folding()(context.Background(), c.text)
+			slices.SortFunc(got, func(a, b FoldRange) int {
+				if a.StartLine != b.StartLine {
+					return a.StartLine - b.StartLine
+				}
+				return b.EndLine - a.EndLine
+			})
+			if err != nil || !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("得到 %v (%v)，预期 %v", got, err, c.want)
+			}
+		})
+	}
+}
+
+func TestFoldingContinuationAndRegions(t *testing.T) {
+	for _, tc := range []struct {
+		id   ID
+		text string
+		want []FoldRange
+	}{
+		{Python, "def f(\n a,\n b\n):\n    return a\nnext()", []FoldRange{{0, 2}, {0, 4}}},
+		{Python, "def f():\n    xs = [\n0,\n1,\n]\n    return xs\nnext()", []FoldRange{{0, 5}, {1, 4}}},
+		{TOML, "a=[\n[1,2],\n[3,4]\n]\n[next]\nx=1", []FoldRange{{0, 3}, {4, 5}}},
+		{JavaScript, "// #region a\nlet n=1;\n// #endregion", []FoldRange{{0, 2}}},
+		{Python, "# region a\nx=1\n# endregion", []FoldRange{{0, 2}}},
+		{Go, "func f() {\n// #region crossing\nx()\n}\n// #endregion", []FoldRange{{0, 3}}},
+		{JSONC, "/* start\nend */ next\n{\n}", []FoldRange{{2, 3}}},
+	} {
+		l, _ := Builtin(tc.id)
+		got, err := l.Folding()(context.Background(), tc.text)
+		slices.SortFunc(got, func(a, b FoldRange) int { return a.StartLine - b.StartLine })
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s got=%v want=%v err=%v", tc.id, got, tc.want, err)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	l, _ := Builtin(JSONC)
+	if _, err := l.Folding()(ctx, "{}"); err != context.Canceled {
+		t.Fatal("未响应取消", err)
+	}
+}

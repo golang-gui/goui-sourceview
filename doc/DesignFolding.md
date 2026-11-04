@@ -93,3 +93,12 @@ Edits 一一对应时采用增量；分析索引尚在重建、变更缺失或�
 10 MiB JSON 窗口曾复现末尾空行不可见；独立 fallback 字体用例在旧代码中观察到高度由
 4176 退回 4032 DIP 并错误排入锚点恢复，修正后保留原高度且 caret 仍在视口。
 修正后 JSON/XML/HTML 各 10 MiB 的 53 步窗口断言全部通过。具体复验矩阵见实施记录。
+
+## 配置与常用代码语言
+
+新增 JSONC/JSON5、YAML、TOML、Go、JavaScript/TypeScript、CSS、Python 的折叠。
+扫描复用实际词法器，排除字符串、注释与块标量中的伪结构。YAML 尊重文档边界与零缩进序列，
+TOML 按连续源节处理，不合并不相邻 dotted key；Python 区分缩进块和括号/反斜杠续行。
+Go/JS/TS/CSS/Python 在明确注释行上识别 region/endregion，交叉 region 舍弃。
+
+逻辑验证覆盖精确行范围、引用/注释、多行数组/字符串、未闭合结构及取消。

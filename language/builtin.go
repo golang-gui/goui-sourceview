@@ -575,6 +575,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			vocabulary := codeVocabulary(info.ID)
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
+		switch info.ID {
+		case JSONC, JSON5, YAML, TOML, Go, JavaScript, TypeScript, CSS, Python:
+			d.Folding = structuralFolding(info.ID, d.Tokenizer)
+		}
 		l, err := New(d)
 		if err != nil {
 			panic(err)
