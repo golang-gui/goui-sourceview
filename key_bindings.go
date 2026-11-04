@@ -71,6 +71,8 @@ const (
 	CommandDeleteWordPartRight
 	CommandExpandSelection
 	CommandShrinkSelection
+	CommandReindentSelection
+	CommandPasteReindented
 	commandLimit
 )
 
@@ -261,6 +263,10 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		v.ExpandSelection()
 	case CommandShrinkSelection:
 		v.ShrinkSelection()
+	case CommandReindentSelection:
+		run(v.ReindentSelection)
+	case CommandPasteReindented:
+		run(v.PasteReindented)
 	case CommandToggleLineMark:
 		row := v.document.model.LineAt(v.Selection().Caret)
 		v.requestLineMark(row, LineMarkToggle, v.lineMarkRect(row).Pos)

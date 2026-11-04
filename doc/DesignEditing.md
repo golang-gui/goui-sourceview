@@ -370,3 +370,8 @@ TOML 连续第三个引号按原文输入形成三引号，不再生成另一组
 
 新增 `MoveWordPart` / `DeleteWordPart` 和 `ExpandSelection` / `ShrinkSelection`，以及同名 Command/ui 别名。
 子词不改变原按词命令；结构选择只使用可靠词法/标签证据，实际轨迹可精确缩回，外部选区或正文变化失效。
+
+`ReindentSelection`、`PasteReindented` 提供显式缩进操作，没有默认快捷键。换行继续由语言 Newline 回调处理。
+批量缩进在 worker 验证普通值结果、生成原坐标计划；GUI 核验修订、选区、语言、缩进配置和生命周期后，
+一次 ApplyBatch。异步方法返回 nil 表示受理或正常无操作，失败由 ConnectError 报告；最多 4096 个实际编辑，
+超限完全不修改。多行字符串等保护路径原样粘贴，普通 Paste 不改变。

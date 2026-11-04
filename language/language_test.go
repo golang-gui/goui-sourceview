@@ -1229,6 +1229,53 @@ func TestConfigurationAndCodeFolds(t *testing.T) {
 	}
 }
 
+func TestBuiltinReindentProtectsLiteralData(t *testing.T) {
+	for _, tc := range []struct {
+		id   ID
+		text string
+		want []LineIndent
+	}{
+		{JSON, "{\n\"a\": [\n1\n]\n}", []LineIndent{{0, ""}, {1, "  "}, {2, "    "}, {3, "  "}, {4, ""}}},
+		{TOML, "[section]\na=[\n1,\n2\n]\ntext='''a\n  literal\n  end'''", []LineIndent{{0, ""}, {1, ""}, {2, "  "}, {3, "  "}, {4, ""}, {5, ""}}},
+		{Go, "func f() {\ns := `a\n  literal\n  end`\nx := 2\n}", []LineIndent{{0, ""}, {1, "  "}, {4, "  "}, {5, ""}}},
+		{Python, "def f():\n  xs = [\n1,\n  ]\n  return xs", []LineIndent{{2, "    "}, {3, "  "}}},
+		{XML, "<root>\n<child>\n  text\n</child>\n</root>", []LineIndent{{0, ""}, {1, "  "}, {3, "  "}, {4, ""}}},
+		{HTML, "<div>\n<script>\nconst a = `<i>`;\n</script>\n<b>x</b>\n</div>", []LineIndent{{0, ""}, {1, "  "}, {4, "  "}, {5, ""}}},
+	} {
+		l, _ := Builtin(tc.id)
+		fn := l.Editing().Reindent
+		if fn == nil {
+			t.Fatal(tc.id, "缺少重新缩进")
+		}
+		got, err := fn(context.Background(), ReindentContext{Text: tc.text, StartLine: 0, EndLine: strings.Count(tc.text, "\n"), IndentWidth: 2, TabWidth: 4, InsertSpaces: true})
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s got=%v want=%v err=%v", tc.id, got, tc.want, err)
+		}
+	}
+}
+func TestBuiltinAssistedNewline(t *testing.T) {
+	for _, tc := range []struct {
+		id                  ID
+		before, after, want string
+		handled             bool
+	}{
+		{JSON, "  {", "x", "\n    ", true},
+		{XML, "<a>", "</a>", "\n  \n", true}, {HTML, "<br>", "", "", false}, {JSON, "  {", "}", "", false},
+		{JSON, "  \"{\"", "", "", false}, {TOML, "[table]", "", "", false},
+		{TOML, "values = [", "", "\n  ", true},
+		{YAML, "key:", "", "\n  ", true}, {YAML, "url: http://", "", "", false},
+		{YAML, "text: |2", "", "\n  ", true}, {YAML, "- item", "", "\n- ", true},
+		{Python, "if ready:", "", "\n  ", true}, {Python, "values[1:", "", "", false},
+		{Python, "{\"key\":", "", "", false},
+	} {
+		l, _ := Builtin(tc.id)
+		indent := tc.before[:len(tc.before)-len(strings.TrimLeft(tc.before, " \t"))]
+		got, ok := l.Editing().Newline(NewlineContext{Before: tc.before, After: tc.after, Indent: indent, Unit: "  ", Known: true})
+		if ok != tc.handled || got.Text != tc.want {
+			t.Fatalf("%s %q: %v,%v", tc.id, tc.before, got, ok)
+		}
+	}
+}
 func TestFoldingContinuationAndRegions(t *testing.T) {
 	for _, tc := range []struct {
 		id   ID

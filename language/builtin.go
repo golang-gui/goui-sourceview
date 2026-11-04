@@ -579,6 +579,18 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 		case JSONC, JSON5, YAML, TOML, Go, JavaScript, TypeScript, CSS, Python:
 			d.Folding = structuralFolding(info.ID, d.Tokenizer)
 		}
+		switch info.ID {
+		case JSON, JSONC, JSON5, TOML, YAML, Go, JavaScript, TypeScript, CSS, Python:
+			d.Editing.Newline = assistedNewline(info.ID, d.Tokenizer)
+		}
+		switch info.ID {
+		case JSON, JSONC, JSON5, TOML, Go, JavaScript, TypeScript, CSS, Python:
+			d.Editing.Reindent = structuralReindent(info.ID, d.Tokenizer)
+		}
+		if d.Editing.Tags != nil {
+			d.Editing.Reindent = markupReindent(d.Editing.Tags)
+			d.Editing.Newline = markupNewline(d.Editing.Tags)
+		}
 		l, err := New(d)
 		if err != nil {
 			panic(err)
@@ -821,7 +833,7 @@ func (s builtinState) Context() Context {
 		return Context{String: t.quote != 0, Comment: t.comment, Literal: t.quote == '\'', Value: !t.key}
 	}
 	if y := s.yaml; y != nil {
-		return Context{String: y.quote != 0 || y.block && !y.blockHeader, Comment: y.comment, Literal: y.quote == '\''}
+		return Context{String: y.quote != 0 || y.block && !y.blockHeader, Comment: y.comment, Literal: y.quote == '\'', Data: yamlEditingContext{flow: y.flow}}
 	}
 	if sh := s.shell; sh != nil {
 		mode := shTop(sh.stack)

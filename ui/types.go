@@ -84,6 +84,8 @@ const (
 	CommandDeleteWordPartRight = source.CommandDeleteWordPartRight
 	CommandExpandSelection     = source.CommandExpandSelection
 	CommandShrinkSelection     = source.CommandShrinkSelection
+	CommandReindentSelection   = source.CommandReindentSelection
+	CommandPasteReindented     = source.CommandPasteReindented
 	CommandUndo                = source.CommandUndo
 	CommandRedo                = source.CommandRedo
 	CommandCut                 = source.CommandCut

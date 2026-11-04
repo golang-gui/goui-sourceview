@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+type yamlEditingContext struct{ flow int }
+
 type yamlState struct {
 	offset, scalarColumn, keyIndent int
 	quote                           byte

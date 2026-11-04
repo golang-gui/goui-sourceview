@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"context"
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
@@ -49,6 +50,7 @@ func (v *SourceView) Redo() bool {
 }
 
 func (v *SourceView) history(undo bool) bool {
+	v.cancelEdit()
 	if v.editable() != nil {
 		return false
 	}
@@ -303,7 +305,9 @@ func (v *SourceView) Cut() error {
 
 // Paste accepts an asynchronous request. Delayed failures are reported through
 // ConnectError. A changed document, selection or mount cancels the request.
-func (v *SourceView) Paste() error {
+func (v *SourceView) Paste() error { return v.paste(false) }
+func (v *SourceView) paste(reindent bool) error {
+	v.cancelEdit()
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -324,7 +328,7 @@ func (v *SourceView) Paste() error {
 	}
 
 	v.cancelPaste()
-	request := &pasteRequest{view: v, document: v.document, revision: v.document.model.Revision(), mount: v.mountEpoch, selection: v.selectionEpoch, id: v.pasteEpoch}
+	request := &pasteRequest{reindent: reindent, view: v, document: v.document, revision: v.document.model.Revision(), mount: v.mountEpoch, selection: v.selectionEpoch, id: v.pasteEpoch}
 	v.pendingPaste = request
 	clipboard.RequestText(request.complete)
 	return nil
@@ -333,6 +337,7 @@ func (v *SourceView) Paste() error {
 // The platform may retain a callback while a remote owner is unresponsive.
 // Cancelling clears widget/document references even before that callback runs.
 type pasteRequest struct {
+	reindent                       bool
 	view                           *SourceView
 	document                       *Document
 	revision, mount, selection, id uint64
@@ -368,6 +373,21 @@ func (r *pasteRequest) complete(text string, err error) {
 	if text == "" {
 		return
 	}
+	if r.reindent && strings.ContainsAny(text, "\r\n") {
+		ctx, known := v.lexicalContext(v.Selection().Range().Start)
+		definition := v.definitionAt(v.Selection().Caret)
+		prefix, _ := v.lineContext(v.Selection().Range())
+		if known && !ctx.String && !ctx.Comment && definition.Editing().Reindent != nil && strings.Trim(prefix, " \t") == "" {
+			s, o := v.Selection(), v.indent
+			v.report(v.startEditRange(textedit.Range{}, func(ctx context.Context, _ string) (editor.Plan, error) {
+				value, err := reindentedPaste(ctx, text, prefix, o, definition)
+				at := s.Range().Start + len(value)
+				return editor.Plan{Before: s, After: textedit.Selection{Anchor: at, Caret: at}, Edits: []textedit.Edit{{Range: s.Range(), Text: value}}}, err
+			}))
+			return
+		}
+	}
+
 	q, before := v.pendingInput, v.operationState()
 	err = v.replace(v.Selection().Range(), text, true)
 	v.report(err)

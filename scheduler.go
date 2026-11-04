@@ -128,6 +128,9 @@ func (q *frameQueue) frame(_ time.Time) {
 			continue
 		}
 		d.foldingStep()
+		for view := range d.views {
+			view.editStep()
+		}
 		if d.engine == nil || d.driver != q.root {
 			continue
 		}
@@ -203,7 +206,7 @@ func (q *frameQueue) requestAnalysis() {
 
 func (d *Document) analysisPending() bool {
 	for v := range d.views {
-		if v.foldIntake != nil && v.projection == nil {
+		if v.editPending() || v.foldIntake != nil && v.projection == nil {
 			return true
 		}
 	}
@@ -248,6 +251,9 @@ func (q *frameQueue) advanceAnalysis(deadline time.Time) bool {
 		seen[d] = true
 		d.lastFrame = time.Now()
 		d.foldingStep()
+		for view := range d.views {
+			view.editStep()
+		}
 		if d.engine == nil || d.driver != q.root {
 			continue
 		}

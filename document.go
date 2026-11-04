@@ -251,7 +251,7 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 		if v.document != d || !v.mounted {
 			continue
 		}
-
+		v.cancelEdit()
 		v.clearFolds()
 		v.pairs, v.brackets = nil, bracketState{}
 		v.closeCompletion()

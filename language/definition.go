@@ -115,6 +115,7 @@ type EditingRules struct {
 	QuoteEscape rune
 	AllowPair   func(PairContext) bool
 	Newline     func(NewlineContext) (edit NewlineEdit, handled bool)
+	Reindent    ReindentFunc
 	Comments    Comments
 }
 

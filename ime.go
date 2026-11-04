@@ -30,6 +30,7 @@ func (v *SourceView) preedit(text string, caret int) {
 }
 func (v *SourceView) applyPreedit(text string, caret int) {
 	v.selectionTrail.steps = nil
+	v.cancelEdit()
 	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
 		return
 	}

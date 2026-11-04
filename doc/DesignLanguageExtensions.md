@@ -149,3 +149,7 @@ Edits 是原始文档坐标，排序且不重叠，同位置插入应先合并�
 外部分析结果通过 `NewFolds(snapshotText, ranges)` 和 `Document.SetFolds(revision, folds)` 发布，
 与 Highlights 一样不需要替换不可变语言定义。应用另外核对 Document.ID 与分析代次；过期修订正常拒绝。
 `example/semantic` 从 Go AST 构造代码块范围，和语义颜色、补全分别更新。
+
+`EditingRules.Reindent` 是可选 worker 回调，输入 ReindentContext 的不可变全文和行范围，返回递增唯一的
+`[]LineIndent`。只能指定目标行的完整前导 ASCII 空白；不能用该回调修改正文。nil/空结果正常无操作。
+完整格式化继续用 ApplyEdits；细节、取消和原子预算见 [P0 设计](DesignP0Editing.md)。
