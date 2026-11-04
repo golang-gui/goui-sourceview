@@ -24,6 +24,8 @@ go run ./example/editor -theme dark path/to/file.html
 go run ./example/declarative
 go run ./example/markdown
 go run ./example/markdown -dark
+go run ./example/debug
+go run ./example/debug -dark
 ```
 
 The examples also build with `CGO_ENABLED=0`. In Bash, prefix a command with
@@ -180,3 +182,15 @@ Markdown 的 page-yaml.md/page-toml.md 展示前置元数据和图表代码围�
 
 Template samples include deployment.yaml.gotmpl/deployment.yaml.j2, settings.toml.j2 and view.xml.gotmpl.
 模板样本还包含 YAML/TOML/XML 宿主；复合后缀由示例显式选择，编辑器不猜测模板生成结果。
+
+## Debug presentation / 调试呈现
+
+`debug` demonstrates application-owned breakpoints and view-local execution positions.
+Click the marker gutter or press F9 to request a breakpoint; Shift-click toggles its state.
+Right-click the marker gutter for conditional breakpoints, logpoints and bookmarks.
+Verify pending and Step simulate adapter results; no debugger or child process is started.
+Edits and marks stay in memory. Closing the window exits; restart resets the sample.
+
+`debug` 展示应用管理的断点与视图内执行位置。点击标记栏或按 F9 请求断点，
+Shift+点击切换状态，右键创建条件断点、日志点或书签。Verify pending 和 Step
+模拟调试器结果，不启动调试器或子进程。修改仅在内存中，关闭窗口退出，重启复位。
