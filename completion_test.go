@@ -350,3 +350,21 @@ func TestDefaultWordPolicyBelongsToDefinition(t *testing.T) {
 		t.Fatal("builtin literal policy lost", items)
 	}
 }
+
+// 无会话和已失效的初始请求都不能被刷新变成新的弹窗请求。
+func TestRefreshCompletionWithoutLiveSession(t *testing.T) {
+	v := NewSourceView()
+	v.SetCompletionProvider(&CompletionProvider{Complete: func(context.Context, CompletionContext) ([]Completion, error) {
+		t.Error("不应调用提供器")
+		return nil, nil
+	}})
+	if err := v.RefreshCompletion(); err != nil || v.completionQueue != nil {
+		t.Fatal("无会话刷新产生副作用", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	v.completionQueue = &completionQueue{owner: v, busy: true, active: &completionJob{state: v.operationState(), context: ctx, cancel: cancel}}
+	v.document.model.SetText("changed")
+	if err := v.RefreshCompletion(); err != nil || ctx.Err() != context.Canceled || v.completionQueue.active != nil {
+		t.Fatal("失效请求没有取消", err)
+	}
+}

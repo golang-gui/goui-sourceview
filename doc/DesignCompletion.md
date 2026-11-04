@@ -215,3 +215,25 @@ Shell 提供保留字及常见内建命令的字面量建议；TOML/YAML 文档�
 [GtkSourceView 5.22.1 CompletionProvider](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/iface.CompletionProvider.html)
 推荐异步 populate 避免阻塞主循环。采用这些能力边界，以有界复制输入和单工作队列实现，
 不把 Monaco 的可变模型传到 Go 后台，也不复制其完整服务框架。
+
+## 外部索引更新后的显式刷新
+
+`SourceView.RefreshCompletion() error` 只重查已经显示或正在请求的会话；没有会话时
+正常返回 nil，不突然弹出列表。应用先发布自己的新索引，再在 GUI 序列调用此方法。
+它不是 Provider 变更信号，也不是新的命令或声明式刷新计数器。
+
+刷新从当前位置生成 CompletionContext，保留本次会话的 Explicit，Trigger 为空。
+复用既有一个运行请求、一个最新待处理项的队列，取消过期任务；等待时保留旧弹窗预览，
+标记 pending 并禁止接受旧候选。重复刷新合并为最新请求。结果依旧按文档、修订、
+挂载、选区和请求代次校验。新候选替换原列表，值相同的选中编辑得以保留，否则选择首项。
+空结果关闭；失焦、只读、预编辑或无效生命周期结束会话。
+
+同步呈现错误直接返回；异步错误通过 ConnectError，取消和过期不是错误。
+ui 使用既有控件引用调用，不复制会话状态或增加特殊生命周期。外部颜色提交与刷新
+互相独立：SetHighlights 不调用刷新，也不关闭会话。
+
+参考 GtkSourceView 的 [CompletionProvider](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/iface.CompletionProvider.html)
+异步填充/已有结果过滤，以及 Monaco 的
+[CompletionItemProvider](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.CompletionItemProvider.html)
+请求上下文与取消契约。已有结果过滤不同于外部索引更新后的重新查询；本项目显式方法
+是针对现有 Provider 和调用方所有权的选择，不声称参考框架提供同名接口。
