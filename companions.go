@@ -112,7 +112,7 @@ func (v *SourceView) arrangeCompanions() {
 		return
 	}
 	const margin float32 = 8
-	available := geometry.Size{Width: max(0, v.viewport.Width-2*margin), Height: max(0, v.viewport.Height-2*margin)}
+	available := geometry.Size{Width: max(0, v.textRight()-2*margin), Height: max(0, v.viewport.Height-2*margin)}
 	arrange := func(bar interface {
 		gui.Widget
 		Destroyed() bool
@@ -124,7 +124,7 @@ func (v *SourceView) arrangeCompanions() {
 		if v.Destroyed() || bar.Destroyed() {
 			return
 		}
-		bar.Arrange(geometry.Rect(max(0, v.viewport.Width-size.Width-margin), min(margin, v.viewport.Height), size.Width, size.Height))
+		bar.Arrange(geometry.Rect(max(0, v.textRight()-size.Width-margin), min(margin, v.viewport.Height), size.Width, size.Height))
 	}
 	if v.findBar != nil {
 		arrange(v.findBar)

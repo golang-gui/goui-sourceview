@@ -95,7 +95,7 @@ func (v *SourceView) paragraphWidth() float32 {
 	if v.wrap == WrapNone {
 		return 1 << 20
 	}
-	return max(1, v.viewport.Width-v.gutter-2*padding)
+	return max(1, v.textRight()-v.gutter-2*padding)
 }
 
 // This lookup is also used by Snapshot: it neither shapes nor updates tokens.

@@ -592,7 +592,7 @@ func (v *SourceView) whitespaceStep(deadline time.Time) {
 }
 
 func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, origin geometry.Point) {
-	if v.whitespace == WhitespaceNone && !v.showLineEndings || v.viewport.Width <= 0 || v.viewport.Height <= 0 {
+	if v.whitespace == WhitespaceNone && !v.showLineEndings || v.textRight() <= 0 || v.viewport.Height <= 0 {
 		return
 	}
 	sourceRow, ok := v.highlightRow(row)
@@ -613,7 +613,7 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 	}
 	line, _ := v.document.model.LineRange(sourceRow)
 	selection := v.Selection().Range()
-	clip := geometry.Rect(v.gutter-origin.X, -origin.Y, max(0, v.viewport.Width-v.gutter), v.viewport.Height)
+	clip := geometry.Rect(v.gutter-origin.X, -origin.Y, max(0, v.textRight()-v.gutter), v.viewport.Height)
 	fallback := whitespaceColor(v.colors.Background)
 	normal := v.partColor("whitespace", fallback)
 	selectedColor := v.partColor("selected-whitespace", fallback)

@@ -45,6 +45,12 @@ type IndentOptions struct {
 type SourceView struct {
 	gui.WidgetBase
 
+	// Optional view-local overview.
+	showMinimap     bool
+	minimapOptions  MinimapOptions
+	minimap         *minimapState
+	minimapGeometry uint64
+
 	// Document ownership and mounting.
 	document, private      *Document
 	mounted                bool
@@ -220,6 +226,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	}
 	v.document = d
 	v.execution = nil
+	v.minimap = nil
 	v.searchRange = nil
 	if v.search != nil {
 		v.search.SetRange(nil)
@@ -530,6 +537,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: v.Selection(), Length: m.Len(), VisibleRange: r, VisibleText: text}
 	v.snapshotFolding(&info, first, last)
 	v.snapshotLineMarks(&info, first, last)
+	v.snapshotMinimap(&info)
 	if v.projection != nil {
 		text := v.projection.Text()
 		limit := textedit.ClampOffset(text, min(len(text), 64*1024))
@@ -684,6 +692,7 @@ func (v *SourceView) mount() {
 
 func (v *SourceView) unmount() {
 	v.execution = nil
+	v.minimap = nil
 	v.pendingInput = nil
 	v.mounted = false
 	v.HidePanel()
