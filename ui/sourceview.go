@@ -25,6 +25,9 @@ type SourceViewView struct {
 	indent                                                               *IndentOptions
 	wrap                                                                 *WrapMode
 	lineNumbers                                                          *bool
+	lineMarks                                                            *bool
+	executionLine                                                        *int
+	onLineMarkAction                                                     func(LineMarkEvent)
 	colors                                                               *scheme.Scheme
 	query                                                                *SearchQuery
 	highlightSearchMatches                                               *bool
@@ -60,8 +63,16 @@ func (v *SourceViewView) IndentOptions(o IndentOptions) *SourceViewView {
 	v.indent = &o
 	return v
 }
-func (v *SourceViewView) WrapMode(w WrapMode) *SourceViewView     { v.wrap = &w; return v }
-func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView  { v.lineNumbers = &b; return v }
+func (v *SourceViewView) WrapMode(w WrapMode) *SourceViewView    { v.wrap = &w; return v }
+func (v *SourceViewView) ShowLineNumbers(b bool) *SourceViewView { v.lineNumbers = &b; return v }
+func (v *SourceViewView) ShowLineMarks(b bool) *SourceViewView   { v.lineMarks = &b; return v }
+
+// ExecutionLine uses zero-based lines; -1 explicitly clears the location.
+func (v *SourceViewView) ExecutionLine(line int) *SourceViewView { v.executionLine = &line; return v }
+func (v *SourceViewView) OnLineMarkAction(fn func(LineMarkEvent)) *SourceViewView {
+	v.onLineMarkAction = fn
+	return v
+}
 func (v *SourceViewView) Scheme(s *scheme.Scheme) *SourceViewView { v.colors = s; return v }
 func (v *SourceViewView) Search(q SearchQuery) *SourceViewView    { v.query = &q; return v }
 
@@ -166,6 +177,7 @@ type state struct {
 	onError          func(error)
 	handles          signal.Handles
 	onFoldingChanged func()
+	onLineMarkAction func(LineMarkEvent)
 }
 
 const writeSelection = 0
@@ -175,6 +187,11 @@ func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 	s := &state{document: w.Document(), indent: w.IndentOptions(), wrap: w.WrapMode(), lineNumbers: w.ShowLineNumbers()}
 
 	s.handles = signal.Handles{
+		w.ConnectLineMarkAction(func(event LineMarkEvent) {
+			if s.onLineMarkAction != nil {
+				s.onLineMarkAction(event)
+			}
+		}),
 		w.ConnectFoldingChanged(func() {
 			if s.onFoldingChanged != nil {
 				s.onFoldingChanged()
@@ -208,6 +225,14 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 		d = s.document
 	}
 	w.SetDocument(d)
+	if v.lineMarks != nil {
+		w.SetShowLineMarks(*v.lineMarks)
+	}
+	if v.executionLine != nil {
+		if err := w.SetExecutionLine(*v.executionLine); err != nil {
+			panic(err)
+		}
+	}
 	enabled := true
 	if v.foldingEnabled != nil {
 		enabled = *v.foldingEnabled
@@ -290,6 +315,7 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	s.onSelection = v.onSelection
 	s.onError = v.onError
 	s.onFoldingChanged = v.onFoldingChanged
+	s.onLineMarkAction = v.onLineMarkAction
 }
 func (v *SourceViewView) Unmount(ctx base.BuildContext, widget gui.Widget) {
 	if s, ok := ctx.State().(*state); ok {

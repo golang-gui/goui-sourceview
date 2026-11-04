@@ -61,6 +61,11 @@ func (v *SourceView) updateGutter() {
 		v.gutter = float32(max(2, len(strconv.Itoa(v.document.model.LineCount()))))*max(v.spaceWidth, v.digitWidth) + 2*padding
 	}
 	v.foldColumn = 0
+	v.markColumn = 0
+	if v.showLineMarks {
+		v.markColumn = max(24, min(32, v.lineHeight*1.35))
+		v.gutter += v.markColumn
+	}
 	if v.foldingEnabled && v.document.definition.Folding() != nil {
 		v.foldColumn = max(16, min(24, v.lineHeight))
 		v.gutter += v.foldColumn

@@ -63,6 +63,10 @@ type SourceView struct {
 	indent                            IndentOptions
 	wrap                              WrapMode
 	showLineNumbers                   bool
+	showLineMarks                     bool
+	markColumn                        float32
+	execution                         *trackedLineMark
+	lineMarkSignal                    signal.Signal1[LineMarkEvent]
 
 	// Native text and input-method resources belong to this view.
 	context                      typography.Context
@@ -215,6 +219,7 @@ func (v *SourceView) SetDocument(d *Document) {
 		v.document.release(v)
 	}
 	v.document = d
+	v.execution = nil
 	v.searchRange = nil
 	if v.search != nil {
 		v.search.SetRange(nil)
@@ -524,6 +529,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	text, _ := m.Slice(r)
 	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: v.Selection(), Length: m.Len(), VisibleRange: r, VisibleText: text}
 	v.snapshotFolding(&info, first, last)
+	v.snapshotLineMarks(&info, first, last)
 	if v.projection != nil {
 		text := v.projection.Text()
 		limit := textedit.ClampOffset(text, min(len(text), 64*1024))
@@ -533,6 +539,13 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 }
 
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
+	if e := v.execution; e != nil && e.revision < c.Revision {
+		if e.revision+1 != c.Revision {
+			e.valid = false
+		}
+		e.offset, e.valid = mapLineAnchor(e.offset, e.valid, c)
+		e.revision = c.Revision
+	}
 	defer v.searchState.Emit()
 	epoch, d := v.mountEpoch, v.document
 	v.observed = c.Revision
@@ -670,6 +683,7 @@ func (v *SourceView) mount() {
 }
 
 func (v *SourceView) unmount() {
+	v.execution = nil
 	v.pendingInput = nil
 	v.mounted = false
 	v.HidePanel()

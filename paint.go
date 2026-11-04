@@ -44,6 +44,10 @@ func (v *SourceView) Paint(p gui.Painter) {
 				p.FillRect(geometry.Rect(v.gutter, top, max(0, bounds.Width-v.gutter), bottom-top), graphics.ColorOf(v.colors.CurrentLine))
 			}
 		}
+		if line, ok := v.ExecutionLine(); ok && v.projection == nil && v.markRow(line) == row {
+			top := padding + v.paragraphTop(row) - v.offset.Y
+			p.FillRect(geometry.Rect(v.gutter, max(0, top), max(0, bounds.Width-v.gutter), max(0, min(top+item.height, bounds.Height)-max(0, top))), graphics.ColorOf(v.partColor("execution-line", tint(rgb(0xe6b422), 35))))
+		}
 		v.paintAssistanceBackground(p, row, item, origin, occurrence)
 		if v.projection == nil {
 			// Put the quiet fill below search/selection, and the outline above
@@ -115,6 +119,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		p.Save()
 		p.SetClipRect(geometry.Rect(0, 0, v.gutter, bounds.Height))
 		p.FillRect(geometry.Rect(0, 0, v.gutter, bounds.Height), graphics.ColorOf(v.colors.GutterBackground))
+		v.paintLineMarks(p)
 		for row := first; row <= last; row = v.nextDisplayRow(row) {
 			item := v.viewportParagraph(row)
 			if item == nil {

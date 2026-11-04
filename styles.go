@@ -154,6 +154,11 @@ func codeRules(d scheme.Definition) []style.Rule {
 		style.Name("source-view").FontFamily("monospace").FontSize(12).BackgroundColor(d.Background).ForegroundColor(d.Foreground),
 		style.Name("source-view").Part("gutter").BackgroundColor(d.GutterBackground).ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("fold-toggle").ForegroundColor(d.GutterForeground),
+		style.Name("source-view").Part("line-mark").ForegroundColor(rgb(0xd83b36)),
+		style.Name("source-view").Part("line-mark-muted").ForegroundColor(d.GutterForeground),
+		style.Name("source-view").Part("bookmark").ForegroundColor(rgb(0x3579c8)),
+		style.Name("source-view").Part("execution-arrow").ForegroundColor(rgb(0xc39400)),
+		style.Name("source-view").Part("execution-line").ForegroundColor(tint(rgb(0xe6b422), 35)),
 		style.Name("source-view").Part("fold-placeholder").ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("current-line").BackgroundColor(d.CurrentLine),
 		// An explicit zero foreground prevents the root foreground fallback;

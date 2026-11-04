@@ -9,7 +9,15 @@ import (
 )
 
 var (
-	Undo = mlang.String(mlang.En("Undo"),
+	Breakpoint            = mlang.String(mlang.En("Breakpoint"), mlang.ZhCN("断点"), mlang.Ja("ブレークポイント"), mlang.Ko("중단점"), mlang.De("Haltepunkt"), mlang.Fr("Point d’arrêt"), mlang.Ru("Точка останова"), mlang.Ar("نقطة توقف"))
+	ConditionalBreakpoint = mlang.String(mlang.En("Conditional breakpoint"), mlang.ZhCN("条件断点"), mlang.Ja("条件付きブレークポイント"), mlang.Ko("조건부 중단점"), mlang.De("Bedingter Haltepunkt"), mlang.Fr("Point d’arrêt conditionnel"), mlang.Ru("Условная точка останова"), mlang.Ar("نقطة توقف شرطية"))
+	Logpoint              = mlang.String(mlang.En("Logpoint"), mlang.ZhCN("日志点"), mlang.Ja("ログポイント"), mlang.Ko("로그 지점"), mlang.De("Protokollpunkt"), mlang.Fr("Point de journalisation"), mlang.Ru("Точка журналирования"), mlang.Ar("نقطة تسجيل"))
+	Bookmark              = mlang.String(mlang.En("Bookmark"), mlang.ZhCN("书签"), mlang.Ja("ブックマーク"), mlang.Ko("책갈피"), mlang.De("Lesezeichen"), mlang.Fr("Signet"), mlang.Ru("Закладка"), mlang.Ar("إشارة مرجعية"))
+	MarkDisabled          = mlang.String(mlang.En("Disabled"), mlang.ZhCN("已禁用"), mlang.Ja("無効"), mlang.Ko("비활성화"), mlang.De("Deaktiviert"), mlang.Fr("Désactivé"), mlang.Ru("Отключено"), mlang.Ar("معطلة"))
+	MarkPending           = mlang.String(mlang.En("Unverified"), mlang.ZhCN("待确认"), mlang.Ja("未確認"), mlang.Ko("확인되지 않음"), mlang.De("Unbestätigt"), mlang.Fr("Non vérifié"), mlang.Ru("Не подтверждено"), mlang.Ar("غير مؤكدة"))
+	MarkRejected          = mlang.String(mlang.En("Cannot bind"), mlang.ZhCN("无法绑定"), mlang.Ja("設定できません"), mlang.Ko("바인딩할 수 없음"), mlang.De("Nicht bindbar"), mlang.Fr("Liaison impossible"), mlang.Ru("Невозможно привязать"), mlang.Ar("تعذر الربط"))
+	ToggleBreakpoint      = mlang.String(mlang.En("Toggle breakpoint"), mlang.ZhCN("切换断点"), mlang.Ja("ブレークポイントを切り替え"), mlang.Ko("중단점 전환"), mlang.De("Haltepunkt umschalten"), mlang.Fr("Basculer le point d’arrêt"), mlang.Ru("Переключить точку останова"), mlang.Ar("تبديل نقطة التوقف"))
+	Undo                  = mlang.String(mlang.En("Undo"),
 		mlang.ZhCN("撤销"), mlang.Ja("元に戻す"), mlang.Ko("실행 취소"),
 		mlang.De("Rückgängig"), mlang.Fr("Annuler"), mlang.Ru("Отменить"), mlang.Ar("تراجع"))
 	Redo = mlang.String(mlang.En("Redo"),
