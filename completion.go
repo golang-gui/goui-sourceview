@@ -300,6 +300,65 @@ func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rect
 	return geometry.Point{X: x - completionTextInset, Y: caret.Y + caret.Height + 2}
 }
 
+// RefreshCompletion re-queries an existing visible or pending completion session.
+// It does nothing when no session exists. The original explicit intent is kept;
+// Trigger is empty because no character caused this refresh. Pending preview
+// items remain visible but cannot be accepted. Async errors use ConnectError.
+func (v *SourceView) RefreshCompletion() error {
+	if v.closingCompletion {
+		return nil
+	}
+	var explicit bool
+	if s := v.completion; s != nil {
+		explicit = s.explicit
+	} else if q := v.completionQueue; q != nil {
+		job := q.next
+		if job == nil {
+			job = q.active
+		}
+		if job == nil {
+			return nil
+		}
+		if !job.state.valid(v) {
+			v.closeCompletion()
+			return nil
+		}
+		explicit = job.request.Explicit
+	} else {
+		return nil
+	}
+	if v.Destroyed() || !v.mounted || !v.Focused() || v.editable() != nil || v.projection != nil || v.Window() == nil {
+		v.closeCompletion()
+		return nil
+	}
+	state, epoch := v.operationState(), v.completionEpoch
+	c, ok := v.completionContext(explicit)
+	if !state.valid(v) || epoch != v.completionEpoch {
+		return ErrOperationChanged
+	}
+	if !ok {
+		v.closeCompletion()
+		return nil
+	}
+	v.completionEpoch++
+	if v.completionQueue != nil {
+		v.completionQueue.cancel()
+	}
+	if s := v.completion; s != nil {
+		s.pending = true
+		s.list.RequestPaint()
+	}
+	if provider := v.completionProvider; provider != nil {
+		if provider.Complete == nil {
+			v.closeCompletion()
+			return nil
+		}
+		v.queueCompletion(state, v.completionEpoch, c, provider.Complete)
+		return nil
+	}
+	return v.presentCompletions(state, v.completionEpoch, c, DefaultCompletions(c))
+}
+
 func (v *SourceView) complete(explicit bool) error { return v.completeTriggered(explicit, "") }
 
 func (v *SourceView) completeTriggered(explicit bool, trigger string) error {
