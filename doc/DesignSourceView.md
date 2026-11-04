@@ -14,7 +14,9 @@ GOUI 不反向依赖本模块。
 只读是可选模式。基础补全和括号交互见 [补全设计](DesignCompletion.md) 与 [括号设计](DesignPairs.md)。
 查找、替换和定位作为 SourceView 的[内置配套界面](DesignFindBar.md)，固定在视口右上角；
 控件和输入框使用所属 GUI 样式环境，裸控件只提供操作与高亮能力。
-多光标、折叠、语义补全、完整嵌入语言等后续能力见 [Roadmap](Roadmap.md)。
+[行标记与执行位置](DesignLineMarks.md) 由文档模型和视图分别拥有；
+[色块地图](DesignMinimap.md) 是默认关闭的内部导航区域，复用正文几何与高亮结果。
+多光标、语义补全等后续能力见 [Roadmap](Roadmap.md)。
 
 | 阅读顺序 | 文档 | 负责的问题 |
 | --- | --- | --- |

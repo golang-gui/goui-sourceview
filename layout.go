@@ -91,7 +91,7 @@ func (v *SourceView) Measure(c layout.Constraint) layout.Measurement {
 		size.Height = min(size.Height, v.MaxSize().Height)
 	}
 	size = c.Clamp(size)
-	v.estimateWrappedHeight(max(1, size.Width-v.gutter-2*padding))
+	v.estimateWrappedHeight(max(1, size.Width-v.gutter-v.minimapWidthAt(size.Width)-2*padding))
 	return layout.Measured(size)
 }
 
@@ -141,7 +141,7 @@ func (v *SourceView) Arrange(rect geometry.Rectangle) {
 
 func (v *SourceView) ContentSize() geometry.Size {
 	v.ensureHeights()
-	width := ceilCoordinate(float64(v.contentWidth) + float64(v.gutter) + 2*float64(padding))
+	width := ceilCoordinate(float64(v.contentWidth) + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
 	if v.wrap != WrapNone {
 		width = v.viewport.Width
 	}
@@ -309,6 +309,7 @@ func (m *visibleLineMap) index(line int) (int, bool) {
 }
 
 func (v *SourceView) resetHeights() {
+	v.minimapGeometry++
 	v.heightEstimated = false
 	hidden := v.hiddenLines
 	if v.projection != nil {
@@ -343,6 +344,9 @@ func (v *SourceView) paragraphAt(y float32) int {
 func (v *SourceView) setParagraphHeight(row int, height float32) {
 	i, visible := v.visibleLines.index(row)
 	if visible {
+		if v.showMinimap && v.heights.Top64(i+1)-v.heights.Top64(i) != float64(max(1, height)) {
+			v.minimapGeometry++
+		}
 		v.heights.Set(i, height)
 	}
 }
@@ -457,7 +461,7 @@ func (v *SourceView) resolveReveal(measured bool) {
 		}
 		return start >= 0 && float64(start)+float64(length) <= float64(viewport)
 	}
-	if measured && visible(rect.X-v.gutter, rect.Width+v.gutter+padding, v.viewport.Width) && visible(rect.Y, rect.Height, v.viewport.Height) {
+	if measured && visible(rect.X-v.gutter, rect.Width+v.gutter+padding, v.textRight()) && visible(rect.Y, rect.Height, v.viewport.Height) {
 		v.reveal = nil
 		v.captureAnchor()
 		return
@@ -488,7 +492,7 @@ func (v *SourceView) resolveReveal(measured bool) {
 func (v *SourceView) revealBounds(rect geometry.Rectangle) geometry.Rectangle {
 	x := float64(v.offset.X) + float64(rect.X) - float64(v.gutter)
 	y := float64(v.offset.Y) + float64(rect.Y)
-	right := float64(v.offset.X) + float64(rect.X) + float64(rect.Width) + float64(padding)
+	right := float64(v.offset.X) + float64(rect.X) + float64(rect.Width) + float64(padding) + float64(v.minimapWidth())
 	bottom := y + float64(rect.Height)
 	left, top := floorCoordinate(x), floorCoordinate(y)
 	return geometry.Rect(left, top, ceilCoordinate(right-float64(left)), ceilCoordinate(bottom-float64(top)))

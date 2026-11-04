@@ -22,7 +22,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 	v.updateGutter()
 	first, last := v.visibleRows()
 	p.Save()
-	p.SetClipRect(geometry.Rect(v.gutter, 0, max(0, bounds.Width-v.gutter), bounds.Height))
+	p.SetClipRect(geometry.Rect(v.gutter, 0, max(0, v.textRight()-v.gutter), bounds.Height))
 	caretRow := v.displayLine(v.displayCaret())
 	selection := v.Selection().Range()
 	occurrence := v.occurrenceWord()
@@ -41,12 +41,12 @@ func (v *SourceView) Paint(p gui.Painter) {
 			lineY := v.geometryOrigin(row, 0, 0).Y
 			top, bottom := max(0, lineY), min(bounds.Height, lineY+item.height)
 			if bottom > top {
-				p.FillRect(geometry.Rect(v.gutter, top, max(0, bounds.Width-v.gutter), bottom-top), graphics.ColorOf(v.colors.CurrentLine))
+				p.FillRect(geometry.Rect(v.gutter, top, max(0, v.textRight()-v.gutter), bottom-top), graphics.ColorOf(v.colors.CurrentLine))
 			}
 		}
 		if line, ok := v.ExecutionLine(); ok && v.projection == nil && v.markRow(line) == row {
 			top := padding + v.paragraphTop(row) - v.offset.Y
-			p.FillRect(geometry.Rect(v.gutter, max(0, top), max(0, bounds.Width-v.gutter), max(0, min(top+item.height, bounds.Height)-max(0, top))), graphics.ColorOf(v.partColor("execution-line", tint(rgb(0xe6b422), 35))))
+			p.FillRect(geometry.Rect(v.gutter, max(0, top), max(0, v.textRight()-v.gutter), max(0, min(top+item.height, bounds.Height)-max(0, top))), graphics.ColorOf(v.partColor("execution-line", tint(rgb(0xe6b422), 35))))
 		}
 		v.paintAssistanceBackground(p, row, item, origin, occurrence)
 		if v.projection == nil {
@@ -152,6 +152,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		p.Restore()
 		p.DrawLine(geometry.Point{X: v.gutter - .5}, geometry.Point{X: v.gutter - .5, Y: bounds.Height}, 1, graphics.ColorOf(v.colors.Border))
 	}
+	v.paintMinimap(p)
 }
 
 // Only a confirmed pair receives matching decoration. A lone candidate may be

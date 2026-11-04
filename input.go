@@ -57,6 +57,10 @@ func (v *SourceView) installInput() {
 		if !v.mounted || !gui.IsEnabled(v) {
 			return
 		}
+		if v.minimapHit(point) {
+			v.beginMinimapDrag(point)
+			return
+		}
 		if row, ok := v.lineMarkHit(point); ok {
 			v.dragging = false
 			action := LineMarkToggle
@@ -128,24 +132,36 @@ func (v *SourceView) installInput() {
 		v.setSelection(s, pos.Upstream, false)
 	})
 	drag.ConnectUpdate(func(point geometry.Point, _ events.Modifiers) {
+		if v.minimap != nil && v.minimap.dragging {
+			v.dragMinimap(point)
+			return
+		}
 		if v.dragging {
 			v.dragPoint = point
 			v.dragSelection(point)
 		}
 	})
 	drag.ConnectEnd(func(point geometry.Point, _ events.Modifiers) {
+		if v.minimap != nil && v.minimap.dragging {
+			v.dragMinimap(point)
+			v.endMinimapDrag()
+			return
+		}
 		if v.dragging {
 			v.dragSelection(point)
 		}
 		v.dragging = false
 	})
-	drag.ConnectCancel(func() { v.dragging = false })
+	drag.ConnectCancel(func() { v.dragging = false; v.endMinimapDrag() })
 	v.AddEventController(drag)
 }
 
 // Cursor resolves code, gutter and fold affordances without shaping text.
 // A captured selection keeps the cursor chosen by its starting region.
 func (v *SourceView) Cursor() gui.Cursor {
+	if v.minimap != nil && v.minimap.dragging {
+		return gui.CursorPointing
+	}
 	if v.dragging {
 		if v.dragGutter {
 			return gui.CursorDefault
@@ -163,6 +179,9 @@ func (v *SourceView) Cursor() gui.Cursor {
 }
 
 func (v *SourceView) cursorAt(point geometry.Point) gui.Cursor {
+	if v.minimapHit(point) {
+		return gui.CursorPointing
+	}
 	if _, ok := v.lineMarkHit(point); ok {
 		return gui.CursorPointing
 	}
@@ -186,7 +205,7 @@ func (v *SourceView) dragSelection(point geometry.Point) {
 		return
 	}
 	horizontal := measured && !v.dragGutter && v.wrap == WrapNone &&
-		(point.X < v.gutter && caret.X < v.gutter || point.X > v.viewport.Width && float64(caret.X)+float64(caret.Width) > float64(v.viewport.Width))
+		(point.X < v.gutter && caret.X < v.gutter || point.X > v.textRight() && float64(caret.X)+float64(caret.Width) > float64(v.textRight()))
 	vertical := point.Y < 0 || point.Y > v.viewport.Height
 	if horizontal || vertical {
 		// An unchanged axis requests the exact retained offset, without rounding a
