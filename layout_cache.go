@@ -62,11 +62,12 @@ type paragraphStyle struct {
 	scheme   *scheme.Scheme
 	language language.ID
 	// Display snapshot identity; semantic readiness is tracked by tokenValid.
-	tokenVersion  uint64
-	languageEpoch uint64
-	tokenValid    bool
-	selection     textedit.Range
-	focused       bool
+	highlightEpoch, highlightStyleEpoch uint64
+	tokenVersion                        uint64
+	languageEpoch                       uint64
+	tokenValid                          bool
+	selection                           textedit.Range
+	focused                             bool
 }
 
 func (v *SourceView) dropLayouts() {
@@ -184,7 +185,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	}
 	// Selection geometry is painted independently. Only an actual foreground
 	// override makes selection/focus part of the native text's color identity.
-	style := paragraphStyle{scheme: v.appliedScheme, language: v.document.language, languageEpoch: v.document.languageEpoch, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
+	style := paragraphStyle{highlightEpoch: v.document.highlightEpoch, highlightStyleEpoch: v.highlightStyleEpoch, scheme: v.appliedScheme, language: v.document.language, languageEpoch: v.document.languageEpoch, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
 	state, epoch := v.operationState(), v.layoutEpoch
 	p := v.layouts[key]
 	adopted := false
@@ -310,7 +311,7 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 	state, epoch := v.operationState(), v.layoutEpoch
 	owner := v.layouts[key]
 	valid := func() bool {
-		return state.valid(v) && epoch == v.layoutEpoch && v.layouts[key] == owner && v.appliedScheme == style.scheme && v.document.language == style.language && activeFocus(v) == focus
+		return state.valid(v) && epoch == v.layoutEpoch && v.layouts[key] == owner && v.appliedScheme == style.scheme && v.document.language == style.language && v.document.highlightEpoch == style.highlightEpoch && v.highlightStyleEpoch == style.highlightStyleEpoch && activeFocus(v) == focus
 	}
 	if !valid() {
 		return false
@@ -319,7 +320,17 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 	if p.paged != nil {
 		length = v.displayRange(p.row).End - v.displayRange(p.row).Start
 	}
-	colors := v.paragraphColors(length, style, tokens)
+	r := v.displayRange(p.row)
+	local := textedit.Range{End: length}
+	if p.paged != nil {
+		local = p.paged.VisibleRange()
+	}
+	spans := v.displayHighlights(textedit.Range{Start: r.Start + local.Start, End: r.Start + local.End})
+	for i := range spans {
+		spans[i].Range.Start -= r.Start
+		spans[i].Range.End -= r.Start
+	}
+	colors := v.paragraphColors(length, style, tokens, spans...)
 	if p.paged != nil {
 		visible := p.paged.VisibleRange()
 		clipped := colors[:0]
@@ -374,7 +385,7 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 	return true
 }
 
-func (v *SourceView) paragraphColors(length int, style paragraphStyle, tokens []highlight.Token) []paragraphColor {
+func (v *SourceView) paragraphColors(length int, style paragraphStyle, tokens []highlight.Token, spans ...HighlightSpan) []paragraphColor {
 	var out []paragraphColor
 	appendRange := func(start, end int, c color.NRGBA) {
 		if start >= end || c == v.colors.Foreground {
@@ -399,20 +410,40 @@ func (v *SourceView) paragraphColors(length int, style paragraphStyle, tokens []
 			appendRange(start, end, c)
 		}
 	}
+	si := 0
+	appendHighlighted := func(start, end int, c color.NRGBA) {
+		for start < end {
+			for si < len(spans) && spans[si].Range.End <= start {
+				si++
+			}
+			if si == len(spans) || spans[si].Range.Start >= end {
+				appendSelected(start, end, c)
+				return
+			}
+			s := spans[si]
+			if start < s.Range.Start {
+				appendSelected(start, min(end, s.Range.Start), c)
+				start = s.Range.Start
+			}
+			stop := min(end, s.Range.End)
+			appendSelected(start, stop, v.highlightColor(s.Kind))
+			start = stop
+		}
+	}
 	at := 0
 	for _, token := range tokens {
 		if token.Start < at || token.End > length || token.End <= token.Start {
 			continue
 		}
-		appendSelected(at, token.Start, v.colors.Foreground)
+		appendHighlighted(at, token.Start, v.colors.Foreground)
 		c, ok := v.colors.Tokens[token.Kind]
 		if !ok {
 			c = v.colors.Foreground
 		}
-		appendSelected(token.Start, token.End, c)
+		appendHighlighted(token.Start, token.End, c)
 		at = token.End
 	}
-	appendSelected(at, length, v.colors.Foreground)
+	appendHighlighted(at, length, v.colors.Foreground)
 	return out
 }
 

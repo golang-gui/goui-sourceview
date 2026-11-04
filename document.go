@@ -44,6 +44,9 @@ type Document struct {
 	foldReady                    bool
 	foldRanges                   []language.FoldRange
 	foldDue                      time.Time
+
+	highlightRoot                     *highlightNode
+	highlightRevision, highlightEpoch uint64
 }
 
 // NewDocument detects the source line ending before normalizing the editing
@@ -229,6 +232,8 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 	if d.definition == l {
 		return
 	}
+	d.highlightRoot = nil
+	d.highlightEpoch++
 	d.definition, d.language = l, l.ID()
 	d.requestFolding(true)
 	d.languageEpoch++
@@ -257,6 +262,11 @@ func (d *Document) SetLanguageDefinition(l *language.Language) {
 
 func (d *Document) acquire(v *SourceView) {
 	if len(d.views) == 0 {
+		if d.highlightRevision != d.model.Revision() {
+			d.highlightRoot = nil
+			d.highlightEpoch++
+		}
+		d.highlightRevision = d.model.Revision()
 		d.observed = d.model.Revision()
 		d.engine = highlight.NewWithLanguage(d.model, d.definition)
 		d.connection = d.model.ConnectChange(d.changed)
@@ -316,6 +326,7 @@ func (d *Document) changed(c textedit.Change) {
 	if d.engine == nil {
 		return
 	}
+	d.changeHighlights(c)
 	d.requestFolding(false)
 	splices, reset := d.engine.Change(c)
 	d.observed = c.Revision

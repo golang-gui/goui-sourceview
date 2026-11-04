@@ -159,6 +159,8 @@ func (v *SourceView) currentScheme() (*scheme.Scheme, error) {
 }
 
 func (v *SourceView) updateScheme() {
+	clear(v.highlightColors)
+	v.highlightStyleEpoch++
 	s, err := v.currentScheme()
 	if err != nil {
 		v.report(err)

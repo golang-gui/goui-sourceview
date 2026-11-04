@@ -212,3 +212,19 @@ func TestMinimapConfiguration(t *testing.T) {
 		t.Fatal("显式关闭或默认配置未生效")
 	}
 }
+
+// 快照和文档均由 ui 暴露，不要求声明式使用方混用命令式包类型。
+func TestExternalHighlightsAliases(t *testing.T) {
+	d := NewDocument("value")
+	var span HighlightSpan
+	span.Range = TextRange{End: 5}
+	span.Kind = "analysis.value"
+	var h *Highlights
+	h, err := NewHighlights("value", []HighlightSpan{span})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.SetHighlights(d.Model().Revision(), h); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+}

@@ -9,6 +9,8 @@ import (
 // Declarative configuration uses the same types as the imperative control.
 // Aliases preserve identity, methods and ownership; they add no parallel state.
 type (
+	Highlights         = source.Highlights
+	HighlightSpan      = source.HighlightSpan
 	Document           = source.Document
 	IndentOptions      = source.IndentOptions
 	MinimapOptions     = source.MinimapOptions
@@ -141,3 +143,8 @@ func DocumentCompletions(c CompletionContext) []Completion { return source.Docum
 
 // DefaultCompletions combines the control's built-in completion sources.
 func DefaultCompletions(c CompletionContext) []Completion { return source.DefaultCompletions(c) }
+
+// NewHighlights builds a worker-safe foreground snapshot; see sourceview.NewHighlights.
+func NewHighlights(text string, spans []HighlightSpan) (*Highlights, error) {
+	return source.NewHighlights(text, spans)
+}
