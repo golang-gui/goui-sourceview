@@ -57,6 +57,18 @@ func (v *SourceView) installInput() {
 		if !v.mounted || !gui.IsEnabled(v) {
 			return
 		}
+		if row, ok := v.lineMarkHit(point); ok {
+			v.dragging = false
+			action := LineMarkToggle
+			if mods&events.ModifierShift != 0 {
+				action = LineMarkToggleEnabled
+			}
+			v.requestLineMark(row, action, point)
+			return
+		}
+		if point.X >= 0 && point.X < v.markColumn {
+			return
+		}
 		state := v.operationState()
 		v.cancelPreedit()
 		if !state.valid(v) || !v.mounted {
@@ -151,6 +163,9 @@ func (v *SourceView) Cursor() gui.Cursor {
 }
 
 func (v *SourceView) cursorAt(point geometry.Point) gui.Cursor {
+	if _, ok := v.lineMarkHit(point); ok {
+		return gui.CursorPointing
+	}
 	if _, ok := v.foldHit(point); ok {
 		return gui.CursorPointing
 	}

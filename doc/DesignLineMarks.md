@@ -54,3 +54,10 @@ LineMark 使用零基逻辑行、Kind、State、应用提供的 Label；稳定 L
 窗口：正常事件路径点击/右键/F9，选区保持，行号/折叠互不干扰，折叠汇总，
 执行行与断点同处一行、独立显露、Basic/Modern 亮暗及 100%/150% 缩放。
 三平台编译不替代远端原生运行；本轮要求本机独立 X11，其他平台记录未运行。
+
+2026-11-04 本机结果：`go test ./...` 与 `GOWORK=off go test ./...` 通过。
+独立 Xvnc :87 / Xfwm4 合成 / Linux 软件绘制 / GOUI v0.6.0 下，
+`tests/window/editor/line_marks` 在 Basic、Modern light、Modern dark × 1/1.5
+缩放的六组正常事件路径验证全部通过，并检查 example/debug 两种缩放的截图。
+原生 macOS、Windows 本轮未运行。输入法预编辑投影期间暂隐藏标记，提交后恢复；
+不把临时预编辑行误报为文档行。执行位置在卸载期间错过模型变更后失效，避免错误重绑。

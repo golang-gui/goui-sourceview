@@ -116,6 +116,13 @@ func (v *SourceView) installContextMenu() {
 			return
 		}
 		point, pointer := ctx.Position()
+		if pointer {
+			if row, ok := v.lineMarkHit(point); ok {
+				ctx.StopPropagation()
+				v.requestLineMark(row, LineMarkContextMenu, point)
+				return
+			}
+		}
 		v.report(v.showContextMenu(point, pointer))
 		ctx.StopPropagation()
 	})

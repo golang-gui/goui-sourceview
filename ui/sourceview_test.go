@@ -13,6 +13,31 @@ type context struct {
 	value any
 }
 
+// 标记/执行配置可完全使用 ui 类型；省略选项保留状态，-1 显式清除。
+func TestLineMarkConfiguration(t *testing.T) {
+	ctx := &context{}
+	d := NewDocument("one\ntwo")
+	_, err := d.AddLineMark(LineMark{Line: 1, Kind: MarkLogpoint, State: MarkPending})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := SourceView().Document(d).ShowLineMarks(true).ExecutionLine(1)
+	w := v.Mount(ctx).(*source.SourceView)
+	defer v.Unmount(ctx, w)
+	v.Update(ctx, w)
+	if line, ok := w.ExecutionLine(); line != 1 || !ok || !w.ShowLineMarks() {
+		t.Fatal("configuration missing")
+	}
+	SourceView().Document(d).Update(ctx, w)
+	if line, ok := w.ExecutionLine(); line != 1 || !ok || !w.ShowLineMarks() {
+		t.Fatal("uncontrolled state reset")
+	}
+	SourceView().Document(d).ShowLineMarks(false).ExecutionLine(-1).Update(ctx, w)
+	if _, ok := w.ExecutionLine(); ok || w.ShowLineMarks() {
+		t.Fatal("explicit clear ignored")
+	}
+}
+
 func (c *context) State() any         { return c.value }
 func (c *context) SetState(value any) { c.value = value }
 func TestBindingRestoresDefaultsAndDisconnects(t *testing.T) {

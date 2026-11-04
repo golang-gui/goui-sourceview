@@ -21,6 +21,13 @@ type (
 	Command            = source.Command
 	KeyBindings        = source.KeyBindings
 	LineEnding         = source.LineEnding
+	LineMarkID         = source.LineMarkID
+	LineMark           = source.LineMark
+	LineMarkInfo       = source.LineMarkInfo
+	LineMarkKind       = source.LineMarkKind
+	LineMarkState      = source.LineMarkState
+	LineMarkAction     = source.LineMarkAction
+	LineMarkEvent      = source.LineMarkEvent
 )
 
 // Text values share GOUI's UTF-8 byte coordinates and model contracts.
@@ -46,9 +53,20 @@ const (
 	WhitespaceAll       = source.WhitespaceAll
 	WhitespaceBoundary  = source.WhitespaceBoundary
 
-	LineEndingLF   = source.LineEndingLF
-	LineEndingCRLF = source.LineEndingCRLF
-	LineEndingCR   = source.LineEndingCR
+	LineEndingLF              = source.LineEndingLF
+	LineEndingCRLF            = source.LineEndingCRLF
+	LineEndingCR              = source.LineEndingCR
+	MarkBreakpoint            = source.MarkBreakpoint
+	MarkConditionalBreakpoint = source.MarkConditionalBreakpoint
+	MarkLogpoint              = source.MarkLogpoint
+	MarkBookmark              = source.MarkBookmark
+	MarkEnabled               = source.MarkEnabled
+	MarkDisabled              = source.MarkDisabled
+	MarkPending               = source.MarkPending
+	MarkRejected              = source.MarkRejected
+	LineMarkToggle            = source.LineMarkToggle
+	LineMarkToggleEnabled     = source.LineMarkToggleEnabled
+	LineMarkContextMenu       = source.LineMarkContextMenu
 )
 
 // Command values are shared with SourceView; this package does not allocate IDs.
@@ -97,6 +115,7 @@ const (
 	CommandFind                = source.CommandFind
 	CommandReplace             = source.CommandReplace
 	CommandGoTo                = source.CommandGoTo
+	CommandToggleLineMark      = source.CommandToggleLineMark
 )
 
 // NewDocument creates a document using the control's normalization and language defaults.

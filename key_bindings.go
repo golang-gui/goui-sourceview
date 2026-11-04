@@ -61,6 +61,8 @@ const (
 	CommandFind
 	CommandReplace
 	CommandGoTo
+	// Applications may bind F9; there is no default breakpoint binding.
+	CommandToggleLineMark
 	commandLimit
 )
 
@@ -243,6 +245,9 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		}
 	}
 	switch command {
+	case CommandToggleLineMark:
+		row := v.document.model.LineAt(v.Selection().Caret)
+		v.requestLineMark(row, LineMarkToggle, v.lineMarkRect(row).Pos)
 	case CommandFind:
 		v.report(v.ShowFind())
 	case CommandReplace:
