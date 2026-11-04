@@ -73,6 +73,10 @@ const (
 	CommandShrinkSelection
 	CommandReindentSelection
 	CommandPasteReindented
+	CommandJoinLines
+	CommandUpperCase
+	CommandLowerCase
+	CommandTrimTrailingWhitespace
 	commandLimit
 )
 
@@ -267,6 +271,14 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		run(v.ReindentSelection)
 	case CommandPasteReindented:
 		run(v.PasteReindented)
+	case CommandJoinLines:
+		run(v.JoinLines)
+	case CommandUpperCase:
+		run(func() error { return v.TransformCase(CaseUpper) })
+	case CommandLowerCase:
+		run(func() error { return v.TransformCase(CaseLower) })
+	case CommandTrimTrailingWhitespace:
+		run(v.TrimTrailingWhitespace)
 	case CommandToggleLineMark:
 		row := v.document.model.LineAt(v.Selection().Caret)
 		v.requestLineMark(row, LineMarkToggle, v.lineMarkRect(row).Pos)

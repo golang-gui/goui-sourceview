@@ -13,6 +13,14 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 )
 
+// CaseMode selects locale-independent Unicode case conversion.
+type CaseMode uint8
+
+const (
+	CaseUpper CaseMode = iota
+	CaseLower
+)
+
 // Bound the final synchronous Model.ApplyBatch transaction. Larger requests
 // fail atomically instead of splitting history or blocking on an unbounded batch.
 const maxPlannedEdits = 4096
@@ -179,6 +187,76 @@ func reindentPlan(ctx context.Context, text string, s textedit.Selection, first,
 	return p, nil
 }
 
+// JoinLines joins selected logical lines, or the current and following line.
+// It is an explicit text operation; it does not preserve language semantics.
+func (v *SourceView) JoinLines() error {
+	s := v.Selection()
+	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) { return cleanupPlan(ctx, text, s, "join") })
+}
+
+// TrimTrailingWhitespace removes ASCII space/tab suffixes from selected logical
+// lines, or the whole document for an empty selection. LF and NBSP are retained.
+func (v *SourceView) TrimTrailingWhitespace() error {
+	s := v.Selection()
+	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) { return cleanupPlan(ctx, text, s, "trim") })
+}
+
+// TransformCase converts the selection, or the language word at the caret.
+// Unicode conversion may change byte length; the result is one undo item.
+func (v *SourceView) TransformCase(mode CaseMode) error {
+	if mode != CaseUpper && mode != CaseLower {
+		return fmt.Errorf("sourceview: invalid case mode")
+	}
+
+	s := v.Selection()
+	word := v.definitionAt(s.Caret).IsWord
+	if s.Anchor != s.Caret {
+		r := s.Range()
+		return v.startEditRange(r, func(ctx context.Context, text string) (editor.Plan, error) { return casePlan(ctx, text, s, r, mode) })
+	}
+	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) {
+		r := editor.WordRange(textedit.NewModel(text), s.Caret, word)
+		return casePlan(ctx, text[r.Start:r.End], s, r, mode)
+	})
+}
+func cleanupPlan(ctx context.Context, text string, s textedit.Selection, kind string) (editor.Plan, error) {
+	p := editor.Plan{Before: s, After: s}
+	m := textedit.NewModel(text)
+	first, last, err := editor.SelectedLines(m, s)
+	if err != nil {
+		return p, err
+	}
+	if s.Anchor == s.Caret {
+		if kind == "trim" {
+			first, last = 0, m.LineCount()-1
+		} else {
+			last = min(first+1, m.LineCount()-1)
+		}
+	}
+	for row := first; row <= last; row++ {
+		if err := ctx.Err(); err != nil {
+			return p, err
+		}
+		line, _ := m.LineRange(row)
+		if kind == "trim" {
+			n := len(strings.TrimRight(text[line.Start:line.End], " \t"))
+			if line.Start+n < line.End {
+				p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: line.Start + n, End: line.End}})
+			}
+		} else if row < last {
+			next, _ := m.LineRange(row + 1)
+			n := len(text[next.Start:next.End]) - len(strings.TrimLeft(text[next.Start:next.End], " \t"))
+			sep := ""
+			if line.End > line.Start && next.Start+n < next.End && text[line.End-1] != ' ' && text[line.End-1] != '\t' {
+				sep = " "
+			}
+			p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: line.End, End: next.Start + n}, Text: sep})
+		}
+	}
+	p.After = textedit.Selection{Anchor: editor.MapPosition(s.Anchor, p.Edits), Caret: editor.MapPosition(s.Caret, p.Edits)}
+	return p, nil
+}
+
 // PasteReindented explicitly shifts a multiline paste's common indentation to
 // the target line. Ordinary Paste is unchanged. Unknown/literal contexts and
 // languages without a reindent provider use literal paste.
@@ -283,4 +361,27 @@ func reindentedPaste(ctx context.Context, text, prefix string, o IndentOptions, 
 		return text, nil
 	}
 	return shiftedPaste(text, prefix, o), nil
+}
+
+func casePlan(ctx context.Context, text string, s textedit.Selection, r textedit.Range, mode CaseMode) (editor.Plan, error) {
+	p := editor.Plan{Before: s, After: s}
+	convert := strings.ToUpper
+	if mode == CaseLower {
+		convert = strings.ToLower
+	}
+	result := convert(text)
+	if result == text {
+		return p, ctx.Err()
+	}
+	p.Edits = []textedit.Edit{{Range: r, Text: result}}
+	if s.Anchor != s.Caret {
+		p.After = textedit.Selection{Anchor: r.Start, Caret: r.Start + len(result)}
+		if s.Anchor > s.Caret {
+			p.After.Anchor, p.After.Caret = p.After.Caret, p.After.Anchor
+		}
+	} else {
+		at := r.Start + len(convert(text[:s.Caret-r.Start]))
+		p.After = textedit.Selection{Anchor: at, Caret: at}
+	}
+	return p, ctx.Err()
 }

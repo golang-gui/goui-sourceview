@@ -98,6 +98,10 @@ func run() error {
 	editor := source.NewSourceView()
 	bindings := editor.KeyBindings()
 	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
+	bindings[source.CommandExpandSelection] = []gui.KeyGesture{{Key: gui.KeyF4}}
+	bindings[source.CommandShrinkSelection] = []gui.KeyGesture{{Key: gui.KeyF4, Modifiers: gui.ModShift}}
+	bindings[source.CommandMoveWordPartLeft] = []gui.KeyGesture{{Key: gui.KeyArrowLeft, Modifiers: gui.ModControl | gui.ModAlt}}
+	bindings[source.CommandMoveWordPartRight] = []gui.KeyGesture{{Key: gui.KeyArrowRight, Modifiers: gui.ModControl | gui.ModAlt}}
 	if err := editor.SetKeyBindings(bindings); err != nil {
 		return err
 	}
@@ -234,6 +238,37 @@ func run() error {
 		}
 	})
 	tools.AddChild(viewOptions)
+	editOptions := gui.NewButton()
+	editOptions.SetChild(gui.NewLabel("Edit"))
+	editMenu := gui.NewPopoverMenu(editOptions)
+	defer editMenu.Hide()
+	editOptions.ConnectClicked(func() {
+		menu := gui.NewMenu()
+		for _, action := range []struct {
+			label string
+			run   func() error
+		}{
+			{"Reindent selection", editor.ReindentSelection}, {"Paste with indentation", editor.PasteReindented},
+			{"Join lines", editor.JoinLines}, {"Upper case", func() error { return editor.TransformCase(source.CaseUpper) }},
+			{"Lower case", func() error { return editor.TransformCase(source.CaseLower) }}, {"Trim trailing whitespace", editor.TrimTrailingWhitespace},
+		} {
+			item := menu.Append(action.label, func() {
+				win.SetFocusedWidget(editor)
+				if err := action.run(); err != nil {
+					status.SetText(err.Error())
+				}
+			})
+			item.SetEnabled(!editor.ReadOnly())
+		}
+		menu.AppendSeparator()
+		menu.Append("Expand selection (F4)", func() { win.SetFocusedWidget(editor); editor.ExpandSelection() })
+		menu.Append("Shrink selection (Shift+F4)", func() { win.SetFocusedWidget(editor); editor.ShrinkSelection() })
+		editMenu.SetMenu(menu)
+		if err := editMenu.ShowAt(geometry.Point{Y: editOptions.Rect().Height}); err != nil {
+			status.SetText(err.Error())
+		}
+	})
+	tools.AddChild(editOptions)
 	tools.AddChild(spacer())
 	hint := gui.NewLabel("F2: complete  ·  F3: next match")
 	hint.SetStyleName(modern.MutedText)

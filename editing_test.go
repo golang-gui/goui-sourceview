@@ -10,6 +10,39 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 )
 
+func TestCleanupPlansAndUndo(t *testing.T) {
+	for _, tc := range []struct {
+		text, kind, want string
+		s                textedit.Selection
+	}{
+		{"one\n  two\nthree", "join", "one two\nthree", textedit.Selection{}},
+		{"one\n  two\nthree", "join", "one two three", textedit.Selection{Anchor: 15}},
+		{"one\n  two\nthree", "join", "one two\nthree", textedit.Selection{Caret: 10}},
+		{"a \t\nb\u00a0\t\n", "trim", "a\nb\u00a0\n", textedit.Selection{}},
+		{"a \nb \nc ", "trim", "a\nb \nc ", textedit.Selection{Caret: 3}},
+		{"one", "join", "one", textedit.Selection{}},
+	} {
+		m := textedit.NewModel(tc.text)
+		p, err := cleanupPlan(context.Background(), tc.text, tc.s, tc.kind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = p.Apply(m, nil); err != nil {
+			t.Fatal(err)
+		}
+		if m.Text() != tc.want {
+			t.Fatalf("%s: %q != %q", tc.kind, m.Text(), tc.want)
+		}
+		if tc.want != tc.text {
+			r := m.UndoWithSelection()
+			if m.Text() != tc.text || r.Selection == nil || *r.Selection != tc.s {
+				t.Fatal("撤销", r)
+			}
+		} else if m.CanUndo() {
+			t.Fatal("空操作产生历史")
+		}
+	}
+}
 func TestReindentPlanValidatesBeforeMutation(t *testing.T) {
 	text := "{\n\"a\": 1\n}"
 	s := textedit.Selection{Anchor: len(text)}

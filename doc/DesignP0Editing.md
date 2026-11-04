@@ -1,7 +1,9 @@
 # P0：折叠、缩进与单光标结构编辑
 
-状态：P0 系列实施设计。本提交落地语言及外部折叠，编辑操作由后续提交落地。
-本文以系列目标契约描述全部切片，不应把后续接口提前视为本提交已实现。
+状态：2026-11-04，P0 的五个切片已实现于 `feature/p0-editing`，尚未合并或发布。
+本文记录接口、保守处理范围和预算；本机验证及平台缺口见 [P0 验证](PlanP0Editing.md)。
+基础契约仍见 [折叠](DesignFolding.md)、[编辑](DesignEditing.md)、[配对](DesignPairs.md)、
+[语言扩展](DesignLanguageExtensions.md)。
 优先级依据见 [能力差距](DesignCapabilityGaps.md)。
 
 ## 1. 范围和实施顺序
@@ -331,7 +333,7 @@ Folds 等用户需要声明的类型同步补齐，不让用户为一个参数�
 | 所属包现有 *_test.go | 逻辑回归，英文生产注释、中文开发者测试说明 |
 | tests/window/editor/folding、shortcuts、markup 等 | 优先扩充现有主题程序；入口列明步骤、断言、环境、副作用和退出 |
 | example/editor、example/semantic | 操作入口；外部分析示例同时发布颜色与折叠，验证解耦 |
-| 各 doc/Design*.md | 实现后更新实际契约，本草案保留取舍或合并到对应专题 |
+| 各 doc/Design*.md | 实现后更新实际契约，本文保留取舍或合并到对应专题 |
 
 不改 README 为内部设计说明，不改 AGENTS 承载进度，不动用户的 doc/Doing.md 或 example/temp。
 

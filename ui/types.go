@@ -9,6 +9,7 @@ import (
 // Declarative configuration uses the same types as the imperative control.
 // Aliases preserve identity, methods and ownership; they add no parallel state.
 type (
+	CaseMode           = source.CaseMode
 	Folds              = source.Folds
 	FoldRange          = source.FoldRange
 	Highlights         = source.Highlights
@@ -48,6 +49,8 @@ type (
 type KeyGesture = gui.KeyGesture
 
 const (
+	CaseUpper    = source.CaseUpper
+	CaseLower    = source.CaseLower
 	WrapNone     = source.WrapNone
 	WrapChar     = source.WrapChar
 	WrapWordChar = source.WrapWordChar
@@ -76,61 +79,65 @@ const (
 
 // Command values are shared with SourceView; this package does not allocate IDs.
 const (
-	CommandMoveWordPartLeft    = source.CommandMoveWordPartLeft
-	CommandMoveWordPartRight   = source.CommandMoveWordPartRight
-	CommandSelectWordPartLeft  = source.CommandSelectWordPartLeft
-	CommandSelectWordPartRight = source.CommandSelectWordPartRight
-	CommandDeleteWordPartLeft  = source.CommandDeleteWordPartLeft
-	CommandDeleteWordPartRight = source.CommandDeleteWordPartRight
-	CommandExpandSelection     = source.CommandExpandSelection
-	CommandShrinkSelection     = source.CommandShrinkSelection
-	CommandReindentSelection   = source.CommandReindentSelection
-	CommandPasteReindented     = source.CommandPasteReindented
-	CommandUndo                = source.CommandUndo
-	CommandRedo                = source.CommandRedo
-	CommandCut                 = source.CommandCut
-	CommandCopy                = source.CommandCopy
-	CommandPaste               = source.CommandPaste
-	CommandDeleteSelection     = source.CommandDeleteSelection
-	CommandMoveLinesUp         = source.CommandMoveLinesUp
-	CommandMoveLinesDown       = source.CommandMoveLinesDown
-	CommandDuplicateLinesUp    = source.CommandDuplicateLinesUp
-	CommandDuplicateLinesDown  = source.CommandDuplicateLinesDown
-	CommandDeleteLines         = source.CommandDeleteLines
-	CommandSelectAll           = source.CommandSelectAll
-	CommandFold                = source.CommandFold
-	CommandUnfold              = source.CommandUnfold
-	CommandFoldAll             = source.CommandFoldAll
-	CommandUnfoldAll           = source.CommandUnfoldAll
-	CommandComplete            = source.CommandComplete
-	CommandToggleLineComment   = source.CommandToggleLineComment
-	CommandToggleBlockComment  = source.CommandToggleBlockComment
-	CommandIndent              = source.CommandIndent
-	CommandOutdent             = source.CommandOutdent
-	CommandInsertLineAbove     = source.CommandInsertLineAbove
-	CommandInsertLineBelow     = source.CommandInsertLineBelow
-	CommandSelectLine          = source.CommandSelectLine
-	CommandJumpToBracket       = source.CommandJumpToBracket
-	CommandMoveWordLeft        = source.CommandMoveWordLeft
-	CommandMoveWordRight       = source.CommandMoveWordRight
-	CommandSelectWordLeft      = source.CommandSelectWordLeft
-	CommandSelectWordRight     = source.CommandSelectWordRight
-	CommandDeleteWordLeft      = source.CommandDeleteWordLeft
-	CommandDeleteWordRight     = source.CommandDeleteWordRight
-	CommandMoveLineStart       = source.CommandMoveLineStart
-	CommandMoveLineEnd         = source.CommandMoveLineEnd
-	CommandSelectLineStart     = source.CommandSelectLineStart
-	CommandSelectLineEnd       = source.CommandSelectLineEnd
-	CommandMoveDocumentStart   = source.CommandMoveDocumentStart
-	CommandMoveDocumentEnd     = source.CommandMoveDocumentEnd
-	CommandSelectDocumentStart = source.CommandSelectDocumentStart
-	CommandSelectDocumentEnd   = source.CommandSelectDocumentEnd
-	CommandFindNext            = source.CommandFindNext
-	CommandFindPrevious        = source.CommandFindPrevious
-	CommandFind                = source.CommandFind
-	CommandReplace             = source.CommandReplace
-	CommandGoTo                = source.CommandGoTo
-	CommandToggleLineMark      = source.CommandToggleLineMark
+	CommandMoveWordPartLeft       = source.CommandMoveWordPartLeft
+	CommandMoveWordPartRight      = source.CommandMoveWordPartRight
+	CommandSelectWordPartLeft     = source.CommandSelectWordPartLeft
+	CommandSelectWordPartRight    = source.CommandSelectWordPartRight
+	CommandDeleteWordPartLeft     = source.CommandDeleteWordPartLeft
+	CommandDeleteWordPartRight    = source.CommandDeleteWordPartRight
+	CommandExpandSelection        = source.CommandExpandSelection
+	CommandShrinkSelection        = source.CommandShrinkSelection
+	CommandReindentSelection      = source.CommandReindentSelection
+	CommandPasteReindented        = source.CommandPasteReindented
+	CommandJoinLines              = source.CommandJoinLines
+	CommandUpperCase              = source.CommandUpperCase
+	CommandLowerCase              = source.CommandLowerCase
+	CommandTrimTrailingWhitespace = source.CommandTrimTrailingWhitespace
+	CommandUndo                   = source.CommandUndo
+	CommandRedo                   = source.CommandRedo
+	CommandCut                    = source.CommandCut
+	CommandCopy                   = source.CommandCopy
+	CommandPaste                  = source.CommandPaste
+	CommandDeleteSelection        = source.CommandDeleteSelection
+	CommandMoveLinesUp            = source.CommandMoveLinesUp
+	CommandMoveLinesDown          = source.CommandMoveLinesDown
+	CommandDuplicateLinesUp       = source.CommandDuplicateLinesUp
+	CommandDuplicateLinesDown     = source.CommandDuplicateLinesDown
+	CommandDeleteLines            = source.CommandDeleteLines
+	CommandSelectAll              = source.CommandSelectAll
+	CommandFold                   = source.CommandFold
+	CommandUnfold                 = source.CommandUnfold
+	CommandFoldAll                = source.CommandFoldAll
+	CommandUnfoldAll              = source.CommandUnfoldAll
+	CommandComplete               = source.CommandComplete
+	CommandToggleLineComment      = source.CommandToggleLineComment
+	CommandToggleBlockComment     = source.CommandToggleBlockComment
+	CommandIndent                 = source.CommandIndent
+	CommandOutdent                = source.CommandOutdent
+	CommandInsertLineAbove        = source.CommandInsertLineAbove
+	CommandInsertLineBelow        = source.CommandInsertLineBelow
+	CommandSelectLine             = source.CommandSelectLine
+	CommandJumpToBracket          = source.CommandJumpToBracket
+	CommandMoveWordLeft           = source.CommandMoveWordLeft
+	CommandMoveWordRight          = source.CommandMoveWordRight
+	CommandSelectWordLeft         = source.CommandSelectWordLeft
+	CommandSelectWordRight        = source.CommandSelectWordRight
+	CommandDeleteWordLeft         = source.CommandDeleteWordLeft
+	CommandDeleteWordRight        = source.CommandDeleteWordRight
+	CommandMoveLineStart          = source.CommandMoveLineStart
+	CommandMoveLineEnd            = source.CommandMoveLineEnd
+	CommandSelectLineStart        = source.CommandSelectLineStart
+	CommandSelectLineEnd          = source.CommandSelectLineEnd
+	CommandMoveDocumentStart      = source.CommandMoveDocumentStart
+	CommandMoveDocumentEnd        = source.CommandMoveDocumentEnd
+	CommandSelectDocumentStart    = source.CommandSelectDocumentStart
+	CommandSelectDocumentEnd      = source.CommandSelectDocumentEnd
+	CommandFindNext               = source.CommandFindNext
+	CommandFindPrevious           = source.CommandFindPrevious
+	CommandFind                   = source.CommandFind
+	CommandReplace                = source.CommandReplace
+	CommandGoTo                   = source.CommandGoTo
+	CommandToggleLineMark         = source.CommandToggleLineMark
 )
 
 // NewDocument creates a document using the control's normalization and language defaults.
