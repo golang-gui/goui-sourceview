@@ -63,6 +63,11 @@ macOS 保留 Command+方向键、Command+G 和 Ctrl+G 的不同含义；具体�
 解除绑定即解除消费；只读状态下仍消费已绑定编辑命令，但不修改文档，沿用原有行为。
 菜单点击和直接方法调用不依赖绑定表是否为空，错误仍经原有返回值/ConnectError 契约处理。
 
+菜单通过 GOUI v0.7.0 的 Command/Shortcut 关联显示当前第一个替代组合键；
+重绑或清空后提示同步变化，没有绑定时留空。关联仅用于菜单呈现，
+不额外注册 ShortcutController，也不替代既有命令匹配、预编辑或补全面板优先级。
+菜单生命周期和释放规则见 [编辑菜单](DesignEditing.md#10-编辑菜单)。
+
 ## 内置界面与声明式层
 
 CommandFind、CommandReplace、CommandGoTo 由 SourceView 自身响应，内部栏首次打开时创建。

@@ -32,7 +32,55 @@ var commandLabels = [...]mlang.Getter{
 type editMenu struct {
 	popup    *gui.PopoverMenu
 	items    map[Command]*gui.MenuItem
+	commands map[Command]*menuCommand
 	language signal.Handle
+}
+
+// These shortcuts describe the editor's existing bindings for menu hints.
+// They are never registered with a controller: input still follows applyKey.
+type menuCommand struct {
+	command  *gui.Command
+	activate signal.Handle
+	keys     []*gui.Shortcut
+}
+
+func newMenuCommand(gestures []gui.KeyGesture, run func()) *menuCommand {
+	b := &menuCommand{command: gui.NewCommand()}
+	b.activate = b.command.ConnectActivate(run)
+	b.setGestures(gestures)
+	return b
+}
+
+func (b *menuCommand) setGestures(gestures []gui.KeyGesture) {
+	for i, gesture := range gestures {
+		if i < len(b.keys) {
+			b.keys[i].SetGesture(gesture)
+		} else {
+			key := gui.NewShortcut(gesture)
+			key.SetCommand(b.command)
+			b.keys = append(b.keys, key)
+		}
+	}
+	for _, key := range b.keys[len(gestures):] {
+		key.SetCommand(nil)
+	}
+	clear(b.keys[len(gestures):])
+	b.keys = b.keys[:len(gestures)]
+}
+
+func (b *menuCommand) release() {
+	b.activate.Disconnect()
+	b.command.SetEnabled(false)
+	b.setGestures(nil)
+	b.keys = nil
+}
+
+func (m *editMenu) releaseCommands() {
+	commands := m.commands
+	m.commands, m.items = nil, nil
+	for _, command := range commands {
+		command.release()
+	}
 }
 
 func (v *SourceView) canCommand(c Command) bool {
@@ -165,18 +213,23 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 		m.language = mlang.ConnectChanged(v.updateMenu)
 	}
 	items := gui.NewMenu()
+	m.releaseCommands()
 	m.items = make(map[Command]*gui.MenuItem)
+	m.commands = make(map[Command]*menuCommand)
 	for c := CommandUndo; c <= CommandUnfoldAll; c++ {
 		if c == CommandCut || c == CommandMoveLinesUp || c == CommandSelectAll || c == CommandFold {
 			items.AppendSeparator()
 		}
-		item := items.Append(commandLabels[c](), func() {
+		binding := newMenuCommand(v.keyBindings[c], func() {
 			if v.document == state.document && v.mountEpoch == state.mount && m.popup.Menu() == items {
 				v.runCommand(c)
 			}
 		})
-		item.SetEnabled(v.canCommand(c))
+		binding.command.SetEnabled(v.canCommand(c))
+		item := items.Append(commandLabels[c](), nil)
+		item.SetCommand(binding.command)
 		m.items[c] = item
+		m.commands[c] = binding
 	}
 	m.popup.SetMenu(items)
 	return m.popup.ShowAt(point)
@@ -188,13 +241,22 @@ func (v *SourceView) updateMenu() {
 	}
 	for c, item := range v.menu.items {
 		item.SetLabel(commandLabels[c]())
-		item.SetEnabled(v.canCommand(c))
+		item.Command().SetEnabled(v.canCommand(c))
+	}
+}
+
+func (v *SourceView) updateMenuBindings() {
+	if v.menu != nil {
+		for c, binding := range v.menu.commands {
+			binding.setGestures(v.keyBindings[c])
+		}
 	}
 }
 
 func (v *SourceView) hideMenu() {
 	if v.menu != nil {
 		v.menu.popup.Hide()
+		v.menu.releaseCommands()
 	}
 }
 

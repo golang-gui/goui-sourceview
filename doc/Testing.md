@@ -34,6 +34,7 @@ GOUI 依赖版本，不以本地工作区成功代替。纯文档阶段以上命
 | `sourceview_test.go` | 文档与视图隔离、通知重入、配置、换行识别及分块导出 |
 | `commands_test.go` | 编辑命令、历史、自定义编辑规则、剪贴板与异步取消 |
 | `input_test.go` | 指针与导航计算、预编辑生命周期、平台快捷键匹配及菜单命令 |
+| `menu_test.go` | 菜单快捷键关联、配置原子性、视图隔离、解绑与旧激活释放 |
 | `search_test.go` | 原始匹配与 cluster 选区、搜索范围、替换及高亮显隐 |
 | `controls_test.go` | FindBar/GoToBar 生命周期、定位、配色与多语言 |
 | `layout_cache_test.go`、`layout_cache_native_test.go` | 最近宽度、编辑和历史复用、资源隔离、失效、着色与光栅结果 |
@@ -284,6 +285,12 @@ XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/find
 本轮环境、命令、结果与未验证项见 [代码选区验收](PlanSelection.md)。
 
 ## 菜单和查找栏界面语言
+
+`go run ./tests/window/editor/menus [-basic] [-dark] [-capture-dir DIR]` 验证
+GOUI Command/Menu/Shortcut 的集成：标题与提示分列、实际文本框右边界一致、
+打开期间重绑/解绑及错误配置保留、只读/选区状态、语言变化、菜单点击和撤销、
+卸载重挂及文档替换。输入经 Window/Popover.DispatchEvent，临时捕获只作观察；
+具体环境和结果见 [菜单接入验收](PlanMenuCommands.md)。
 
 运行 `go run ./tests/window/editor/localization`，可指定 `-capture-dir` 为仓库外现有目录。
 对简中、英、日、韩、德、法、俄、阿拉伯八语言，使用独立 testdata 核对展开菜单全部文案、

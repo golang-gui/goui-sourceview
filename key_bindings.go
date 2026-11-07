@@ -173,7 +173,8 @@ type boundKey struct {
 // text, navigation and editing keys belong to ordinary input and popup control.
 // Invalid commands, unsupported gestures or conflicting commands return an
 // error without changing the old table. Same-command aliases are deduplicated.
-// It does not affect ordinary input, IME, menus or direct method calls.
+// Menu hints follow the configured bindings; ordinary input, IME, menu actions
+// and direct method calls retain their existing behavior.
 func (v *SourceView) SetKeyBindings(bindings KeyBindings) error {
 	if v.Destroyed() {
 		return nil
@@ -229,6 +230,7 @@ func (v *SourceView) SetKeyBindings(bindings KeyBindings) error {
 	}
 	v.keyBindings, v.boundKeys = table, keys
 	v.keyBindingsEpoch++
+	v.updateMenuBindings()
 	return nil
 }
 

@@ -241,28 +241,32 @@ func run() error {
 	editOptions := gui.NewButton()
 	editOptions.SetChild(gui.NewLabel("Edit"))
 	editMenu := gui.NewPopoverMenu(editOptions)
+	var actions menuActions
+	defer actions.clear()
 	defer editMenu.Hide()
 	editOptions.ConnectClicked(func() {
+		actions.clear()
 		menu := gui.NewMenu()
+		bindings := editor.KeyBindings()
 		for _, action := range []struct {
-			label string
-			run   func() error
+			label   string
+			command source.Command
+			run     func() error
 		}{
-			{"Reindent selection", editor.ReindentSelection}, {"Paste with indentation", editor.PasteReindented},
-			{"Join lines", editor.JoinLines}, {"Upper case", func() error { return editor.TransformCase(source.CaseUpper) }},
-			{"Lower case", func() error { return editor.TransformCase(source.CaseLower) }}, {"Trim trailing whitespace", editor.TrimTrailingWhitespace},
+			{"Reindent selection", source.CommandReindentSelection, editor.ReindentSelection}, {"Paste with indentation", source.CommandPasteReindented, editor.PasteReindented},
+			{"Join lines", source.CommandJoinLines, editor.JoinLines}, {"Upper case", source.CommandUpperCase, func() error { return editor.TransformCase(source.CaseUpper) }},
+			{"Lower case", source.CommandLowerCase, func() error { return editor.TransformCase(source.CaseLower) }}, {"Trim trailing whitespace", source.CommandTrimTrailingWhitespace, editor.TrimTrailingWhitespace},
 		} {
-			item := menu.Append(action.label, func() {
+			actions.append(menu, action.label, bindings[action.command], !editor.ReadOnly(), func() {
 				win.SetFocusedWidget(editor)
 				if err := action.run(); err != nil {
 					status.SetText(err.Error())
 				}
 			})
-			item.SetEnabled(!editor.ReadOnly())
 		}
 		menu.AppendSeparator()
-		menu.Append("Expand selection (F4)", func() { win.SetFocusedWidget(editor); editor.ExpandSelection() })
-		menu.Append("Shrink selection (Shift+F4)", func() { win.SetFocusedWidget(editor); editor.ShrinkSelection() })
+		actions.append(menu, "Expand selection", bindings[source.CommandExpandSelection], true, func() { win.SetFocusedWidget(editor); editor.ExpandSelection() })
+		actions.append(menu, "Shrink selection", bindings[source.CommandShrinkSelection], true, func() { win.SetFocusedWidget(editor); editor.ShrinkSelection() })
 		editMenu.SetMenu(menu)
 		if err := editMenu.ShowAt(geometry.Point{Y: editOptions.Rect().Height}); err != nil {
 			status.SetText(err.Error())

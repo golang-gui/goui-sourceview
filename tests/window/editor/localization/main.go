@@ -11,6 +11,8 @@
 // Captures are observational, not pixel goldens. Native IME, physical keys,
 // fractional/mixed DPI, RTL mirroring and mother-tongue review remain manual.
 // Restart to reset; closes on success, exits nonzero on failure or early close.
+// Open-menu locale changes wait for completed frames with stable allocations;
+// adding/removing the shortcut column may resize the native popup asynchronously.
 package main
 
 import (
@@ -156,10 +158,14 @@ func main() {
 	scale := float32(1)
 	var menu gui.Popover
 	var enabled []bool
+	menuFrames, previousMenuFrame := 0, 0
+	var menuAllocation []geometry.Rectangle
 	complete := false
+	deadline := time.Now().Add(45 * time.Second)
 	timer := app.NewTimer()
 	defer timer.Stop()
 	timer.ConnectTimeout(func() {
+		check(time.Now().Before(deadline), fmt.Sprintf("localization timeout phase=%d language=%d", phase, index))
 		switch phase {
 		case 0:
 			img, err := gui.RenderWidget(overlay, 0)
@@ -200,9 +206,12 @@ func main() {
 		case 3:
 			check(len(win.Popovers()) == 1, "context menu not open")
 			menu = win.Popovers()[0]
+			menu.ConnectFrame(func(time.Time) { menuFrames++ })
 			phase++
 		case 4:
 			must(mlang.SetLanguage(languages[index].Tag))
+			menuAllocation = nil
+			must(menu.RequestPaint())
 			phase++
 		case 5:
 			entry := languages[index]
@@ -211,10 +220,13 @@ func main() {
 			var labels []string
 			var states []bool
 			var selectAllSelected bool
+			var allocation []geometry.Rectangle
+			clipped := false
 			walk(menu.Widget(), func(w gui.Widget) {
 				info := w.Snapshot()
 				if info.Role == gui.RoleMenuItem && info.Visible {
 					labels = append(labels, info.Text)
+					allocation = append(allocation, info.Bounds)
 					states = append(states, info.Enabled)
 					if info.Text == entry.Menu[11] {
 						selectAllSelected = info.Selected
@@ -222,9 +234,21 @@ func main() {
 				}
 				if label, ok := w.(*gui.Label); ok && label.Visible() {
 					width := label.Measure(layout.Unbounded()).Width
-					check(label.Rect().Width+0.5 >= width, "translated menu label was clipped")
+					clipped = clipped || label.Rect().Width+0.5 < width
+					allocation = append(allocation, label.Snapshot().Bounds)
 				}
 			})
+			must(menu.RequestPaint())
+			if previousMenuFrame == menuFrames {
+				return
+			}
+			previousMenuFrame = menuFrames
+			stable := slices.Equal(menuAllocation, allocation)
+			menuAllocation = allocation
+			if !stable {
+				return
+			}
+			check(!clipped, "translated menu label was clipped")
 			check(slices.Equal(labels, entry.Menu), fmt.Sprintf("%s menu=%q want=%q", entry.Tag, labels, entry.Menu))
 			check(selectAllSelected, "language change lost menu navigation")
 			if enabled == nil {
