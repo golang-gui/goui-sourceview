@@ -1,7 +1,7 @@
 # GOUI 接入与最小扩展设计
 
-> 当前源码接入基线：GOUI v0.5.0（`14b394d94227cc0a9d5a9bc9a95e8a711330b333`）；
-> 四边 Padding、局部选区绑定和文件对话框适配见第 9–10 节。
+> 当前源码接入基线：已发布 GOUI v0.7.0（`33ce8a9e02f57364f2f18aaed1b36d4ca32ef127`）；
+> 四边 Padding、局部选区绑定和文件对话框适配见第 9–10 节，圆角迁移见第 11 节。
 > 以下较早的版本、提案及验收记录按各自日期保留，不代表当前最低依赖。
 
 > 实施状态：G1/G2/G3 及后续所需扩展已随 GOUI v0.2.0 发布，本模块直接声明该版本；下文保留设计与验收门槛，实际签名、范围和验证见 [Implementation](Implementation.md)。
@@ -225,3 +225,22 @@ ScrollView 的已分配视口和滚动几何由其 Arrange/LayoutVisible 流程�
 SourceView 继续报告内容范围与延迟布局结果，不在 Measure 阶段另行提交滚动几何。
 
 实际接入以独立模块测试和正常窗口事件验证为准，记录见 [Plan](Plan.md)。
+
+## 11. GOUI v0.7.0（2026-11-07）
+
+直接声明已发布的 v0.7.0，保持 Go 1.24；不依赖相邻 GOUI 检出或机器专属 replace。
+根据 [官方迁移说明](https://github.com/golang-gui/goui/releases/tag/v0.7.0)，
+`Style.Radius()` 改为返回完整四角值的 `CornerRadius()`；`DrawBoxShadow` 同样消费
+`geometry.CornerRadius`。`Rule.Radius(float32)` 仍是等圆角的有效构造方式。
+
+查找面板表面与输入框的可比较外观快照、补全外壳及选中行保存完整四角值。
+背景与边框交给 `gui.PaintStyledBox`，选中行背景交给 `gui.PaintStyledBackground`，
+不在 SourceView 复制路径算法；样式中的 `BorderSides` 保持未设置等于全边、显式 0
+等于无边框的语义。阴影单独绘制，沿用相同四角轮廓和既有阴影预留范围。
+
+无效圆角在缓存前规范为 0，避免 NaN 导致重复失效；实际尺寸的相邻圆角缩放由 GOUI 负责。
+仅补全内容的保守安全留白使用 `CornerRadius.Max()`；不能用最大值代替绘制轮廓。
+仅一个角变化也能关闭旧补全窗口并释放布局，最大值相同不能掩盖样式变化。
+
+本轮不迁移 SourceView 自己的编辑命令到通用 Command，不改公共编辑 API 或输入路由。
+验证范围和结果见 [v0.7.0 升级记录](PlanGOUIV070.md)。

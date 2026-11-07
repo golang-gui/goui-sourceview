@@ -55,7 +55,7 @@ Disabled 沿 GOUI 的状态归一化契约处理。滚动条保留独立的悬�
 
 ScrollView 在所有焦点/禁用状态间预留稳定圆角安全内区，聚焦只改变外观，
 不改变正文宽度或换行。主题变化沿既有 StyleChanged 重新计算；框架机制见
-[GOUI 外框设计](../../goui/doc/DesignScrollFrame.md)。当前声明的 GOUI v0.5.0 已提供
+[GOUI 外框设计](../../goui/doc/DesignScrollFrame.md)。当前声明的 GOUI v0.7.0 已提供
 该机制，无需本地工作区。
 
 选区默认保留 token 前景；SelectionForeground.A==0 表示不覆盖，255 表示活动选区
@@ -121,10 +121,11 @@ Basic 保留紧凑的 9.75 pt 输入与 4/2 DIP 圆角。操作图标使用专�
 独立原生 Popover 使用 `sourceview.completion` StyleName：根规则给出背景、边框、圆角、阴影和字体，
 由宿主统一绘制外壳与预留阴影空间。Modern 跟随 menu 圆角和阴影，Basic 圆角为 4 DIP。
 detail / selected / selected-detail / match / selected-match 部件分别控制说明、选中和匹配。
-selected 同时控制选中背景的独立 Radius：Basic 为 2 DIP，Modern 跟随官方 menu-item（当前 4 DIP）；
-追加 `style.Name("sourceview.completion").Part("selected").Radius(...)` 可覆盖，0 显式使用直角。
+selected 同时控制选中背景的完整 CornerRadius：Basic 为等圆角 2 DIP，Modern 跟随官方 menu-item（当前等圆角 4 DIP）；
+追加 `style.Name("sourceview.completion").Part("selected").Radius(...)` 可设置等圆角，0 显式使用直角；
+`CornerRadius(geometry.CornerRadius{...})` 可分别覆盖四角，不向最大值或首个角折叠。
 圆角不继承外壳的大小；背景左右留 2 DIP、上下留 1 DIP，完整行命中区域和文字位置保持不变。
-滚动时裁剪完整圆角背景，半径按实际背景尺寸钳制；负值及非有限值按 0 处理。
+滚动时裁剪完整圆角背景，GOUI 按实际尺寸统一缩放相邻圆角；负值及非有限值按 0 处理。
 滚动条复用官方 scroll-view 的 trough/thumb 和 Normal/Hovered/Pressed 状态；
 旧的 sourceview.completion / scroll-thumb 装饰部件已移除，应用覆盖请改用 scroll-view / thumb。
 普通/选中匹配前景均来自 Modern 的对比度调整主题色。
@@ -134,6 +135,9 @@ selected 同时控制选中背景的独立 Radius：Basic 为 2 DIP，Modern 跟
 编辑器的局部 StyleScope。快照只保存普通颜色、字体和表面参数；原生布局仍由列表独占，
 外观变化、会话取消或卸载释放。运行中实际外观变化关闭旧会话，下次打开采用最新样式；悬停等未改变外观的样式通知保留会话。
 边框及阴影的显式 alpha 原样保留，不由缺省配色推导覆盖。候选内容和 ScrollView 安排在圆角安全区域。
+查找面板背景与边框使用 GOUI `PaintStyledBox`，支持完整四角和 `BorderSides`；
+阴影传递相同四角轮廓，绘制与缓存都保留每个角和显式空边框。
+补全外壳继续由 Popover 绘制，内容仅以最大圆角计算保守留白，不改变实际轮廓。
 透明表面不可用时重试不透明宿主，由 GOUI 应用矩形无外部阴影外观；字体、内容和输入契约一致。
 
 ## 验证与参照

@@ -24,6 +24,11 @@
 // DIP 尺寸按物理像素取整，首帧前的临时几何不能作为宽度稳定性的基准。
 // No clipboard, files or settings change; edge moves only this program's window.
 // Restart to reset. Close to exit; closing early with -auto is a failure.
+// -corners -case json -auto additionally checks asymmetric selected-row corners
+// in a native 2x RenderWidget raster. Samples are 1 DIP inside each corner,
+// outside glyphs/caret; sRGB NRGBA colors must match exactly, without AA
+// tolerance. Upper-left/lower-right remain transparent, the other two are
+// opaque. The native Popover shell is separate from this content raster.
 package main
 
 import (
@@ -31,6 +36,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"math"
 	"runtime"
@@ -44,6 +50,7 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
@@ -98,6 +105,7 @@ func verticalBar(w gui.Widget) *gui.ScrollBar {
 func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "dark code scheme")
+	corners := flag.Bool("corners", false, "verify independently rounded selected-row pixels")
 	scenario := flag.String("case", "json", "json/html/xml/long/unicode/scroll/wrapped/edge/navigation")
 	auto := flag.Bool("auto", false, "verify input and close automatically")
 	basicTheme := flag.Bool("basic", false, "use the official Basic sheet")
@@ -129,6 +137,16 @@ func main() {
 	app.SetStyleSheet(modern.Sheet(modern.Options{Dark: *dark}))
 	if *basicTheme {
 		app.SetStyleSheet(basic.Sheet())
+	}
+	if *corners {
+		check(*scenario == "json" && *auto, "-corners requires -case json -auto")
+		rules := modern.Rules(modern.Options{Dark: *dark})
+		if *basicTheme {
+			rules = basic.Rules()
+		}
+		app.SetStyleSheet(style.Sheet(append(rules,
+			style.Name("sourceview.completion").Part("selected").CornerRadius(geometry.CornerRadius{TopLeft: 10, BottomRight: 10}).
+				BackgroundColor(color.NRGBA{R: 20, G: 180, B: 100, A: 255}))...))
 	}
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 700, Height: 340}})
 	must(err)
@@ -245,6 +263,9 @@ func main() {
 		ready.Stop()
 		check(info.Role == "completion-list" && len(info.Children) > 0 && selected(info) >= 0, fmt.Sprintf("completion rows not ready: %+v; scroll=%+v", info, role(popup.Widget().Snapshot(), gui.RoleScrollView)))
 		initialWidth = info.Bounds.Width
+		if *corners {
+			verifyCornerPixels(popup, info)
+		}
 		if *scenario == "scroll" {
 			for i := 0; i < 12; i++ {
 				key(events.KeyArrowDown, 0)
@@ -353,6 +374,29 @@ func main() {
 	if *auto && !complete {
 		log.Fatal("verification aborted")
 	}
+}
+
+func verifyCornerPixels(popup gui.Popover, info gui.WidgetInfo) {
+	root := popup.Widget()
+	im, err := gui.RenderWidget(root, 2)
+	must(err)
+	row := info.Children[selected(info)].Bounds
+	bounds := root.Snapshot().Bounds
+	// Selected fill has a 2-DIP horizontal and 1-DIP vertical inset.
+	x, y := row.X-bounds.X+2, row.Y-bounds.Y+1
+	w, h := row.Width-4, row.Height-2
+	// RenderWidget captures the content, excluding the native Popover shell.
+	background := color.NRGBA{}
+	selectedColor := color.NRGBA{R: 20, G: 180, B: 100, A: 255}
+	for _, sample := range []struct {
+		x, y float32
+		want color.NRGBA
+	}{{x + 1, y + 1, background}, {x + w - 1, y + 1, selectedColor},
+		{x + w - 1, y + h - 1, background}, {x + 1, y + h - 1, selectedColor}} {
+		got := color.NRGBAModel.Convert(im.At(int(sample.x*2), int(sample.y*2))).(color.NRGBA)
+		check(got == sample.want, fmt.Sprintf("corner pixel at (%g,%g): got %v want %v", sample.x, sample.y, got, sample.want))
+	}
+	log.Print("PASS asymmetric selected-row corner pixels")
 }
 
 // 所有交互均走窗口输入；模型、Provider 和选区 setter 只用于准备场景或回调重入。

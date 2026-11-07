@@ -3,6 +3,7 @@
 // go run ./tests/window/editor/frame；分别以 1、1.5、2 倍运行。
 // -theme basic/light/dark 选择样式；-inspect 在自动断言通过后保留窗口。
 // 初始为 Integrated 窗口中的 TextView、SourceView，各有双向滚动条。
+// 等待异步正文测量和双向滚动条分配完成后，才记录聚焦前的视口基线。
 // 正常 DispatchEvent 输入依次验证点击聚焦、滚轮、两轴拖动、焦点转移；
 // 再验证禁用、自动换行隐藏横条、短文本隐藏双条及主题切换后重新布局。
 // TextView／SourceView 另验证宽首行／短次行：短行向窗口外拖选不横滚，长行仍横滚。
@@ -186,6 +187,20 @@ func main() {
 		}
 		previous = frames
 		verify()
+		if focusStage == 0 {
+			for i, host := range hosts {
+				info := host.Snapshot()
+				if info.MaxScrollX <= 0 || info.MaxScrollY <= 0 {
+					return // Deferred measurement can still introduce a scrollbar.
+				}
+				for _, direction := range []layout.Direction{layout.DirectionHorizontal, layout.DirectionVertical} {
+					bar := barOf(i, direction)
+					if !bar.Visible() || bar.Rect().Width <= 0 || bar.Rect().Height <= 0 {
+						return
+					}
+				}
+			}
+		}
 		if focusStage < 5 {
 			pointer := func(i int) geometry.Point {
 				r := editors[i].Snapshot().Bounds
@@ -216,7 +231,7 @@ func main() {
 				verifyFocusFrame(false, false)
 				log.Print("PASS focused hover/leave and unfocused frame colors")
 			}
-			check(viewport(1) == stable[1], "pointer/focus changed content bounds")
+			check(viewport(1) == stable[1], fmt.Sprintf("pointer/focus changed content bounds at focus step %d: before=%+v after=%+v", focusStage, stable[1], viewport(1)))
 			focusStage++
 			return
 		}

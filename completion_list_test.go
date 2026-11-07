@@ -199,6 +199,39 @@ func TestCompletionSelectionUsesStyledRadius(t *testing.T) {
 	}
 }
 
+func TestCompletionSelectionKeepsIndependentCorners(t *testing.T) {
+	l, _ := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
+	l.view.completion = nil
+	corners := geometry.CornerRadius{TopLeft: 18, BottomRight: 4}
+	themedScope(l.view, style.Sheet(append(modern.Rules(modern.Options{}),
+		style.Name("sourceview.completion").Part("selected").CornerRadius(corners))...))
+	l.readAppearance()
+	l.view.completion = l.session
+	arrangeCompletion(l)
+	p := &completionPainter{}
+	l.Paint(p)
+	if l.selectedRadius != corners || len(p.paths) != 1 || len(p.rounded) != 0 || len(p.fills) != 0 {
+		t.Fatal("asymmetric selection was reduced to a uniform radius", l.selectedRadius, p)
+	}
+	// A 26-DIP row keeps its 18-DIP upper-left corner: clamping each corner
+	// to half the row height would incorrectly shrink it to 13 DIP.
+	var start geometry.Point
+	var curves []geometry.Point
+	p.paths[0].Range(func(op graphics.PathOperation, args []float32) bool {
+		if op == graphics.PathMoveTo {
+			start = geometry.Point{X: args[0], Y: args[1]}
+		}
+		if op == graphics.PathBezierTo {
+			curves = append(curves, geometry.Point{X: args[4], Y: args[5]})
+		}
+		return false
+	})
+	want := []geometry.Point{{X: l.viewport.Width - 6, Y: 27}, {X: 20, Y: 1}}
+	if start != (geometry.Point{X: 20, Y: 1}) || !slices.Equal(curves, want) {
+		t.Fatal("rounded and square corners lost their independent geometry", start, curves)
+	}
+}
+
 func TestCompletionSelectionPaintKeepsWholeScrolledRow(t *testing.T) {
 	items := make([]Completion, 32)
 	for i := range items {

@@ -11,7 +11,6 @@ import (
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"
-	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
 )
@@ -45,7 +44,7 @@ type completionList struct {
 	colors                         completionColors
 	font, secondaryFont            typography.FontInfo
 	box                            styleBox
-	selectedRadius                 float32
+	selectedRadius                 geometry.CornerRadius
 }
 
 type completionRow struct {
@@ -123,11 +122,8 @@ func (l *completionList) readAppearance() bool {
 	}
 	root := resolve("")
 	selected := resolve("selected")
-	selectedRadius, _ := selected.Radius()
-	if math.IsNaN(float64(selectedRadius)) || math.IsInf(float64(selectedRadius), 0) {
-		selectedRadius = 0
-	}
-	selectedRadius = max(0, selectedRadius)
+	selectedRadius, _ := selected.CornerRadius()
+	selectedRadius = cleanCornerRadius(selectedRadius)
 	border, _ := root.BorderColor()
 	colors := completionColors{Background: background(root), Foreground: foreground(root), Border: nrgba(border), DetailForeground: foreground(resolve("detail")),
 		SelectedBackground: background(selected), SelectedForeground: foreground(selected), SelectedDetailForeground: foreground(resolve("selected-detail")),
@@ -494,12 +490,8 @@ func (l *completionList) Paint(p gui.Painter) {
 			// row must not acquire a new rounded edge at the viewport boundary.
 			fill := geometry.Rect(r.X+2, r.Y+1, max(0, r.Width-4), max(0, r.Height-2))
 			if fill.Width > 0 && fill.Height > 0 {
-				radius := min(l.selectedRadius, min(fill.Width, fill.Height)/2)
-				if radius == 0 {
-					p.FillRect(fill, graphics.ColorOf(colors.SelectedBackground))
-				} else {
-					p.FillRoundRect(fill, radius, graphics.ColorOf(colors.SelectedBackground))
-				}
+				gui.PaintStyledBackground(p, fill, style.Rule{}.BackgroundColor(colors.SelectedBackground).
+					CornerRadius(l.selectedRadius).Style)
 			}
 		}
 		baseline := r.Y + (l.rowHeight-l.ascent-l.descent)/2 + l.ascent
@@ -581,7 +573,7 @@ func (p *completionPanel) Arrange(r geometry.Rectangle) {
 // Reserve a conservative safe interior for the styled Popover's rounded
 // corners. The shell, shadow and border are drawn only by Popover itself.
 func (p *completionPanel) inset() float32 {
-	return max(completionInset, float32(math.Ceil(float64(p.list.box.radius/2)))+p.list.box.width)
+	return max(completionInset, float32(math.Ceil(float64(p.list.box.radius.Max()/2)))+p.list.box.width)
 }
 
 func (p *completionPanel) Snapshot() gui.WidgetInfo {

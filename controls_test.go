@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"errors"
+	"fmt"
 	"image/color"
 	"testing"
 
@@ -199,7 +200,7 @@ func TestCompletionShellRulesAndSafeContent(t *testing.T) {
 			themedScope(l.view, tc.sheet)
 			l.readAppearance()
 			l.view.completion = l.session
-			if l.box.radius != tc.radius || l.box.width != tc.border || l.colors.Background.A != 255 {
+			if l.box.radius != geometry.UniformCornerRadius(tc.radius) || l.box.width != tc.border || l.colors.Background.A != 255 {
 				t.Fatal("incomplete styled shell", l.box)
 			}
 			menu := boxOf(tc.sheet.Resolve(style.Sel{Name: "menu"}))
@@ -237,7 +238,7 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 				t.Fatal("unreadable built-in popup surface/text", c)
 			}
 		}
-		if l.font.Family != "ui-font" || l.font.Size != 19 || l.detailFont().Size != 19*.9 || b.appearance.surface.radius != 8 || b.appearance.focused.width != 2 {
+		if l.font.Family != "ui-font" || l.font.Size != 19 || l.detailFont().Size != 19*.9 || b.appearance.surface.radius != geometry.UniformCornerRadius(8) || b.appearance.focused.width != 2 {
 			t.Fatal("Modern font, radius or focus metrics were not used")
 		}
 		if got := foreground(gui.ResolveWidgetStyle(b.find, "sourceview.find.input", "", style.Normal)); got.A != 255 || background(gui.ResolveWidgetStyle(b.find, "sourceview.find.input", "frame", style.Normal)).A != 255 {
@@ -337,18 +338,22 @@ func TestUnchangedStyleNotificationsKeepCompletion(t *testing.T) {
 }
 
 func TestCompletionSelectionRadiusChangeClosesOldSession(t *testing.T) {
-	l, ctx := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
-	owner := themedScope(l.view, modern.Sheet(modern.Options{}))
-	l.readAppearance()
-	arrangeCompletion(l)
-	l.Paint(&completionPainter{})
-	created := ctx.created
-	closed := 0
-	l.session.popup = closingPopup{onClose: func() { closed++ }}
-	owner.SetStyleSheet(style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").Radius(0))...))
-	l.view.StyleChanged()
-	if l.view.completion != nil || closed != 1 || ctx.destroyed != created {
-		t.Fatal("selection-radius-only change retained a stale popup or native resources")
+	for _, corners := range []geometry.CornerRadius{{}, {TopLeft: 4, TopRight: 4, BottomRight: 4}} {
+		t.Run(fmt.Sprint(corners), func(t *testing.T) {
+			l, ctx := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
+			owner := themedScope(l.view, modern.Sheet(modern.Options{}))
+			l.readAppearance()
+			arrangeCompletion(l)
+			l.Paint(&completionPainter{})
+			created := ctx.created
+			closed := 0
+			l.session.popup = closingPopup{onClose: func() { closed++ }}
+			owner.SetStyleSheet(style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Part("selected").CornerRadius(corners))...))
+			l.view.StyleChanged()
+			if l.view.completion != nil || closed != 1 || ctx.destroyed != created {
+				t.Fatal("selection-radius-only change retained a stale popup or native resources")
+			}
+		})
 	}
 }
 

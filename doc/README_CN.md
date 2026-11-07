@@ -12,6 +12,7 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 ## 安装
 
 需要 Go 1.24 或更新版本。SourceView v0.3.0 依赖 GOUI v0.6.0，由 Go 自动下载。
+当前开发分支使用 GOUI v0.7.0；已发布的 v0.3.0 保持不变。
 
 ```sh
 go get github.com/golang-gui/goui-sourceview@v0.3.0
