@@ -77,6 +77,10 @@ func queryName(id ID, r rune) bool {
 	return IdentifierRune(r) || id == Nix && (r == '-' || r == '\'') || id == PromQL && r == ':'
 }
 func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b queryTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(queryState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign query state")
@@ -112,6 +116,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case queryBlockComment:
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				s.mode = queryCode
@@ -136,16 +141,19 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 				}
 				add(i, i+2, KindString, ClassString)
 				i += 2
+				folds.closeLiteral(in.Offset+i, true)
 				s.mode, s.indent = queryCode, false
 				continue
 			}
 			if s.mode == queryString && !s.indent && c == s.quote {
+				folds.closeLiteral(in.Offset+i+1, true)
 				add(i, i+1, KindString, ClassString)
 				i++
 				s.mode, s.quote = queryCode, 0
 				continue
 			}
 			if s.id == Nix && strings.HasPrefix(text[i:], "$"+"{") || s.id == JQ && strings.HasPrefix(text[i:], "\\(") {
+				folds.queryBoundary(in.Offset+i, in.Offset+i+2, true)
 				close := byte('}')
 				if s.id == JQ {
 					close = ')'
@@ -209,12 +217,14 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if s.id == Nix && strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode = queryBlockComment
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
 		if c == '"' || s.id == PromQL && (c == '\'' || c == 0x60) || s.id == Nix && strings.HasPrefix(text[i:], "''") {
+			folds.openLiteral()
 			s.mode, s.quote = queryString, c
 			s.indent = s.id == Nix && c == '\''
 			size := 1
@@ -259,6 +269,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.expr != nil {
 			f := s.expr
 			if c == f.close && f.depth == 0 {
+				folds.queryBoundary(in.Offset+i, in.Offset+i+1, false)
 				add(i, i+1, KindDelimiter, ClassDelimiter)
 				i++
 				s.mode, s.quote, s.indent, s.expr = f.mode, f.quote, f.indent, f.parent
@@ -292,6 +303,7 @@ func (b queryTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode, s.quote = queryCode, 0
 		}
 		if s.mode == queryString && s.id == PromQL && s.quote != 0x60 {
+			folds.closeLiteral(in.Offset+i, false)
 			s.mode, s.quote = queryCode, 0
 		}
 		s.escape, s.last, s.member = false, 0, false

@@ -11,6 +11,7 @@ type foldLexemes struct {
 	heres              map[any]foldHere
 	keywords           *keywordFoldObserver
 	hcl                *hclFoldObserver
+	query              *queryFoldObserver
 	lineLiteral        int // Zig's confirmed line-string token, or -1.
 }
 
@@ -152,6 +153,10 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 	case hcTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	case plTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case queryTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case functionalTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	default:
 		return t.Tokenizer.Scan(in, state)

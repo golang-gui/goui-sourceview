@@ -208,6 +208,10 @@ func fnCharacter(text string) int {
 	return 0
 }
 func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(fnState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign functional state")
@@ -229,6 +233,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			f := *s.discard
 			f.need--
 			if f.need == 0 {
+				folds.closeComment(in.Offset + i)
 				s.discard = f.parent
 			} else {
 				s.discard = &f
@@ -259,6 +264,9 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 		s.word, s.wordOn, s.wordPrefix, s.value, s.atStart = scanWord{}, false, false, true, false
 	}
 	endString := func() {
+		if fnData(s.id) && s.discard == nil {
+			folds.closeLiteral(in.Offset+i, true)
+		}
 		wasComment := s.literal.comment
 		s.literal = fnLiteral{}
 		s.escape, s.braces = false, 0
@@ -607,6 +615,7 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if fnData(s.id) && strings.HasPrefix(text[i:], "#_") {
+			folds.openComment()
 			s.discard = &fnDiscard{parent: s.discard, need: 1}
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -718,6 +727,9 @@ func (b functionalTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if c == '"' || c == '\'' && (s.id == Elixir || s.id == Erlang) || s.id == Julia && c == 0x60 {
+			if fnData(s.id) && s.discard == nil {
+				folds.openLiteral()
+			}
 			s.mode = fnString
 			s.literal = fnLiteral{quote: c, arity: 1, interpolate: s.id == Elixir || s.id == Julia}
 			s.literal.triple = (s.id == FSharp || s.id == Elixir || s.id == Julia || s.id == Erlang) && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))

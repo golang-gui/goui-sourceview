@@ -147,7 +147,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -163,13 +163,18 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var pythonHeader *indentFold
 		zigStart, zigEnd := -1, -1
 		var objc objcFoldPolicy
+		var query queryFoldPolicy
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
 			lexemes = &foldLexemes{row: -1}
 			if id == HCL {
 				lexemes.hcl = &hclFoldObserver{}
+			}
+			if id == Nix || id == JQ {
+				lexemes.query = &queryFoldObserver{}
+				query = queryFoldPolicy{id: id, scopes: []queryFoldScope{{}}}
 			}
 			scanner = foldingTokenizer{t, lexemes}
 		}
@@ -236,6 +241,10 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			skip := table || cPreprocessorLine(id, l)
 			if cObjective(id) && !skip {
 				objc.line(ctx, l, &f)
+			}
+			if id == Nix || id == JQ {
+				query.line(ctx, l, lexemes.query.events, &f)
+				lexemes.query.events = lexemes.query.events[:0]
 			}
 			f.delimiters(l, skip, id)
 			if pythonLanguage(id) {
@@ -346,7 +355,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			f.add(zigStart, zigEnd)
 		}
 		switch id {
-		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl:
+		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
 			return noncrossingMixedFolds(ctx, f.out)
 		}
 		return f.out, nil

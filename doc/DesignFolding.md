@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl；六批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，第七批为 Nix/jq/PromQL/Clojure/EDN；七批均尚未发布。
 
 ## 范围与所有权
 
@@ -83,6 +83,10 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | SCSS（第六批） | 规则／mixin／function／控制块括号、插值代码、闭合字面量／块注释 |
 | Less（第六批） | 规则／mixin／detached ruleset 括号、闭合字面量／块注释；变量插值不当作代码块 |
 | Perl（第六批） | 代码括号、闭合引用／多段替换／正则／heredoc 和 POD；数据尾部不当作代码 |
+| Nix（第七批） | 属性集合／列表／插值括号、let/in 绑定段、闭合普通／缩进字符串和块注释 |
+| jq（第七批） | if/then/elif/else/end、def 与结束分号、代码／插值括号和闭合跨行字符串 |
+| PromQL（第七批） | 函数／聚合／选择器／范围括号、闭合反引号多行字符串；普通引号按词法器错误恢复 |
+| Clojure / EDN（第七批） | 集合括号、闭合跨行字符串、Clojure 正则字面量，以及词法器确认完整的丢弃形式 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
@@ -276,6 +280,39 @@ Perl 在原扫描器的打开／关闭／回退路径增加私有观察。公开
 这一批只做词法结构折叠，不提供完整 Objective-C 编译语法、Sass/Less 求值、Perl
 正则执行语义或 format 正文解析；错误恢复沿用原有扫描器，不用统一括号扫描替代它。
 
+### Nix、jq、PromQL、Clojure、EDN
+
+五种语言继续复用 structuralFolding、私有边界观察和范围归并。
+queryTokenizer 记录实际字符串／注释关闭及插值进入／离开；functionalTokenizer
+仅为 Clojure/EDN 记录字符串和丢弃形式的边界。公开 Scan 仍传 nil，token、
+Consumed、ReplaceFrom、不可变 State 与 GUI 高亮缓存不变，不增加公开 API 或依赖。
+
+- Nix 的集合、列表和代码括号沿用词法分类；普通／缩进字符串跨插值保留外层观察，
+  内层字面量另行入栈，转义的伪插值不产生边界。路径内容不作为代码括号，
+  块注释与相邻字符串按实际关闭位置观察，不根据 String Context 的切换猜测。
+- Nix 在相同分组深度配对 let/in，仅隐藏绑定段，in 所在行及结果表达式保持可见。
+  旧式 let 后直接跟集合时按集合括号折叠，不让它抢占外层 let 的 in；
+  属性访问中的 let/in 不配对。不推断 if/then/else 的完整表达式终点。
+- jq 的 if 须确认 then，elif 重新等待 then，else 不另开块，end 只关闭同深度的条件。
+  def 须确认名称和参数后的冒号，只有同分组深度的结束分号才关闭函数；参数及调用内
+  分号不提前结束外层 def。变量、成员名称、对象键、字符串和注释中的伪关键字不匹配。
+- Nix/jq 的真实插值边界分别进入独立的控制结构状态，退出时恢复外层。
+  内部孤立的 in/end 或未完成控制头不能关闭外层绑定／函数／条件，
+  内层已确认区域仍可发布。此状态只由本次 worker 所有，不进入 queryState。
+- PromQL 仅使用实际代码括号和闭合字符串，不猜测整条查询／二元表达式范围。
+  反引号保留跨行及反斜线正文，单／双引号在词法器的错误行末恢复时撤销观察，
+  不将字符串或标签里的括号／注释标记混入查询结构。
+- Clojure/EDN 的列表、向量、映射、集合及 Clojure reader 条件按实际括号折叠；字符字面量、
+  字符串及 Clojure 正则字面量中的伪括号不参与代码匹配。多行字面量独立观察。
+  同行多个闭合符仍遵守既有规则：内层关闭后还有外层闭合符时，该行保持可见。
+- `#_` 的打开与完整形式结束直接复用 fnDiscard 路径，支持嵌套、标签数据和 Clojure
+  元数据前缀；按注释区域整体折叠。丢弃内容的括号不进入正文栈，字符串也不再产生
+  独立的正文折叠；未完成的丢弃形式不发布已闭合范围。分号行注释不合成跨行注释块。
+
+所有结构只基于词法边界，不执行 reader、宏、Nix 求值、jq 过滤或 Prometheus 查询，
+不承诺完整编译器 AST／语法验证。保留原有取消、修订核验、视图隔离和关闭行尾规则，
+不引入 GOUI 扩展或通用缩进回退。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -347,6 +384,16 @@ Perl 在原扫描器的打开／关闭／回退路径增加私有观察。公开
 2026-11-08 查询的 Perldoc 页标记 5.44.0。本批采用上述具体词法边界，
 不将文档版本等同编译器运行验收。沿用已有 provider 与视图分离原则，
 将声明／引用操作符差异留在语言策略，不扩大 GOUI 或引入外部解析器。
+
+第七批参照 [Nix 字符串](https://nix.dev/manual/nix/2.32/language/string-literals)
+与 [let 绑定](https://nix.dev/tutorials/nix-language.html#let-in)、
+[jq 条件与函数](https://jqlang.org/manual/)、
+[PromQL 字符串](https://prometheus.io/docs/prometheus/latest/querying/basics/#string-literals)、
+[Clojure Reader](https://clojure.org/reference/reader) 和
+[EDN](https://github.com/edn-format/edn)。2026-11-08 查阅的 Nix 字符串页标记 2.32.9、
+jq 手册标记 1.8，其余为动态文档；这里只采用上述已明确的词法／reader 边界，
+不将文档版本或其他编辑器的解析能力等同本模块的完整语言实现。
+继续采用前述规则与视图分离、复用扫描器和最小公共契约的取舍，不引入其解析器依赖。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 
