@@ -10,6 +10,14 @@ SourceView v0.4.0 已正式发布，发布依赖为 GOUI v0.7.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
+## 基础配置文件折叠第十批（2026-11-08）
+
+新增 Nginx 配置块、go.mod／go.work 括号分组和 INI／GitConfig／EditorConfig／
+systemd／Desktop Entry 分节折叠。采用已有扫描器确认的词法／文本边界，
+范围收敛为基本代码编辑器，不增加编译器语法树或语义解析。
+设计见 [代码折叠](DesignFolding.md)，逻辑与独立窗口验收见
+[第十批验收](PlanFoldingLanguages10.md)。尚未发布。
+
 ## F# 与 Haskell 布局折叠第九批（2026-11-08）
 
 新增 F# 声明／控制／同列分支与 Haskell 布局列表的专用折叠，复用扫描器真实边界。
