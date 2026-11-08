@@ -264,8 +264,8 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 		s.word, s.wordOn, s.wordPrefix, s.value, s.atStart = scanWord{}, false, false, true, false
 	}
 	endString := func() {
-		if fnData(s.id) && s.discard == nil {
-			folds.closeLiteral(in.Offset+i, true)
+		if (fnData(s.id) || closedFunctional(s.id)) && s.discard == nil && !s.literal.comment {
+			folds.closeFunctionalLiteral(in.Offset + i)
 		}
 		wasComment := s.literal.comment
 		s.literal = fnLiteral{}
@@ -287,6 +287,7 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 	}
 	for i < limit {
 		c := text[i]
+		folds.functionalModifier(in.Offset+i, c, false)
 		r, n := utf8.DecodeRuneInString(text[i:])
 		if s.mode == fnCode && s.expr != nil && s.expr.matched != 0 && c != s.expr.close {
 			v := *s.expr
@@ -315,12 +316,14 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 		case fnBlockComment:
 			open, close := fnComment(s.id)
 			if strings.HasPrefix(text[i:], open) {
+				folds.openComment()
 				s.commentDepth++
 				add(i, i+len(open), KindComment, ClassComment)
 				i += len(open)
 				continue
 			}
 			if strings.HasPrefix(text[i:], close) {
+				folds.closeComment(in.Offset + i + len(close))
 				s.commentDepth--
 				add(i, i+len(close), KindComment, ClassComment)
 				i += len(close)
@@ -356,6 +359,9 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			}
 			flushCapture()
 			if c == '|' {
+				if !s.rawComment {
+					folds.openLiteral()
+				}
 				s.rawLabel = "|" + captureText(s.rawCapture) + "}"
 				s.rawCapture = nil
 				s.mode = fnRawBody
@@ -398,6 +404,9 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			}
 			if s.rawMatch == len(close) {
 				wasComment := s.rawComment
+				if !wasComment {
+					folds.closeLiteral(in.Offset+i, true)
+				}
 				s.mode = fnCode
 				s.rawLabel, s.rawMatch, s.rawComment = "", 0, false
 				if wasComment {
@@ -505,6 +514,9 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 					}
 				}
 				if size != 0 {
+					if size > 0 {
+						folds.functionalBoundary(in.Offset+i, in.Offset+i+size, true)
+					}
 					s.expr = &fnExpr{parent: s.expr, literal: s.literal, close: close}
 					if size > 0 {
 						add(i, i+size, KindDelimiter, ClassDelimiter)
@@ -571,6 +583,8 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				continue
 			}
 			if s.id == Julia && c == '"' {
+				folds.openLiteral()
+				folds.functionalModifiers()
 				w.add(s.word.start, in.Offset+i, KindMeta, 0)
 				s.word, s.wordOn = scanWord{}, false
 				s.literal = fnLiteral{raw: true}
@@ -592,6 +606,15 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			i += n
 			continue
 		}
+		// Julia's #= must win over its shorter # line-comment prefix.
+		open, _ := fnComment(s.id)
+		if open != "" && strings.HasPrefix(text[i:], open) {
+			folds.openComment()
+			s.mode, s.commentDepth = fnBlockComment, 1
+			add(i, i+len(open), KindComment, ClassComment)
+			i += len(open)
+			continue
+		}
 		line := fnLine(s.id)
 		if line != "" && strings.HasPrefix(text[i:], line) {
 			isComment := true
@@ -606,13 +629,6 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				s.mode = fnLineComment
 				continue
 			}
-		}
-		open, _ := fnComment(s.id)
-		if open != "" && strings.HasPrefix(text[i:], open) {
-			s.mode, s.commentDepth = fnBlockComment, 1
-			add(i, i+len(open), KindComment, ClassComment)
-			i += len(open)
-			continue
 		}
 		if fnData(s.id) && strings.HasPrefix(text[i:], "#_") {
 			folds.openComment()
@@ -668,6 +684,8 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			continue
 		}
 		if s.id == Elixir && c == '~' && i+2 < len(text) && text[i+1] < utf8.RuneSelf && unicode.IsLetter(rune(text[i+1])) && strings.ContainsRune("/|\"'([{<", rune(text[i+2])) {
+			folds.openLiteral()
+			folds.functionalModifiers()
 			d := text[i+2]
 			close := d
 			paired := byte(0)
@@ -727,7 +745,7 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			}
 		}
 		if c == '"' || c == '\'' && (s.id == Elixir || s.id == Erlang) || s.id == Julia && c == 0x60 {
-			if fnData(s.id) && s.discard == nil {
+			if (fnData(s.id) || closedFunctional(s.id)) && s.discard == nil {
 				folds.openLiteral()
 			}
 			s.mode = fnString
@@ -785,6 +803,7 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				add(i, i+1, KindDelimiter, ClassDelimiter)
 				i++
 				if v.matched >= max(1, f.literal.arity) {
+					folds.functionalBoundary(in.Offset+i-1, in.Offset+i, false)
 					s.mode, s.literal, s.expr = fnString, f.literal, f.parent
 				} else {
 					s.expr = &v
@@ -847,6 +866,11 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 	}
 	flushCapture()
 	if in.LineEnd && i == len(text) {
+		folds.functionalModifier(in.Offset+i, 0, true)
+		if s.mode == fnRawBody {
+			// A quoted-string delimiter cannot continue across a physical LF.
+			s.rawMatch = 0
+		}
 		if s.mode == fnDash {
 			w.add(s.word.start, in.Offset+i, KindComment, ClassComment)
 			s.word = scanWord{}

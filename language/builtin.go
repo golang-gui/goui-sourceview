@@ -580,7 +580,7 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Folding = keywordFolding(info.ID, d.Tokenizer)
 		case JSX, TSX, PHP:
 			d.Folding = mixedFolding(info.ID, d.Tokenizer)
-		case JSONC, JSON5, YAML, TOML, Go, JavaScript, TypeScript, CSS, Python, C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
+		case JSONC, JSON5, YAML, TOML, Go, JavaScript, TypeScript, CSS, Python, C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml:
 			d.Folding = structuralFolding(info.ID, d.Tokenizer)
 		}
 		switch info.ID {

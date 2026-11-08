@@ -147,7 +147,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -164,10 +164,11 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		zigStart, zigEnd := -1, -1
 		var objc objcFoldPolicy
 		var query queryFoldPolicy
+		var functional functionalFoldPolicy
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml:
 			lexemes = &foldLexemes{row: -1}
 			if id == HCL {
 				lexemes.hcl = &hclFoldObserver{}
@@ -175,6 +176,10 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			if id == Nix || id == JQ {
 				lexemes.query = &queryFoldObserver{}
 				query = queryFoldPolicy{id: id, scopes: []queryFoldScope{{}}}
+			}
+			if closedFunctional(id) {
+				lexemes.functional = &functionalFoldObserver{}
+				functional = functionalFoldPolicy{id: id, scopes: []functionalFoldScope{{}}}
 			}
 			scanner = foldingTokenizer{t, lexemes}
 		}
@@ -245,6 +250,10 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			if id == Nix || id == JQ {
 				query.line(ctx, l, lexemes.query.events, &f)
 				lexemes.query.events = lexemes.query.events[:0]
+			}
+			if closedFunctional(id) {
+				functional.line(ctx, l, lexemes.functional.events, &f)
+				lexemes.functional.events = lexemes.functional.events[:0]
 			}
 			f.delimiters(l, skip, id)
 			if pythonLanguage(id) {
@@ -355,7 +364,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			f.add(zigStart, zigEnd)
 		}
 		switch id {
-		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN:
+		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml:
 			return noncrossingMixedFolds(ctx, f.out)
 		}
 		return f.out, nil

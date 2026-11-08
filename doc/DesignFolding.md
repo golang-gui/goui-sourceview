@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN；七批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN；第八批为 Elixir/Erlang/Julia/OCaml；八批均尚未发布。
 
 ## 范围与所有权
 
@@ -87,6 +87,10 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | jq（第七批） | if/then/elif/else/end、def 与结束分号、代码／插值括号和闭合跨行字符串 |
 | PromQL（第七批） | 函数／聚合／选择器／范围括号、闭合反引号多行字符串；普通引号按词法器错误恢复 |
 | Clojure / EDN（第七批） | 集合括号、闭合跨行字符串、Clojure 正则字面量，以及词法器确认完整的丢弃形式 |
+| Elixir（第八批） | do/end、fn/end、代码／位串括号、闭合多行引号／heredoc／sigil，区分 do: 简写 |
+| Erlang（第八批） | begin/case/if/receive/try/maybe/end、实际匿名 fun、代码／binary 括号和闭合多行字面量 |
+| Julia（第八批） | 显式 end 块、代码括号、闭合多行字符串／字符串宏／嵌套注释，区分推导式和索引 begin/end |
+| OCaml（第八批） | begin/struct/sig/object/end、for/while/do/done、代码括号、闭合引号／quoted string／嵌套注释 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
@@ -313,6 +317,40 @@ Consumed、ReplaceFrom、不可变 State 与 GUI 高亮缓存不变，不增加�
 不承诺完整编译器 AST／语法验证。保留原有取消、修订核验、视图隔离和关闭行尾规则，
 不引入 GOUI 扩展或通用缩进回退。
 
+### Elixir、Erlang、Julia、OCaml
+
+四种语言复用 functionalTokenizer 的实际字面量／块注释边界，额外的控制栈只由
+本次 worker 所有。Elixir／Julia 真实插值进入独立控制状态，退出时恢复外层，
+孤立 end 不关闭外部块。引号／sigil／字符串宏内的伪关键字和括号不作为代码。
+Elixir sigil 与 Julia 字符串宏的相邻字母修饰符按扫描片段延长关闭位置，
+不改变公开扫描的 token、Consumed、ReplaceFrom 或不可变 State 结构。
+
+- Elixir：从确认的 defmodule／def／if 等控制头记录起始行，到实际 do/end 配对；
+  fn/end 独立入栈，else／rescue／catch／after 不另开区域。do 紧邻冒号才是简写，
+  下一行的原子不能取消 do 块。成员和原子中的同名词不配对。
+  位串按双尖括号配对，三尖括号移位运算符不参与折叠。
+- Erlang：case 须确认同分组深度的 of；begin／if／receive／try／maybe 与 end 配对。
+  匿名 fun 须确认参数及实际箭头，支持命名递归 fun 和多 clause；
+  fun Name/Arity、fun Module:Name/Arity 及变量形式只是引用。
+  binary 双尖括号可嵌套，连续关闭符按各自边界匹配；普通代码括号沿用统一范围规则。
+- Julia：function／macro／module／baremodule／struct／抽象及 primitive type／
+  循环／条件／let／quote／try／do 使用显式 end。
+  括号或数组中已有表达式后的 for／if 视为 generator／comprehension，不额外等待 end；
+  内部明确打开的 begin 等块仍独立匹配。索引深度中的 end 不关闭外层函数，
+  begin 后的运算／范围后缀按位置表达式处理；实际 begin 代码体正常配对。
+  这是词法上下文判断，不承诺完整 Julia AST、宏展开或任意错误代码的精确解析。
+- OCaml：begin／struct／sig／object 由 end 关闭，确认 do 的 for／while 由 done 关闭，
+  两种终止符不互换。quoted string 的标签及结束标记按真实连续字节匹配，
+  支持标签跨扫描片段，物理 LF 取消部分结束标记匹配；注释内字符串／quoted string
+  保护其中的伪注释关闭符，嵌套注释仍独立观察。
+
+本批同时修正扫描器两处已复现的边界问题：Julia #= 块注释须优先于 # 行注释，
+OCaml quoted string 的关闭标记不能跨 LF 拼接。公开接口和状态结构保持不变，
+这两类输入的词法分类按语法修正；其他共享扫描器语言通过观察路径一致性回归。
+不提供 Erlang 顶层函数 clause 的完整范围、OCaml 普通 let／match 表达式的整体终点，
+也不为 F#、Haskell 或 Scala 3 加入通用缩进回退。所有已发布候选仍须实际闭合，
+关闭行尾保留、同起点外层优先、交叉过滤与视图隔离沿用既有机制。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -394,6 +432,17 @@ Consumed、ReplaceFrom、不可变 State 与 GUI 高亮缓存不变，不增加�
 jq 手册标记 1.8，其余为动态文档；这里只采用上述已明确的词法／reader 边界，
 不将文档版本或其他编辑器的解析能力等同本模块的完整语言实现。
 继续采用前述规则与视图分离、复用扫描器和最小公共契约的取舍，不引入其解析器依赖。
+
+第八批参照 [Elixir Syntax reference](https://elixir.hexdocs.pm/syntax-reference.html)、
+[Erlang expressions](https://www.erlang.org/doc/system/expressions.html)、
+[Julia control flow](https://docs.julialang.org/en/v1/manual/control-flow/)
+与 [begin/end 的索引语义](https://docs.julialang.org/en/v1/base/base/#end)、
+[OCaml expressions](https://ocaml.org/manual/5.4/expr.html)、
+[modules](https://ocaml.org/manual/5.4/modules.html) 和
+[lexical conventions](https://ocaml.org/manual/5.4/lex.html)。
+2026-11-08 查阅的 Elixir 页面标记 1.20.5、Erlang 为 OTP 29.1.2，OCaml 为 5.4，
+Julia stable 为动态文档；采用上述具体块／字面量边界，不将文档版本等同编译器运行验收。
+继续沿用前述 Monaco provider 与 Scintilla 视图状态分离，不引入其解析器或原生依赖。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

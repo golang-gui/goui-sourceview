@@ -12,6 +12,7 @@ type foldLexemes struct {
 	keywords           *keywordFoldObserver
 	hcl                *hclFoldObserver
 	query              *queryFoldObserver
+	functional         *functionalFoldObserver
 	lineLiteral        int // Zig's confirmed line-string token, or -1.
 }
 
@@ -21,6 +22,9 @@ type foldHere struct{ row, literals, comments int }
 func (f *foldLexemes) openLiteral() {
 	if f != nil {
 		f.literals = append(f.literals, f.row)
+		if f.functional != nil {
+			f.functional.modifiers = append(f.functional.modifiers, false)
+		}
 		if f.hcl != nil {
 			f.hcl.templates = append(f.hcl.templates, nil)
 		}
@@ -30,6 +34,9 @@ func (f *foldLexemes) openLiteral() {
 func (f *foldLexemes) closeLiteral(end int, complete bool) {
 	if f != nil {
 		f.close(&f.literals, end, complete)
+		if f.functional != nil && len(f.functional.modifiers) > 0 {
+			f.functional.modifiers = f.functional.modifiers[:len(f.functional.modifiers)-1]
+		}
 		if f.hcl != nil && len(f.hcl.templates) > 0 {
 			f.hcl.templates = f.hcl.templates[:len(f.hcl.templates)-1]
 		}
