@@ -49,7 +49,11 @@ func rRawQuotePrefix(before string) bool {
 	return !IdentifierRune(prev) && prev != '.'
 }
 
-func (rTokenizer) Scan(in Input, state State) (Result, error) {
+func (t rTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (rTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(rState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign R state")
@@ -118,6 +122,7 @@ func (rTokenizer) Scan(in Input, state State) (Result, error) {
 				if c == s.quote && s.closingDashes == s.rawDashes {
 					add(i, i+1, KindString, ClassString)
 					i++
+					folds.closeLiteral(in.Offset+i, true)
 					endLiteral()
 					continue
 				}
@@ -187,6 +192,7 @@ func (rTokenizer) Scan(in Input, state State) (Result, error) {
 			add(i, i+n, kind, ClassString)
 			i += n
 			if c == s.quote {
+				folds.closeLiteral(in.Offset+i, true)
 				endLiteral()
 			}
 			continue
@@ -204,6 +210,7 @@ func (rTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 		if s.wordOn {
 			if (c == '"' || c == '\'') && (s.word.text == "r" || s.word.text == "R") && s.word.length == 1 {
+				folds.openLiteral()
 				finishWord(in.Offset + i)
 				s.mode, s.quote, s.rawStart = rRawPrefix, c, in.Offset+i-1
 				add(i, i+1, KindString, ClassString)
@@ -232,6 +239,7 @@ func (rTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '"' || c == '\'' || c == '`' {
+			folds.openLiteral()
 			s.mode, s.quote = rString, c
 			kind := KindString
 			if c == '`' {

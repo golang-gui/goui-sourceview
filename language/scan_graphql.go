@@ -38,7 +38,11 @@ var gqlKeywords = words("query mutation subscription fragment on schema scalar t
 func gqlName(r rune) bool {
 	return r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
 }
-func (gqlTokenizer) Scan(in Input, state State) (Result, error) {
+func (t gqlTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (gqlTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(gqlState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign GraphQL state")
@@ -78,6 +82,7 @@ func (gqlTokenizer) Scan(in Input, state State) (Result, error) {
 			if strings.HasPrefix(text[i:], `"""`) {
 				add(i, i+3, KindString, ClassString)
 				i += 3
+				folds.closeLiteral(in.Offset+i, true)
 				s.mode = gqlCode
 				continue
 			}
@@ -124,6 +129,7 @@ func (gqlTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if c == '"' {
+				folds.closeLiteral(in.Offset+i+1, true)
 				s.mode = gqlCode
 			}
 			add(i, i+n, KindString, ClassString)
@@ -156,6 +162,7 @@ func (gqlTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '"' {
+			folds.openLiteral()
 			s.mode = gqlString
 			size := 1
 			if strings.HasPrefix(text[i:], `"""`) {
@@ -194,6 +201,9 @@ func (gqlTokenizer) Scan(in Input, state State) (Result, error) {
 	if in.LineEnd && i == len(text) {
 		finishWord(in.Offset + i)
 		if s.mode != gqlBlock {
+			if s.mode == gqlString {
+				folds.closeLiteral(in.Offset+i, false)
+			}
 			s.mode = gqlCode
 		}
 		s.escape, s.escapeBraces, s.escapeLeft, s.last = false, false, 0, 0

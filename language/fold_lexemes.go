@@ -10,6 +10,8 @@ type foldLexemes struct {
 	mixed              *mixedFoldObserver
 	heres              map[any]foldHere
 	keywords           *keywordFoldObserver
+	hcl                *hclFoldObserver
+	lineLiteral        int // Zig's confirmed line-string token, or -1.
 }
 
 type foldLexeme struct{ start, end int }
@@ -18,12 +20,18 @@ type foldHere struct{ row, literals, comments int }
 func (f *foldLexemes) openLiteral() {
 	if f != nil {
 		f.literals = append(f.literals, f.row)
+		if f.hcl != nil {
+			f.hcl.templates = append(f.hcl.templates, nil)
+		}
 	}
 }
 
 func (f *foldLexemes) closeLiteral(end int, complete bool) {
 	if f != nil {
 		f.close(&f.literals, end, complete)
+		if f.hcl != nil && len(f.hcl.templates) > 0 {
+			f.hcl.templates = f.hcl.templates[:len(f.hcl.templates)-1]
+		}
 	}
 }
 
@@ -98,6 +106,7 @@ type foldingTokenizer struct {
 func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 	if in.Offset == 0 {
 		t.lexemes.row++
+		t.lexemes.lineLiteral = -1
 	}
 	switch scanner := t.Tokenizer.(type) {
 	case cTokenizer:
@@ -133,6 +142,14 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 	case codeTokenizer:
 		return scanner.scanFolding(in, state, nil, t.lexemes)
 	case builtinTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case zigTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case rTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case gqlTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case hcTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	default:
 		return t.Tokenizer.Scan(in, state)

@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL；四批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，第五批为 Zig/R/GraphQL/HCL/Protobuf/Starlark；五批均尚未发布。
 
 ## 范围与所有权
 
@@ -73,6 +73,12 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Shell（第四批） | if/fi、循环/done、case/esac、代码括号、命令替换、闭合多行引号／heredoc |
 | CMake（第四批） | 配对控制命令、跨行参数括号、闭合引号／bracket 字面量与注释 |
 | SQL（第四批） | CASE/END、括号、闭合多行引号／dollar 字符串／嵌套块注释；不推断方言 BEGIN 块 |
+| Zig（第五批） | 代码括号、扫描器确认的连续 `\\` 多行字符串；不跨空行或另一个赋值续接 |
+| R（第五批） | 代码括号、闭合多行引号／raw 字符串；引用名称、注释和自定义运算符内的伪括号不参与匹配 |
+| GraphQL（第五批） | 查询／类型／参数／输入值括号、已闭合 block string，排除转义三引号 |
+| HCL/Terraform（第五批） | 块／对象／列表／插值括号、闭合字面量／heredoc／块注释、同一模板内的 if/for 指令配对 |
+| Protobuf（第五批） | message/enum/service/oneof 等括号结构及实际闭合的块注释／跨行字面量 |
+| Starlark（第五批） | def/if/elif/else/for 缩进块、代码括号、实际闭合的三引号／续行字符串 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
@@ -201,6 +207,38 @@ worker 释放，不附着到共享 Tokenizer 或 State。
 取消检查覆盖分片、长普通代码片段、控制遍历和候选归并；并发调用的观察与恢复状态相互隔离。
 这些规则是词法折叠，不承诺完整 AST、执行语义、Shell 全部方言或 SQL 存储过程语法。
 
+### Zig、R、GraphQL、HCL、Protobuf、Starlark
+
+六种语言复用 structuralFolding。R、GraphQL、HCL 在原扫描器的实际打开／关闭／恢复点
+观察字面量和注释；Protobuf、Starlark 复用 codeTokenizer 已有的观察路径。
+公开 Scan 仍传 nil 观察器，分词、不可变 State 和 GUI 高亮缓存保持原有契约。
+本批范围统一排序、同起点外层优先并过滤行范围交叉，不改变前几批的候选生成策略。
+
+- Zig 的多行字符串没有成对关闭引号。扫描器记录每行实际确认的 `\\` 起点，
+  连续下一行仅在该起点前都是空白时续接；空行、其他代码或新的赋值结束前一个区域。
+  EOF 可结束已确认的连续行串，只有一个物理行不产生折叠。普通引号／引用名称内的
+  伪 `\\` 不成为行串，不从行首／行尾 String Context 推断它。
+- R 匹配原扫描器确认的普通／raw 关闭位置，raw 括号种类和 dash 数量沿用词法器。
+  相邻字符串独立观察；字符串、反引号名称、注释和 `%...%` 运算符中的括号不配对。
+- GraphQL 的 block string 只在真实三引号处关闭，`\"""` 是正文转义；普通引号在
+  错误行末恢复时撤销观察，不能吞并后面的查询。查询、片段、schema 和输入值按真实
+  括号配对，不将字符串／注释中的伪结构当作代码。
+- HCL 的引号和 heredoc 跨 `${...}`／`%{...}` 保留外层观察，内层字符串另行入栈；
+  块注释及字面量的相邻开关按实际位置处理。只在扫描器确认进入并闭合 `%{...}` 后
+  处理 if/for/endif/endfor；else 不再开块。忽略注释和 strip marker，空条件、
+  错配结束词与未知指令不发布控制块。`$${`／`%%{` 沿用正文转义，不能伪造指令。
+  每个字符串／heredoc 保存独立模板块栈，嵌套插值头保存所属模板，不让内层 endif
+  关闭外层 if。该状态仅由本次 worker 所有，不附着到 hcState 或持久表达式 frame。
+- Protobuf 复用实际代码括号和块注释，不根据关键字文本再次解析声明，不读取 import、
+  执行 protoc、解析 option 类型或承诺编译器完整语法。相邻普通引号不是一个多行字符串。
+- Starlark 复用已有缩进、括号续行和显式反斜线续行机制，块头限定为
+  def/if/elif/else/for，支持紧凑条件与跨行头。Python 的 class/while/try/with 等
+  保留字不成为 Starlark 块；列表推导、字典冒号和字符串内容也不形成伪块。
+  只接受空格缩进，空行／注释不产生独立区域，三引号内容中的缩进不终止外层 suite。
+
+只发布能够按词法边界确认的范围；非法代码的恢复沿用词法器，不增加通用缩进回退、
+region 约定、新公开 API、依赖或 GOUI 扩展。并发、分片、取消与修订检查沿用既有契约。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -251,6 +289,17 @@ worker 释放，不附着到共享 Tokenizer 或 State。
 中 Ruby master 为 4.1 文档、PostgreSQL current 为 18；这里只采用上述已明确的语法边界，
 不将文档版本或其他编辑器的解析能力变成本模块的完整语法承诺。
 沿用 provider 与视图状态分离的设计，增加逐语言的词法控制策略，不引入解析器或运行时依赖。
+
+第五批参照 [Zig 多行字符串](https://ziglang.org/documentation/master/#Multiline-String-Literals)、
+[R quoting](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Quotes.html)、
+[GraphQL September 2025 字符串规则](https://spec.graphql.org/September2025/#sec-String-Value)、
+[HCL Native Syntax](https://github.com/hashicorp/hcl/blob/main/hclsyntax/spec.md)、
+[Protobuf proto3](https://protobuf.dev/reference/protobuf/proto3-spec/) 与
+[Starlark 规范](https://github.com/bazelbuild/starlark/blob/master/spec.md)。
+2026-11-08 查阅的 Zig master、R-devel、HCL main 和 Starlark master 是动态来源；
+本批采用上述具体词法／缩进边界，不将其全部语言能力或编译器版本视为已适配。
+继续沿用前述 Monaco provider 与 Scintilla 视图状态分离的取舍，复用扫描器边界，
+不引入这些框架的解析器或原生依赖。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

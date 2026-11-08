@@ -67,7 +67,11 @@ var hcKeywords = words("true false null for in if else endif endfor resource dat
 
 func hcName(r rune) bool { return IdentifierRune(r) || r == '-' }
 
-func (hcTokenizer) Scan(in Input, state State) (Result, error) {
+func (t hcTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (hcTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(hcState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign HCL state")
@@ -88,6 +92,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			kind = KindKeyword
 		}
 		w.add(s.word.start, end, kind, 0)
+		folds.hclWord(s.word.text)
 		s.pending, s.pendingOn = s.word, true
 		s.word, s.wordOn = scanWord{}, false
 	}
@@ -101,6 +106,9 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 	for i < limit {
 		c := text[i]
 		r, n := utf8.DecodeRuneInString(text[i:])
+		if s.mode == hcCode && !s.wordOn && s.expr != nil && c != '#' && !strings.HasPrefix(text[i:], "//") && !strings.HasPrefix(text[i:], "/*") {
+			folds.hclHead(c)
+		}
 		switch s.mode {
 		case hcLineComment:
 			add(i, i+n, KindComment, ClassComment)
@@ -108,6 +116,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case hcBlockComment:
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				s.mode = hcCode
@@ -122,6 +131,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			} else if c == ' ' || c == '\t' || c == '\r' {
 				s.hereGap = true
 			} else {
+				folds.closeLiteral(in.Offset+i, false)
 				s.mode, s.capture, s.hereGap = hcCode, nil, false
 				captured.Reset()
 				continue
@@ -182,6 +192,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if strings.HasPrefix(text[i:], "${") || strings.HasPrefix(text[i:], "%{") {
+				folds.hclEnter(c == '%')
 				s.expr = &hcExpr{parent: s.expr, mode: s.mode, here: s.here}
 				s.mode, s.here, s.matching, s.beginning, s.trailing, s.matched = hcCode, "", false, false, false, 0
 				add(i, i+2, KindDelimiter, ClassDelimiter)
@@ -189,6 +200,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if s.mode == hcQuoted && c == '"' {
+				folds.closeLiteral(in.Offset+i+1, true)
 				s.mode = hcCode
 			}
 			add(i, i+n, KindString, ClassString)
@@ -227,12 +239,14 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode = hcBlockComment
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
 		if c == '"' {
+			folds.openLiteral()
 			s.mode = hcQuoted
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -246,6 +260,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			if len(text) > i+head {
 				next, _ := utf8.DecodeRuneInString(text[i+head:])
 				if codeNameStart(HCL, next) {
+					folds.openLiteral()
 					s.mode, s.capture, s.hereGap = hcHereHead, nil, false
 					add(i, i+head, KindString, ClassString)
 					i += head
@@ -266,6 +281,7 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '}' && s.expr != nil && s.expr.depth == 0 {
+			folds.hclLeave(in.Offset + i + 1)
 			f := s.expr
 			s.mode, s.here, s.expr = f.mode, f.here, f.parent
 			s.matching, s.beginning, s.trailing, s.matched = false, false, false, 0
@@ -299,9 +315,11 @@ func (hcTokenizer) Scan(in Input, state State) (Result, error) {
 			if s.here != "" {
 				s.mode = hcHereBody
 			} else {
+				folds.closeLiteral(in.Offset+i, false)
 				s.mode = hcCode
 			}
 		} else if s.mode == hcHereBody && s.matching && s.matched == len(s.here) {
+			folds.closeLiteral(in.Offset+i, true)
 			s.mode, s.here = hcCode, ""
 		}
 		if s.mode == hcLineComment || s.mode == hcNumber {

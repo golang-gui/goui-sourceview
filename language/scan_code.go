@@ -221,8 +221,8 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 	return b.scanFolding(in, state, boundary, nil)
 }
 
-// scanFolding observes literals for JSX and SQL folding. Ordinary tokenization
-// retains its normal path with no lexical observations.
+// scanFolding observes confirmed literal/comment boundaries for folding workers.
+// Ordinary tokenization retains its normal path with no lexical observations.
 func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeState, int) bool, folds *foldLexemes) (Result, error) {
 	s, ok := state.(codeState)
 	if !ok || s.id != b.id {

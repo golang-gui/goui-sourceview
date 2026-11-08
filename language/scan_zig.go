@@ -41,7 +41,11 @@ var zigKeywords = words("addrspace align allowzero and anyframe anytype asm asyn
 func zigKeyword(word string) bool {
 	return zigKeywords[word] || len(word) > 1 && (word[0] == 'u' || word[0] == 'i') && strings.Trim(word[1:], "0123456789") == ""
 }
-func (zigTokenizer) Scan(in Input, state State) (Result, error) {
+func (t zigTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (zigTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(zigState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Zig state")
@@ -160,6 +164,9 @@ func (zigTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], `\\`) {
+			if folds != nil {
+				folds.lineLiteral = in.Offset + i
+			}
 			s.mode = zigMultiline
 			continue
 		}

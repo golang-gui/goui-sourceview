@@ -147,7 +147,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -161,16 +161,33 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var regionStack []int
 		var pythonContinuation bool
 		var pythonHeader *indentFold
+		zigStart, zigEnd := -1, -1
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark:
 			lexemes = &foldLexemes{row: -1}
+			if id == HCL {
+				lexemes.hcl = &hclFoldObserver{}
+			}
 			scanner = foldingTokenizer{t, lexemes}
 		}
 		f := structuralFolder{literal: -1, comment: -1, section: -1, sectionEnd: -1, last: -1}
 		err := syntaxLines(ctx, scanner, text, func(l syntaxLine) {
 			before, after := l.before.Context(), l.after.Context()
+			if id == Zig {
+				at := lexemes.lineLiteral
+				if at < 0 || zigStart >= 0 && strings.TrimSpace(l.text[:at]) != "" {
+					f.add(zigStart, zigEnd)
+					zigStart, zigEnd = -1, -1
+				}
+				if at >= 0 {
+					if zigStart < 0 {
+						zigStart = l.row
+					}
+					zigEnd = l.row
+				}
+			}
 			if marker := foldRegionMarker(id, l); marker != 0 {
 				if marker > 0 {
 					regionStack = append(regionStack, l.row)
@@ -214,11 +231,11 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			} else if id == TOML && f.section >= 0 && (trim != "" || before.String) {
 				f.sectionEnd = l.row
 			}
-			continued := len(f.stack) > 0 || id == Python && pythonContinuation
+			continued := len(f.stack) > 0 || pythonLanguage(id) && pythonContinuation
 			f.delimiters(l, table || cPreprocessorLine(id, l), id)
-			if id == Python {
+			if pythonLanguage(id) {
 				pythonContinuation = strings.HasSuffix(trim, "\\")
-				if !continued && !strings.HasSuffix(trim, ":") && pythonBlockHeader(trim+":") && (len(f.stack) > 0 || pythonContinuation) {
+				if !continued && !strings.HasSuffix(trim, ":") && indentBlockHeader(id, trim+":") && (len(f.stack) > 0 || pythonContinuation) {
 					pythonHeader = &indentFold{row: l.row, column: column}
 				}
 				if continued {
@@ -236,7 +253,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 				f.last = l.row
 				return
 			}
-			if id != YAML && id != Python {
+			if id != YAML && !pythonLanguage(id) {
 				return
 			}
 			blockContent := false
@@ -284,8 +301,8 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			}
 			f.last = l.row
 			header := false
-			if id == Python {
-				header = pythonBlockHeader(trim) && len(f.stack) == 0
+			if pythonLanguage(id) {
+				header = indentBlockHeader(id, trim) && len(f.stack) == 0
 			} else {
 				s := l.after.(builtinState).yaml
 				header = s != nil && s.block || strings.HasSuffix(trim, ":") || seq
@@ -319,6 +336,13 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			if !crossing {
 				f.out = append(f.out, r)
 			}
+		}
+		if id == Zig {
+			f.add(zigStart, zigEnd)
+		}
+		switch id {
+		case Zig, R, GraphQL, HCL, Protobuf, Starlark:
+			return noncrossingMixedFolds(ctx, f.out)
 		}
 		return f.out, nil
 	}
