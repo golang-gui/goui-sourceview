@@ -5,6 +5,8 @@
 // RenderWidget 在正文中统计指定语义前景的 NRGBA 实心像素（每类至少 5 个），
 // 不依赖字形边缘抗锯齿或跨平台金图。确认外部着色确实应用到了绘制。
 // 延迟发布独立颜色层必须保留原补全弹窗、选中项目；显式刷新须原位更新。
+// 修订发布后，等待公开 layoutPending 结束再检查旧颜色清零；不同原生后端
+// 可能分帧刷新未编辑行。仍保留精确像素断言及总期限。
 // 30 秒未完成、提前关闭或断言失败返回非零，成功自动退出。重启复位。
 // 不执行源码，不修改文件、剪贴板或系统配置；关闭时取消后台分析。
 package main
@@ -201,6 +203,9 @@ func main() {
 			replace(`"hello"`, "42")
 		case 1:
 			if !ready() || countColor(blue) < 5 {
+				return
+			}
+			if v.Snapshot().Attributes["goui.sourceview"].(map[string]any)["layoutPending"] == true {
 				return
 			}
 			check(countColor(pink) == 0, "旧语义颜色未被替换")
