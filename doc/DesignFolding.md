@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖分为 [第一批](PlanFoldingLanguages.md) 与 [第二批](PlanFoldingLanguages2.md)；两批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，本轮第三批为 JSX/TSX/PHP 混合文档；三批均尚未发布。
 
 ## 范围与所有权
 
@@ -66,6 +66,8 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Go / JavaScript / TypeScript / CSS / Python | 词法器确认的括号、跨行字面量／注释；Python 块缩进及对应 region 注释 |
 | C / C++ / Java / C# / Rust（第一批） | 词法器确认的 `{}[]()`、已闭合多行字面量／块注释和下述显式 region |
 | Kotlin / Swift / Dart / Scala / Groovy / PowerShell（第二批） | 词法器确认的 `{}[]()`、已闭合多行字面量／块注释、插值表达式和显式 region |
+| JSX / TSX（第三批） | 配对标签、Fragment、代码／表达式括号、模板字符串、注释与代码 region |
+| PHP（第三批） | PHP 括号、跨行字符串／heredoc／nowdoc／注释、跨片段模板控制结构，以及静态 HTML 标签／注释 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。新增五种语言的
@@ -123,6 +125,40 @@ PowerShell 支持不区分大小写的 `#region` / `#endregion` 注释标记。
 Scala 本批只处理词法括号与字面量，不承诺 Scala 3 缩进块；Swift 条件编译、
 Groovy 运行时语义、PowerShell 执行语义也不参与折叠分析。
 
+### JSX、TSX、PHP 混合文档
+
+外层语言注册专用 mixedFolding，仍使用原有 Document 任务、FoldRange 和视图状态。
+观察器全部由单次 worker 所有；公开 Tokenizer State 不包含可变观察器或 GUI 对象。
+
+JSX/TSX 在现有扫描器确认进入、完成或撤销标签候选时记录事件，保留完整名称和起始行。
+配对区分大小写；Fragment 使用独立的空名称；自闭合标签不产生元素范围。
+标签属性中的表达式可以再包含 JSX，未完成的外层标签与内层标签分别保存。
+TSX 泛型候选回退时撤销对应标签观察，不根据所有尖括号猜测标签。
+代码区域继续使用 JS/TS 扫描器，观察实际字符串／注释边界，模板插值与 JSX 切换保留
+外层字面量；属性引号也可形成跨行范围。JSX 正文作为正文，不用 String Context 转换
+把整段正文误判为字面量。错名、未闭合标签不发布元素范围。
+
+PHP 由原扫描器记录实际代码片段的字节区间。PHP 结构只读取这些区间内的确认 token，
+括号与控制头可跨越多次 `?>` / `<?php` 切换；HTML、script/style 中的代码括号不混入
+PHP 栈。字面量／注释观察覆盖普通多行引号、插值、heredoc/nowdoc 和错误打开头恢复。
+
+HTML 折叠使用保留 UTF-8 字节位置和物理 LF 的私有投影：屏蔽整个 PHP 片段，并在区间
+起点留下不可充当标签名的占位符。PHP 字符串里的伪标签不会进入 HTML 匹配，标签名
+夹有 PHP 输出时保守跳过；静态标签的属性里可以含 PHP。沿用 HTML 的大小写、void、
+raw-text 与注释规则，script/style 形成元素折叠，本批不增加其内 JS/CSS 的独立块折叠。
+PHP 内部 HTML profile 的自动标签编辑与折叠仍关闭，外层 PHP 定义提供这套专用规则。
+
+PHP 替代语法识别 `if/while/for/foreach/switch/declare (...) :` 及各自结束关键字。
+条件括号可以跨行并包含嵌套括号；分支不产生伪嵌套，方法／静态成员、变量、字符串、
+普通括号体和不匹配结束词不会伪造模板头。结束须由分号或 PHP 关闭标记确认。
+这只是词法结构分析，不执行 PHP、推导动态 HTML 输出或验证完整编译器语法。
+
+所有候选按起点升序、终点降序归并，同起点保留外层；独立语言结构若发生行范围交叉，
+保留较早起点的已确认结构，省略交叉候选，避免向组件提交非法范围。
+关闭行仍有其他语句／标记时保留该行；JSX 结束后的独立分号或逗号属于原结构终止符。
+取消检查覆盖分片扫描、PHP 投影屏蔽、控制词遍历与候选归并。投影和名称缓存随该次
+worker 释放，不附着到共享 Tokenizer 或 State。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -150,6 +186,15 @@ Groovy 运行时语义、PowerShell 执行语义也不参与折叠分析。
 与 [comments](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comments?view=powershell-7.6)。
 [Scala 3 optional braces](https://docs.scala-lang.org/scala3/reference/other-new-features/indentation.html)
 说明其缩进语法需要专门处理，本批按已确认范围保留为后续工作，不用统一缩进回退替代。
+
+第三批核对 [React JSX markup](https://react.dev/learn/writing-markup-with-jsx)、
+[TypeScript JSX](https://www.typescriptlang.org/docs/handbook/jsx.html)、
+[PHP escaping HTML](https://www.php.net/manual/en/language.basic-syntax.phpmode.php)、
+[PHP strings](https://www.php.net/manual/en/language.types.string.php)、
+[替代控制语法](https://www.php.net/manual/en/control-structures.alternative-syntax.php) 和
+[语句分隔](https://www.php.net/manual/en/language.basic-syntax.instruction-separation.php)。
+沿用上文 Monaco provider 与 Scintilla 视图状态分离的取舍；新增专用语言边界，
+不引入其解析器依赖，也不以单一 HTML 扫描替代混合语言识别。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

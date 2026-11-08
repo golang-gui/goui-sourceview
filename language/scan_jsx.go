@@ -94,6 +94,10 @@ func jsxStart(text string, closing bool) bool {
 }
 
 func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b jsxTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(jsxState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign JSX state")
@@ -119,6 +123,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 			s.closing = true
 			n = 2
 		}
+		folds.startTag(s.closing)
 		add(i, i+n, KindDelimiter, 0)
 		i += n
 		s.name, s.attr = scanWord{start: in.Offset + i}, scanWord{}
@@ -136,6 +141,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 		i++
 	}
 	finishTag := func(self bool) {
+		folds.endTag(in.Offset+i, self)
 		if s.closing {
 			s.depth = max(0, s.depth-1)
 		} else if !self {
@@ -151,6 +157,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 		}
 	}
 	fallback := func(extends bool) {
+		folds.abortTag()
 		name, attr := s.name, s.attr
 		pop()
 		s.code.word, s.code.wordOn, s.code.canRegexp = name, true, true
@@ -169,7 +176,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == jsxCode {
 			boundary := byte(0)
 			part := Input{Text: text[i:], Offset: in.Offset + i, Limit: limit - i, LineEnd: in.LineEnd, DocumentEnd: in.DocumentEnd}
-			result, err := (codeTokenizer{b.base()}).scan(part, s.code, func(code codeState, at int) bool {
+			result, err := (codeTokenizer{b.base()}).scanFolding(part, s.code, func(code codeState, at int) bool {
 				if part.Text[at] == '}' && s.frames != nil && s.frames.mode != jsxCode && code.braces == 0 && code.strings == nil {
 					boundary = '}'
 					return true
@@ -179,7 +186,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 					return true
 				}
 				return false
-			})
+			}, folds)
 			if err != nil {
 				return Result{}, err
 			}
@@ -200,6 +207,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 		switch s.mode {
 		case jsxName:
 			if jsxNamePart(r) {
+				folds.tagName(text[i : i+n])
 				s.name.add(text[i : i+n])
 				if strings.ContainsRune(".:-", r) {
 					s.candidate = false
@@ -238,6 +246,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case jsxQuoted:
 			if c == s.quote {
+				folds.closeLiteral(in.Offset+i+1, true)
 				add(i, i+1, KindString, ClassString)
 				i++
 				s.mode, s.quote = jsxAttrs, 0
@@ -302,6 +311,7 @@ func (b jsxTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == jsxValue {
 			confirm()
 			if c == '\'' || c == '"' {
+				folds.openLiteral()
 				s.mode, s.quote = jsxQuoted, c
 				add(i, i+1, KindString, ClassString)
 				i++

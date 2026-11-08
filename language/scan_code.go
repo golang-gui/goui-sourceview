@@ -218,6 +218,12 @@ func (b codeTokenizer) Scan(in Input, state State) (Result, error) {
 // scan can pause at a confirmed code boundary for an enclosing JSX profile.
 // Only the private caller may receive zero consumption at that boundary.
 func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int) bool) (Result, error) {
+	return b.scanFolding(in, state, boundary, nil)
+}
+
+// scanFolding observes JS/TS literals for the enclosing JSX profile. Other
+// code profiles retain their normal scan path with no lexical observations.
+func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeState, int) bool, folds *foldLexemes) (Result, error) {
 	s, ok := state.(codeState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign state for %s", b.id)
@@ -242,6 +248,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 	}
 	finishWord := func(end int) { finishCodeWord(&s, &w, end) }
 	startQuote := func(quote byte, raw, formatted bool) {
+		folds.openLiteral()
 		s.mode, s.quote, s.raw, s.formatted, s.escape = codeQuoted, quote, raw, formatted, false
 		s.triple = pythonLanguage(b.id) && strings.HasPrefix(text[i:], strings.Repeat(string(quote), 3))
 		n := 1
@@ -353,6 +360,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 				continue
 			}
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				s.blockDepth--
 				if s.blockDepth == 0 {
 					s.mode = codeNormal
@@ -486,6 +494,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 				if !s.triple || strings.HasPrefix(text[i:], strings.Repeat(string(c), count)) {
 					add(i, i+count, KindString, ClassString)
 					i += count
+					folds.closeLiteral(in.Offset+i, true)
 					s.mode = codeNormal
 					s.quote = 0
 					s.raw = false
@@ -581,6 +590,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			continue
 		}
 		if !pythonLanguage(b.id) && strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode = codeBlockComment
 			s.blockDepth = 1
 			add(i, i+2, KindComment, ClassComment)
@@ -760,6 +770,7 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 			s.regexpClass = false
 		}
 		if s.mode == codeQuoted && !s.triple && s.quote != '`' && b.id != SQL && !s.escape {
+			folds.closeLiteral(in.Offset+i, false)
 			s.mode = codeNormal
 			s.quote = 0
 			s.raw = false

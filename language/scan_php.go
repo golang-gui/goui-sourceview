@@ -104,6 +104,10 @@ func phpOpening(text string) int {
 }
 
 func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b phpTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(phpState)
 	if !ok || s.fragment != b.fragment || s.htmlDefinition != b.html {
 		return Result{}, fmt.Errorf("language: foreign PHP state")
@@ -114,6 +118,10 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 	}
 	w := tokenWriter{base: in.Offset}
 	text, i := in.Text, 0
+	codeStart := -1
+	if s.inCode {
+		codeStart = in.Offset
+	}
 	add := func(a, z int, k Kind, c Class) { w.add(in.Offset+a, in.Offset+z, k, c) }
 	var capture strings.Builder
 	flush := func() {
@@ -133,10 +141,14 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 		w.add(s.word.start, end, kind, 0)
 		s.word, s.wordOn = scanWord{}, false
 	}
-	endHere := func() { s.mode, s.here, s.matching, s.beginning, s.matched = phpCode, nil, false, false, 0 }
+	endHere := func() {
+		folds.closeLiteral(in.Offset+i, true)
+		s.mode, s.here, s.matching, s.beginning, s.matched = phpCode, nil, false, false, 0
+	}
 	for i < limit {
 		if !s.inCode {
 			if n := phpOpening(text[i:]); n > 0 {
+				codeStart = in.Offset + i
 				// Flush a suspended JS/CSS word before the PHP span so a later
 				// classification can never overwrite the intervening PHP tokens.
 				if s.html.code != nil && s.html.code.wordOn {
@@ -176,6 +188,7 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case phpBlockComment:
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				s.mode = phpCode
@@ -236,6 +249,7 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 				i++
 				continue
 			}
+			folds.closeLiteral(in.Offset+i, false)
 			s.mode, s.header, s.headerQuote, s.capture = phpCode, 0, 0, nil
 			capture.Reset()
 			continue
@@ -293,6 +307,7 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if s.mode == phpQuoted && c == s.quote {
+				folds.closeLiteral(in.Offset+i+n, true)
 				s.mode, s.quote = phpCode, 0
 			}
 			add(i, i+n, KindString, ClassString)
@@ -314,6 +329,7 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if (s.word.text == "b" || s.word.text == "B") && (c == '\'' || c == '"') {
+				folds.openLiteral()
 				w.add(s.word.start, in.Offset+i+1, KindString, ClassString)
 				s.word, s.wordOn = scanWord{}, false
 				s.mode, s.quote = phpQuoted, c
@@ -325,6 +341,8 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 		if strings.HasPrefix(text[i:], "?>") {
 			add(i, i+2, KindMeta, 0)
 			i += 2
+			folds.phpSpan(codeStart, in.Offset+i)
+			codeStart = -1
 			s.inCode = false
 			s.frames = nil
 			continue
@@ -349,18 +367,21 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode = phpBlockComment
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
 		if strings.HasPrefix(text[i:], "<<<") {
+			folds.openLiteral()
 			s.mode = phpHereOpen
 			add(i, i+3, KindString, ClassString)
 			i += 3
 			continue
 		}
 		if c == '\'' || c == '"' || c == '`' {
+			folds.openLiteral()
 			s.mode, s.quote = phpQuoted, c
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -422,12 +443,16 @@ func (b phpTokenizer) Scan(in Input, state State) (Result, error) {
 				s.here = &phpHere{label: label, literal: s.headerQuote == '\''}
 				s.mode = phpHereBody
 			} else {
+				folds.closeLiteral(in.Offset+i, false)
 				s.mode = phpCode
 			}
 			s.header, s.headerQuote, s.capture = 0, 0, nil
 		}
 		s.matching, s.beginning, s.matched = s.mode == phpHereBody, true, 0
 		s.escape, s.last = false, 0
+	}
+	if codeStart >= 0 {
+		folds.phpSpan(codeStart, in.Offset+i)
 	}
 	return w.result(i, s), nil
 }

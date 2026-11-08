@@ -7,6 +7,7 @@ type foldLexemes struct {
 	row                int
 	literals, comments []int
 	closed             []foldLexeme
+	mixed              *mixedFoldObserver
 }
 
 type foldLexeme struct{ start, end int }
@@ -74,6 +75,10 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 	case grTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	case psTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case jsxTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case phpTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	default:
 		return t.Tokenizer.Scan(in, state)
