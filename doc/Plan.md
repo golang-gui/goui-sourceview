@@ -10,6 +10,13 @@ SourceView v0.4.0 已正式发布，发布依赖为 GOUI v0.7.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
+## 语言 profile 折叠第六批（2026-11-08）
+
+新增 Objective-C、Objective-C++、SCSS、Less、Perl 折叠，复用词法边界观察。
+补充 Objective-C 声明／协议与表达式区分、SCSS 插值、Perl 多段引用／修饰符／heredoc／POD。
+设计见 [代码折叠](DesignFolding.md)，精确范围、分片／并发、独立窗口及限制见
+[第六批验收](PlanFoldingLanguages6.md)。尚未发布。
+
 ## 结构化语言折叠第五批（2026-11-08）
 
 新增 Zig、R、GraphQL、HCL/Terraform、Protobuf、Starlark 折叠。
