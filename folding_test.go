@@ -319,7 +319,7 @@ func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
 	b.SetDocument(d)
 	observe(t, b)
 	text := d.model.Text()
-	ranges := []FoldRange{{0, 5}, {1, 4}, {1, 3}}
+	ranges := []FoldRange{{StartLine: 0, EndLine: 5}, {StartLine: 1, EndLine: 4}, {StartLine: 1, EndLine: 3}}
 	f, err := NewFolds(text, ranges)
 	if err != nil {
 		t.Fatal(err)
@@ -355,7 +355,7 @@ func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
 	if !d.externalFolds || len(v.folds) != 2 || v.folds[1].StartLine != 2 || !v.folds[1].Collapsed {
 		t.Fatal("编辑映射", v.folds)
 	}
-	next, _ := NewFolds(d.model.Text(), []FoldRange{{1, 6}, {2, 5}})
+	next, _ := NewFolds(d.model.Text(), []FoldRange{{StartLine: 1, EndLine: 6}, {StartLine: 2, EndLine: 5}})
 	d.SetFolds(d.model.Revision(), next)
 	finishFoldIntake(t, v)
 	if !v.folds[1].Collapsed {
@@ -378,11 +378,11 @@ func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
 	}
 }
 func TestNewFoldsCanonicalAndCrossing(t *testing.T) {
-	f, err := NewFolds("a\r\nb\r\nc", []FoldRange{{0, 2}, {0, 1}, {0, 2}, {0, 1}})
+	f, err := NewFolds("a\r\nb\r\nc", []FoldRange{{StartLine: 0, EndLine: 2}, {StartLine: 0, EndLine: 1}, {StartLine: 0, EndLine: 2}, {StartLine: 0, EndLine: 1}})
 	if err != nil || len(f.entries) != 1 || f.entries[0].end != 5 {
 		t.Fatal(f, err)
 	}
-	for _, ranges := range [][]FoldRange{{{0, 2}, {1, 3}}, {{-1, 2}}, {{0, 0}}, {{0, 4}}} {
+	for _, ranges := range [][]FoldRange{{{StartLine: 0, EndLine: 2}, {StartLine: 1, EndLine: 3}}, {{StartLine: -1, EndLine: 2}}, {{StartLine: 0, EndLine: 0}}, {{StartLine: 0, EndLine: 4}}} {
 		if _, err := NewFolds("a\nb\nc\nd", ranges); err == nil {
 			t.Fatal("非法范围", ranges)
 		}
@@ -393,7 +393,7 @@ func TestFoldIntakeCancelledAndSelectionProtected(t *testing.T) {
 	d := v.document
 	v.SetSelection(textedit.Selection{})
 	v.Fold(0)
-	f, _ := NewFolds(d.model.Text(), []FoldRange{{0, 5}})
+	f, _ := NewFolds(d.model.Text(), []FoldRange{{StartLine: 0, EndLine: 5}})
 	d.SetFolds(d.model.Revision(), f)
 	v.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
 	finishFoldIntake(t, v)
@@ -414,7 +414,7 @@ func TestFoldBatchMappingAndUndo(t *testing.T) {
 	original := "a\nb\n{\nx\n}\ntail"
 	d.model.SetText(original)
 	observe(t, v)
-	v.acceptFolds([]language.FoldRange{{2, 4}})
+	v.acceptFolds([]language.FoldRange{{StartLine: 2, EndLine: 4}})
 	v.SetSelection(textedit.Selection{})
 	v.Fold(2)
 	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "AA\nA"}, {Range: textedit.Range{Start: 2, End: 3}, Text: "B\nB"}}, textedit.BatchOptions{}); err != nil {
@@ -440,7 +440,7 @@ func TestExternalFoldClearWaitsForPreedit(t *testing.T) {
 	d := v.document
 	v.SetSelection(textedit.Selection{})
 	v.Fold(1)
-	f, _ := NewFolds(d.model.Text(), []FoldRange{{0, 5}, {1, 4}})
+	f, _ := NewFolds(d.model.Text(), []FoldRange{{StartLine: 0, EndLine: 5}, {StartLine: 1, EndLine: 4}})
 	d.SetFolds(d.model.Revision(), f)
 	finishFoldIntake(t, v)
 	v.projection = textedit.NewProjection(d.model, v.Selection())
@@ -457,7 +457,7 @@ func TestExternalFoldClearWaitsForPreedit(t *testing.T) {
 func TestFoldIntakeNotificationReentry(t *testing.T) {
 	v := foldingFixture(t)
 	d := v.document
-	f, _ := NewFolds(d.model.Text(), []FoldRange{{0, 5}})
+	f, _ := NewFolds(d.model.Text(), []FoldRange{{StartLine: 0, EndLine: 5}})
 	other := NewDocument("other")
 	v.ConnectFoldingChanged(func() { v.SetDocument(other) })
 	d.SetFolds(d.model.Revision(), f)

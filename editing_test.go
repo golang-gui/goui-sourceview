@@ -46,12 +46,12 @@ func TestCleanupPlansAndUndo(t *testing.T) {
 func TestReindentPlanValidatesBeforeMutation(t *testing.T) {
 	text := "{\n\"a\": 1\n}"
 	s := textedit.Selection{Anchor: len(text)}
-	for _, bad := range [][]language.LineIndent{{{1, "x"}}, {{1, "\n"}}, {{1, " "}, {1, "  "}}, {{3, " "}}, {{-1, " "}}} {
+	for _, bad := range [][]language.LineIndent{{{Line: 1, Text: "x"}}, {{Line: 1, Text: "\n"}}, {{Line: 1, Text: " "}, {Line: 1, Text: "  "}}, {{Line: 3, Text: " "}}, {{Line: -1, Text: " "}}} {
 		if _, err := reindentPlan(context.Background(), text, s, 0, 2, bad); err == nil {
 			t.Fatal("未拒绝非法结果", bad)
 		}
 	}
-	p, err := reindentPlan(context.Background(), text, s, 0, 2, []language.LineIndent{{0, ""}, {1, "  "}, {2, ""}})
+	p, err := reindentPlan(context.Background(), text, s, 0, 2, []language.LineIndent{{Line: 0, Text: ""}, {Line: 1, Text: "  "}, {Line: 2, Text: ""}})
 	if err != nil {
 		t.Fatal(err)
 	}
