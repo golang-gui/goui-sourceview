@@ -10,6 +10,14 @@ SourceView v0.4.0 已正式发布，发布依赖为 GOUI v0.7.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
+## 基础 DOT／Diff 折叠第十一批（2026-11-08）
+
+新增 DOT 的显式图／属性括号和多行字面量／注释，以及普通 Git／unified Diff 的
+文件／hunk 文本区域。沿用已有扫描器，HTML-like label 和二进制正文不透明，
+不增加语法语义解析或补丁应用。设计见 [代码折叠](DesignFolding.md)，
+精确范围、分片／并发、独立桌面 24 组和限制见 [第十一批验收](PlanFoldingLanguages11.md)。
+尚未发布。
+
 ## 基础配置文件折叠第十批（2026-11-08）
 
 新增 Nginx 配置块、go.mod／go.work 括号分组和 INI／GitConfig／EditorConfig／
