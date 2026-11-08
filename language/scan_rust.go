@@ -40,7 +40,11 @@ func (rustTokenizer) InitialState() State { return rustState{} }
 
 var rustKeywords = words("as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while abstract become box do final gen macro override priv try typeof unsized virtual yield bool char str i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64")
 
-func (rustTokenizer) Scan(in Input, state State) (Result, error) {
+func (t rustTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (rustTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(rustState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Rust state")
@@ -77,12 +81,14 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case rustBlockComment:
 			if strings.HasPrefix(text[i:], "/*") {
+				folds.openComment()
 				s.depth++
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				continue
 			}
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				s.depth--
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
@@ -101,6 +107,7 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			} else if c == '\\' {
 				kind, s.escape = KindEscape, true
 			} else if c == s.quote {
+				folds.closeLiteral(in.Offset+i+n, true)
 				s.mode, s.quote = rustNormal, 0
 			}
 			add(i, i+n, kind, ClassString)
@@ -115,6 +122,7 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			if c == '"' {
 				s.mode = rustRawBody
+				folds.openLiteral()
 				s.rawStart = 0
 				s.rawIdentOpen = false
 				add(i, i+1, KindString, ClassString)
@@ -138,10 +146,12 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			if s.matched > 0 && c == '#' {
 				s.matched++
 				if s.matched == s.hashes+1 {
+					folds.closeLiteral(in.Offset+i+n, true)
 					s.mode, s.hashes, s.matched = rustNormal, 0, 0
 				}
 			} else if c == '"' {
 				if s.hashes == 0 {
+					folds.closeLiteral(in.Offset+i+n, true)
 					s.mode = rustNormal
 				} else {
 					s.matched = 1
@@ -172,6 +182,7 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			prefix := s.word.text
 			if !s.rawIdentifier && !s.lifetime && (c == '"' || c == '\'' && prefix == "b") && (prefix == "b" || prefix == "c" || prefix == "r" || prefix == "br" || prefix == "cr") {
+				folds.openLiteral()
 				w.add(s.word.start, in.Offset+i+1, KindString, ClassString)
 				s.mode, s.quote = rustQuoted, c
 				if strings.HasSuffix(prefix, "r") {
@@ -199,6 +210,7 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = rustLineComment
 			if text[i+1] == '*' {
 				s.mode, s.depth = rustBlockComment, 1
+				folds.openComment()
 			}
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -213,6 +225,7 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if c == '"' || c == '\'' {
+			folds.openLiteral()
 			s.mode, s.quote, s.escape = rustQuoted, c, false
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -248,6 +261,9 @@ func (rustTokenizer) Scan(in Input, state State) (Result, error) {
 			s.rawIdentOpen = false
 		}
 		if s.mode == rustLineComment || s.mode == rustNumber || s.mode == rustQuoted && s.quote == '\'' {
+			if s.mode == rustQuoted {
+				folds.closeLiteral(in.Offset+i, false)
+			}
 			s.mode, s.quote = rustNormal, 0
 		}
 		s.escape, s.matched, s.last = false, 0, 0

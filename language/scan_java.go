@@ -63,7 +63,11 @@ func hexValue(r rune) rune {
 	return -1
 }
 
-func (javaTokenizer) Scan(in Input, state State) (Result, error) {
+func (t javaTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (javaTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(javaState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Java state")
@@ -88,6 +92,9 @@ func (javaTokenizer) Scan(in Input, state State) (Result, error) {
 	}
 	lineEnd := func(end int) {
 		finishWord(end)
+		if s.mode == javaQuoted || s.mode == javaQuoteOpen {
+			folds.closeLiteral(end, s.mode == javaQuoteOpen && s.quotes == 2)
+		}
 		if s.mode != javaBlockComment && s.mode != javaTextBlock {
 			s.mode, s.quote = javaNormal, 0
 		}
@@ -114,6 +121,7 @@ func (javaTokenizer) Scan(in Input, state State) (Result, error) {
 			case javaBlockComment:
 				w.add(start, end, KindComment, ClassComment)
 				if s.star && r == '/' {
+					folds.closeComment(end)
 					s.mode, s.star = javaNormal, false
 				} else {
 					s.star = r == '*'
@@ -125,6 +133,7 @@ func (javaTokenizer) Scan(in Input, state State) (Result, error) {
 					s.mode = javaLineComment
 					if r == '*' {
 						s.mode = javaBlockComment
+						folds.openComment()
 					}
 					s.pendingStart, s.star = 0, false
 					return
@@ -141,6 +150,7 @@ func (javaTokenizer) Scan(in Input, state State) (Result, error) {
 					return
 				}
 				if s.quotes == 2 {
+					folds.closeLiteral(start, true)
 					s.mode = javaNormal
 				} else {
 					s.mode = javaQuoted
@@ -155,10 +165,12 @@ func (javaTokenizer) Scan(in Input, state State) (Result, error) {
 					kind, s.escape, s.quotes = KindEscape, true, 0
 				} else if r == s.quote {
 					if s.mode == javaQuoted {
+						folds.closeLiteral(end, true)
 						s.mode, s.quote = javaNormal, 0
 					} else {
 						s.quotes++
 						if s.quotes == 3 {
+							folds.closeLiteral(end, true)
 							s.mode, s.quote, s.quotes = javaNormal, 0, 0
 						}
 					}
@@ -208,9 +220,11 @@ func (javaTokenizer) Scan(in Input, state State) (Result, error) {
 				s.mode, s.pendingStart = javaSlash, start
 				w.add(start, end, KindDelimiter, 0)
 			case '"':
+				folds.openLiteral()
 				s.mode, s.quote, s.quotes = javaQuoteOpen, r, 1
 				w.add(start, end, KindString, ClassString)
 			case '\'':
+				folds.openLiteral()
 				s.mode, s.quote = javaQuoted, r
 				w.add(start, end, KindString, ClassString)
 			default:

@@ -97,7 +97,7 @@ func (f *structuralFolder) add(start, end int) {
 		f.out = append(f.out, FoldRange{start, end})
 	}
 }
-func (f *structuralFolder) delimiters(l syntaxLine, skip bool) {
+func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 	if skip {
 		return
 	}
@@ -107,6 +107,26 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool) {
 		}
 		for i := t.Start; i < t.End; i++ {
 			c := l.text[i]
+			// The Java lexer already established eligibility and classified this
+			// token after Unicode translation. Retain original source offsets.
+			if id == Java && c == '\\' && i+1 < t.End && l.text[i+1] == 'u' {
+				at := i + 1
+				for at < t.End && l.text[at] == 'u' {
+					at++
+				}
+				if at+4 <= t.End {
+					var value rune
+					valid := true
+					for _, h := range l.text[at : at+4] {
+						n := hexValue(h)
+						valid = valid && n >= 0
+						value = value*16 + n
+					}
+					if valid && value < 128 {
+						c, i = byte(value), at+3
+					}
+				}
+			}
 			switch c {
 			case '{', '[', '(':
 				f.stack = append(f.stack, foldOpen{l.row, c})
@@ -120,7 +140,12 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool) {
 					continue
 				}
 				f.stack = f.stack[:len(f.stack)-1]
-				f.add(o.line, foldEndLine(l.text, i+1, l.row, true))
+				end := foldEndLine(l.text, i+1, l.row, true)
+				switch id {
+				case C, Cpp, Java, CSharp, Rust:
+					end = codeFoldEndLine(l.text, i+1, l.row)
+				}
+				f.add(o.line, end)
 			}
 		}
 	}
@@ -131,8 +156,15 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var regionStack []int
 		var pythonContinuation bool
 		var pythonHeader *indentFold
+		var lexemes *foldLexemes
+		scanner := t
+		switch id {
+		case C, Cpp, Java, CSharp, Rust:
+			lexemes = &foldLexemes{row: -1}
+			scanner = foldingTokenizer{t, lexemes}
+		}
 		f := structuralFolder{literal: -1, comment: -1, section: -1, sectionEnd: -1, last: -1}
-		err := syntaxLines(ctx, t, text, func(l syntaxLine) {
+		err := syntaxLines(ctx, scanner, text, func(l syntaxLine) {
 			before, after := l.before.Context(), l.after.Context()
 			if marker := foldRegionMarker(id, l); marker != 0 {
 				if marker > 0 {
@@ -150,17 +182,23 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			column := len(l.text) - len(strings.TrimLeft(l.text, " "))
 			// State identifies multiline literals, including a closing line. Per-line
 			// strings are still excluded by token classes in delimiter processing.
-			if id != YAML && !before.String && after.String {
+			if lexemes != nil {
+				for _, closed := range lexemes.closed {
+					f.add(closed.start, codeFoldEndLine(l.text, closed.end, l.row))
+				}
+				lexemes.closed = lexemes.closed[:0]
+			}
+			if lexemes == nil && id != YAML && !before.String && after.String {
 				f.literal = l.row
 			}
-			if id != YAML && before.String && !after.String && f.literal >= 0 {
+			if lexemes == nil && id != YAML && before.String && !after.String && f.literal >= 0 {
 				f.add(f.literal, literalEnd(l, ClassString))
 				f.literal = -1
 			}
-			if !before.Comment && after.Comment {
+			if lexemes == nil && !before.Comment && after.Comment {
 				f.comment = l.row
 			}
-			if before.Comment && !after.Comment && f.comment >= 0 {
+			if lexemes == nil && before.Comment && !after.Comment && f.comment >= 0 {
 				f.add(f.comment, literalEnd(l, ClassComment))
 				f.comment = -1
 			}
@@ -172,7 +210,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 				f.sectionEnd = l.row
 			}
 			continued := len(f.stack) > 0 || id == Python && pythonContinuation
-			f.delimiters(l, table)
+			f.delimiters(l, table || cPreprocessorLine(id, l), id)
 			if id == Python {
 				pythonContinuation = strings.HasSuffix(trim, "\\")
 				if !continued && !strings.HasSuffix(trim, ":") && pythonBlockHeader(trim+":") && (len(f.stack) > 0 || pythonContinuation) {
@@ -321,12 +359,54 @@ func literalEnd(l syntaxLine, class Class) int {
 	return foldEndLine(l.text, end, l.row, true)
 }
 
+func codeFoldEndLine(text string, end, row int) int {
+	if strings.TrimSpace(text[end:]) == ";" {
+		return row
+	}
+	return foldEndLine(text, end, row, true)
+}
+
+func cPreprocessorLine(id ID, l syntaxLine) bool {
+	if id != C && id != Cpp {
+		return false
+	}
+	return l.before.(cState).directive || leadingFoldDirective(l)
+}
+
+func leadingFoldDirective(l syntaxLine) bool {
+	at := len(l.text) - len(strings.TrimLeft(l.text, " \t\r"))
+	for _, t := range l.tokens {
+		if t.Start <= at && at < t.End {
+			return t.Kind == KindMeta && t.Class == 0 && l.text[at] == '#'
+		}
+	}
+	return false
+}
+
 func foldRegionMarker(id ID, l syntaxLine) int {
 	if l.before.Context().String || l.before.Context().Comment {
 		return 0
 	}
 	raw := strings.TrimSpace(l.text)
 	switch id {
+	case C, Cpp, Java, CSharp, Rust:
+		if cPreprocessorLine(id, l) && !leadingFoldDirective(l) {
+			return 0 // A continued macro is not a region directive/comment.
+		}
+		if strings.HasPrefix(raw, "//") {
+			raw = strings.TrimSpace(raw[2:])
+		} else if leadingFoldDirective(l) && (id == C || id == Cpp || id == CSharp) {
+			raw = strings.TrimSpace(raw[1:])
+			if id == C || id == Cpp {
+				fields := strings.Fields(raw)
+				if len(fields) < 2 || fields[0] != "pragma" {
+					return 0
+				}
+				raw = strings.TrimSpace(strings.TrimPrefix(raw, "pragma"))
+			}
+		} else {
+			return 0
+		}
 	case Go, JavaScript, TypeScript:
 		if !strings.HasPrefix(raw, "//") {
 			return 0

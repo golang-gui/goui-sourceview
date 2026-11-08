@@ -69,7 +69,11 @@ func (csTokenizer) InitialState() State { return csState{leading: true} }
 
 var csKeywords = words("abstract as base bool break byte case catch char checked class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while add alias and args ascending async await by descending dynamic equals field file from get global group init into join let managed nameof nint not notnull nuint on or orderby partial record remove required scoped select set unmanaged value var when where with yield")
 
-func (csTokenizer) Scan(in Input, state State) (Result, error) {
+func (t csTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (csTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(csState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign C# state")
@@ -92,7 +96,12 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 		w.add(s.word.start, end, kind, 0)
 		s.word, s.wordOn, s.escapedWord = scanWord{}, false, false
 	}
-	endLiteral := func() { s.mode, s.literal, s.escape, s.quoteRun = csNormal, csLiteral{}, false, 0 }
+	endLiteral := func(end int, complete bool) {
+		if s.literal.quote != 0 {
+			folds.closeLiteral(end, complete)
+		}
+		s.mode, s.literal, s.escape, s.quoteRun = csNormal, csLiteral{}, false, 0
+	}
 	enterExpression := func() {
 		s.frames = &csFrame{parent: s.frames, literal: s.literal}
 		s.mode, s.literal, s.braceRun = csNormal, csLiteral{}, 0
@@ -118,6 +127,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case csBlockComment:
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				s.mode = csNormal
@@ -147,6 +157,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			if c == '"' {
 				w.add(s.prefixStart, in.Offset+i+1, KindString, ClassString)
+				folds.openLiteral()
 				s.literal.quote, s.quoteRun, s.mode, s.prefixStart = c, 1, csQuoteOpen, 0
 				if s.literal.verbatim {
 					s.mode, s.quoteRun = csQuoted, 0
@@ -172,7 +183,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			case 1:
 				s.mode = csQuoted
 			case 2:
-				endLiteral()
+				endLiteral(in.Offset+i, true)
 			default:
 				s.mode, s.literal.quotes, s.literal.openingLine, s.literal.lineSpace = csRaw, s.quoteRun, true, true
 			}
@@ -199,7 +210,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 				add(i, i+1, KindString, ClassString)
 				i++
 				if s.quoteRun == s.literal.quotes {
-					endLiteral()
+					endLiteral(in.Offset+i, true)
 				}
 				continue
 			}
@@ -233,7 +244,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			} else if c == '\\' && !s.literal.verbatim {
 				kind, s.escape = KindEscape, true
 			} else if c == s.literal.quote {
-				endLiteral()
+				endLiteral(in.Offset+i+n, true)
 			}
 			add(i, i+n, kind, ClassString)
 			i += n
@@ -283,6 +294,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = csLineComment
 			if text[i+1] == '*' {
 				s.mode = csBlockComment
+				folds.openComment()
 			}
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -346,12 +358,14 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '"' {
+			folds.openLiteral()
 			s.mode, s.literal, s.quoteRun = csQuoteOpen, csLiteral{quote: c}, 1
 			add(i, i+1, KindString, ClassString)
 			i++
 			continue
 		}
 		if c == '\'' {
+			folds.openLiteral()
 			s.mode, s.literal = csQuoted, csLiteral{quote: c}
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -382,7 +396,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			if s.quoteRun >= 3 {
 				s.mode, s.literal.quotes, s.literal.openingLine = csRaw, s.quoteRun, true
 			} else {
-				endLiteral()
+				endLiteral(in.Offset+i, s.quoteRun == 2)
 			}
 		}
 		if s.mode == csRaw {
@@ -398,7 +412,7 @@ func (csTokenizer) Scan(in Input, state State) (Result, error) {
 			s.literal.openingLine, s.literal.lineSpace = false, true
 		}
 		if s.mode == csQuoted && !s.literal.verbatim || s.mode == csLineComment || s.mode == csDirective || s.mode == csNumber || s.mode == csPrefix {
-			endLiteral()
+			endLiteral(in.Offset+i, false)
 		}
 		s.escape, s.leading, s.quoteRun, s.last, s.prefixStart, s.closing = false, true, 0, 0, 0, 0
 	}

@@ -75,6 +75,10 @@ func cPrefix(id ID, word string, quote byte) (raw, ok bool) {
 }
 
 func (b cTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b cTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(cState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign state for %s", b.id)
@@ -115,6 +119,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 		case cBlockComment:
 			add(i, i+n, KindComment, ClassComment)
 			if s.star && c == '/' {
+				folds.closeComment(in.Offset + i + n)
 				s.mode = cNormal
 				s.star = false
 			} else {
@@ -132,6 +137,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 				kind = KindEscape
 				s.escape = true
 			} else if c == s.quote {
+				folds.closeLiteral(in.Offset+i+n, true)
 				s.mode = cNormal
 				s.quote = 0
 			}
@@ -153,6 +159,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			// Invalid openers recover on this physical line.
+			folds.closeLiteral(in.Offset+i, false)
 			s.mode, s.raw = cNormal, ""
 			continue
 		case cRawBody:
@@ -160,6 +167,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			if c == ')' && strings.HasPrefix(text[i:], close) {
 				add(i, i+len(close), KindString, ClassString)
 				i += len(close)
+				folds.closeLiteral(in.Offset+i, true)
 				s.mode, s.raw = cNormal, ""
 				continue
 			}
@@ -184,6 +192,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			if c == '"' || c == '\'' {
 				if raw, ok := cPrefix(b.id, s.word.text, c); ok {
+					folds.openLiteral()
 					w.add(s.word.start, in.Offset+i+1, KindString, ClassString)
 					s.word, s.wordOn = scanWord{}, false
 					s.mode, s.quote, s.escape = cQuoted, c, false
@@ -206,6 +215,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = cLineComment
 			if text[i+1] == '*' {
 				s.mode = cBlockComment
+				folds.openComment()
 			}
 			s.star = false
 			add(i, i+2, KindComment, ClassComment)
@@ -232,6 +242,7 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '"' || c == '\'' || c == '<' && s.include {
+			folds.openLiteral()
 			s.mode, s.quote, s.escape = cQuoted, c, false
 			if c == '<' {
 				s.quote = '>'
@@ -273,6 +284,9 @@ func (b cTokenizer) Scan(in Input, state State) (Result, error) {
 			finishWord(in.Offset + i)
 			s.leading, s.directive, s.directiveName, s.include = true, false, false, false
 			if s.mode == cQuoted || s.mode == cLineComment || s.mode == cNumber || s.mode == cRawOpen {
+				if s.mode == cQuoted || s.mode == cRawOpen {
+					folds.closeLiteral(in.Offset+i, false)
+				}
 				s.mode, s.quote, s.raw = cNormal, 0, ""
 			}
 			s.escape, s.star = false, false
