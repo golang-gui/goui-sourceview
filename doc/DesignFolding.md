@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell；九批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell；第十批为 Nginx、Go 模块／工作区及分节配置文件；十批均尚未发布。
 
 ## 范围与所有权
 
@@ -93,6 +93,9 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | OCaml（第八批） | begin/struct/sig/object/end、for/while/do/done、代码括号、闭合引号／quoted string／嵌套注释 |
 | F#（第九批） | 声明／控制结构与同列分支的专用缩进规则、显式 begin/class/sig/end、循环 done、括号和闭合多行字面量／嵌套注释 |
 | Haskell（第九批） | where/let/do/of（及 mdo）引入的布局列表、in／分组结束／逗号终止、显式括号、闭合 string gap 和嵌套注释 |
+| Nginx（第十批） | 词法器确认的配置块 `{}`、已闭合的多行引号；括号／方括号不作为块 |
+| go.mod / go.work（第十批） | 词法器确认的 `()` 指令分组，排除字符串／注释内的伪分隔符 |
+| INI / GitConfig / EditorConfig / systemd / Desktop Entry（第十批） | 完整节标题到下一节前的文本区域，排除值／续行中的伪标题 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
@@ -392,6 +395,32 @@ OCaml quoted string 的关闭标记不能跨 LF 拼接。公开接口和状态�
 推导、任意 GHC 扩展、条件编译分支求值或 Haskell 普通顶层函数 clause 的整体范围。
 Scala 3 缩进、OCaml 普通 let/match、Erlang 顶层 clause 仍需单独规则。
 
+### 基础配置文件
+
+后续扩展以基本代码编辑器为范围，采用明确的词法／文本边界，不以语言数量为目标，
+不引入编译器语法树或语义分析。本批补足 Nginx、go.mod／go.work 和五种分节配置格式；
+Scala 3 专用布局方案不实施，DOT／Diff 等格式按实际需要另行评估。
+
+- Nginx 复用已有 configTokenizer 与字面量观察，只配对 ClassDelimiter 确认的 `{}`。
+  普通括号、方括号不进入块栈，不因正则中的其他标点干扰外层配置块；引号、转义和变量
+  中的伪花括号沿用扫描器分类。只发布实际闭合的多行引号／配置块，不解释指令和正则含义。
+- Go 模块／工作区复用 modTokenizer，只配对其确认的 `()`，支持 require／use／replace
+  等明确分组。引号、反引号和注释内容排除；版本区间的 `[]` 不额外建立区域。
+  不校验模块路径、版本、依赖或任何指令的求值结果。
+- 五种分节格式复用现有扫描器的标题分类。只有以 `[` 开始、有实际关闭 `]`、非空名称
+  且尾部仅有空白／词法器确认注释的物理行，才开始新节。续行或值里的 `[name]`
+  不成为标题；不根据字符串原文单独猜测标题。
+- INI 使用本仓已有词法 profile，不宣称统一所有 INI 方言。GitConfig 的 quoted subsection
+  由现有字符串分类保护，其中的 `]` 不关闭标题；续行按原有状态处理。
+  EditorConfig 取完整标题的外层关闭括号，允许 glob 字符类及转义，不解析／匹配 glob；
+  其不支持行尾注释的规则保留，不能把 `[*] #text` 当作完整标题。
+- 节保留标题行，后续正文与注释折叠到下一节之前，尾部空行保持可见。
+  相邻空节和单行节不产生无内容区域；首节之前的文本保持原样。重复节名分别按位置
+  折叠，不按名称合并，也不处理 include、覆盖、继承或本地化键的语义。
+
+新增状态只存在于当前折叠调用。公开 Tokenizer、不可变 State、GUI 高亮缓存、公共 API、
+模块依赖与 GOUI 均不变；取消、修订核验、关闭行尾保留及两视图隔离沿用原有机制。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -496,6 +525,16 @@ Julia stable 为动态文档；采用上述具体块／字面量边界，不将�
 和 [Haskell](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexHaskell.cxx) 的词法／折叠
 分离方式；它们自身的折叠策略不替代语言规范，本模块复用现有扫描器并分别处理布局，
 不复制其解析器或引入原生依赖。provider 与视图状态分离继续沿用前述 Monaco／Scintilla 取舍。
+
+第十批参照 [Nginx 配置结构](https://nginx.org/en/docs/beginners_guide.html#conf_structure)、
+[Go 模块与工作区文件](https://go.dev/ref/mod)、
+[Git 配置格式](https://git-scm.com/docs/git-config#_syntax)、
+[EditorConfig 0.17.2](https://spec.editorconfig.org/)、
+[systemd.syntax 256](https://www.freedesktop.org/software/systemd/man/256/systemd.syntax.html) 与
+[Desktop Entry 基础格式](https://specifications.freedesktop.org/desktop-entry/latest/basic-format.html)。
+2026-11-08 核对上述文本边界；版本号仅描述参照文档，不代表执行了对应工具或完整语义适配。
+沿用前述 Monaco provider 与 Scintilla 视图分离方式，语言边界复用既有扫描器，
+不复制外部解析器或引入新依赖。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

@@ -108,6 +108,11 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 		}
 		for i := t.Start; i < t.End; i++ {
 			c := l.text[i]
+			// Configuration brackets have narrower roles than code brackets:
+			// regex punctuation and version intervals are not block delimiters.
+			if id == Nginx && c != '{' && c != '}' || (id == GoMod || id == GoWork) && c != '(' && c != ')' {
+				continue
+			}
 			// The Java lexer already established eligibility and classified this
 			// token after Unicode translation. Retain original source offsets.
 			if id == Java && c == '\\' && i+1 < t.End && l.text[i+1] == 'u' {
@@ -147,7 +152,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, GoMod, GoWork:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -169,7 +174,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx:
 			lexemes = &foldLexemes{row: -1}
 			if id == HCL {
 				lexemes.hcl = &hclFoldObserver{}
@@ -378,7 +383,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			}
 		}
 		switch id {
-		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell:
+		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, GoMod, GoWork:
 			return noncrossingMixedFolds(ctx, f.out)
 		}
 		return f.out, nil
