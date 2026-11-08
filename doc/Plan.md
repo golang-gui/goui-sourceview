@@ -10,6 +10,13 @@ SourceView v0.4.0 已正式发布，发布依赖为 GOUI v0.7.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
+## 查询与 reader 折叠第七批（2026-11-08）
+
+新增 Nix、jq、PromQL、Clojure、EDN 折叠，复用扫描器边界。
+处理 Nix 绑定段、jq 条件／函数分号、独立插值状态、Clojure/EDN 完整丢弃形式。
+设计见 [代码折叠](DesignFolding.md)，精确范围、分片／并发、独立窗口与限制见
+[第七批验收](PlanFoldingLanguages7.md)。尚未发布。
+
 ## 语言 profile 折叠第六批（2026-11-08）
 
 新增 Objective-C、Objective-C++、SCSS、Less、Perl 折叠，复用词法边界观察。
