@@ -91,6 +91,8 @@ func TestLayoutFoldingRanges(t *testing.T) {
 		{"fsharp recursive and", FSharp, "let rec first x =\n    second x\nand second x =\n    first x", []FoldRange{{0, 1}, {2, 3}}},
 		{"fsharp explicit", FSharp, "begin\nlet x = 1;\nwork x\nend", []FoldRange{{0, 3}}},
 		{"fsharp verbose loop", FSharp, "for x = 1 to 10 do\n work x\ndone", []FoldRange{{0, 2}}},
+		{"fsharp outer end stays visible", FSharp, "begin\nlet run x =\n    first x\n    second x\nend", []FoldRange{{0, 4}, {1, 3}}},
+		{"fsharp outer done stays visible", FSharp, "for x in xs do\n    if ready then\n        work x\ndone", []FoldRange{{0, 3}, {1, 2}}},
 		{"fsharp let in", FSharp, "begin\nlet x =\n    work()\nin finish x\nend", []FoldRange{{0, 4}, {1, 2}}},
 		{"fsharp groups", FSharp, "let values = [\n1\n2\n]\nlet next = 1", []FoldRange{{0, 3}}},
 		{"fsharp normal literal", FSharp, "let text = \"first\nend let }\nlast\"\nlet next = 1", []FoldRange{{0, 2}}},

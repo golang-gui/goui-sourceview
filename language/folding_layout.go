@@ -223,9 +223,12 @@ func (s *layoutFoldScope) closeAt(index int, l syntaxLine, at int, f *structural
 	if !include {
 		end = min(end, l.row-1)
 	}
-	for len(s.blocks) > index {
-		s.pop(f, end)
+	// Only the matching owner contains its explicit terminator. Implicit
+	// children must keep that outer closing line visible when folded alone.
+	for len(s.blocks) > index+1 {
+		s.pop(f, min(end, l.row-1))
 	}
+	s.pop(f, end)
 }
 func (s *layoutFoldScope) fsharp(a keywordFoldAtom, value string, l syntaxLine, f *structuralFolder, enabled bool) {
 	if value == "=" {
