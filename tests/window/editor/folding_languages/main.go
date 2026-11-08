@@ -1,7 +1,9 @@
 // Built-in code folding verification. Requires a native desktop/window manager.
 // Run: XMODIFIERS=@im=none go run ./tests/window/editor/folding_languages
 // [-basic] [-dark]. Record OS, typography, GOUI_PLAT_PAINTER and GOUI_PLAT_SCALE.
-// Two views share each C/C++/Java/C#/Rust fixture; the mirror is read-only.
+// Two views share each C/C++/Java/C#/Rust/Kotlin/Swift/Dart/Scala/Groovy/PowerShell
+// fixture; the mirror is read-only. The latter six include a multiline literal
+// with an embedded expression, each with its own independently expected range.
 // Automatic checks wait for exact asynchronous ranges, use normal Window key
 // and pointer dispatch to fold code/literals, check view isolation and snapshots,
 // delete at a hidden boundary, undo, search/reveal, disable/re-enable folding,
@@ -72,7 +74,7 @@ func main() {
 	box.SetCrossAlign(layout.CrossStretch)
 	probe := &scaleProbe{}
 	box.AddChild(probe)
-	label := gui.NewLabel("C/C++/Java/C#/Rust · independent folds, shared document")
+	label := gui.NewLabel("Code folding · independent views, shared document")
 	box.AddChild(label)
 	for _, editor := range []*source.SourceView{v, mirror} {
 		editor.ConnectError(func(err error) { panic(err) })
@@ -101,6 +103,12 @@ func main() {
 		{language.Java, common + " String s = \"\"\"\n  } [\n \"\"\";\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 7}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 6}}},
 		{language.CSharp, common + " var s = $$\"\"\"\n  } [\n \"\"\";\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 7}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 6}}},
 		{language.Rust, "fn f() {\n if x {\n  hidden();\n }\n /* outer\n  /* inner\n   } [\n  */\n */\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
+		{language.Kotlin, "fun f() {\n if (x) {\n  hidden();\n }\n val s = \"\"\"\n ${\n  \"} [\"\n }\n \"\"\"\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
+		{language.Swift, "func f() {\n if x {\n  hidden();\n }\n let s = #\"\"\"\n \\#(\n  \"} [\"\n )\n \"\"\"#\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
+		{language.Dart, "void f() {\n if (x) {\n  hidden();\n }\n var s = \"\"\"\n ${\n  '} ['\n }\n \"\"\";\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
+		{language.Scala, "def f(): Unit = {\n if (x) {\n  hidden();\n }\n val s = s\"\"\"\n ${\n  \"} [\"\n }\n \"\"\"\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
+		{language.Groovy, "def f() {\n if (x) {\n  hidden();\n }\n def s = \"\"\"\n ${\n  '} ['\n }\n \"\"\"\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
+		{language.PowerShell, "function Test {\n if ($true) {\n  hidden();\n }\n $s = @\"\n $(\n  '} ['\n )\n\"@\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
 	}
 	var doc *source.Document
 	caret := func(row int, end bool) {
