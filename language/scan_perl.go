@@ -93,7 +93,11 @@ func plClose(r rune) rune {
 	}
 	return r
 }
-func (plTokenizer) Scan(in Input, state State) (Result, error) {
+func (t plTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (plTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(plState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Perl state")
@@ -115,6 +119,7 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 			kind = KindKeyword
 		}
 		if !s.nameOnly && plQuoteOp(word.text) {
+			folds.openLiteral() // Tentative until a delimiter is confirmed.
 			s.mode, s.pendingOp, s.pendingStart, s.pendingEnd, s.pendingGap = plQuotePending, word.text, word.start, end, false
 			kind = KindKeyword
 		} else {
@@ -137,12 +142,16 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 	finishHere := func() {
 		flush()
 		h := &scanHere{label: captureText(s.capture), indent: s.hereIndent, literal: s.hereLiteral || s.hereQuote == '\''}
+		folds.openHere(h)
 		s.queue = enqueueHere(s.queue, h)
 		s.capture = nil
 		s.herePhase, s.hereQuote, s.hereIndent, s.hereLiteral = 0, 0, false, false
 		s.mode, s.expect = plCode, false
 	}
 	startQuote := func(op string, delimiter rune, parts int) {
+		if s.mode != plQuotePending && s.mode != plSecondDelimiter {
+			folds.openLiteral()
+		}
 		interp := op != "q" && op != "qw" && op != "tr" && op != "y"
 		regex := op == "m" || op == "qr" || op == "s"
 		if delimiter == '\'' && regex {
@@ -246,6 +255,7 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 				i++
 				continue
 			}
+			folds.closeLiteral(in.Offset+i, true)
 			s.mode = plCode
 		case plQuotePending, plSecondDelimiter:
 			if space(c) {
@@ -258,6 +268,7 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if s.mode == plQuotePending && (strings.HasPrefix(text[i:], "=>") || strings.ContainsRune(")]};,", r)) {
+				folds.closeLiteral(in.Offset+i, false)
 				if s.pendingStart >= 0 {
 					w.add(s.pendingStart, s.pendingEnd, KindPlain, 0)
 				}
@@ -331,6 +342,8 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 							s.mode, s.expect = plCode, false
 							if op == "m" || op == "qr" || op == "s" || op == "tr" || op == "y" {
 								s.mode = plFlags
+							} else {
+								folds.closeLiteral(in.Offset+i, true)
 							}
 						}
 					}
@@ -415,6 +428,7 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if in.Offset+i == 0 && c == '=' && i+1 < len(text) && ((text[i+1] >= 'a' && text[i+1] <= 'z') || (text[i+1] >= 'A' && text[i+1] <= 'Z')) {
+			folds.openComment()
 			s.mode = plPod
 			continue
 		}
@@ -515,6 +529,7 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if s.active != nil && s.matching && s.matched == len(s.active.label) {
+			folds.closeHere(s.active, in.Offset+i)
 			w.add(s.matchStart, in.Offset+i, KindString, ClassString)
 			s.active = nil
 			s.mode, s.literal, s.expect = s.resumeMode, s.resumeLiteral, s.resumeExpect
@@ -524,9 +539,13 @@ func (plTokenizer) Scan(in Input, state State) (Result, error) {
 			s.commentBack = plCode
 		}
 		if s.mode == plPod && s.podEnd {
+			folds.closeComment(in.Offset + i)
 			s.mode, s.podEnd, s.expect = plCode, false, true
 		}
 		if s.mode == plNumber || s.mode == plFlags {
+			if s.mode == plFlags {
+				folds.closeLiteral(in.Offset+i, true)
+			}
 			s.mode, s.expect = plCode, false
 		}
 		if s.queue != nil && s.next < s.queue.n && s.active == nil {

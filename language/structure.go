@@ -147,7 +147,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -162,10 +162,11 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var pythonContinuation bool
 		var pythonHeader *indentFold
 		zigStart, zigEnd := -1, -1
+		var objc objcFoldPolicy
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl:
 			lexemes = &foldLexemes{row: -1}
 			if id == HCL {
 				lexemes.hcl = &hclFoldObserver{}
@@ -232,7 +233,11 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 				f.sectionEnd = l.row
 			}
 			continued := len(f.stack) > 0 || pythonLanguage(id) && pythonContinuation
-			f.delimiters(l, table || cPreprocessorLine(id, l), id)
+			skip := table || cPreprocessorLine(id, l)
+			if cObjective(id) && !skip {
+				objc.line(ctx, l, &f)
+			}
+			f.delimiters(l, skip, id)
 			if pythonLanguage(id) {
 				pythonContinuation = strings.HasSuffix(trim, "\\")
 				if !continued && !strings.HasSuffix(trim, ":") && indentBlockHeader(id, trim+":") && (len(f.stack) > 0 || pythonContinuation) {
@@ -341,7 +346,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			f.add(zigStart, zigEnd)
 		}
 		switch id {
-		case Zig, R, GraphQL, HCL, Protobuf, Starlark:
+		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl:
 			return noncrossingMixedFolds(ctx, f.out)
 		}
 		return f.out, nil
@@ -396,7 +401,7 @@ func codeFoldEndLine(text string, end, row int) int {
 }
 
 func cPreprocessorLine(id ID, l syntaxLine) bool {
-	if id != C && id != Cpp {
+	if cBaseID(id) != C && cBaseID(id) != Cpp {
 		return false
 	}
 	return l.before.(cState).directive || leadingFoldDirective(l)

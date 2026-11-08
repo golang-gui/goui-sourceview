@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark；五批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，第六批为 Objective-C/Objective-C++/SCSS/Less/Perl；六批均尚未发布。
 
 ## 范围与所有权
 
@@ -79,6 +79,10 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | HCL/Terraform（第五批） | 块／对象／列表／插值括号、闭合字面量／heredoc／块注释、同一模板内的 if/for 指令配对 |
 | Protobuf（第五批） | message/enum/service/oneof 等括号结构及实际闭合的块注释／跨行字面量 |
 | Starlark（第五批） | def/if/elif/else/for 缩进块、代码括号、实际闭合的三引号／续行字符串 |
+| Objective-C / Objective-C++（第六批） | 代码括号、闭合字面量／块注释，以及类／分类／扩展／协议定义到 `@end` 的配对 |
+| SCSS（第六批） | 规则／mixin／function／控制块括号、插值代码、闭合字面量／块注释 |
+| Less（第六批） | 规则／mixin／detached ruleset 括号、闭合字面量／块注释；变量插值不当作代码块 |
+| Perl（第六批） | 代码括号、闭合引用／多段替换／正则／heredoc 和 POD；数据尾部不当作代码 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
@@ -239,6 +243,39 @@ worker 释放，不附着到共享 Tokenizer 或 State。
 只发布能够按词法边界确认的范围；非法代码的恢复沿用词法器，不增加通用缩进回退、
 region 约定、新公开 API、依赖或 GOUI 扩展。并发、分片、取消与修订检查沿用既有契约。
 
+### Objective-C、Objective-C++、SCSS、Less、Perl
+
+五种语言继续复用 structuralFolding、worker 私有词法观察与统一范围归并。
+Objective-C 两种 profile 使用现有 C 扫描器，SCSS/Less 使用 codeTokenizer，
+Perl 在原扫描器的打开／关闭／回退路径增加私有观察。公开 Scan、不可变 State、
+分词结果、Document 任务和视图状态契约不变，不增加 API、依赖或 GOUI 修改。
+
+- Objective-C：只在词法器确认的声明深度匹配 `@interface`、`@implementation`、
+  协议定义与 `@end`，包括分类和类扩展。打开头须先确认名称；`@protocol` 直接跟
+  `(` 是表达式，确认名称后继续等待后续 token，逗号／分号则是前向声明。
+  前向声明和表达式既不打开新区域，也不清掉已有 implementation 区域。
+  方法体、消息发送、引用字面量、注释和宏中的伪指令不作为声明。
+- Objective-C++ 沿用 C++ 的原始字符串和代码括号；两种 profile 均保留 C 的续行字面量、
+  块注释和预处理行识别。宏定义及其物理续行不参与代码／声明配对，实际闭合的字面量
+  和注释仍可折叠；不展开宏、不计算条件编译、不增加 Objective-C 的显式 region 约定。
+- SCSS 的普通规则、mixin、function、控制块和映射／调用依据代码括号。
+  `#{...}` 使用原扫描器的真实插值切换，外层引号／注释保留观察，内层字面量／注释
+  独立入栈。转义伪插值不打开结构；URL 正文按字符串排除，URL 参数可按真实括号折叠。
+  关闭行仍有正文时保持该行可见，不能为了保留一个内层区域吞掉注释后的表达式。
+- Less 的嵌套规则、mixin 和 detached ruleset 依据代码括号；`@{...}` 变量插值
+  沿用变量 token，不制造代码块。URL 中的 `//` 不变成注释；反引号 JavaScript
+  仅作为闭合字面量折叠，不执行或进一步解析内部代码。
+- Perl 的 quote-like 操作符先记录候选开头，真实分隔符确认后继续观察；若扫描器回退
+  为普通名称（如 `q =>`），撤销候选。跨行操作符／分隔符保留操作符所在标题行。
+  成对／非成对的 s/tr/y 均覆盖两段，不能在第一段后提前结束；正则／替换等待扫描器
+  读完修饰符再提交结束位置。普通引号、q/qq/qw/qx/qr/m、转义和嵌套分隔符沿用词法器。
+- Perl heredoc 以扫描器创建的不可变标签身份关联声明／终止行，支持引用、缩进和队列。
+  POD 从实际打开命令到 `=cut` 关闭；`__DATA__`／`__END__` 后不做代码配对。
+  名称位置的 q/s 等不是引用操作符，未完成的第二段、heredoc、POD 不发布伪闭合范围。
+
+这一批只做词法结构折叠，不提供完整 Objective-C 编译语法、Sass/Less 求值、Perl
+正则执行语义或 format 正文解析；错误恢复沿用原有扫描器，不用统一括号扫描替代它。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -300,6 +337,16 @@ region 约定、新公开 API、依赖或 GOUI 扩展。并发、分片、取消
 本批采用上述具体词法／缩进边界，不将其全部语言能力或编译器版本视为已适配。
 继续沿用前述 Monaco provider 与 Scintilla 视图状态分离的取舍，复用扫描器边界，
 不引入这些框架的解析器或原生依赖。
+
+第六批参照 Apple 的 [类定义](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/ProgrammingWithObjectiveC/DefiningClasses/DefiningClasses.html)
+与 [协议](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/ProgrammingWithObjectiveC/WorkingwithProtocols/WorkingwithProtocols.html)、
+[Sass 插值](https://sass-lang.com/documentation/interpolation/)、
+[Less 变量插值与规则](https://lesscss.org/features/#variables-feature-variable-interpolation)、
+[Perl 引用操作符](https://perldoc.perl.org/perlop#Quote-and-Quote-like-Operators) 和
+[POD](https://perldoc.perl.org/perlpod)。Apple 页面为存档，Sass/Less/Perldoc 为动态文档；
+2026-11-08 查询的 Perldoc 页标记 5.44.0。本批采用上述具体词法边界，
+不将文档版本等同编译器运行验收。沿用已有 provider 与视图分离原则，
+将声明／引用操作符差异留在语言策略，不扩大 GOUI 或引入外部解析器。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

@@ -151,6 +151,8 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 		return scanner.scan(in, state, t.lexemes)
 	case hcTokenizer:
 		return scanner.scan(in, state, t.lexemes)
+	case plTokenizer:
+		return scanner.scan(in, state, t.lexemes)
 	default:
 		return t.Tokenizer.Scan(in, state)
 	}
