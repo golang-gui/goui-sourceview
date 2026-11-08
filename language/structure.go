@@ -152,7 +152,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, GoMod, GoWork:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, GoMod, GoWork, DOT:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -174,7 +174,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, DOT:
 			lexemes = &foldLexemes{row: -1}
 			if id == HCL {
 				lexemes.hcl = &hclFoldObserver{}
@@ -383,7 +383,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 			}
 		}
 		switch id {
-		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, GoMod, GoWork:
+		case Zig, R, GraphQL, HCL, Protobuf, Starlark, ObjectiveC, ObjectiveCpp, SCSS, Less, Perl, Nix, JQ, PromQL, Clojure, EDN, Elixir, Erlang, Julia, OCaml, FSharp, Haskell, Nginx, GoMod, GoWork, DOT:
 			return noncrossingMixedFolds(ctx, f.out)
 		}
 		return f.out, nil

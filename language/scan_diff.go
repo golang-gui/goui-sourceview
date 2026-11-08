@@ -44,7 +44,11 @@ func diffCount(text string, sign byte) (uint64, bool) {
 	return n, err == nil
 }
 
-func (diffTokenizer) Scan(in Input, state State) (Result, error) {
+func (b diffTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (diffTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(diffState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign diff state")
@@ -93,6 +97,9 @@ func (diffTokenizer) Scan(in Input, state State) (Result, error) {
 				b, bok := diffCount(fields[2], '+')
 				if aok && bok {
 					s.old, s.next = a, b
+					if folds != nil && folds.diff != nil {
+						folds.diff.hunk = true
+					}
 				}
 			}
 		} else if s.body {

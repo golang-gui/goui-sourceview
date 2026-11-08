@@ -157,7 +157,11 @@ func dotKeyword(s string) bool {
 	}
 	return false
 }
-func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
+func (b dotTokenizer) Scan(in Input, previous State) (Result, error) {
+	return b.scan(in, previous, nil)
+}
+
+func (dotTokenizer) scan(in Input, previous State, folds *foldLexemes) (Result, error) {
 	s, ok := previous.(dotState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign DOT state")
@@ -189,6 +193,7 @@ func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
 		if s.mode == '*' {
 			if strings.HasPrefix(in.Text[i:], "*/") {
 				w.add(at, at+2, KindComment, ClassComment)
+				folds.closeComment(at + 2)
 				s.mode = 0
 				i += 2
 			} else {
@@ -211,6 +216,7 @@ func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
 			if c == '\\' {
 				s.slash, s.slashAt = true, at
 			} else if c == '"' {
+				folds.closeLiteral(at+n, true)
 				s.mode = 0
 			}
 			i += n
@@ -255,6 +261,7 @@ func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
 			w.add(at, at+n, KindString, ClassString)
 			i += n
 			if s.htmlDepth == 0 {
+				folds.closeLiteral(at+n, true)
 				s.mode = 0
 			}
 			continue
@@ -281,18 +288,21 @@ func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(in.Text[i:], "/*") {
+			folds.openComment()
 			s.mode = '*'
 			w.add(at, at+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
 		if c == '"' {
+			folds.openLiteral()
 			s.mode = '"'
 			w.add(at, at+n, KindString, ClassString)
 			i += n
 			continue
 		}
 		if c == '<' {
+			folds.openLiteral()
 			s.mode, s.htmlDepth = '<', 1
 			w.add(at, at+n, KindString, ClassString)
 			i += n
@@ -320,6 +330,9 @@ func (dotTokenizer) Scan(in Input, previous State) (Result, error) {
 			finish(in.Offset + i)
 		}
 		if s.mode == '/' || s.mode == '"' && !s.slash {
+			if s.mode == '"' {
+				folds.closeLiteral(in.Offset+i, false)
+			}
 			s.mode = 0
 		}
 		s.slash, s.slashAt, s.htmlEnd = false, 0, 0

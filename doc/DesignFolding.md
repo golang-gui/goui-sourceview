@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；十批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；第十一批补充基础 DOT／普通 Diff。上述扩展均尚未发布。
 
 ## 范围与所有权
 
@@ -96,10 +96,33 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Nginx（第十批） | 词法器确认的配置块 `{}`、已闭合的多行引号；括号／方括号不作为块 |
 | go.mod / go.work（第十批） | 词法器确认的 `()` 指令分组，排除字符串／注释内的伪分隔符 |
 | INI / GitConfig / EditorConfig / systemd / Desktop Entry（第十批） | 完整节标题到下一节前的文本区域，排除值／续行中的伪标题 |
+| DOT（第十一批） | graph/subgraph `{}`、属性 `[]`，词法器确认闭合的多行注释／续行引号／HTML-like 字面量 |
+| Diff（第十一批） | 普通 Git／unified 文件区域及 `@@` hunk，文件头沿用词法分类，不解释补丁内容 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
 结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。后续批次沿用这一规则。
+
+### DOT 与普通 Diff
+
+按基本编辑器范围补足简单可确认的文本结构，不增加编译器、语义解析或依赖。
+DOT 复用现有扫描器，在实际打开／关闭／错误恢复位置记录多行字面量和注释。
+只将确认的 `{}`／`[]` 进入结构栈；字符串／注释中的伪括号排除。
+HTML-like label 整体作为字面量，不构建 HTML 元素树；普通引号在无续行的 LF 恢复时
+撤销未完成观察，不发布伪闭合范围。已完成的内层块可独立保留。
+
+Diff 的文件区域保留 `diff --git` 标题，或连续 `---`／`+++` 的旧文件标题；
+每个普通 `@@ -old[,count] +new[,count] @@` 开始 hunk，到下一个 hunk／文件或 EOF。
+Git 文件的首对旧／新文件头属于该文件，后续 plain unified 文件可独立开始。
+文件与 hunk 形成两层候选，不按变更行推导源语言结构。
+已有扫描器以声明行数区分正文与文件标题；折叠复用分类及其确认的 hunk，
+不另写补丁解析器。正文的 `---`／`+++`、单个空格的 context 行和无末尾换行标记
+均保留在正确区域；仅尾部真正空行留在区域外。孤立文件头不形成文件区域。
+二进制／rename 等 Git 元数据可随文件整体折叠，二进制正文保持不透明，
+combined diff 不创建候选；不解码二进制、不应用补丁或验证补丁有效性。
+
+公开 Scan 的 token、Consumed、ReplaceFrom 与不可变 State 不变；观察器由每次调用私有持有。
+沿用取消、非交叉排序、同标题外层优先和既有视图状态机制。
 
 ### C、C++、Java、C#、Rust
 
@@ -535,6 +558,12 @@ Julia stable 为动态文档；采用上述具体块／字面量边界，不将�
 2026-11-08 核对上述文本边界；版本号仅描述参照文档，不代表执行了对应工具或完整语义适配。
 沿用前述 Monaco provider 与 Scintilla 视图分离方式，语言边界复用既有扫描器，
 不复制外部解析器或引入新依赖。
+
+第十一批参照 [Graphviz DOT 语言](https://graphviz.org/doc/info/lang.html) 与
+[Git diff 格式](https://git-scm.com/docs/diff-format)（2026-11-08 核对）。
+仅采用显式括号／字面量与普通文件／hunk 文本边界；Graphviz 的 HTML 标签语义、
+Git combined patch、文件应用和完整格式校验不在范围。
+provider 与视图状态分离沿用前述 Monaco／Scintilla 取舍，不复制外部词法器或解析器。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 
