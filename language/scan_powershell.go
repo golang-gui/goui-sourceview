@@ -74,7 +74,11 @@ func psQuote(r rune) rune {
 	return 0
 }
 
-func (psTokenizer) Scan(in Input, state State) (Result, error) {
+func (t psTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (psTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(psState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign PowerShell state")
@@ -108,6 +112,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case psBlockComment:
 			if strings.HasPrefix(text[i:], "#>") {
+				folds.closeComment(in.Offset + i + 2)
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				s.mode = psCode
@@ -122,6 +127,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 				i += n
 				continue
 			}
+			folds.closeLiteral(in.Offset+i, false)
 			s.mode, s.quote = psCode, 0
 			continue
 		case psVariable:
@@ -152,6 +158,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 			if s.mode == psHereBody && in.Offset+i == 0 && psQuote(r) == s.quote && i+n < len(text) && text[i+n] == '@' {
 				add(i, i+n+1, KindString, ClassString)
 				i += n + 1
+				folds.closeLiteral(in.Offset+i, true)
 				s.mode, s.quote = psCode, 0
 				continue
 			}
@@ -178,6 +185,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 				}
 				add(i, i+n, KindString, ClassString)
 				i += n
+				folds.closeLiteral(in.Offset+i, true)
 				s.mode, s.quote = psCode, 0
 				continue
 			}
@@ -240,6 +248,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "<#") {
+			folds.openComment()
 			s.mode = psBlockComment
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -248,6 +257,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 		if c == '@' && i+1 < len(text) {
 			next, size := utf8.DecodeRuneInString(text[i+1:])
 			if q := psQuote(next); q != 0 {
+				folds.openLiteral()
 				s.mode, s.quote = psHereHeader, q
 				add(i, i+1+size, KindString, ClassString)
 				i += 1 + size
@@ -255,6 +265,7 @@ func (psTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if q := psQuote(r); q != 0 {
+			folds.openLiteral()
 			s.mode, s.quote = psQuoted, q
 			add(i, i+n, KindString, ClassString)
 			i += n

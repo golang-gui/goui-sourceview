@@ -68,7 +68,11 @@ func (ktTokenizer) InitialState() State { return ktState{} }
 
 var ktKeywords = words("as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while by catch constructor delegate dynamic field file finally get import init param property receiver set setparam where actual abstract annotation companion const crossinline data enum expect external final infix inline inner internal lateinit noinline open operator out override private protected public reified sealed suspend tailrec vararg value context")
 
-func (ktTokenizer) Scan(in Input, state State) (Result, error) {
+func (t ktTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (ktTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(ktState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Kotlin state")
@@ -91,8 +95,12 @@ func (ktTokenizer) Scan(in Input, state State) (Result, error) {
 		w.add(s.word.start, end, kind, 0)
 		s.word, s.wordOn = scanWord{}, false
 	}
-	endLiteral := func() { s.mode, s.literal, s.escape, s.quoteRun, s.unicodeLeft = ktCode, ktLiteral{}, false, 0, 0 }
+	endLiteral := func(complete bool) {
+		folds.closeLiteral(in.Offset+i, complete)
+		s.mode, s.literal, s.escape, s.quoteRun, s.unicodeLeft = ktCode, ktLiteral{}, false, 0, 0
+	}
 	startString := func(arity int) {
+		folds.openLiteral()
 		n := 1
 		triple := text[i] == '"' && strings.HasPrefix(text[i:], `"""`)
 		if triple {
@@ -116,12 +124,14 @@ func (ktTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case ktBlockComment:
 			if strings.HasPrefix(text[i:], "/*") {
+				folds.openComment()
 				s.depth++
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				continue
 			}
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				s.depth--
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
@@ -207,7 +217,7 @@ func (ktTokenizer) Scan(in Input, state State) (Result, error) {
 					continue
 				}
 				if s.quoteRun >= 3 {
-					endLiteral()
+					endLiteral(true)
 					continue
 				}
 				s.quoteRun = 0
@@ -239,7 +249,7 @@ func (ktTokenizer) Scan(in Input, state State) (Result, error) {
 				if c == s.literal.quote {
 					add(i, i+1, KindString, ClassString)
 					i++
-					endLiteral()
+					endLiteral(true)
 					continue
 				}
 			}
@@ -288,6 +298,7 @@ func (ktTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode, s.depth = ktBlockComment, 1
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -367,7 +378,7 @@ func (ktTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = ktQuoted
 		}
 		if s.mode == ktQuoted && (!s.literal.triple || s.quoteRun >= 3) {
-			endLiteral()
+			endLiteral(s.literal.triple && s.quoteRun >= 3)
 		}
 		if s.mode == ktLineComment || s.mode == ktBacktick || s.mode == ktNumber || s.mode == ktPrefix {
 			s.mode = ktCode

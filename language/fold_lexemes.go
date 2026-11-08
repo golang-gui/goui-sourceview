@@ -2,7 +2,7 @@ package language
 
 // foldLexemes observes confirmed lexical boundaries during one folding scan.
 // It belongs to that worker, never to a registered tokenizer or saved State.
-// A stack retains outer C# literals across interpolation and nested Rust comments.
+// Stacks retain outer literals across interpolation and nested block comments.
 type foldLexemes struct {
 	row                int
 	literals, comments []int
@@ -62,6 +62,18 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 	case csTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	case rustTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case ktTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case swiftTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case dartTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case scalaTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case grTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case psTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	default:
 		return t.Tokenizer.Scan(in, state)

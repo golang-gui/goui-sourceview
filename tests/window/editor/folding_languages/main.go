@@ -96,11 +96,11 @@ func main() {
 	}
 	common := "void f() {\n if (x) {\n  hidden();\n }\n"
 	fixtures := []fixture{
-		{language.C, common + " /* note\n  } [\n */\n}\ntail", []language.FoldRange{{0, 7}, {1, 3}, {4, 6}}},
-		{language.Cpp, common + " auto s = R\"tag(\n  } [\n )tag\";\n}\ntail", []language.FoldRange{{0, 7}, {1, 3}, {4, 6}}},
-		{language.Java, common + " String s = \"\"\"\n  } [\n \"\"\";\n}\ntail", []language.FoldRange{{0, 7}, {1, 3}, {4, 6}}},
-		{language.CSharp, common + " var s = $$\"\"\"\n  } [\n \"\"\";\n}\ntail", []language.FoldRange{{0, 7}, {1, 3}, {4, 6}}},
-		{language.Rust, "fn f() {\n if x {\n  hidden();\n }\n /* outer\n  /* inner\n   } [\n  */\n */\n}\ntail", []language.FoldRange{{0, 9}, {1, 3}, {4, 8}, {5, 7}}},
+		{language.C, common + " /* note\n  } [\n */\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 7}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 6}}},
+		{language.Cpp, common + " auto s = R\"tag(\n  } [\n )tag\";\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 7}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 6}}},
+		{language.Java, common + " String s = \"\"\"\n  } [\n \"\"\";\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 7}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 6}}},
+		{language.CSharp, common + " var s = $$\"\"\"\n  } [\n \"\"\";\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 7}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 6}}},
+		{language.Rust, "fn f() {\n if x {\n  hidden();\n }\n /* outer\n  /* inner\n   } [\n  */\n */\n}\ntail", []language.FoldRange{{StartLine: 0, EndLine: 9}, {StartLine: 1, EndLine: 3}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}}},
 	}
 	var doc *source.Document
 	caret := func(row int, end bool) {

@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。本轮新增五种编程语言的折叠，尚未发布；结果见 [编程语言折叠验收](PlanFoldingLanguages.md)。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖分为 [第一批](PlanFoldingLanguages.md) 与第二批（下述六种语言）；两批均尚未发布。
 
 ## 范围与所有权
 
@@ -64,11 +64,12 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Markdown | 标题、围栏等标记结构 |
 | YAML / TOML | 缩进／块标量、表节、多行字面量及容器 |
 | Go / JavaScript / TypeScript / CSS / Python | 词法器确认的括号、跨行字面量／注释；Python 块缩进及对应 region 注释 |
-| C / C++ / Java / C# / Rust（本轮） | 词法器确认的 `{}[]()`、已闭合多行字面量／块注释和下述显式 region |
+| C / C++ / Java / C# / Rust（第一批） | 词法器确认的 `{}[]()`、已闭合多行字面量／块注释和下述显式 region |
+| Kotlin / Swift / Dart / Scala / Groovy / PowerShell（第二批） | 词法器确认的 `{}[]()`、已闭合多行字面量／块注释、插值表达式和显式 region |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。新增五种语言的
-结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。
+结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。第二批沿用这一规则。
 
 ### C、C++、Java、C#、Rust
 
@@ -94,6 +95,34 @@ Tokenizer、不可变 State 或 GUI 高亮缓存。外层 C# 字符串跨插值�
 这是词法折叠，不执行预处理器，不推导条件编译分支、C++ 模板类型、Rust 宏展开或
 编译器 AST，也不增加 `#if` / `#else` / `#endif` 分支折叠。
 
+### Kotlin、Swift、Dart、Scala、Groovy、PowerShell
+
+沿用同一单次 worker 观察器，在现有六个扫描器的真实打开／关闭／恢复点采集边界。
+进入或离开插值表达式不关闭外层字面量，表达式中的字面量独立入栈。公开 Scan 调用
+传入 nil 观察器，分词规则与 State 契约保持原样；没有第二套词法分析器或公开 API。
+
+| 语言 | 特有边界 |
+| --- | --- |
+| Kotlin | 三引号、多 dollar 插值、普通／嵌套表达式字面量、嵌套块注释 |
+| Swift | 三引号、扩展分隔符字符串／正则、匹配 hash 数量的插值、嵌套块注释 |
+| Dart | 单／双引号三引号与 raw 字符串、插值表达式、嵌套块注释 |
+| Scala | 三引号、自定义插值前缀及 raw 字符串、插值表达式、嵌套块注释 |
+| Groovy | 三引号、slashy／dollar-slashy、转义续行字符串和插值、块注释 |
+| PowerShell | 普通多行引号、单双引号 here-string、`$()` 表达式及内层字面量、`<# #>` 块注释 |
+
+Kotlin／Scala 延迟确认三引号结束的路径也记录准确的源位置，包括在行尾确认关闭。
+PowerShell here-string 关闭符须由扫描器在行首确认；错误打开头会撤销该字面量，
+缩进的关闭符仍作为正文。PowerShell 块注释在首个 `#>` 结束，不按嵌套注释处理。
+反引号标识符和字符串中的变量不会变成独立多行折叠。
+
+前五种语言支持独占行的 `// region` / `// endregion`（可带 `#`），
+PowerShell 支持不区分大小写的 `#region` / `#endregion` 注释标记。
+字符串／块注释中的伪标记不生效；未闭合或与结构范围交叉的 region 不发布。
+多行普通字面量若被扫描器按错误恢复而终止，不将错误恢复当作已闭合范围。
+
+Scala 本批只处理词法括号与字面量，不承诺 Scala 3 缩进块；Swift 条件编译、
+Groovy 运行时语义、PowerShell 执行语义也不参与折叠分析。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -112,6 +141,15 @@ Tokenizer、不可变 State 或 GUI 高亮缓存。外层 C# 字符串跨插值�
 [C# interpolated strings](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/tokens/interpolated)
 和 [Rust comments](https://doc.rust-lang.org/reference/comments.html) 核对。
 本轮实现和精确范围测试只使用已有扫描器确认的边界，不宣称完整编译器语法分析。
+
+第二批核对 [Kotlin strings](https://kotlinlang.org/docs/strings.html)、
+[Swift lexical structure](https://docs.swift.org/swift-book/ReferenceManual/LexicalStructure.html)、
+[Dart strings](https://dart.dev/language/built-in-types#strings)、
+[Groovy strings](https://groovy-lang.org/syntax.html#all-strings)、
+[PowerShell quoting](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules?view=powershell-7.5)
+与 [comments](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_comments?view=powershell-7.6)。
+[Scala 3 optional braces](https://docs.scala-lang.org/scala3/reference/other-new-features/indentation.html)
+说明其缩进语法需要专门处理，本批按已确认范围保留为后续工作，不用统一缩进回退替代。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

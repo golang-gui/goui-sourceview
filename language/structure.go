@@ -142,7 +142,7 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)
@@ -159,7 +159,7 @@ func structuralFolding(id ID, t Tokenizer) FoldingFunc {
 		var lexemes *foldLexemes
 		scanner := t
 		switch id {
-		case C, Cpp, Java, CSharp, Rust:
+		case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell:
 			lexemes = &foldLexemes{row: -1}
 			scanner = foldingTokenizer{t, lexemes}
 		}
@@ -389,6 +389,16 @@ func foldRegionMarker(id ID, l syntaxLine) int {
 	}
 	raw := strings.TrimSpace(l.text)
 	switch id {
+	case Kotlin, Swift, Dart, Scala, Groovy:
+		if !strings.HasPrefix(raw, "//") {
+			return 0
+		}
+		raw = strings.TrimSpace(raw[2:])
+	case PowerShell:
+		if !strings.HasPrefix(raw, "#") {
+			return 0
+		}
+		raw = strings.ToLower(strings.TrimSpace(raw[1:]))
 	case C, Cpp, Java, CSharp, Rust:
 		if cPreprocessorLine(id, l) && !leadingFoldDirective(l) {
 			return 0 // A continued macro is not a region directive/comment.

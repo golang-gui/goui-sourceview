@@ -65,7 +65,11 @@ func (scalaTokenizer) InitialState() State { return scalaState{} }
 
 var scalaKeywords = words("abstract case catch class def do else extends false final finally for forSome if implicit import lazy match new null object override package private protected return sealed super this throw trait try true type val var while with yield enum export given then using end extension inline opaque open transparent derives infix erased macro")
 
-func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
+func (t scalaTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (scalaTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(scalaState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Scala state")
@@ -87,8 +91,12 @@ func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
 			s.word, s.wordOn = scanWord{}, false
 		}
 	}
-	endLiteral := func() { s.mode, s.literal, s.escape, s.quotes, s.unicodeLeft = scalaCode, scalaLiteral{}, false, 0, 0 }
+	endLiteral := func(complete bool) {
+		folds.closeLiteral(in.Offset+i, complete)
+		s.mode, s.literal, s.escape, s.quotes, s.unicodeLeft = scalaCode, scalaLiteral{}, false, 0, 0
+	}
 	startLiteral := func(start int, interp, raw bool) {
+		folds.openLiteral()
 		n := 1
 		triple := text[i] == '"' && strings.HasPrefix(text[i:], `"""`)
 		if triple {
@@ -108,12 +116,14 @@ func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case scalaBlockComment:
 			if strings.HasPrefix(text[i:], "/*") {
+				folds.openComment()
 				s.depth++
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				continue
 			}
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				s.depth--
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
@@ -156,7 +166,7 @@ func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
 					continue
 				}
 				if s.quotes >= 3 {
-					endLiteral()
+					endLiteral(true)
 					continue
 				}
 				s.quotes = 0
@@ -197,7 +207,7 @@ func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
 				if c == s.literal.quote {
 					add(i, i+1, KindString, ClassString)
 					i++
-					endLiteral()
+					endLiteral(true)
 					continue
 				}
 			}
@@ -260,6 +270,7 @@ func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode, s.depth = scalaBlockComment, 1
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -337,7 +348,7 @@ func (scalaTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = scalaQuoted
 		}
 		if s.mode == scalaQuoted && (!s.literal.triple || s.quotes >= 3) {
-			endLiteral()
+			endLiteral(s.literal.triple && s.quotes >= 3)
 		}
 		if s.mode == scalaLineComment || s.mode == scalaNumber || s.mode == scalaBacktick {
 			s.mode = scalaCode

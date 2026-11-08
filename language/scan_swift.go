@@ -63,7 +63,11 @@ func (swiftTokenizer) InitialState() State { return swiftState{expect: true} }
 
 var swiftKeywords = words("associatedtype borrowing class consuming deinit enum extension fileprivate func import init inout internal let nonisolated open operator package precedencegroup private protocol public rethrows static struct subscript typealias var break case catch continue default defer do else fallthrough for guard if in repeat return throw switch where while as Any any await catch false is nil rethrows self Self some super throws true try actor async convenience distributed dynamic didSet final get indirect infix isolated lazy left mutating none nonmutating optional override postfix prefix required right set unowned weak willSet sending each macro")
 
-func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
+func (t swiftTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (swiftTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(swiftState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Swift state")
@@ -87,10 +91,12 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 		s.expect = kind == KindKeyword && strings.Contains(" return throw try await case in ", " "+s.word.text+" ")
 		s.word, s.wordOn = scanWord{}, false
 	}
-	endLiteral := func() {
+	endLiteral := func(complete bool) {
+		folds.closeLiteral(in.Offset+i, complete)
 		s.mode, s.literal, s.quotes, s.closing, s.escapeHashes, s.escaping, s.regexClass, s.expect = swiftCode, swiftLiteral{}, 0, 0, 0, false, false, false
 	}
 	startLiteral := func(regex bool) {
+		folds.openLiteral()
 		start := in.Offset + i
 		if s.mode == swiftPrefix {
 			start = s.prefixStart
@@ -118,12 +124,14 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case swiftBlockComment:
 			if strings.HasPrefix(text[i:], "/*") {
+				folds.openComment()
 				s.depth++
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				continue
 			}
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				s.depth--
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
@@ -167,7 +175,7 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 					add(i, i+1, KindString, ClassString)
 					i++
 					if s.closing-1 == s.literal.hashes {
-						endLiteral()
+						endLiteral(true)
 					}
 					continue
 				}
@@ -219,7 +227,7 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 					add(i, i+1, KindString, ClassString)
 					i++
 					if s.literal.hashes == 0 {
-						endLiteral()
+						endLiteral(true)
 					} else {
 						s.closing = 1
 					}
@@ -235,7 +243,7 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 				}
 				if s.quotes == needed {
 					if s.literal.hashes == 0 {
-						endLiteral()
+						endLiteral(true)
 					} else {
 						s.closing = 1
 					}
@@ -276,6 +284,7 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode, s.depth = swiftBlockComment, 1
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -346,7 +355,7 @@ func (swiftTokenizer) Scan(in Input, state State) (Result, error) {
 	if in.LineEnd && i == len(text) {
 		finishWord(in.Offset + i)
 		if s.mode == swiftString && !s.literal.triple || s.mode == swiftRegex && s.literal.hashes == 0 {
-			endLiteral()
+			endLiteral(false)
 		}
 		if s.mode == swiftLineComment || s.mode == swiftNumber || s.mode == swiftBacktick || s.mode == swiftPrefix {
 			s.mode = swiftCode

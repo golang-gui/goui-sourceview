@@ -61,7 +61,11 @@ func (dartTokenizer) InitialState() State { return dartState{} }
 
 var dartKeywords = words("abstract as assert async await augment base break case catch class const continue covariant default deferred do dynamic else enum export extends extension external factory false final finally for Function get hide if implements import in interface is late library mixin native new null of on operator part required rethrow return sealed set show static super switch sync this throw true try type typedef var void when while with yield")
 
-func (dartTokenizer) Scan(in Input, state State) (Result, error) {
+func (t dartTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (dartTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(dartState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Dart state")
@@ -84,10 +88,12 @@ func (dartTokenizer) Scan(in Input, state State) (Result, error) {
 		w.add(s.word.start, end, kind, 0)
 		s.word, s.wordOn = scanWord{}, false
 	}
-	endLiteral := func() {
+	endLiteral := func(complete bool) {
+		folds.closeLiteral(in.Offset+i, complete)
 		s.mode, s.literal, s.escape, s.unicodeLeft, s.unicodeBraces = dartCode, dartLiteral{}, false, 0, false
 	}
 	startLiteral := func(raw bool, start int) {
+		folds.openLiteral()
 		quote := text[i]
 		triple := strings.HasPrefix(text[i:], strings.Repeat(string(quote), 3))
 		n := 1
@@ -108,12 +114,14 @@ func (dartTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case dartBlockComment:
 			if strings.HasPrefix(text[i:], "/*") {
+				folds.openComment()
 				s.depth++
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				continue
 			}
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				s.depth--
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
@@ -200,7 +208,7 @@ func (dartTokenizer) Scan(in Input, state State) (Result, error) {
 				if strings.HasPrefix(text[i:], strings.Repeat(string(c), count)) {
 					add(i, i+count, KindString, ClassString)
 					i += count
-					endLiteral()
+					endLiteral(true)
 					continue
 				}
 			}
@@ -242,6 +250,7 @@ func (dartTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode, s.depth = dartBlockComment, 1
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
@@ -298,7 +307,7 @@ func (dartTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = dartString
 		}
 		if s.mode == dartString && !s.literal.triple {
-			endLiteral()
+			endLiteral(false)
 		}
 		if s.mode == dartLineComment || s.mode == dartNumber {
 			s.mode = dartCode

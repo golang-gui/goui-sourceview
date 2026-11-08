@@ -60,7 +60,11 @@ func (grTokenizer) InitialState() State { return grState{expect: true} }
 var grKeywords = words("abstract as assert boolean break byte case catch char class const continue def default do double else enum extends final finally float for goto if implements import in instanceof int interface long native new package private protected public record return sealed permits short static strictfp super switch synchronized this threadsafe throw throws trait transient try var void volatile while yield true false null")
 
 func grNameStart(r rune) bool { return IdentifierRune(r) && !(r >= '0' && r <= '9') }
-func (grTokenizer) Scan(in Input, state State) (Result, error) {
+func (t grTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (grTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(grState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Groovy state")
@@ -84,7 +88,8 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 		s.expect = kind == KindKeyword && !strings.Contains(" true false null this super ", " "+s.word.text+" ")
 		s.word, s.wordOn, s.member = scanWord{}, false, false
 	}
-	endString := func() {
+	endString := func(complete bool) {
+		folds.closeLiteral(in.Offset+i, complete)
 		s.mode, s.literal, s.expect, s.member = grCode, grLiteral{}, false, false
 		s.escape, s.escapeLeft, s.octal, s.unicodeLead = false, 0, false, false
 	}
@@ -98,6 +103,7 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		case grBlockComment:
 			if strings.HasPrefix(text[i:], "*/") {
+				folds.closeComment(in.Offset + i + 2)
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
 				s.mode = grCode
@@ -163,7 +169,7 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 				if strings.HasPrefix(text[i:], "/$") {
 					add(i, i+2, KindString, ClassString)
 					i += 2
-					endString()
+					endString(true)
 					continue
 				}
 			} else if s.literal.slash {
@@ -175,7 +181,7 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 				if c == '/' {
 					add(i, i+1, KindString, ClassString)
 					i++
-					endString()
+					endString(true)
 					continue
 				}
 			} else {
@@ -204,7 +210,7 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 					}
 					add(i, i+size, KindString, ClassString)
 					i += size
-					endString()
+					endString(true)
 					continue
 				}
 			}
@@ -257,18 +263,21 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if strings.HasPrefix(text[i:], "/*") {
+			folds.openComment()
 			s.mode = grBlockComment
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
 		if strings.HasPrefix(text[i:], "$/") {
+			folds.openLiteral()
 			s.mode, s.literal = grString, grLiteral{dollar: true, interpolate: true}
 			add(i, i+2, KindString, ClassString)
 			i += 2
 			continue
 		}
 		if c == '"' || c == '\'' || c == '/' && s.expect {
+			folds.openLiteral()
 			s.literal = grLiteral{quote: c, slash: c == '/', interpolate: c != '\''}
 			s.literal.triple = c != '/' && strings.HasPrefix(text[i:], strings.Repeat(string(c), 3))
 			size := 1
@@ -336,7 +345,7 @@ func (grTokenizer) Scan(in Input, state State) (Result, error) {
 			s.mode = grString
 		}
 		if s.mode == grString && !s.literal.triple && !s.literal.slash && !s.literal.dollar && !s.escape {
-			endString()
+			endString(false)
 		}
 		if s.mode == grLineComment || s.mode == grNumber {
 			s.mode = grCode
