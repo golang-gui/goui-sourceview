@@ -221,8 +221,8 @@ func (b codeTokenizer) scan(in Input, state State, boundary func(codeState, int)
 	return b.scanFolding(in, state, boundary, nil)
 }
 
-// scanFolding observes JS/TS literals for the enclosing JSX profile. Other
-// code profiles retain their normal scan path with no lexical observations.
+// scanFolding observes literals for JSX and SQL folding. Ordinary tokenization
+// retains its normal path with no lexical observations.
 func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeState, int) bool, folds *foldLexemes) (Result, error) {
 	s, ok := state.(codeState)
 	if !ok || s.id != b.id {
@@ -354,6 +354,7 @@ func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeStat
 			continue
 		case codeBlockComment:
 			if b.id == SQL && strings.HasPrefix(text[i:], "/*") {
+				folds.openComment()
 				s.blockDepth++
 				add(i, i+2, KindComment, ClassComment)
 				i += 2
@@ -374,6 +375,7 @@ func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeStat
 			continue
 		case codeDollarOpen:
 			if c == '$' {
+				folds.openLiteral()
 				capture.WriteByte(c)
 				flushCapture()
 				s.dollar = captureText(s.dollarCapture)
@@ -407,6 +409,7 @@ func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeStat
 					}
 				}
 				if s.dollarMatch == len(s.dollar) {
+					folds.closeLiteral(in.Offset+j+1, true)
 					s.mode = codeNormal
 					s.dollar = ""
 					s.dollarMatch = 0
@@ -759,6 +762,11 @@ func (b codeTokenizer) scanFolding(in Input, state State, boundary func(codeStat
 	flushCapture()
 	if in.LineEnd && i == len(text) {
 		finishWord(in.Offset + i)
+		// A dollar-quote delimiter is contiguous source text, never a match
+		// assembled from the suffix and prefix of different physical lines.
+		if s.mode == codeDollarBody {
+			s.dollarMatch = 0
+		}
 		if s.mode == codeStyleVariable {
 			s.mode, s.styleVariableBack = s.styleVariableBack, codeNormal
 		}

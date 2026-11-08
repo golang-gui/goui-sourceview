@@ -103,7 +103,11 @@ func (rbTokenizer) InitialState() State { return rbState{canRegexp: true, statem
 
 var rbKeywords = words("BEGIN END alias and begin break case class def defined? do else elsif end ensure false for if in module next nil not or redo rescue retry return self super then true undef unless until when while yield __ENCODING__ __FILE__ __LINE__")
 
-func (rbTokenizer) Scan(in Input, state State) (Result, error) {
+func (t rbTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (rbTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(rbState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Ruby state")
@@ -142,6 +146,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 	finishHere := func() {
 		flush()
 		h := &scanHere{label: captureText(s.capture), indent: s.hereIndent, literal: s.hereQuote == '\''}
+		folds.openHere(h)
 		s.queue = enqueueHere(s.queue, h)
 		s.capture, s.hereQuote, s.hereIndent, s.hereStart = nil, 0, false, 0
 		s.mode, s.canRegexp = rbCode, false
@@ -255,6 +260,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 					if r == lit.close {
 						lit.depth--
 						if lit.depth == 0 {
+							folds.closeLiteral(in.Offset+i+n, true)
 							regexp := lit.regexp
 							s.mode, s.literal, s.canRegexp = rbCode, rbLiteral{}, false
 							if regexp {
@@ -294,6 +300,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if in.Offset+i == 0 && strings.HasPrefix(text[i:], "=begin") && (i+6 == len(text) || space(text[i+6])) {
+			folds.openComment()
 			s.mode = rbBlockComment
 			continue
 		}
@@ -320,6 +327,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if c == '\'' || c == '"' || c == '`' {
+			folds.openLiteral()
 			s.mode, s.literal = rbQuoted, rbLiteral{open: r, close: r, depth: 1, interpolate: c != '\''}
 			s.gap = false
 			add(i, i+n, KindString, ClassString)
@@ -348,6 +356,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 						close = '>'
 					}
 					s.mode, s.literal = rbQuoted, rbLiteral{open: open, close: close, depth: 1, interpolate: strings.ContainsRune("QWIrx", rune(kind)), regexp: kind == 'r'}
+					folds.openLiteral()
 					add(i, z+size, KindString, ClassString)
 					i = z + size
 					s.gap = false
@@ -356,6 +365,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if c == '/' && canLiteral && !strings.HasPrefix(text[i:], "/=") && (s.canRegexp || i+1 < len(text) && !space(text[i+1])) {
+			folds.openLiteral()
 			s.mode, s.literal = rbQuoted, rbLiteral{open: '/', close: '/', depth: 1, interpolate: true, regexp: true}
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -477,11 +487,15 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 		}
 		if s.active != nil && s.matching && s.matched == len(s.active.label) {
+			folds.closeHere(s.active, in.Offset+i)
 			w.add(s.matchStart, in.Offset+i, KindString, ClassString)
 			f := s.resume
 			s.mode, s.literal, s.expr, s.active, s.queue, s.next, s.canRegexp, s.command, s.resume = f.mode, f.literal, f.expr, f.active, f.queue, f.next, f.canRegexp, f.command, f.parent
 		}
 		if s.mode == rbLineComment || s.mode == rbRegexpFlags || s.mode == rbNumber || s.mode == rbBlockComment && s.blockEnd {
+			if s.mode == rbBlockComment {
+				folds.closeComment(in.Offset + i)
+			}
 			s.mode = rbCode
 		}
 		if s.queue != nil && s.next < s.queue.n {
@@ -491,6 +505,7 @@ func (rbTokenizer) Scan(in Input, state State) (Result, error) {
 				s.queue, s.next = nil, 0
 			}
 			s.resume = &rbResume{parent: s.resume, mode: s.mode, literal: s.literal, expr: s.expr, active: s.active, queue: s.queue, next: s.next, canRegexp: s.canRegexp, command: s.command}
+			folds.activateHere(h)
 			s.mode, s.literal, s.expr, s.active, s.queue, s.next = rbHereBody, rbLiteral{}, nil, h, nil, 0
 		}
 		s.matching, s.beginning, s.matched, s.matchStart = s.active != nil, true, 0, 0

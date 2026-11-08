@@ -82,6 +82,7 @@ func syntaxLines(ctx context.Context, tokenizer Tokenizer, text string, visit fu
 type structuralFolder struct {
 	out                 []FoldRange
 	stack               []foldOpen
+	floor               int
 	literal, comment    int
 	section, sectionEnd int
 	indent              []indentFold
@@ -131,18 +132,22 @@ func (f *structuralFolder) delimiters(l syntaxLine, skip bool, id ID) {
 			case '{', '[', '(':
 				f.stack = append(f.stack, foldOpen{l.row, c})
 			case '}', ']', ')':
-				if len(f.stack) == 0 {
+				if len(f.stack) <= f.floor {
 					continue
 				}
 				o := f.stack[len(f.stack)-1]
 				if o.char == '{' && c != '}' || o.char == '[' && c != ']' || o.char == '(' && c != ')' {
-					f.stack = nil
+					if f.floor == 0 {
+						f.stack = nil
+					} else {
+						f.stack = f.stack[:f.floor]
+					}
 					continue
 				}
 				f.stack = f.stack[:len(f.stack)-1]
 				end := foldEndLine(l.text, i+1, l.row, true)
 				switch id {
-				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP:
+				case C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell, JSX, TSX, PHP, Lua, Ruby, Shell, CMake, SQL:
 					end = codeFoldEndLine(l.text, i+1, l.row)
 				}
 				f.add(o.line, end)

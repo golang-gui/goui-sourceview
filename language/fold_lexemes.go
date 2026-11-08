@@ -8,9 +8,12 @@ type foldLexemes struct {
 	literals, comments []int
 	closed             []foldLexeme
 	mixed              *mixedFoldObserver
+	heres              map[any]foldHere
+	keywords           *keywordFoldObserver
 }
 
 type foldLexeme struct{ start, end int }
+type foldHere struct{ row, literals, comments int }
 
 func (f *foldLexemes) openLiteral() {
 	if f != nil {
@@ -33,6 +36,47 @@ func (f *foldLexemes) openComment() {
 func (f *foldLexemes) closeComment(end int) {
 	if f != nil {
 		f.close(&f.comments, end, true)
+	}
+}
+
+func (f *foldLexemes) openHere(key any) {
+	if f != nil {
+		if f.heres == nil {
+			f.heres = make(map[any]foldHere)
+		}
+		f.heres[key] = foldHere{row: f.row, literals: -1, comments: -1}
+	}
+}
+func (f *foldLexemes) activateHere(key any) {
+	if f != nil {
+		if h, ok := f.heres[key]; ok {
+			h.literals, h.comments = len(f.literals), len(f.comments)
+			f.heres[key] = h
+			if f.keywords != nil {
+				f.keywords.heres = append(f.keywords.heres, keywordFoldHere{key: key, enter: true})
+			}
+		}
+	}
+}
+func (f *foldLexemes) closeHere(key any, end int) {
+	if f != nil {
+		if h, ok := f.heres[key]; ok {
+			delete(f.heres, key)
+			if h.literals >= 0 && f.keywords != nil {
+				f.keywords.heres = append(f.keywords.heres, keywordFoldHere{key: key})
+			}
+			// Ruby restores its suspended state at a terminator even when an
+			// interpolation was incomplete. Drop its abandoned observations too.
+			if h.literals >= 0 && len(f.literals) > h.literals {
+				f.literals = f.literals[:h.literals]
+			}
+			if h.comments >= 0 && len(f.comments) > h.comments {
+				f.comments = f.comments[:h.comments]
+			}
+			if f.row > h.row {
+				f.closed = append(f.closed, foldLexeme{h.row, end})
+			}
+		}
 	}
 }
 
@@ -79,6 +123,16 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 	case jsxTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	case phpTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case luaTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case rbTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case configTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case codeTokenizer:
+		return scanner.scanFolding(in, state, nil, t.lexemes)
+	case builtinTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	default:
 		return t.Tokenizer.Scan(in, state)

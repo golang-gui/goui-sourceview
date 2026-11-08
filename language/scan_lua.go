@@ -38,7 +38,11 @@ func (luaTokenizer) InitialState() State { return luaState{} }
 
 var luaKeywords = words("and break do else elseif end false for function goto if in local nil not or repeat return then true until while")
 
-func (luaTokenizer) Scan(in Input, state State) (Result, error) {
+func (t luaTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+
+func (luaTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(luaState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Lua state")
@@ -85,6 +89,7 @@ func (luaTokenizer) Scan(in Input, state State) (Result, error) {
 			} else if c == '\\' {
 				kind, s.escape = KindEscape, true
 			} else if c == s.quote {
+				folds.closeLiteral(in.Offset+i+n, true)
 				s.mode, s.quote = luaNormal, 0
 			}
 			add(i, i+n, kind, ClassString)
@@ -102,6 +107,11 @@ func (luaTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if c == '[' {
+				if s.comment {
+					folds.openComment()
+				} else {
+					folds.openLiteral()
+				}
 				if !s.comment {
 					kind, class = KindString, ClassString
 				}
@@ -124,6 +134,11 @@ func (luaTokenizer) Scan(in Input, state State) (Result, error) {
 			}
 			add(i, i+n, kind, class)
 			if c == ']' && s.matched == s.equals+1 {
+				if s.comment {
+					folds.closeComment(in.Offset + i + n)
+				} else {
+					folds.closeLiteral(in.Offset+i+n, true)
+				}
 				s.mode, s.equals, s.matched, s.comment = luaNormal, 0, 0, false
 			} else if c == ']' {
 				s.matched = 1
@@ -174,6 +189,7 @@ func (luaTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '"' || c == '\'' {
+			folds.openLiteral()
 			s.mode, s.quote = luaQuoted, c
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -210,6 +226,9 @@ func (luaTokenizer) Scan(in Input, state State) (Result, error) {
 	if in.LineEnd && i == len(text) {
 		finishWord(in.Offset + i)
 		if s.mode == luaLineComment || s.mode == luaLongOpen || s.mode == luaNumber || s.mode == luaQuoted && !s.escape && !s.skipSpace {
+			if s.mode == luaQuoted {
+				folds.closeLiteral(in.Offset+i, false)
+			}
 			s.mode, s.quote, s.comment, s.equals, s.start = luaNormal, 0, false, 0, 0
 		}
 		s.escape, s.matched, s.last = false, 0, 0

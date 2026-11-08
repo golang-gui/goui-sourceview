@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档；三批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，第四批为 Lua/Ruby/Shell/CMake/SQL；四批均尚未发布。
 
 ## 范围与所有权
 
@@ -68,10 +68,15 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Kotlin / Swift / Dart / Scala / Groovy / PowerShell（第二批） | 词法器确认的 `{}[]()`、已闭合多行字面量／块注释、插值表达式和显式 region |
 | JSX / TSX（第三批） | 配对标签、Fragment、代码／表达式括号、模板字符串、注释与代码 region |
 | PHP（第三批） | PHP 括号、跨行字符串／heredoc／nowdoc／注释、跨片段模板控制结构，以及静态 HTML 标签／注释 |
+| Lua（第四批） | function、条件／循环／do 块、repeat/until 条件、括号、闭合长字符串／长注释 |
+| Ruby（第四批） | end 块、括号、多行引号／percent 字面量／heredoc／块注释；区分后置修饰和 endless 方法 |
+| Shell（第四批） | if/fi、循环/done、case/esac、代码括号、命令替换、闭合多行引号／heredoc |
+| CMake（第四批） | 配对控制命令、跨行参数括号、闭合引号／bracket 字面量与注释 |
+| SQL（第四批） | CASE/END、括号、闭合多行引号／dollar 字符串／嵌套块注释；不推断方言 BEGIN 块 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
-不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。新增五种语言的
-结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。第二批沿用这一规则。
+不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
+结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。后续批次沿用这一规则。
 
 ### C、C++、Java、C#、Rust
 
@@ -159,6 +164,43 @@ PHP 替代语法识别 `if/while/for/foreach/switch/declare (...) :` 及各自�
 取消检查覆盖分片扫描、PHP 投影屏蔽、控制词遍历与候选归并。投影和名称缓存随该次
 worker 释放，不附着到共享 Tokenizer 或 State。
 
+### Lua、Ruby、Shell、CMake、SQL
+
+五种语言注册私有 keywordFolding，继续使用原有 Document 分析任务和 FoldRange。
+复用现有词法器确认的 token、实际字面量／注释边界；只补齐被省略的普通代码片段，
+不再次扫描字符串和注释中的伪关键字。观察器和控制栈由单次 worker 所有，
+不修改不可变 State 或共享高亮缓存，不增加公开 API、依赖或 GOUI 扩展。
+
+- Lua：function/end、if/then/end、for/while/do/end、独立 do/end 和 repeat/until。
+  循环头的 do 不另开块；repeat 必须包含完整的 until 条件才结束，跨行括号、
+  续行运算符和条件里的 function 块继续等待。长字符串／长注释匹配实际等号数；
+  普通引号仅接受词法器确认的跨行延续，错误行末恢复不产生已闭合字面量。
+- Ruby：class/module/def/begin/case、前置 if/unless/while/until、for 与 do 块。
+  表达式位置区分前置控制和后置修饰，成员名称不当作控制词；循环的可选 do 不重复开块。
+  方法头区分 endless 定义、普通默认参数、setter 和关键字方法名，不让无 end 的方法
+  吞掉外层结构。引号、percent 字面量及插值代码分别观察；__END__ 数据不分析。
+- Ruby/Shell heredoc：以实际扫描器创建的不可变标签身份关联声明与结束行，
+  支持长标签、同一行多个声明、引用和各自的缩进规则，不能按 String Context 的切换猜测。
+  Ruby 激活 heredoc 时记录挂起结构的栈深和元数据，用受保护的栈前缀隔离插值临时状态；
+  终止符恢复挂起状态时一并丢弃未完成的内部字符串／控制块／括号观察，保留外层结构。
+  不为每次激活复制整个栈，也不将检查点写入共享 State。
+- Shell：关键字必须出现在命令位置；echo 等普通参数中的 if/fi/done 不配对。
+  case 模式与扩展模式括号独立处理，支持 ;;、;&、;;& 分支结束。
+  `$()` 和反引号命令替换建立独立控制栈，内部代码可以折叠；引号正文、参数展开、
+  算术展开和 heredoc 正文不进入命令结构匹配。未确认 then/do 的块不发布。
+- CMake：仅在词法器确认的顶层命令及其参数括号闭合后处理配对控制，命令名不区分大小写。
+  覆盖 if、while、foreach、function、macro、block 及对应 end 命令；参数、变量、
+  引号和 bracket 数据中的同名文本不作为命令。普通跨行命令参数仍可按括号折叠。
+- SQL：只增加 CASE/END 表达式结构，不将事务 BEGIN/COMMIT 或存储过程的方言控制块
+  混为通用 BEGIN/END。END IF/LOOP 等限定结束词不会关闭 CASE，END CASE 中的 CASE
+  不再开块；引用标识符不作为关键字。观察实际多行引号、dollar 标签和嵌套块注释。
+  dollar 结束标签必须是连续源文本：物理 LF 清除部分匹配，扫描分片之间仍保留进度。
+  这一点同步修正公开 SQL 分词，避免跨 LF 拼成伪结束标签后暴露字符串内部关键字。
+
+继续使用同起点外层优先和交叉范围过滤；未闭合结构不发布，关闭行后的其他语句保持可见。
+取消检查覆盖分片、长普通代码片段、控制遍历和候选归并；并发调用的观察与恢复状态相互隔离。
+这些规则是词法折叠，不承诺完整 AST、执行语义、Shell 全部方言或 SQL 存储过程语法。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -195,6 +237,20 @@ worker 释放，不附着到共享 Tokenizer 或 State。
 [语句分隔](https://www.php.net/manual/en/language.basic-syntax.instruction-separation.php)。
 沿用上文 Monaco provider 与 Scintilla 视图状态分离的取舍；新增专用语言边界，
 不引入其解析器依赖，也不以单一 HTML 扫描替代混合语言识别。
+
+第四批核对 [Lua 5.4 控制结构](https://www.lua.org/manual/5.4/manual.html#3.3.4)、
+[Ruby 控制表达式](https://docs.ruby-lang.org/en/master/syntax/control_expressions_rdoc.html)
+与 [方法定义](https://docs.ruby-lang.org/en/master/syntax/methods_rdoc.html)、
+[Bash 条件结构](https://www.gnu.org/software/bash/manual/html_node/Conditional-Constructs.html)
+与 [Bash 手册](https://www.gnu.org/software/bash/manual/bash.html)、
+[CMake 语言](https://cmake.org/cmake/help/latest/manual/cmake-language.7.html)。
+[PostgreSQL CASE](https://www.postgresql.org/docs/current/functions-conditional.html)、
+[BEGIN](https://www.postgresql.org/docs/current/sql-begin.html) 和
+[词法结构](https://www.postgresql.org/docs/current/sql-syntax-lexical.html) 用于确认表达式、
+事务与连续 dollar 标签的差异；不据此声称支持所有 SQL 方言。2026-11-08 查询的动态页面
+中 Ruby master 为 4.1 文档、PostgreSQL current 为 18；这里只采用上述已明确的语法边界，
+不将文档版本或其他编辑器的解析能力变成本模块的完整语法承诺。
+沿用 provider 与视图状态分离的设计，增加逐语言的词法控制策略，不引入解析器或运行时依赖。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

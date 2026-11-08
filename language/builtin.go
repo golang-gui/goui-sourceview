@@ -576,6 +576,8 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		switch info.ID {
+		case Lua, Ruby, Shell, CMake, SQL:
+			d.Folding = keywordFolding(info.ID, d.Tokenizer)
 		case JSX, TSX, PHP:
 			d.Folding = mixedFolding(info.ID, d.Tokenizer)
 		case JSONC, JSON5, YAML, TOML, Go, JavaScript, TypeScript, CSS, Python, C, Cpp, Java, CSharp, Rust, Kotlin, Swift, Dart, Scala, Groovy, PowerShell:
@@ -787,6 +789,10 @@ type builtinTokenizer struct{ id ID }
 func (b builtinTokenizer) InitialState() State { return initialBuiltin() }
 
 func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b builtinTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(builtinState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign state for %s", b.id)
@@ -799,7 +805,14 @@ func (b builtinTokenizer) Scan(in Input, state State) (Result, error) {
 	for limit < len(in.Text) && !utf8.RuneStart(in.Text[limit]) {
 		limit++
 	}
-	raw, next, n := scanBuiltin(b.id, s, in.Text, limit, in.LineEnd, in.Offset)
+	var raw []lexicalToken
+	var next builtinState
+	var n int
+	if b.id == Shell && folds != nil {
+		raw, next, n = scanShellFolding(s, in.Text, limit, in.LineEnd, in.Offset, folds)
+	} else {
+		raw, next, n = scanBuiltin(b.id, s, in.Text, limit, in.LineEnd, in.Offset)
+	}
 	if (b.id == XML || b.id == HTML) && next.mode == data && n == in.Limit && n > 0 && in.Text[n-1] == '<' && (n == len(in.Text) || in.Text[n] == '>') && !(in.LineEnd && n == len(in.Text)) {
 		next.pendingTag = true
 	}

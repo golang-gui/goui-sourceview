@@ -80,6 +80,10 @@ var dockerKeywords = words("ADD ARG CMD COPY ENTRYPOINT ENV EXPOSE FROM HEALTHCH
 var httpMethods = words("GET HEAD POST PUT DELETE CONNECT OPTIONS TRACE PATCH PROPFIND PROPPATCH MKCOL COPY MOVE LOCK UNLOCK")
 
 func (b configTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b configTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(configState)
 	if !ok || s.id != b.id {
 		return Result{}, fmt.Errorf("language: foreign state for %s", b.id)
@@ -215,6 +219,11 @@ func (b configTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if c == '[' {
+				if s.bracketComment {
+					folds.openComment()
+				} else {
+					folds.openLiteral()
+				}
 				s.mode = configBracket
 				s.bracketMatch = 0
 				add(i, i+1, kind, class)
@@ -240,6 +249,11 @@ func (b configTokenizer) Scan(in Input, state State) (Result, error) {
 			} else if s.bracketMatch <= s.bracketEquals && c == '=' {
 				s.bracketMatch++
 			} else if s.bracketMatch == s.bracketEquals+1 && c == ']' {
+				if s.bracketComment {
+					folds.closeComment(in.Offset + i + n)
+				} else {
+					folds.closeLiteral(in.Offset+i+n, true)
+				}
 				s.mode = configCode
 				s.bracketMatch = 0
 			} else {
@@ -278,6 +292,7 @@ func (b configTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if s.mode == configQuote && c == s.quote {
+			folds.closeLiteral(in.Offset+i+1, true)
 			add(i, i+1, KindString, ClassString)
 			i++
 			s.mode = configCode
@@ -408,6 +423,7 @@ func (b configTokenizer) Scan(in Input, state State) (Result, error) {
 			continue
 		}
 		if c == '\'' || c == '"' {
+			folds.openLiteral()
 			s.mode, s.quote = configQuote, c
 			add(i, i+1, KindString, ClassString)
 			i++
