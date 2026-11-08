@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml；八批均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml；第九批为 F#/Haskell；九批均尚未发布。
 
 ## 范围与所有权
 
@@ -91,6 +91,8 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Erlang（第八批） | begin/case/if/receive/try/maybe/end、实际匿名 fun、代码／binary 括号和闭合多行字面量 |
 | Julia（第八批） | 显式 end 块、代码括号、闭合多行字符串／字符串宏／嵌套注释，区分推导式和索引 begin/end |
 | OCaml（第八批） | begin/struct/sig/object/end、for/while/do/done、代码括号、闭合引号／quoted string／嵌套注释 |
+| F#（第九批） | 声明／控制结构与同列分支的专用缩进规则、显式 begin/class/sig/end、循环 done、括号和闭合多行字面量／嵌套注释 |
+| Haskell（第九批） | where/let/do/of（及 mdo）引入的布局列表、in／分组结束／逗号终止、显式括号、闭合 string gap 和嵌套注释 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
@@ -351,6 +353,45 @@ OCaml quoted string 的关闭标记不能跨 LF 拼接。公开接口和状态�
 也不为 F#、Haskell 或 Scala 3 加入通用缩进回退。所有已发布候选仍须实际闭合，
 关闭行尾保留、同起点外层优先、交叉过滤与视图隔离沿用既有机制。
 
+### F#、Haskell
+
+两种语言通过 structuralFolding 复用代码括号、扫描器真实字面量／注释边界和候选归并。
+布局规则单独维护在 folding_layout.go，不能套用 Python/Starlark 或统一缩进回退。
+只在已确认的语言头及正文处建立候选；同层新声明、布局退出或 EOF 结束已具备正文的区域，
+不将普通缩进、未完成头或仅有注释的正文当作块。空行、纯注释和字符串续行不作为退缩进。
+
+- F#：let／use／and、type／module／member 等声明须确认等号；if 须确认 then，
+  for／while 须确认 do，match 须确认 with，fun／模式分支须确认箭头。
+  同列新声明结束前一声明；同列的模式分支保留 match／function／type 的外层范围，
+  else／elif 保留 if，with／finally 保留 try。分支正文可以独立折叠。
+  显式 begin／class／sig 到 end、循环到 done、let/in、;; 和代码括号分别限定边界。
+  #light off 关闭缩进推断，保留显式结构；#light on 重新启用后续布局规则。
+  指令行不当作正文退缩进，不求值条件编译。源码缩进 Tab 不推断布局，
+  字符串和注释内的 Tab 仍作为其内容处理。
+- F# 字符串包括普通引号、verbatim、三引号及插值。真实插值使用独立控制／分组栈，
+  退出时恢复外层，不让内层 end 或同列正文关闭外部声明。
+  多 dollar 的开／关花括号按实际 arity 观察，结束符不能跨物理 LF 拼接。
+  注释内普通／verbatim／三引号字符串保护其中的伪注释关闭符；双反引号名称作为单个
+  标识符分类，其中的关键字和括号不进入布局／分隔符栈。
+- Haskell：where／let／do／of（以及已识别的 mdo）后，首个非注释 token 的实际列
+  确定布局列表。列相同是同一列表的下一条目，列更小才退出；首条目的列不大于
+  当前布局基线时按空列表处理。module 的 where 允许顶层声明从首列开始。
+  Tab 按下一个 8 列边界计算，UTF-8 字节偏移和语法列数分别保留。
+- 显式花括号不再建立同一列表的隐式候选，内部多行正文的缩进不关闭外层隐式列表；
+  分组关闭、表达式结束的逗号和匹配的 in 收束对应隐式区域。
+  显式 let 的引用身份保护外层 let，内层 in 不误结束外层绑定。
+  代码括号和显式布局仍按真实分隔符折叠。
+- Haskell string gap 支持两个反斜杠间的空白、LF 和空行，保留跨片段状态；
+  缺少 gap 的普通字符串错误行末恢复时撤销未闭合字面量观察。
+  普通／字符字面量、字符串及嵌套注释中的伪布局头不参与匹配。
+
+本批修正原有扫描器的 F# 普通／verbatim 字符串错误行末恢复、注释内特殊字符串、
+多 dollar 结束符跨 LF 拼接、双反引号名称分类，以及 Haskell string gap 跨行状态；公开接口和不可变状态
+契约保持不变，fnState 仅增加私有 gap 标记。布局观察状态始终只由当前 worker 所有。
+这是常见词法布局折叠，不提供完整编译器 AST／F# 语法过滤器、Haskell parse-error(t)
+推导、任意 GHC 扩展、条件编译分支求值或 Haskell 普通顶层函数 clause 的整体范围。
+Scala 3 缩进、OCaml 普通 let/match、Erlang 顶层 clause 仍需单独规则。
+
 逻辑测试覆盖嵌套、交叉/非法结果、随机行映射、锚点编辑、取消/过期、对象隔离。
 窗口覆盖关闭行号、折行、横向滚动、选择删除、搜索、撤销、共享文档、IME、卸载与主题。
 
@@ -443,6 +484,18 @@ jq 手册标记 1.8，其余为动态文档；这里只采用上述已明确的�
 2026-11-08 查阅的 Elixir 页面标记 1.20.5、Erlang 为 OTP 29.1.2，OCaml 为 5.4，
 Julia stable 为动态文档；采用上述具体块／字面量边界，不将文档版本等同编译器运行验收。
 继续沿用前述 Monaco provider 与 Scintilla 视图状态分离，不引入其解析器或原生依赖。
+
+第九批参照 [F# lexical filtering](https://fsharp.github.io/fslang-spec/lexical-filtering/)、
+[lexical analysis](https://fsharp.github.io/fslang-spec/lexical-analysis/)、
+[verbose syntax](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/verbose-syntax)、
+[Haskell 2010 lexical structure](https://www.haskell.org/onlinereport/haskell2010/haskellch2.html)
+与 [layout syntax reference](https://www.haskell.org/onlinereport/haskell2010/haskellch10.html)。
+2026-11-08 查阅：Haskell 为 2010 报告，F# 为动态规范页；仅采用上述明确边界，
+不将规范全部规则或编译器版本视为已完成适配。
+核对 [Lexilla F#](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexFSharp.cxx)
+和 [Haskell](https://github.com/ScintillaOrg/lexilla/blob/master/lexers/LexHaskell.cxx) 的词法／折叠
+分离方式；它们自身的折叠策略不替代语言规范，本模块复用现有扫描器并分别处理布局，
+不复制其解析器或引入原生依赖。provider 与视图状态分离继续沿用前述 Monaco／Scintilla 取舍。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

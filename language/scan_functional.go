@@ -19,6 +19,7 @@ const (
 	fnRawBody
 	fnPrefix
 	fnDash
+	fnQuotedName
 )
 
 // These dialects share bounded words and persistent literal/comment frames,
@@ -47,6 +48,7 @@ type fnState struct {
 	discard                                    *fnDiscard
 	commentDepth, braces, prefix               int
 	escape, wordOn, wordPrefix, value, atStart bool
+	gap                                        bool
 	word                                       scanWord
 	rawCapture                                 *scanText
 	rawLabel                                   string
@@ -263,13 +265,17 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 		}
 		s.word, s.wordOn, s.wordPrefix, s.value, s.atStart = scanWord{}, false, false, true, false
 	}
-	endString := func() {
-		if (fnData(s.id) || closedFunctional(s.id)) && s.discard == nil && !s.literal.comment {
-			folds.closeFunctionalLiteral(in.Offset + i)
+	endString := func(complete bool) {
+		if (fnData(s.id) || closedFunctional(s.id) || layoutFunctional(s.id)) && s.discard == nil && !s.literal.comment {
+			if complete {
+				folds.closeFunctionalLiteral(in.Offset + i)
+			} else {
+				folds.closeLiteral(in.Offset+i, false)
+			}
 		}
 		wasComment := s.literal.comment
 		s.literal = fnLiteral{}
-		s.escape, s.braces = false, 0
+		s.escape, s.gap, s.braces = false, false, 0
 		s.mode = fnCode
 		s.value = true
 		if wasComment {
@@ -295,6 +301,19 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			s.expr = &v
 		}
 		switch s.mode {
+		case fnQuotedName:
+			if strings.HasPrefix(text[i:], "``") {
+				add(i, i+2, KindProperty, 0)
+				i += 2
+				s.mode = fnCode
+				s.value = true
+			} else if c == '\t' || c == '\r' {
+				s.mode = fnCode
+			} else {
+				add(i, i+n, KindProperty, 0)
+				i += n
+			}
+			continue
 		case fnDash:
 			if c == '-' {
 				add(i, i+1, KindDelimiter, 0)
@@ -334,9 +353,20 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			}
 			if (s.id == OCaml || s.id == FSharp) && c == '"' {
 				s.mode = fnString
-				s.literal = fnLiteral{quote: c, comment: true}
-				add(i, i+1, KindComment, ClassComment)
-				i++
+				triple := s.id == FSharp && strings.HasPrefix(text[i:], "\"\"\"")
+				s.literal = fnLiteral{quote: c, comment: true, triple: triple, raw: triple}
+				size := 1
+				if triple {
+					size = 3
+				}
+				add(i, i+size, KindComment, ClassComment)
+				i += size
+				continue
+			}
+			if s.id == FSharp && c == '@' && strings.HasPrefix(text[i:], `@"`) {
+				s.mode = fnPrefix
+				s.prefix = 0
+				s.literal = fnLiteral{comment: true}
 				continue
 			}
 			if s.id == OCaml && c == '{' {
@@ -430,6 +460,9 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				continue
 			}
 			if c == '"' {
+				if !s.literal.comment {
+					folds.openLiteral()
+				}
 				s.mode = fnString
 				s.literal.quote = c
 				s.literal.interpolate = s.prefix > 0
@@ -445,7 +478,11 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				s.prefix = 0
 				continue
 			}
-			s.prefix, s.literal, s.mode = 0, fnLiteral{}, fnCode
+			s.mode = fnCode
+			if s.literal.comment {
+				s.mode = fnBlockComment
+			}
+			s.prefix, s.literal = 0, fnLiteral{}
 			continue
 		case fnVariable:
 			if IdentifierRune(r) {
@@ -460,7 +497,25 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			if s.literal.comment {
 				k, class = KindComment, ClassComment
 			}
+			if s.id == Haskell && s.gap {
+				if unicode.IsSpace(r) {
+					add(i, i+n, KindEscape, class)
+					i += n
+					continue
+				}
+				if c == '\\' {
+					add(i, i+1, KindEscape, class)
+					i++
+					s.gap = false
+					continue
+				}
+				endString(false)
+				continue
+			}
 			if s.escape {
+				if s.id == Haskell && unicode.IsSpace(r) {
+					s.gap = true
+				}
 				if !s.literal.raw {
 					k = KindEscape
 				}
@@ -516,6 +571,8 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				if size != 0 {
 					if size > 0 {
 						folds.functionalBoundary(in.Offset+i, in.Offset+i+size, true)
+					} else {
+						folds.functionalBoundary(s.braceStart, in.Offset+i, true)
 					}
 					s.expr = &fnExpr{parent: s.expr, literal: s.literal, close: close}
 					if size > 0 {
@@ -550,7 +607,7 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				}
 				add(i, i+size, k, class)
 				i += size
-				endString()
+				endString(true)
 				continue
 			}
 			if c == '\\' && (!s.literal.raw || s.id == Julia || s.id == Elixir) {
@@ -670,6 +727,12 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			i++
 			continue
 		}
+		if s.id == FSharp && strings.HasPrefix(text[i:], "``") {
+			s.mode = fnQuotedName
+			add(i, i+2, KindProperty, 0)
+			i += 2
+			continue
+		}
 		if s.id == FSharp && (c == '$' || c == '@') {
 			s.mode = fnPrefix
 			s.prefix = 0
@@ -745,7 +808,7 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			}
 		}
 		if c == '"' || c == '\'' && (s.id == Elixir || s.id == Erlang) || s.id == Julia && c == 0x60 {
-			if (fnData(s.id) || closedFunctional(s.id)) && s.discard == nil {
+			if (fnData(s.id) || closedFunctional(s.id) || layoutFunctional(s.id)) && s.discard == nil {
 				folds.openLiteral()
 			}
 			s.mode = fnString
@@ -803,7 +866,7 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 				add(i, i+1, KindDelimiter, ClassDelimiter)
 				i++
 				if v.matched >= max(1, f.literal.arity) {
-					folds.functionalBoundary(in.Offset+i-1, in.Offset+i, false)
+					folds.functionalBoundary(in.Offset+i-max(1, f.literal.arity), in.Offset+i, false)
 					s.mode, s.literal, s.expr = fnString, f.literal, f.parent
 				} else {
 					s.expr = &v
@@ -867,6 +930,16 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 	flushCapture()
 	if in.LineEnd && i == len(text) {
 		folds.functionalModifier(in.Offset+i, 0, true)
+		if s.mode == fnQuotedName {
+			s.mode = fnCode
+		}
+		if s.id == FSharp && s.expr != nil && s.expr.matched != 0 {
+			// Interpolation closing braces, like opening braces, must be
+			// adjacent; a physical LF is not a scanner-fragment boundary.
+			v := *s.expr
+			v.matched = 0
+			s.expr = &v
+		}
 		if s.mode == fnRawBody {
 			// A quoted-string delimiter cannot continue across a physical LF.
 			s.rawMatch = 0
@@ -896,8 +969,12 @@ func (b functionalTokenizer) scan(in Input, state State, folds *foldLexemes) (Re
 			}
 			s.rawCapture, s.rawComment = nil, false
 		}
-		if s.mode == fnString && !s.literal.triple && !s.literal.comment && (s.id == FSharp || s.id == Haskell) {
-			endString()
+		if s.mode == fnString && s.id == Haskell {
+			if s.escape || s.gap {
+				s.gap = true
+			} else {
+				endString(false)
+			}
 		}
 		s.last, s.escape, s.value, s.atStart = 0, false, false, true
 		s.braces, s.braceStart = 0, 0
