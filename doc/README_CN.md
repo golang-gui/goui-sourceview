@@ -11,11 +11,10 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 
 ## 安装
 
-需要 Go 1.24 或更新版本。SourceView v0.3.0 依赖 GOUI v0.6.0，由 Go 自动下载。
-当前开发分支使用 GOUI v0.7.0；已发布的 v0.3.0 保持不变。
+需要 Go 1.24 或更新版本。SourceView v0.4.0 依赖 GOUI v0.7.0，由 Go 自动下载。
 
 ```sh
-go get github.com/golang-gui/goui-sourceview@v0.3.0
+go get github.com/golang-gui/goui-sourceview@v0.4.0
 ```
 
 ## 主要能力
@@ -25,9 +24,11 @@ go get github.com/golang-gui/goui-sourceview@v0.3.0
   Kotlin、Swift、Dart、R、Zig、Objective-C、Objective-C++、Scala、Perl、Diff/Patch、Windows Batch、HCL/Terraform、GraphQL、SCSS、Less、Dotenv、Java Properties、Git Ignore/Attributes、Starlark、Groovy、
   Go Template、Jinja2、systemd unit、Desktop Entry、Nix、jq、PromQL、F#、Elixir、Erlang、Julia、Clojure、Haskell、OCaml、CSV、TSV、AsciiDoc、reStructuredText、TeX/LaTeX、BibTeX、gettext PO/POT、EditorConfig、JSON5、EDN、Git config、SSH config、crontab、Mermaid、Graphviz DOT，以及 Go 模块、工作区和校验文件。
 - **混合文档：** Markdown 前置元数据和代码围栏高亮，以及 HTML、XML、YAML、TOML 模板宿主组合。
-- **折叠与导航：** 结构化标记、Markdown 标题及围栏代码折叠，行列跳转。
+- **折叠与导航：** 结构化文档、常用代码语言、Markdown 标题及围栏折叠，支持独立外部折叠快照。
 - **编辑辅助：** 智能缩进、空白标记、缩进线及列标尺。
-- **源码编辑：** Unicode 选区、剪贴板、撤销/重做、缩进和整行操作。
+- **源码编辑：** Unicode 与结构选区、子词导航、剪贴板、撤销/重做、重新缩进和整理命令。
+- **行标记与地图：** 断点/书签呈现、执行行和色块 Minimap 导航。
+- **外部分析：** 独立高亮/折叠快照及补全刷新。
 - **补全与括号：** 补全建议、自动配对、匹配括号跳转及标签名称联动。
 - **自定义语言：** 由应用配置高亮、编辑规则及补全。
 - **查找替换：** 浮动面板，支持多行、正则、捕获组替换及选区内搜索。

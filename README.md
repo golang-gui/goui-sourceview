@@ -12,12 +12,11 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer. SourceView v0.3.0 depends on GOUI v0.6.0,
+Requires Go 1.24 or newer. SourceView v0.4.0 depends on GOUI v0.7.0,
 which Go downloads automatically.
-The development branch targets GOUI v0.7.0; the released v0.3.0 remains unchanged.
 
 ```sh
-go get github.com/golang-gui/goui-sourceview@v0.3.0
+go get github.com/golang-gui/goui-sourceview@v0.4.0
 ```
 
 ## Features
@@ -30,9 +29,11 @@ go get github.com/golang-gui/goui-sourceview@v0.3.0
   Starlark, Groovy, Go Template, Jinja2, systemd unit, Desktop Entry, Nix, jq, PromQL,
   F#, Elixir, Erlang, Julia, Clojure, Haskell, OCaml, CSV, TSV, AsciiDoc, reStructuredText, TeX/LaTeX, BibTeX, gettext PO/POT, EditorConfig, JSON5, EDN, Git config, SSH config, crontab, Mermaid, Graphviz DOT and Go module/workspace/checksum files.
 - **Mixed documents** with highlighted Markdown metadata and code fences, plus HTML, XML, YAML and TOML template hosts.
-- **Folding and navigation** for structured documents, Markdown headings and code fences, with line/column navigation.
+- **Folding and navigation** for structured documents, common code languages, Markdown headings and code fences, with independent external fold snapshots.
 - **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
-- **Code editing** with Unicode selection, clipboard, undo/redo, indentation and line operations.
+- **Code editing** with Unicode and structural selection, word-part navigation, clipboard, undo/redo, reindentation and cleanup commands.
+- **Line marks and minimap** with breakpoint/bookmark presentation, execution lines and color-block navigation.
+- **External analysis** with independent highlight/fold snapshots and completion refresh.
 - **Completion and brackets** with suggestions, automatic pairs, matching-bracket navigation and linked tag names.
 - **Custom languages** with application-defined highlighting, editing rules and completion.
 - **Find and replace** in a floating panel, with multiline queries, regular expressions, capture replacements and selection scopes.
