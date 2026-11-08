@@ -10,6 +10,13 @@ SourceView v0.4.0 已正式发布，发布依赖为 GOUI v0.7.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
+## 结构化语言折叠第五批（2026-11-08）
+
+新增 Zig、R、GraphQL、HCL/Terraform、Protobuf、Starlark 折叠。
+复用词法边界观察，处理 Zig 连续行串、HCL 模板指令与所属字符串、Starlark 专用缩进头。
+设计见 [代码折叠](DesignFolding.md)，精确范围、分片／并发、独立窗口与限制见
+[第五批验收](PlanFoldingLanguages5.md)。尚未发布。
+
 ## 关键字语言折叠第四批（2026-11-08）
 
 新增 Lua、Ruby、Shell、CMake、SQL 的专用词法控制结构、字面量／注释折叠，
