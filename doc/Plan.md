@@ -10,6 +10,14 @@ SourceView v0.4.0 已正式发布，发布依赖为 GOUI v0.7.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
 
+## 函数式语言折叠第八批（2026-11-08）
+
+新增 Elixir、Erlang、Julia、OCaml 的显式终止块、代码括号及多行字面量／注释折叠。
+处理 Elixir do: 简写、Erlang 函数引用、Julia 推导式与索引关键字、OCaml done/end 区分，
+修正 Julia 块注释前缀和 OCaml quoted string 跨行结束标记的词法边界。
+设计见 [代码折叠](DesignFolding.md)，精确范围、分片／并发、独立窗口及限制见
+[第八批验收](PlanFoldingLanguages8.md)。尚未发布。
+
 ## 查询与 reader 折叠第七批（2026-11-08）
 
 新增 Nix、jq、PromQL、Clojure、EDN 折叠，复用扫描器边界。
