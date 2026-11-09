@@ -141,7 +141,9 @@ func (v *SourceView) Arrange(rect geometry.Rectangle) {
 
 func (v *SourceView) ContentSize() geometry.Size {
 	v.ensureHeights()
-	width := ceilCoordinate(float64(v.contentWidth) + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
+	// Geometry.Caret is 1 DIP wide at the final text stop. Its full rectangle,
+	// as well as the text and padding, must fit in the horizontal extent.
+	width := ceilCoordinate(float64(v.contentWidth) + 1 + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
 	if v.wrap != WrapNone {
 		width = v.viewport.Width
 	}
@@ -461,7 +463,11 @@ func (v *SourceView) resolveReveal(measured bool) {
 		}
 		return start >= 0 && float64(start)+float64(length) <= float64(viewport)
 	}
-	if measured && visible(rect.X-v.gutter, rect.Width+v.gutter+padding, v.textRight()) && visible(rect.Y, rect.Height, v.viewport.Height) {
+	// Padding is a preferred scroll target, not part of the caret. A host that
+	// clamps to whole DIP may leave a fraction of that margin unreachable.
+	// Once the measured caret is fully visible, release the request so future
+	// manual scrolling does not keep revealing the old editing position.
+	if measured && visible(rect.X-v.gutter, rect.Width+v.gutter, v.textRight()) && visible(rect.Y, rect.Height, v.viewport.Height) {
 		v.reveal = nil
 		v.captureAnchor()
 		return
