@@ -109,6 +109,8 @@ const (
 	CommandUnfold                 = source.CommandUnfold
 	CommandFoldAll                = source.CommandFoldAll
 	CommandUnfoldAll              = source.CommandUnfoldAll
+	CommandCollapseLine           = source.CommandCollapseLine
+	CommandExpandLine             = source.CommandExpandLine
 	CommandComplete               = source.CommandComplete
 	CommandToggleLineComment      = source.CommandToggleLineComment
 	CommandToggleBlockComment     = source.CommandToggleBlockComment

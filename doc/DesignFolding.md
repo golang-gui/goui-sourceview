@@ -6,6 +6,9 @@
 
 ## 范围与所有权
 
+本文的结构折叠以逻辑行为单位。单行 JSON 或其他长行经自动换行后占据多屏的情况，使用独立的
+[长行收起](DesignLineCollapse.md)；该能力不需要语言 provider，不改变结构折叠的范围或命令语义。
+
 语言定义的可选 Folding 函数从不可变 UTF-8/LF 全文生成 FoldRange。范围行号从 0 开始，
 StartLine 是保留的标题行，EndLine 包含在范围内；隐藏 StartLine+1..EndLine。
 范围允许嵌套，不允许交叉；排序、去重、同起点保留外层、越界检查由组件完成。

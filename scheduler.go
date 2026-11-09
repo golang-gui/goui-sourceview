@@ -344,6 +344,7 @@ func (v *SourceView) layoutStep(deadline time.Time) {
 		if valid() {
 			v.RequestLayout()
 			v.RequestPaint()
+			v.updateMenu()
 		}
 	}()
 	// First refine the text position retained across a width change. Other

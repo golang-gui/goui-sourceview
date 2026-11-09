@@ -29,7 +29,14 @@ func (c *sourceMotionController) HandleCrossing(ctx gui.CrossingContext) {
 
 func (v *SourceView) installInput() {
 	v.pointer = gui.NewMotionEventController()
-	v.pointer.ConnectMotion(func(info gui.MotionInfo) { v.pointerPoint = info.Position })
+	v.pointer.ConnectMotion(func(info gui.MotionInfo) {
+		_, wasBadge := v.collapsedLineHit(v.pointerPoint)
+		v.pointerPoint = info.Position
+		_, isBadge := v.collapsedLineHit(v.pointerPoint)
+		if wasBadge != isBadge {
+			v.RequestPaint()
+		}
+	})
 	v.AddEventController(&sourceMotionController{MotionEventController: v.pointer, point: &v.pointerPoint})
 	companions := gui.NewKeyEventController()
 	companions.SetPhase(gui.PhaseCapture)
@@ -83,6 +90,11 @@ func (v *SourceView) installInput() {
 			root.SetFocusedWidget(v)
 		}
 		if !v.mounted {
+			return
+		}
+		if line, ok := v.collapsedLineHit(point); ok {
+			v.dragging = false
+			v.ExpandLine(line)
 			return
 		}
 		if line, ok := v.foldHit(point); ok {
@@ -179,6 +191,9 @@ func (v *SourceView) Cursor() gui.Cursor {
 }
 
 func (v *SourceView) cursorAt(point geometry.Point) gui.Cursor {
+	if _, ok := v.collapsedLineHit(point); ok {
+		return gui.CursorPointing
+	}
 	if v.minimapHit(point) {
 		return gui.CursorPointing
 	}
@@ -468,6 +483,12 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 	m := v.document.model
 	row := m.LineAt(caret)
 	r, _ := m.LineRange(row)
+	if v.lineCollapsed(row) && (key == events.KeyArrowDown || key == events.KeyPageDown || key == events.KeyEnd) {
+		v.ExpandLine(row)
+		if !state.valid(v) || v.Destroyed() {
+			return
+		}
+	}
 	p := v.paragraph(row)
 	pos := textedit.Position{Offset: caret - r.Start, Upstream: v.upstream}
 	if !extend && s.Anchor != s.Caret && (key == events.KeyArrowLeft || key == events.KeyArrowRight) {
@@ -554,9 +575,24 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 				if next >= 0 && next < m.LineCount() {
 					row = next
 					r, _ = m.LineRange(row)
+					enterCollapsedEnd := !down && v.lineCollapsed(row)
+					if enterCollapsedEnd {
+						v.ExpandLine(row)
+						if !state.valid(v) || v.Destroyed() {
+							return
+						}
+					}
 					p = v.paragraph(row)
 					if p != nil {
 						g = &p.geometry
+						if enterCollapsedEnd && p.paged != nil {
+							// The preview keeps page zero active. Up from the next
+							// paragraph needs the actual last page, not that cache.
+							g = p.geometryAt(r.End - r.Start)
+							if !state.valid(v) || v.Destroyed() {
+								return
+							}
+						}
 					}
 					if p != nil {
 						index = 0

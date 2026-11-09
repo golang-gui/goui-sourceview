@@ -77,6 +77,9 @@ const (
 	CommandUpperCase
 	CommandLowerCase
 	CommandTrimTrailingWhitespace
+	// Long wrapped lines are a view operation, independent of language folding.
+	CommandCollapseLine
+	CommandExpandLine
 	commandLimit
 )
 
@@ -316,7 +319,7 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 	case CommandToggleBlockComment:
 		run(v.ToggleBlockComment)
 	case CommandMoveLinesUp, CommandMoveLinesDown, CommandDuplicateLinesUp, CommandDuplicateLinesDown,
-		CommandDeleteLines, CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll:
+		CommandDeleteLines, CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll, CommandCollapseLine, CommandExpandLine:
 		v.runCommand(command)
 	case CommandInsertLineAbove, CommandInsertLineBelow:
 		run(func() error { return v.InsertLine(command == CommandInsertLineBelow) })

@@ -13,9 +13,9 @@ import (
 
 const padding float32 = 6
 
-// A full reset has no drawable paragraphs to retain while frame work catches
-// up. Its first allocation may prepare the visible region, including widths
-// changed by the host's bounded scrollbar convergence. Paint ends this phase.
+// Full resets and explicit line-collapse changes need a drawable first
+// allocation, including widths changed by bounded scrollbar convergence.
+// Paint ends this preparation phase; ordinary scrolling stays deferred.
 type viewportInitialization struct {
 	document        *Document
 	revision, mount uint64
@@ -25,6 +25,12 @@ func (v *SourceView) invalidateTextLayout() {
 	state := v.operationState()
 	v.invalidateLayout()
 	if state.valid(v) && v.mounted && v.frameLayout && !v.Destroyed() {
+		v.beginViewportInitialization()
+	}
+}
+
+func (v *SourceView) beginViewportInitialization() {
+	if v.mounted && v.frameLayout && !v.Destroyed() {
 		v.initialLayout = &viewportInitialization{v.document, v.document.model.Revision(), v.mountEpoch}
 	}
 }
@@ -53,6 +59,9 @@ func (v *SourceView) invalidateLayout() {
 	}
 	v.resetHeights()
 	v.contentWidth = 0
+	if len(v.collapsedLines) > 0 && v.collapsedRevision == v.document.model.Revision() && v.wrap != WrapNone {
+		v.beginViewportInitialization()
+	}
 	if v.frameLayout {
 		v.requestLayoutWork()
 	}
@@ -200,7 +209,8 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 	if v.viewport != viewport || v.offset != offset {
 		v.closeCompletion()
 	}
-	if v.viewport.Width != viewport.Width && v.wrap != WrapNone {
+	widthChanged := v.viewport.Width != viewport.Width && v.wrap != WrapNone
+	if widthChanged {
 		v.layoutEpoch++
 		// Keep prior heights as estimates until current-width paragraphs are
 		// ready. Collapsing every long paragraph to one line would hide the
@@ -220,13 +230,14 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 	old := v.ContentSize()
 	state, epoch := v.operationState(), v.layoutEpoch
 	initialize := v.initializingViewport() && viewport.Width > 0 && viewport.Height > 0
+	resizeCollapsed := widthChanged && viewport.Width > 0 && viewport.Height > 0
 	measured := false
 	for range 2 {
 		first, last := v.visibleRows()
 		complete := true
 		for row := first; row <= last; row = v.nextDisplayRow(row) {
 			var p *paragraph
-			if initialize {
+			if initialize || resizeCollapsed && v.lineCollapsed(row) {
 				if _, failed := v.layoutFailures[v.paragraphKey(row)]; !failed {
 					p = v.paragraph(row)
 				}
@@ -394,6 +405,9 @@ func (v *SourceView) paragraphAt(y float32) int {
 }
 
 func (v *SourceView) setParagraphHeight(row int, height float32) {
+	if v.lineCollapsed(row) {
+		_, height = v.linePreview(v.cachedParagraph(row))
+	}
 	i, visible := v.visibleLines.index(row)
 	if visible {
 		if v.showMinimap && v.heights.Top64(i+1)-v.heights.Top64(i) != float64(max(1, height)) {
@@ -583,8 +597,16 @@ func (v *SourceView) hitCaret(point geometry.Point) (textedit.Position, geometry
 	measured := false
 	if p := v.paragraph(row); p != nil {
 		origin := v.paragraphOrigin(row, p)
-		pos = p.geometry.Hit(geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y})
-		caret = p.geometry.Caret(pos).Translate(origin)
+		g := &p.geometry
+		if v.lineCollapsed(row) {
+			if first, _ := v.linePreview(p); first != nil {
+				g = first
+			}
+			pos = g.HitLine(0, max(0, min(point.X-origin.X, v.linePreviewRect(row, p).Width-1)))
+		} else {
+			pos = g.Hit(geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y})
+		}
+		caret = g.Caret(pos).Translate(origin)
 		measured = true
 		pos.Offset += r.Start
 	}

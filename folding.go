@@ -311,6 +311,7 @@ func (v *SourceView) mapFolds(c textedit.Change, splices []highlight.Splice) {
 }
 
 func (v *SourceView) expandFoldRange(r textedit.Range) bool {
+	lineChanged := v.expandCollapsedRange(r)
 	changed := false
 	for i := range v.folds {
 		f := &v.folds[i]
@@ -326,7 +327,7 @@ func (v *SourceView) expandFoldRange(r textedit.Range) bool {
 	if changed {
 		v.refreshFoldGeometry()
 	}
-	return changed
+	return changed || lineChanged
 }
 
 func (v *SourceView) unfoldSelection(s textedit.Selection) bool {

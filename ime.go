@@ -45,6 +45,14 @@ func (v *SourceView) applyPreedit(text string, caret int) {
 	m := v.document.model
 	if v.projection == nil || v.projectionRevision != m.Revision() {
 		v.cancelPaste()
+		line, _ := m.LineRange(m.LineAt(v.Selection().Caret))
+		state := v.operationState()
+		if v.expandCollapsedRange(line) {
+			v.foldingSignal.Emit()
+			if !state.valid(v) || v.Destroyed() || !v.mounted || v.editable() != nil {
+				return
+			}
+		}
 		v.expandFoldRange(v.Selection().Range())
 		v.projection = textedit.NewProjection(m, v.Selection())
 		v.projectionRevision = m.Revision()

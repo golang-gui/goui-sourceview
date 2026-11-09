@@ -9,6 +9,8 @@ import (
 )
 
 var (
+	CollapseLongLine      = mlang.String(mlang.En("Collapse long line"), mlang.ZhCN("收起长行"), mlang.Ja("長い行を折りたたむ"), mlang.Ko("긴 줄 접기"), mlang.De("Lange Zeile einklappen"), mlang.Fr("Replier la ligne longue"), mlang.Ru("Свернуть длинную строку"), mlang.Ar("طي السطر الطويل"))
+	ExpandLongLine        = mlang.String(mlang.En("Expand long line"), mlang.ZhCN("展开长行"), mlang.Ja("長い行を展開"), mlang.Ko("긴 줄 펼치기"), mlang.De("Lange Zeile ausklappen"), mlang.Fr("Déplier la ligne longue"), mlang.Ru("Развернуть длинную строку"), mlang.Ar("توسيع السطر الطويل"))
 	Breakpoint            = mlang.String(mlang.En("Breakpoint"), mlang.ZhCN("断点"), mlang.Ja("ブレークポイント"), mlang.Ko("중단점"), mlang.De("Haltepunkt"), mlang.Fr("Point d’arrêt"), mlang.Ru("Точка останова"), mlang.Ar("نقطة توقف"))
 	ConditionalBreakpoint = mlang.String(mlang.En("Conditional breakpoint"), mlang.ZhCN("条件断点"), mlang.Ja("条件付きブレークポイント"), mlang.Ko("조건부 중단점"), mlang.De("Bedingter Haltepunkt"), mlang.Fr("Point d’arrêt conditionnel"), mlang.Ru("Условная точка останова"), mlang.Ar("نقطة توقف شرطية"))
 	Logpoint              = mlang.String(mlang.En("Logpoint"), mlang.ZhCN("日志点"), mlang.Ja("ログポイント"), mlang.Ko("로그 지점"), mlang.De("Protokollpunkt"), mlang.Fr("Point de journalisation"), mlang.Ru("Точка журналирования"), mlang.Ar("نقطة تسجيل"))

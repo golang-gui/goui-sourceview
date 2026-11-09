@@ -18,7 +18,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 	if v.context == nil || v.mounted && v.observed != v.document.model.Revision() {
 		return
 	}
-	// End reset-only layout preparation when painting begins. Keep it for
+	// End first-allocation preparation when painting begins. Keep it for
 	// a zero-size allocation, whose first usable viewport has not arrived yet.
 	if v.Rect().Width > 0 && v.Rect().Height > 0 && v.initializingViewport() {
 		v.initialLayout = nil
@@ -42,6 +42,11 @@ func (v *SourceView) Paint(p gui.Painter) {
 		}
 		r := v.displayRange(row)
 		origin := v.paragraphOrigin(row, item)
+		collapsed := v.lineCollapsed(row)
+		if collapsed {
+			p.Save()
+			p.SetClipRect(v.linePreviewRect(row, item))
+		}
 		if activeFocus(v) && row == caretRow {
 			lineY := v.geometryOrigin(row, 0, 0).Y
 			top, bottom := max(0, lineY), min(bounds.Height, lineY+item.height)
@@ -95,7 +100,11 @@ func (v *SourceView) Paint(p gui.Painter) {
 			}
 		}
 		if item.paged != nil {
-			item.paged.Paint(p, origin)
+			if collapsed {
+				item.paged.Paint(&linePreviewPainter{Painter: p, bounds: v.linePreviewRect(row, item)}, origin)
+			} else {
+				item.paged.Paint(p, origin)
+			}
 		} else {
 			p.DrawTextLayout(origin, item.layout)
 		}
@@ -112,9 +121,13 @@ func (v *SourceView) Paint(p gui.Painter) {
 				}
 			}
 		}
+		if collapsed {
+			p.Restore()
+			v.paintLineCollapseBadge(p, row, item)
+		}
 	}
 	if activeFocus(v) && v.caretOn && gui.IsEnabled(v) {
-		if r, ok := v.cachedCaretRect(); ok {
+		if r, ok := v.cachedCaretRect(); ok && !v.collapsedOffsetHidden(caretRow, v.cachedParagraph(caretRow), v.Selection().Caret, v.upstream) {
 			p.FillRect(r, graphics.ColorOf(v.colors.Caret))
 			v.im.SetCaretRect(r)
 		}

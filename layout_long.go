@@ -68,6 +68,9 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 		}
 	}
 	viewport := geometry.Rect(v.offset.X, max(0, v.offset.Y-padding-v.paragraphTop(row)), v.textRight(), max(v.lineHeight, v.viewport.Height))
+	if v.lineCollapsed(row) {
+		viewport.X, viewport.Y, viewport.Height = 0, 0, v.lineHeight
+	}
 	ready := p.paged.Prepare(viewport, measure)
 	// An unattached/offscreen view has no frame source. Allow a small fixed
 	// number of bounded steps, never an unbounded walk to distant text.

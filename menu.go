@@ -27,6 +27,8 @@ var commandLabels = [...]mlang.Getter{
 	CommandUnfold:             resource.Unfold,
 	CommandFoldAll:            resource.FoldAll,
 	CommandUnfoldAll:          resource.UnfoldAll,
+	CommandCollapseLine:       resource.CollapseLongLine,
+	CommandExpandLine:         resource.ExpandLongLine,
 }
 
 type editMenu struct {
@@ -90,6 +92,10 @@ func (v *SourceView) canCommand(c Command) bool {
 	selected := v.Selection().Anchor != v.Selection().Caret
 	clipboard := gui.App != nil && gui.App.Clipboard() != nil
 	switch c {
+	case CommandCollapseLine:
+		return v.canCollapseLine(v.document.model.LineAt(v.Selection().Caret))
+	case CommandExpandLine:
+		return v.lineCollapsed(v.document.model.LineAt(v.Selection().Caret))
 	case CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll:
 		return v.canFold() && len(v.folds) > 0
 	case CommandUndo:
@@ -125,6 +131,10 @@ func (v *SourceView) runCommand(c Command) {
 		return
 	}
 	switch c {
+	case CommandCollapseLine:
+		v.CollapseLine(v.document.model.LineAt(v.Selection().Caret))
+	case CommandExpandLine:
+		v.ExpandLine(v.document.model.LineAt(v.Selection().Caret))
 	case CommandFold:
 		v.foldAtCaret(true)
 	case CommandUnfold:
@@ -216,8 +226,21 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	m.releaseCommands()
 	m.items = make(map[Command]*gui.MenuItem)
 	m.commands = make(map[Command]*menuCommand)
+	lineAction := Command(0)
+	if v.canCommand(CommandCollapseLine) {
+		lineAction = CommandCollapseLine
+	} else if v.canCommand(CommandExpandLine) {
+		lineAction = CommandExpandLine
+	}
+	var commands []Command
 	for c := CommandUndo; c <= CommandUnfoldAll; c++ {
-		if c == CommandCut || c == CommandMoveLinesUp || c == CommandSelectAll || c == CommandFold {
+		if c == CommandFold && lineAction != 0 {
+			commands = append(commands, lineAction)
+		}
+		commands = append(commands, c)
+	}
+	for _, c := range commands {
+		if c == CommandCut || c == CommandMoveLinesUp || c == CommandSelectAll || c == CommandFold || c == CommandCollapseLine || c == CommandExpandLine {
 			items.AppendSeparator()
 		}
 		binding := newMenuCommand(v.keyBindings[c], func() {

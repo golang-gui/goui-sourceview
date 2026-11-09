@@ -120,6 +120,8 @@ type SourceView struct {
 	foldColumn                                                                        float32
 	foldingEnabled                                                                    bool
 	folds                                                                             []foldEntry
+	collapsedLines                                                                    map[int]textedit.Range
+	collapsedRevision                                                                 uint64
 	foldRevision                                                                      uint64
 	foldDefinition                                                                    *language.Language
 	whitespace                                                                        WhitespaceMode
@@ -246,6 +248,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.foldIntake = nil
 	v.foldClear = false
 	v.folds = nil
+	v.collapsedLines = nil
 	v.hiddenLines = nil
 	v.foldRevision = d.model.Revision()
 	v.foldDefinition = d.definition
@@ -553,6 +556,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	text, _ := m.Slice(r)
 	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: v.Selection(), Length: m.Len(), VisibleRange: r, VisibleText: text}
 	v.snapshotFolding(&info, first, last)
+	v.snapshotCollapsedLines(&info, first, last)
 	v.snapshotLineMarks(&info, first, last)
 	v.snapshotMinimap(&info)
 	if v.projection != nil {
@@ -583,6 +587,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		return
 	}
 	hadHiddenRows := len(v.hiddenLines) > 0
+	lineCollapseChanged := v.mapCollapsedLines(c)
 	v.mapFolds(c, splices)
 	v.mapParagraphs(splices)
 	v.changeLongParagraphs(c)
@@ -644,6 +649,10 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		v.RequestLayout()
 		v.RequestPaint()
 	}
+	if lineCollapseChanged {
+		v.beginViewportInitialization()
+		v.requestLayoutWork()
+	}
 	if c.Reset {
 		v.offset = geometry.Point{}
 		v.scrollSignal.Emit(geometry.Rect(0, 0, v.viewport.Width, v.viewport.Height))
@@ -656,6 +665,9 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	}
 	if v.mounted && v.mountEpoch == epoch && v.document == d {
 		v.changeSignal.Emit(c)
+		if lineCollapseChanged && v.mounted && v.mountEpoch == epoch && v.document == d && !v.Destroyed() {
+			v.foldingSignal.Emit()
+		}
 	}
 }
 
@@ -680,6 +692,7 @@ func (v *SourceView) mount() {
 		})
 	}
 	if v.observed != v.document.model.Revision() {
+		v.collapsedLines = nil
 		v.searchRange = nil
 		if v.search != nil {
 			v.search.SetRange(nil)
