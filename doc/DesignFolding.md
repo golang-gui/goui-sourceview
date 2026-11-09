@@ -2,7 +2,7 @@
 
 状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；[第十一批](PlanFoldingLanguages11.md) 补充基础 DOT／普通 Diff；[第十二批](PlanFoldingLanguages12.md) 补充 SSH 配置／HTTP 请求块；[第十三批](PlanFoldingLanguages13.md) 补充 Dockerfile 阶段与多行指令。上述扩展均尚未发布。
 
-其余语言按 [剩余支持收尾计划](PlanFoldingRemaining.md) 分四批实现。第一批为 Makefile、Batch、GoTemplate／Jinja2；规则限于明确文本／词法边界，未完成批次不视为已有能力。
+剩余 13 项按 [收尾计划](PlanFoldingRemaining.md) 分四批补充基础实现；规则限于明确文本／词法边界。当前 80 个内置定义有默认 provider，7 个有意无默认规则；各批实际验收与限制见该计划。
 
 ## 范围与所有权
 
@@ -691,3 +691,14 @@ TOML 源节不按 dotted key 合成不连续区域，Python 续行与块缩进�
 
 第三批记录格式只折叠已闭合 BibTeX 条目、实际 PO 翻译记录、Dotenv 引用值、Properties 续行和 CSV 引号字段。
 闭合行上的其他 CSV 列保持可见；不求解 BibTeX 字段、PO 复数或配置变量。详见剩余收尾计划。
+
+剩余支持第四批只识别 Mermaid Flowchart／graph 的 subgraph/end 和 Sequence 的
+loop／alt／opt／par／rect／critical／break／box/end；分支保留在父块，不折叠任意图形括号或缩进。
+引用、指令及节点多行标签屏蔽；同一行多个分号语句不做解析，未完成块省略。
+2026-11-09 核对 Mermaid 官方页面（页面标示 12.3.0）
+[Flowchart subgraphs](https://mermaid.js.org/syntax/flowchart.html#subgraphs) 与
+[Sequence blocks](https://mermaid.js.org/syntax/sequenceDiagram.html#loops)，包括 participant box 的 end。
+这是本项目按明确文本边界的策略，未声称 Monaco／Scintilla 默认提供相同语言覆盖，未引入其解析器。
+provider 与视图状态分离仍沿用前文 Monaco／Scintilla 的取舍。
+最终有限清单为 87 个内置定义中 80 个具备 provider；Plain、JSONLines、GoSum、GitIgnore、
+GitAttributes、TSV、Crontab 有意无默认规则。外部 SetFolds 仍可提供明确范围；此后不以补满语言数量为目标。

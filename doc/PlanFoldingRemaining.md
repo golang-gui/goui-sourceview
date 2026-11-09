@@ -2,14 +2,14 @@
 
 2026-11-09，基线 `66df67a`，GOUI v0.7.0。用户已授权连续实现、验证并提交四批。
 只做明显文本／词法边界，不增加完整解析器、语义求值或公共 API。
-当前 87 个内置定义中 67 个有 Folding；以下 13 项补充有限规则，另 7 项有意保持无默认折叠。
+基线 87 个内置定义中 67 个有 Folding；以下 13 项补充有限规则，另 7 项有意保持无默认折叠。
 
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 1 | Makefile、Batch、GoTemplate、Jinja2 | 已完成 |
 | 2 | AsciiDoc、reStructuredText、LaTeX | 已完成 |
 | 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 已完成 |
-| 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 待实现 |
+| 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 实现中 |
 
 ## 边界
 
@@ -97,4 +97,12 @@ GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建�
 
 ## 第四批与整体验收
 
-待实现。
+Mermaid 仅处理 Flowchart／graph 的 subgraph，以及 Sequence 的 loop／alt／opt／par／rect／critical／break／box，
+使用实际关键字与 end；else／and／option 留在父块内。节点多行标签、引用及指令不生成伪块。
+简单 frontmatter 只跳过，不解析或折叠 YAML；其他图类型不使用括号／缩进回退。
+同一行多个分号语句不解析；相应未完成块保守舍弃，不为此引入完整 Mermaid 解析器。
+空标题只有注释、同一行已有 end 的两个误判在 b4-conservative-before.log 保留失败断言。
+首次修正又遗漏未着色的普通标题（普通文本不生成 token），六项断言失败保留在 b4-language.log
+和 b4-first-test.log／race.log。改用屏蔽后的正文判断普通描述，并保留引用描述观察后修正。
+固定清单检查 87 个内置定义：80 个有默认 provider，7 个有意不提供默认规则，与计划一致。
+窗口和最终检查进行中。

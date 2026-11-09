@@ -20,7 +20,7 @@ func (s mermaidState) Context() Context {
 }
 func (mermaidTokenizer) InitialState() State { return mermaidState{} }
 
-var mermaidWords = strings.Fields("flowchart flowchart-elk graph subgraph end direction TB TD BT LR RL sequenceDiagram participant actor as Note note over left right of loop alt else opt par and rect critical option break autonumber activate deactivate classDiagram class namespace stateDiagram-v2 stateDiagram state erDiagram gantt dateFormat axisFormat excludes section title pie showData journey gitGraph commit branch checkout merge mindmap timeline requirementDiagram requirement element style classDef linkStyle click href accTitle accDescr")
+var mermaidWords = strings.Fields("flowchart flowchart-elk graph subgraph end direction TB TD BT LR RL sequenceDiagram participant actor as Note note over left right of loop alt else opt par and rect critical option break box autonumber activate deactivate classDiagram class namespace stateDiagram-v2 stateDiagram state erDiagram gantt dateFormat axisFormat excludes section title pie showData journey gitGraph commit branch checkout merge mindmap timeline requirementDiagram requirement element style classDef linkStyle click href accTitle accDescr")
 
 func (mermaidTokenizer) Scan(in Input, previous State) (Result, error) {
 	s, ok := previous.(mermaidState)

@@ -576,6 +576,8 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		switch info.ID {
+		case Mermaid:
+			d.Folding = mermaidFolding(d.Tokenizer)
 		case BibTeX, Dotenv, Properties, CSV:
 			d.Folding = recordLiteralFolding(info.ID, d.Tokenizer)
 		case Gettext:
