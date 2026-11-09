@@ -31,7 +31,10 @@ type propTokenizer struct{}
 
 func (propTokenizer) InitialState() State { return propState{} }
 func propSpace(c byte) bool               { return c == ' ' || c == '\t' || c == '\f' }
-func (propTokenizer) Scan(in Input, state State) (Result, error) {
+func (t propTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+func (propTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(propState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Properties state")
@@ -160,8 +163,12 @@ func (propTokenizer) Scan(in Input, state State) (Result, error) {
 	}
 	if in.LineEnd && i == len(text) {
 		if s.escape {
+			if folds != nil && len(folds.literals) == 0 {
+				folds.openLiteral()
+			}
 			s.escape, s.skipLeading = false, true
 		} else {
+			folds.closeLiteral(in.Offset+i, true)
 			s = propState{}
 		}
 	}

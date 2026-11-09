@@ -576,6 +576,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		switch info.ID {
+		case BibTeX, Dotenv, Properties, CSV:
+			d.Folding = recordLiteralFolding(info.ID, d.Tokenizer)
+		case Gettext:
+			d.Folding = poFolding(d.Tokenizer)
 		case AsciiDoc, ReStructuredText:
 			d.Folding = proseFolding(info.ID, d.Tokenizer)
 		case LaTeX:

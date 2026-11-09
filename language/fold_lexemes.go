@@ -4,6 +4,7 @@ package language
 // It belongs to that worker, never to a registered tokenizer or saved State.
 // Stacks retain outer literals across interpolation and nested block comments.
 type foldLexemes struct {
+	bibStart           int
 	row                int
 	literals, comments []int
 	closed             []foldLexeme
@@ -120,6 +121,14 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 		t.lexemes.lineLiteral = -1
 	}
 	switch scanner := t.Tokenizer.(type) {
+	case csvTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case envTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case propTokenizer:
+		return scanner.scan(in, state, t.lexemes)
+	case bibTokenizer:
+		return scanner.scan(in, state, t.lexemes)
 	case texTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	case templateTokenizer:

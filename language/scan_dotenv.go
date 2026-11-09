@@ -38,7 +38,10 @@ func (envTokenizer) InitialState() State { return envState{} }
 func envName(c rune) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
-func (envTokenizer) Scan(in Input, state State) (Result, error) {
+func (t envTokenizer) Scan(in Input, state State) (Result, error) {
+	return t.scan(in, state, nil)
+}
+func (envTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(envState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign Dotenv state")
@@ -81,6 +84,7 @@ func (envTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if c == s.quote {
+				folds.closeLiteral(in.Offset+i+n, true)
 				s.quote, s.mode = 0, envAfter
 			}
 			add(i, i+n, KindString, ClassString)
@@ -138,6 +142,7 @@ func (envTokenizer) Scan(in Input, state State) (Result, error) {
 				continue
 			}
 			if c == '"' || c == '\'' || c == '`' {
+				folds.openLiteral()
 				s.mode, s.quote = envQuoted, c
 				add(i, i+1, KindString, ClassString)
 				i++

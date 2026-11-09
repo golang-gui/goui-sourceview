@@ -688,3 +688,6 @@ Edits 一一对应时采用增量；分析索引尚在重建、变更缺失或�
 新增 JSONC/JSON5、YAML、TOML、Go、JS/TS、CSS、Python 的折叠。引用/注释/块标量使用实际词法器；
 TOML 源节不按 dotted key 合成不连续区域，Python 续行与块缩进分别处理。Go/JS/TS/CSS/Python 支持
 注释中的 region/endregion，跨越已确认结构的 region 舍弃。边界与压力验证见 [P0 设计](DesignP0Editing.md)。
+
+第三批记录格式只折叠已闭合 BibTeX 条目、实际 PO 翻译记录、Dotenv 引用值、Properties 续行和 CSV 引号字段。
+闭合行上的其他 CSV 列保持可见；不求解 BibTeX 字段、PO 复数或配置变量。详见剩余收尾计划。

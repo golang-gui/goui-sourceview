@@ -225,6 +225,7 @@ func (texTokenizer) scan(in Input, previous State, folds *foldLexemes) (Result, 
 type bibTokenizer struct{}
 type bibState struct {
 	head, entry, key, value, quoted bool
+	comment, escaped                bool
 	close                           byte
 	depth                           int
 	word                            scanWord
@@ -240,7 +241,10 @@ func (bibTokenizer) InitialState() State { return bibState{} }
 
 var bibWords = strings.Fields("@article @book @inproceedings @incollection @misc @online @string @preamble @comment author title year journal volume number pages publisher editor booktitle doi url")
 
-func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
+func (t bibTokenizer) Scan(in Input, previous State) (Result, error) {
+	return t.scan(in, previous, nil)
+}
+func (bibTokenizer) scan(in Input, previous State, folds *foldLexemes) (Result, error) {
 	s, ok := previous.(bibState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign BibTeX state")
@@ -259,8 +263,15 @@ func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
 				name := strings.ToLower(s.word.text)
 				s.head, s.word = false, scanWord{}
 				if name == "comment" {
+					s.comment, s.depth, s.close = true, 1, '}'
+					if c == '(' {
+						s.close = ')'
+					}
 					w.add(at, at+n, KindComment, ClassComment)
 				} else {
+					if folds != nil {
+						folds.literals = append(folds.literals, folds.bibStart)
+					}
 					s.entry, s.key, s.value = true, name != "string" && name != "preamble", name == "preamble"
 					s.close = '}'
 					if c == '(' {
@@ -277,8 +288,32 @@ func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
 			i += n
 			continue
 		}
+		if s.comment {
+			w.add(at, at+n, KindComment, ClassComment)
+			if s.escaped {
+				s.escaped = false
+			} else if c == '\\' {
+				s.escaped = true
+			} else {
+				open := byte('{')
+				if s.close == ')' {
+					open = '('
+				}
+				if c == open {
+					s.depth++
+				} else if c == s.close {
+					s.depth--
+					s.comment = s.depth > 0
+				}
+			}
+			i += n
+			continue
+		}
 		if !s.entry {
 			if c == '@' {
+				if folds != nil {
+					folds.bibStart = folds.row
+				}
 				s.head = true
 				s.word = scanWord{}
 				w.add(at, at+n, KindKeyword, 0)
@@ -290,14 +325,20 @@ func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
 		}
 		if s.quoted || s.depth > 0 {
 			w.add(at, at+n, KindString, ClassString)
-			if c == '{' {
-				s.depth++
-			}
-			if c == '}' && s.depth > 0 {
-				s.depth--
-			}
-			if c == '"' && s.quoted && s.depth == 0 {
-				s.quoted = false
+			if s.escaped {
+				s.escaped = false
+			} else if c == '\\' {
+				s.escaped = true
+			} else {
+				if c == '{' {
+					s.depth++
+				}
+				if c == '}' && s.depth > 0 {
+					s.depth--
+				}
+				if c == '"' && s.quoted && s.depth == 0 {
+					s.quoted = false
+				}
 			}
 			i += n
 			continue
@@ -305,6 +346,7 @@ func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
 		kind, class := KindPlain, Class(0)
 		switch {
 		case c == s.close:
+			folds.closeLiteral(at+n, true)
 			kind, class, s.entry = KindDelimiter, ClassDelimiter, false
 		case c == ',':
 			kind, s.key, s.value = KindDelimiter, false, false
@@ -328,6 +370,9 @@ func (bibTokenizer) Scan(in Input, previous State) (Result, error) {
 		}
 		w.add(at, at+n, kind, class)
 		i += n
+	}
+	if in.LineEnd && i == len(in.Text) {
+		s.escaped = false
 	}
 	return w.result(i, s), nil
 }

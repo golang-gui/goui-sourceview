@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 1 | Makefile、Batch、GoTemplate、Jinja2 | 已完成 |
 | 2 | AsciiDoc、reStructuredText、LaTeX | 已完成 |
-| 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 待实现 |
+| 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 实现中 |
 | 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 待实现 |
 
 ## 边界
@@ -81,7 +81,12 @@ GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建�
 
 ## 第三批
 
-待实现。
+实现闭合 BibTeX 条目、PO 记录、Dotenv 多行引用值、Properties 逻辑续行、CSV 多行引用字段。
+四种扫描器在实际开闭位置观察；PO 复用已分类关键字，不把引用文本当记录边界。
+CSV 关闭行上有后续列（包括空列）时保留该行，PO 复数及连续字符串留在所属记录。
+固定精确断言先复现 BibTeX 转义引号／转义花括号提前关闭、@comment 内伪条目生成范围：
+b3-ranges-before.log。补足私有转义状态和字面闭合注释的屏蔽，不扩展到字段／引用／宏语义。
+验证进行中。
 
 ## 第四批与整体验收
 

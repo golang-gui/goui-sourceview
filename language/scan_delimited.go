@@ -41,7 +41,10 @@ func (s csvState) Context() Context {
 	return Context{String: true, Literal: true}
 }
 func (csvTokenizer) InitialState() State { return csvState{fieldStart: true} }
-func (csvTokenizer) Scan(in Input, previous State) (Result, error) {
+func (t csvTokenizer) Scan(in Input, previous State) (Result, error) {
+	return t.scan(in, previous, nil)
+}
+func (csvTokenizer) scan(in Input, previous State, folds *foldLexemes) (Result, error) {
 	s, ok := previous.(csvState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign CSV state")
@@ -62,6 +65,7 @@ func (csvTokenizer) Scan(in Input, previous State) (Result, error) {
 				i += n
 				continue
 			}
+			folds.closeLiteral(s.quoteAt+1, true)
 			s.quoted, s.quoteAt = false, 0
 		}
 		kind, class := KindString, ClassString
@@ -72,6 +76,7 @@ func (csvTokenizer) Scan(in Input, previous State) (Result, error) {
 		} else if c == ',' {
 			kind, class, s.fieldStart = KindDelimiter, 0, true
 		} else if c == '"' && s.fieldStart {
+			folds.openLiteral()
 			s.quoted, s.fieldStart = true, false
 		} else {
 			s.fieldStart = false
@@ -84,6 +89,7 @@ func (csvTokenizer) Scan(in Input, previous State) (Result, error) {
 	}
 	if in.LineEnd && limit == len(in.Text) {
 		if s.pending {
+			folds.closeLiteral(s.quoteAt+1, true)
 			s.quoted, s.pending, s.quoteAt = false, false, 0
 		}
 		if !s.quoted {
