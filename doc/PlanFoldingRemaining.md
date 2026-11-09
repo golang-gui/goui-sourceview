@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 1 | Makefile、Batch、GoTemplate、Jinja2 | 已完成 |
 | 2 | AsciiDoc、reStructuredText、LaTeX | 已完成 |
-| 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 实现中 |
+| 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 已完成 |
 | 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 待实现 |
 
 ## 边界
@@ -86,7 +86,14 @@ GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建�
 CSV 关闭行上有后续列（包括空列）时保留该行，PO 复数及连续字符串留在所属记录。
 固定精确断言先复现 BibTeX 转义引号／转义花括号提前关闭、@comment 内伪条目生成范围：
 b3-ranges-before.log。补足私有转义状态和字面闭合注释的屏蔽，不扩展到字段／引用／宏语义。
-验证进行中。
+固定范围／反例、8 路并发、4090..4097 边界、9000 字节正文、预取消与中途取消，
+以及四种扫描器 1..17 字节预算的完整结果／状态一致性均通过（b3-language.log）。
+GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建通过（b3-checks.json）。
+同前两批独立桌面环境，新增七份样本五种主题／绘制／缩放配置均通过；前两批各两组、配置折叠
+两组回归通过，共 11 组。正常事件路径的折叠、搜索、隐藏删除、Undo、边界编辑重分析、只读和
+视图隔离断言均通过。两个程序哈希、实际后端／缩放、认证／进程清理和草稿不变已核对
+（b3-postflight.json）。功能提交 `4556e9d`；独立核心导出 b3-core 全量测试／vet 通过。
+窗口验收独立导出 b3-final 全量测试／vet 通过。最后补写仅改本记录。日志 b3-*，原生平台、合成／硬件 GPU 限制同第一批。
 
 ## 第四批与整体验收
 
