@@ -9,7 +9,7 @@
 | 1 | Makefile、Batch、GoTemplate、Jinja2 | 已完成 |
 | 2 | AsciiDoc、reStructuredText、LaTeX | 已完成 |
 | 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 已完成 |
-| 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 实现中 |
+| 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 已完成 |
 
 ## 边界
 
@@ -75,7 +75,7 @@ Linux amd64 / GOUI v0.7.0 / Pango，同第一批的专用 TigerVNC／Xfwm4 环�
 键盘／指针、搜索、隐藏删除／Undo、边界编辑重分析、只读与视图隔离均通过。
 实际后端／缩放、两个程序哈希、进程／认证清理、草稿不变已核对（b2-postflight.json）。
 GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建均通过（b2-checks.json）。
-功能提交 `d51db6d`，核心独立导出 b2-core 全量测试／vet 通过；窗口验收独立导出 b2-final 全量测试／vet 通过。最后补写仅改本记录。
+功能提交 `d51db6d`，窗口验收提交 `a1701e0`，核心独立导出 b2-core 全量测试／vet 通过；窗口验收独立导出 b2-final 全量测试／vet 通过。最后补写仅改本记录。
 失败与成功日志均保留在同一临时目录 b2-*。原生平台与合成／硬件 GPU 限制同第一批。
 
 
@@ -92,7 +92,7 @@ GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建�
 同前两批独立桌面环境，新增七份样本五种主题／绘制／缩放配置均通过；前两批各两组、配置折叠
 两组回归通过，共 11 组。正常事件路径的折叠、搜索、隐藏删除、Undo、边界编辑重分析、只读和
 视图隔离断言均通过。两个程序哈希、实际后端／缩放、认证／进程清理和草稿不变已核对
-（b3-postflight.json）。功能提交 `4556e9d`；独立核心导出 b3-core 全量测试／vet 通过。
+（b3-postflight.json）。功能提交 `4556e9d`，窗口验收提交 `b440723`；独立核心导出 b3-core 全量测试／vet 通过。
 窗口验收独立导出 b3-final 全量测试／vet 通过。最后补写仅改本记录。日志 b3-*，原生平台、合成／硬件 GPU 限制同第一批。
 
 ## 第四批与整体验收
@@ -105,4 +105,21 @@ Mermaid 仅处理 Flowchart／graph 的 subgraph，以及 Sequence 的 loop／al
 首次修正又遗漏未着色的普通标题（普通文本不生成 token），六项断言失败保留在 b4-language.log
 和 b4-first-test.log／race.log。改用屏蔽后的正文判断普通描述，并保留引用描述观察后修正。
 固定清单检查 87 个内置定义：80 个有默认 provider，7 个有意不提供默认规则，与计划一致。
-窗口和最终检查进行中。
+精确范围／反例、8 路并发、4090..4097 边界、9000 字节正文、预取消与中途取消均通过。
+修正后的全量测试、race（根包/language/highlight/editor/ui）、vet、Windows amd64／macOS arm64
+CGO_ENABLED=0 交叉构建全部通过（GOWORK=off，b4-checks.json）；先前失败日志保留，不扩大 skip 或删减断言。
+
+Linux amd64 / Go 1.25.8 / GOUI v0.7.0 / Pango，独立 TigerVNC 1.12.0／Xfwm4 4.16.1 桌面。
+Mermaid 五份样本 Basic SW 1×、Modern Light SW 1.5×、Dark SW 2×、Light GL 1×、Dark GL 1.5×通过；
+前三批各 Basic SW 1×／Dark GL 1.5×通过；13 个原有独立程序合计 25 组回归通过，完整矩阵共 36 组。
+全部包含相应程序的精确范围及正常事件路径断言，不把窗口启动当作验收。新增程序验证键盘／指针、
+搜索展开／隐藏文本、边界 Delete、Undo、只读、双视图隔离、边界编辑后重分析及文档切换。
+14 个本次源码构建程序的哈希、实际绘制后端／缩放、专用进程退出、认证文件删除、原有草稿哈希不变
+已核对（b4-postflight.json，desktop-p2ckbrp8）。WM 仍有 Another compositing manager 警告；
+不宣称桌面合成或硬件 GPU 验收，未执行物理 IME、混合 DPI、其他平台原生运行或性能对照。
+
+功能提交 `4f2ece3`；独立核心导出 b4-core 全量测试／vet 通过。
+最终验收独立导出 b4-final 全量测试／vet 通过；最后补写仅改本记录。全部日志／失败记录／构建清单位于同一临时目录 b4-*。
+
+四批共补充 13 项基础规则，80/7 清单检查通过。四批功能与窗口验收分别提交；没有新增公共 API、
+完整语法／语义解析器或第三方依赖，不修改 GOUI、不推送、不发布；七项有意留空的默认规则不作为待补缺口。

@@ -98,7 +98,7 @@ func main() {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
 		}
 	}
-	fixtures, ok := map[int]func() []fixture{1: batchOne, 2: batchTwo, 3: batchThree}[*batch]
+	fixtures, ok := map[int]func() []fixture{1: batchOne, 2: batchTwo, 3: batchThree, 4: batchFour}[*batch]
 	check(ok, "unknown verification batch")
 	samples := fixtures()
 
