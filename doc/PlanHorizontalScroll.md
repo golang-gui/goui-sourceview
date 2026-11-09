@@ -25,12 +25,18 @@
 验证再次输入仍能显露行尾、Undo 恢复该字符和选区。
 
 旧版加入同一窗口程序后在首次实际拖动失败（desktop-before.log）。修复版 Basic 软件 1×
-三种样本初验通过（desktop-basic.log）。其余主题／后端／缩放及原有长行、补全窗口回归进行中。
+三种样本初验通过（desktop-basic.log）。完整 9 组均通过（desktop.log）：新增窗口 Basic SW 1×、Modern Light SW 1.5×、Dark SW 2×、
+Light GL 1×、Dark GL 1.5×，每组包含三种实际滑块样本，共 15 份；原有 160011 字节长行程序
+以 SW 1×／GL 1.5×配置回归；连续补全以 Basic SW 1×／Dark GL 1.5×回归。
+新增滑块和补全程序核对实际后端／缩放，旧长行程序只记录启动配置与其既有断言，未新增后端探针。
+三个程序 SHA256、专用进程退出／全部认证文件清理、既有草稿哈希不变已核对（postflight.json）。
 
 ## 检查与限制
 
 GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 CGO_ENABLED=0 交叉构建通过
-（b1-checks.json）。独立导出与最终窗口结果待补。修复和窗口验收按英文分别提交。
+（b1-checks.json）。功能提交 `5e34018`，独立索引导出 core 的全量测试／vet 通过。
+窗口程序与最终记录的独立索引导出 final 全量测试／vet 通过；最后补写仅修改本记录。
+修复和窗口验收按英文分别提交。
 日志、构建和独立导出位于 `/tmp/sourceview-horizontal-scroll-3_f5gijv/`。
 
 Linux amd64 / Go 1.25.8 / Pango；专用 TigerVNC 1.12.0／Xfwm4 4.16.1，隔离显示、认证和 XDG 目录。
