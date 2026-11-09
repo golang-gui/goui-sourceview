@@ -369,7 +369,8 @@ func (v *SourceView) applyKey(event events.KeyEvent) bool {
 		case events.KeyEnter:
 			run(v.newline)
 		case events.KeyBackspace, events.KeyDelete:
-			wasCompleting := v.completion != nil
+			wasCompleting := v.completion != nil || v.completionQueue != nil && v.completionQueue.pending()
+			continued := false
 			run(func() error {
 				if v.unfoldDeleteBoundary(event.Key == events.KeyDelete) {
 					return nil
@@ -393,9 +394,11 @@ func (v *SourceView) applyKey(event events.KeyEvent) bool {
 				if handled, err := v.linkedTag(r, ""); handled {
 					return err
 				}
-				return v.replace(r, "", false)
+				var err error
+				continued, err = v.completionInput(r, "", false)
+				return err
 			})
-			if wasCompleting && v.editable() == nil {
+			if wasCompleting && !continued && v.editable() == nil {
 				v.report(v.complete(false))
 			}
 		case events.KeyArrowLeft, events.KeyArrowRight, events.KeyArrowUp, events.KeyArrowDown, events.KeyHome, events.KeyEnd, events.KeyPageUp, events.KeyPageDown:

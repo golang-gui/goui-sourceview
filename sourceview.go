@@ -164,6 +164,7 @@ type SourceView struct {
 	completion                             *completionSession
 	completionProvider                     *CompletionProvider
 	completionQueue                        *completionQueue
+	completionEdit                         *completionEdit
 	completionEpoch                        uint64
 	closingCompletion, automaticCompletion bool
 
@@ -312,7 +313,7 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 	v.setSelectionKeepingCompletion(s, upstream, reveal, nil)
 }
 
-// Only keyboard movement inside an existing completion word may retain its UI.
+// Only owned input or keyboard movement inside a completion word retains its UI.
 // Explicit setters, pointer input and reentrant callbacks use setSelection.
 func (v *SourceView) setSelectionKeepingCompletion(s textedit.Selection, upstream, reveal bool, keep *completionSession) {
 	defer v.searchState.Emit()
@@ -573,7 +574,9 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	epoch, d := v.mountEpoch, v.document
 	v.observed = c.Revision
 	v.reveal = nil
-	v.closeCompletion()
+	if !v.retainCompletionChange(c) {
+		v.closeCompletion()
+	}
 	if v.document != d || v.mountEpoch != epoch || !v.mounted {
 		return
 	}

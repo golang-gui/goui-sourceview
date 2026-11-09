@@ -15,6 +15,10 @@ func (v *SourceView) ReplaceSelection(text string) error {
 }
 
 func (v *SourceView) replace(r textedit.Range, text string, atomic bool) error {
+	return v.replaceKeepingCompletion(r, text, atomic, nil)
+}
+
+func (v *SourceView) replaceKeepingCompletion(r textedit.Range, text string, atomic bool, keep *completionEdit) error {
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -31,10 +35,36 @@ func (v *SourceView) replace(r textedit.Range, text string, atomic bool) error {
 	revision := m.Revision()
 	epoch := v.mountEpoch
 	before := v.Selection()
+	if keep != nil {
+		if keep.state != state || keep.epoch != v.completionEpoch || keep.session != v.completion {
+			return ErrOperationChanged
+		}
+		v.completionEpoch++
+		keep.epoch = v.completionEpoch
+		if v.completionQueue != nil {
+			v.completionQueue.cancel()
+		}
+		if keep.session != nil {
+			keep.session.pending = true
+		}
+		v.completionEdit = keep
+		defer func() {
+			if v.completionEdit == keep {
+				v.completionEdit = nil
+			}
+		}()
+	}
 	err := m.Apply(textedit.Edit{Range: r, Text: text}, textedit.EditOptions{Source: &v.source, Selection: &before, Atomic: atomic})
 	if err == nil && v.document == d && v.mountEpoch == epoch && m.Revision() == revision+1 && v.selectionEpoch == state.selection {
 		end := r.Start + len(text)
-		v.setSelection(textedit.Selection{Anchor: end, Caret: end}, false, true)
+		var session *completionSession
+		if keep != nil && keep.applied && keep.epoch == v.completionEpoch {
+			session = keep.session
+			if session == nil {
+				keep.epoch++ // Normal selection cleanup cancels an undisplayed request.
+			}
+		}
+		v.setSelectionKeepingCompletion(textedit.Selection{Anchor: end, Caret: end}, false, true, session)
 	}
 	return err
 }

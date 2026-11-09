@@ -104,10 +104,10 @@ func (v *SourceView) applyCommit(c gui.IMCommit) {
 		}
 	}
 	state := v.operationState()
-	err := v.replace(r, c.Text, atomic)
+	continued, err := v.completionInput(r, textedit.Normalize(c.Text), atomic)
 	v.report(err)
 	end := r.Start + len(textedit.Normalize(c.Text))
-	if err == nil && !atomic && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == (textedit.Selection{Anchor: end, Caret: end}) {
+	if err == nil && !continued && !atomic && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == (textedit.Selection{Anchor: end, Caret: end}) {
 		v.report(v.completeTriggered(false, c.Text))
 	}
 }

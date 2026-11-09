@@ -340,6 +340,10 @@ func (v *SourceView) RefreshCompletion() error {
 		v.closeCompletion()
 		return nil
 	}
+	return v.refreshCompletions(state, c)
+}
+
+func (v *SourceView) refreshCompletions(state operationState, c CompletionContext) error {
 	v.completionEpoch++
 	if v.completionQueue != nil {
 		v.completionQueue.cancel()
@@ -563,6 +567,7 @@ func (v *SourceView) closeCompletion() {
 	if v.closingCompletion {
 		return
 	}
+	v.completionEdit = nil
 	v.closingCompletion = true
 	defer func() { v.closingCompletion = false }()
 	v.completionEpoch++
@@ -630,6 +635,9 @@ func (v *SourceView) completionKey(event events.KeyEvent) bool {
 		v.closeCompletion()
 		return false
 	}
+	if completionTextKey(event) {
+		return false
+	}
 	if event.Modifiers != 0 {
 		v.closeCompletion()
 		return false
@@ -654,7 +662,7 @@ func (v *SourceView) completionKey(event events.KeyEvent) bool {
 	case events.KeyEscape:
 		v.closeCompletion()
 		return true
-	case events.KeyBackspace:
+	case events.KeyBackspace, events.KeyDelete:
 		return false
 	default:
 		v.closeCompletion()
