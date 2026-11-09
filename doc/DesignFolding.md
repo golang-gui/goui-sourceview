@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；[第十一批](PlanFoldingLanguages11.md) 补充基础 DOT／普通 Diff。上述扩展均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；[第十一批](PlanFoldingLanguages11.md) 补充基础 DOT／普通 Diff；第十二批补充 SSH 配置／HTTP 请求块。上述扩展均尚未发布。
 
 ## 范围与所有权
 
@@ -98,10 +98,31 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | INI / GitConfig / EditorConfig / systemd / Desktop Entry（第十批） | 完整节标题到下一节前的文本区域，排除值／续行中的伪标题 |
 | DOT（第十一批） | graph/subgraph `{}`、属性 `[]`，词法器确认闭合的多行注释／续行引号／HTML-like 字面量 |
 | Diff（第十一批） | 普通 Git／unified 文件区域及 `@@` hunk，文件头沿用词法分类，不解释补丁内容 |
+| SSHConfig（第十二批） | 大小写不敏感的 Host／Match 配置分节，排除参数／注释中的伪标题 |
+| HTTP／REST（第十二批） | 由 `###` 分隔的请求块，首个请求可无分隔符；正文保持整体 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
 结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。后续批次沿用这一规则。
+
+### SSH 配置与 HTTP 请求块
+
+SSH 复用既有扫描器确认的行首指令及参数，按不区分大小写的 `Host`／`Match`
+切分文本节，兼容空白／等号分隔。只在有词法参数时开始节，注释、值中的伪标题和
+HostName 等相似指令不切分；首节之前的全局配置保持可见。重复节按物理位置区分，
+保留标题、折叠后续内容到下一节前，尾部空行可见；无后续内容的空节不发布。
+这是文本分节，不校验所有参数语法、不求解模式／Match 条件、不展开 Include 或执行 exec。
+
+HTTP 沿用已有扫描器的行首三个或更多 `#` 分隔规则。分隔标题保持可见，
+请求头和正文整体折叠到下一个分隔符前；分隔符前的首个请求以请求行作为标题。
+请求起点使用扫描器确认的显式 method 加非空 target，或未加引号的明确 HTTP(S) URL
+（省略 GET，scheme 不区分大小写）。文件变量／注释前导区留在首个请求之外，
+只有注释、变量或空行的分隔块不发布；尾部空行留在区域外。
+已经进入请求后，正文中的 method／URL 不另起请求；非行首分隔符文本不切分。
+正文中的 JSON／HTML／XML 保持不透明，不为其生成额外候选；词法高亮仍沿用原扫描器。
+不解析网络／认证／响应，不读取正文引用文件，不推导仅有变量的隐式请求或其它客户端方言。
+
+两种格式复用现有全文 worker、取消和视图状态；不增加公共 API、扫描器状态或 GUI 分支。
 
 ### DOT 与普通 Diff
 
@@ -564,6 +585,12 @@ Julia stable 为动态文档；采用上述具体块／字面量边界，不将�
 仅采用显式括号／字面量与普通文件／hunk 文本边界；Graphviz 的 HTML 标签语义、
 Git combined patch、文件应用和完整格式校验不在范围。
 provider 与视图状态分离沿用前述 Monaco／Scintilla 取舍，不复制外部词法器或解析器。
+
+第十二批参照 [OpenSSH ssh_config](https://man.openbsd.org/ssh_config) 的 Host／Match
+文本作用域、大小写／等号规则，以及 [REST Client 请求格式](https://github.com/Huachao/vscode-restclient#usage)
+的 `###` 分隔与省略 GET 形式（2026-11-09 核对）。仅采用明确文本边界，不承诺完整
+SSH／REST Client 语法兼容。继续沿用前述 Monaco provider 与 Scintilla 视图状态分离方式，
+复用本仓现有 tokenizer，不复制外部解析器或引入依赖。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 

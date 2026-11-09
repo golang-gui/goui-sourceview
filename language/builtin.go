@@ -576,9 +576,11 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		switch info.ID {
+		case HTTP:
+			d.Folding = requestFolding(d.Tokenizer)
 		case Diff:
 			d.Folding = diffFolding(d.Tokenizer)
-		case INI, GitConfig, EditorConfig, Systemd, DesktopEntry:
+		case INI, GitConfig, EditorConfig, Systemd, DesktopEntry, SSHConfig:
 			d.Folding = sectionFolding(info.ID, d.Tokenizer)
 		case Lua, Ruby, Shell, CMake, SQL:
 			d.Folding = keywordFolding(info.ID, d.Tokenizer)

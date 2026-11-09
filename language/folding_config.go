@@ -45,6 +45,21 @@ func sectionHeaderToken(id ID, t Token) bool {
 }
 
 func sectionHeaderLine(ctx context.Context, id ID, l syntaxLine) bool {
+	if id == SSHConfig {
+		start, end := leadingFoldKeyword(l)
+		if end <= start || !strings.EqualFold(l.text[start:end], "Host") && !strings.EqualFold(l.text[start:end], "Match") {
+			return false
+		}
+		for _, t := range l.tokens {
+			if t.Class&ClassComment != 0 {
+				break
+			}
+			if t.Start >= end && t.Class&ClassString != 0 && strings.TrimSpace(l.text[t.Start:t.End]) != "" {
+				return true
+			}
+		}
+		return false
+	}
 	start := len(l.text) - len(strings.TrimLeft(l.text, " \t"))
 	if start == len(l.text) || l.text[start] != '[' {
 		return false
@@ -89,4 +104,18 @@ func sectionHeaderLine(ctx context.Context, id ID, l syntaxLine) bool {
 		}
 	}
 	return strings.TrimSpace(l.text[at:]) == ""
+}
+
+// A keyword may span several bounded scanner results. Require classification
+// over the entire leading word, without joining words across whitespace.
+func leadingFoldKeyword(l syntaxLine) (start, end int) {
+	start = len(l.text) - len(strings.TrimLeft(l.text, " \t"))
+	end = start
+	for _, t := range l.tokens {
+		if t.Start != end || t.Kind != KindKeyword || t.Class&(ClassString|ClassComment) != 0 {
+			break
+		}
+		end = t.End
+	}
+	return
 }
