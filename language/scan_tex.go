@@ -24,7 +24,11 @@ func (texTokenizer) InitialState() State { return texState{} }
 
 var texWords = strings.Fields("\\begin \\end \\section \\subsection \\chapter \\documentclass \\usepackage \\title \\author \\date \\maketitle \\label \\ref \\cite \\textbf \\textit \\emph \\item \\include \\input \\frac \\sqrt \\alpha \\beta \\sum \\int \\verb")
 
-func (texTokenizer) Scan(in Input, previous State) (Result, error) {
+func (b texTokenizer) Scan(in Input, previous State) (Result, error) {
+	return b.scan(in, previous, nil)
+}
+
+func (texTokenizer) scan(in Input, previous State, folds *foldLexemes) (Result, error) {
 	s, ok := previous.(texState)
 	if !ok {
 		return Result{}, fmt.Errorf("language: foreign TeX state")
@@ -37,6 +41,9 @@ func (texTokenizer) Scan(in Input, previous State) (Result, error) {
 	finish := func() {
 		switch s.word.text {
 		case "begin", "end":
+			if folds != nil && folds.tex != nil {
+				folds.tex.environmentRow = folds.tex.commandRow
+			}
 			s.wantEnv, s.ending = true, s.word.text == "end"
 		case "verb":
 			s.wantVerb = true
@@ -64,6 +71,7 @@ func (texTokenizer) Scan(in Input, previous State) (Result, error) {
 			w.add(at, at+n, KindString, ClassString)
 			i += n
 			if s.rawMatch == len(close) {
+				folds.texEnvironment(s.raw, true, in.Offset+i)
 				w.add(s.rawStart, in.Offset+i, KindKeyword, 0)
 				s.raw, s.rawMatch, s.rawStart = "", 0, 0
 			}
@@ -112,6 +120,9 @@ func (texTokenizer) Scan(in Input, previous State) (Result, error) {
 			if c == '}' {
 				w.add(at, at+n, KindDelimiter, ClassDelimiter)
 				env := s.word.text
+				if s.word.length == len(env) {
+					folds.texEnvironment(env, s.ending, at+n)
+				}
 				if s.ending {
 					if env == s.mathEnv {
 						s.mathEnv = ""
@@ -165,6 +176,9 @@ func (texTokenizer) Scan(in Input, previous State) (Result, error) {
 			continue
 		}
 		if c == '\\' {
+			if folds != nil && folds.tex != nil {
+				folds.tex.commandRow = folds.row
+			}
 			s.command = true
 			s.word = scanWord{}
 			w.add(at, at+n, KindKeyword, 0)

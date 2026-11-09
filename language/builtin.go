@@ -576,6 +576,10 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		switch info.ID {
+		case AsciiDoc, ReStructuredText:
+			d.Folding = proseFolding(info.ID, d.Tokenizer)
+		case LaTeX:
+			d.Folding = texFolding(d.Tokenizer)
 		case Makefile:
 			d.Folding = makeFolding(d.Tokenizer)
 		case Batch:

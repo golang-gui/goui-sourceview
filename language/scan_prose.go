@@ -78,7 +78,11 @@ func (adocTokenizer) Scan(in Input, previous State) (Result, error) {
 				i += n
 				continue
 			}
-			if space(c) && s.run >= 4 && s.marker != '=' {
+			if space(c) && s.run >= 4 {
+				if s.block == 0 && s.marker == '=' && s.run <= 6 {
+					s.line = KindHeading
+					w.add(0, at, KindHeading, 0)
+				}
 				s.tail = true
 				w.add(at, at+n, s.line, proseClass(s.line))
 				i += n
@@ -158,7 +162,7 @@ func (adocTokenizer) Scan(in Input, previous State) (Result, error) {
 		i += n
 	}
 	if in.LineEnd && i == len(in.Text) {
-		if s.candidate && s.run >= 4 && s.marker != '=' && (s.block == 0 || s.marker == s.block && s.run == s.width) {
+		if s.candidate && s.run >= 4 && (s.block == 0 || s.marker == s.block && s.run == s.width) {
 			w.add(0, in.Offset+limit, KindFence, 0)
 			if s.block == 0 {
 				s.block, s.width = s.marker, s.run
