@@ -6,7 +6,7 @@
 
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
-| 1 | Makefile、Batch、GoTemplate、Jinja2 | 实现中 |
+| 1 | Makefile、Batch、GoTemplate、Jinja2 | 已完成 |
 | 2 | AsciiDoc、reStructuredText、LaTeX | 待实现 |
 | 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 待实现 |
 | 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 待实现 |
@@ -38,7 +38,27 @@ Plain、JSONLines、GoSum、GitIgnore、GitAttributes、TSV、Crontab 保持无�
 
 ## 第一批
 
-进行中。
+功能与逻辑：Makefile、Batch、GoTemplate、Jinja2。既有词法观察配对模板块，宿主仍不透明；
+Make 使用显式控制指令、续行和可确认 recipe，Batch 使用 label／注释 region。
+`folding_remaining1_test.go` 固定精确范围／反例、8 路并发、4090..4097 边界、9000 字节正文、
+预取消／扫描中途取消、1..17 字节预算下公开／观察 Scan 的完整结果比较；模板构造器覆盖
+Plain／HTML／XML／YAML／TOML 宿主。全部通过。raw 中带引号的伪 endraw 曾复现提前结束，
+补充 rawPrefix 状态后修正；首次修正时观察器把空白误当符号导致三个 raw 断言失败，
+修正观察点后恢复。失败保留在 b1-raw-before.log、b1-raw-fix-first.log，不删减预期。
+
+Linux amd64 / Go 1.25.8 / GOUI v0.7.0 / Pango，专用 TigerVNC 1.12.0、Xfwm4 4.16.1。
+新增窗口程序第一批八份样本（含两种 HTML 宿主），键盘／指针、搜索／隐藏文本、边界删除／
+Undo、只读与双视图隔离、边界编辑后精确重分析均通过。Basic 初验及完整 9 组通过：
+新增 Basic SW 1×、Modern Light SW 1.5×、Modern Dark SW 2×、Light GL 1×、Dark GL 1.5×；
+另跑 Dockerfile、Shell/Lua/Ruby/CMake/SQL 的 Basic SW 1× 和 Dark GL 1.5×。
+实际后端／缩放和三个程序哈希已核对，专用进程退出、认证文件清理、原有草稿哈希不变。
+WM 含 Another compositing manager 警告，不宣称桌面合成或硬件 GPU 验收。
+
+GOWORK=off 全量测试、race（根包/language/highlight/editor/ui）、vet、Windows amd64／
+macOS arm64 CGO_ENABLED=0 交叉构建通过。物理 IME、混合 DPI、其他平台原生运行和性能对照未执行。
+日志位于 /tmp/sourceview-folding-remaining-d5k6cda0/：b1-*，矩阵位置见 b1-postflight.json。
+功能提交 `bac9808`。核心独立导出 b1-core 的全量测试／vet 通过；验收独立导出 b1-final 的全量测试／vet 也通过。最后补写仅改本记录。
+
 
 ## 第二批
 
