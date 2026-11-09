@@ -14,6 +14,7 @@ type foldLexemes struct {
 	query              *queryFoldObserver
 	functional         *functionalFoldObserver
 	diff               *diffFoldObserver
+	template           *templateFoldObserver
 	lineLiteral        int // Zig's confirmed line-string token, or -1.
 }
 
@@ -118,6 +119,8 @@ func (t foldingTokenizer) Scan(in Input, state State) (Result, error) {
 		t.lexemes.lineLiteral = -1
 	}
 	switch scanner := t.Tokenizer.(type) {
+	case templateTokenizer:
+		return scanner.scan(in, state, t.lexemes)
 	case dotTokenizer:
 		return scanner.scan(in, state, t.lexemes)
 	case diffTokenizer:

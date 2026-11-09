@@ -2,6 +2,8 @@
 
 状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；[第十一批](PlanFoldingLanguages11.md) 补充基础 DOT／普通 Diff；[第十二批](PlanFoldingLanguages12.md) 补充 SSH 配置／HTTP 请求块；[第十三批](PlanFoldingLanguages13.md) 补充 Dockerfile 阶段与多行指令。上述扩展均尚未发布。
 
+其余语言按 [剩余支持收尾计划](PlanFoldingRemaining.md) 分四批实现。第一批为 Makefile、Batch、GoTemplate／Jinja2；规则限于明确文本／词法边界，未完成批次不视为已有能力。
+
 ## 范围与所有权
 
 语言定义的可选 Folding 函数从不可变 UTF-8/LF 全文生成 FoldRange。范围行号从 0 开始，
@@ -105,6 +107,23 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
 结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。后续批次沿用这一规则。
+
+### 剩余支持第一批：Makefile、Batch 与模板
+
+Makefile 配对 define/endef、ifdef/ifndef/ifeq/ifneq/endif；define 正文只观察嵌套 define，
+不将其中的条件单词当代码。识别显式续行及字面目标后的连续 recipe，沿用 .RECIPEPREFIX，
+赋值和变量展开目标不作为规则头。不执行 include、变量求值或依赖分析。
+Batch 复用实际 label 分类做分节，支持词法注释中的显式 region；不推导 goto/call 或普通括号。
+
+模板在既有扫描器的实际打开／单词／符号／关闭路径产生 worker 私有观察，
+Go 配对 if/range/with/define/block 与 end；Jinja 配对常见显式块、raw 与块 set，
+区别赋值 set；else/elif 等保留在父块内。只在闭合标签后配对，错配或未完成不发布。
+支持多行模板注释、裁剪标记与显式宿主构造器；宿主文本／元素保持不透明，
+宿主 folding 仍禁用，不合成混合元素树。raw 内带引号／符号的伪 endraw 不关闭 raw，
+扫描器增加私有前缀标记确认这一边界；不是模板求值或完整语法解析。
+
+词法观察不保存在 State／注册 tokenizer 中；nil 观察路径与带观察路径逐片比较 token、
+Consumed、ReplaceFrom 和 State。状态保持不可变；复用现有 worker、取消、范围排序和视图状态。
 
 ### Dockerfile 阶段与多行指令
 

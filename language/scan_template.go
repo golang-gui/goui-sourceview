@@ -32,6 +32,7 @@ func newTemplate(id ID, host *Language) (*Language, error) {
 	}
 	info, _ := Lookup(id)
 	d := Definition{Info: info, Tokenizer: templateTokenizer{id, host}, Editing: defaultEditing(), AllowWordSuggestions: codeWordSuggestions}
+	d.Folding = templateFolding(id, d.Tokenizer)
 	d.Editing.Word = func(r rune) bool { return IdentifierRune(r) || r == '$' }
 	d.Editing.AllowPair = func(c PairContext) bool { return c.Selected || c.Context.Data == true }
 	if id == GoTemplate {
@@ -71,6 +72,7 @@ type templateState struct {
 	body                       builtinState
 	mode, quote                byte
 	escape, raw, rawEnd, first bool
+	rawPrefix                  bool
 	depth                      int
 	word                       scanWord
 	wordOn                     bool
@@ -141,6 +143,10 @@ func (b templateTokenizer) InitialState() State {
 	return templateState{id: b.id, host: b.host, body: initialBuiltin()}
 }
 func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
+	return b.scan(in, state, nil)
+}
+
+func (b templateTokenizer) scan(in Input, state State, folds *foldLexemes) (Result, error) {
 	s, ok := state.(templateState)
 	if !ok || s.id != b.id || s.host != b.host {
 		return Result{}, fmt.Errorf("language: foreign template state")
@@ -163,6 +169,7 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.raw && s.word.text != "endraw" {
 			k = KindPlain
 		}
+		folds.templateWord(s.word.text, k, s.first)
 		w.add(s.word.start, end, k, 0)
 		if s.first && s.mode == '%' {
 			if s.word.text == "raw" && !s.raw {
@@ -181,8 +188,10 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 		if s.mode == 0 {
 			open := strings.HasPrefix(text[i:], "{{") || s.id == Jinja2 && (strings.HasPrefix(text[i:], "{%") || strings.HasPrefix(text[i:], "{#"))
 			if open && (!s.raw || strings.HasPrefix(text[i:], "{%")) {
+				folds.templateOpen(in.Offset+i, text[i+1], s.raw)
 				s.hostBoundary(in.Offset+i, &w)
 				s.mode, s.first, s.rawEnd = text[i+1], true, false
+				s.rawPrefix = false
 				add(i, i+2, KindMeta, 0)
 				i += 2
 				continue
@@ -222,6 +231,7 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 				if s.id == GoTemplate {
 					s.mode = '{'
 				} else {
+					folds.templateClose(s.id, in.Offset+i)
 					s.mode = 0
 				}
 			} else {
@@ -259,6 +269,7 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 			close = "%}"
 		}
 		if s.depth == 0 && strings.HasPrefix(text[i:], close) {
+			folds.templateClose(s.id, in.Offset+i+2)
 			add(i, i+2, KindMeta, 0)
 			i += 2
 			s.mode = 0
@@ -275,16 +286,29 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 				i += n
 				continue
 			}
+			trim := s.first && !s.rawPrefix && (c == '-' || c == '+')
+			if !space(c) {
+				folds.templateSymbol(c, in.Offset+i, trim)
+				if trim {
+					s.rawPrefix = true
+				} else {
+					s.first = false
+				}
+			}
 			i += n
 			continue
 		}
 		if s.id == GoTemplate && strings.HasPrefix(text[i:], "/*") {
+			if folds != nil && folds.template != nil && !folds.template.action.seen {
+				folds.template.action.comment = true
+			}
 			s.mode = '#'
 			add(i, i+2, KindComment, ClassComment)
 			i += 2
 			continue
 		}
 		if c == '"' || c == '\'' || s.id == GoTemplate && c == 0x60 {
+			folds.templateSymbol(c, in.Offset+i, false)
 			s.quote = c
 			add(i, i+1, KindString, ClassString)
 			i++
@@ -310,6 +334,8 @@ func (b templateTokenizer) Scan(in Input, state State) (Result, error) {
 			s.depth--
 		}
 		if !space(c) {
+			trim := (c == '-' || s.id == Jinja2 && c == '+') && (strings.HasPrefix(text[i+1:], close) || s.id == Jinja2 || i+1 < len(text) && space(text[i+1]))
+			folds.templateSymbol(c, in.Offset+i, trim)
 			class := Class(0)
 			if strings.ContainsRune("()[]{}", r) {
 				class = ClassDelimiter
