@@ -1,6 +1,6 @@
 // Completion panel verification. Requires a desktop/window manager and native
 // fonts. Run: go run ./tests/window/editor/completion [-dark] [-case CASE]
-// [-auto]. CASE: json, html, xml, long, unicode, scroll, wrapped, edge, navigation.
+// [-auto]. CASE: json, html, xml, long, unicode, scroll, wrapped, edge, navigation, typing.
 // navigation 必须带 -auto，验证词内左右移动复用弹窗、候选恢复、词边界与选区关闭、
 // 嵌入语言确认、慢 Provider 的取消和过期结果、请求尚未显示时移动以及选区回调换文档。
 // -basic selects Basic instead of Modern. -expect-surface transparent/opaque
@@ -106,7 +106,7 @@ func main() {
 	runtime.LockOSThread()
 	dark := flag.Bool("dark", false, "dark code scheme")
 	corners := flag.Bool("corners", false, "verify independently rounded selected-row pixels")
-	scenario := flag.String("case", "json", "json/html/xml/long/unicode/scroll/wrapped/edge/navigation")
+	scenario := flag.String("case", "json", "json/html/xml/long/unicode/scroll/wrapped/edge/navigation/typing")
 	auto := flag.Bool("auto", false, "verify input and close automatically")
 	basicTheme := flag.Bool("basic", false, "use the official Basic sheet")
 	surface := flag.String("expect-surface", "", "assert transparent or opaque popup creation")
@@ -115,8 +115,8 @@ func main() {
 	text, prefix, id := "{\n    \"value\": tr", "tr", language.JSON
 	switch *scenario {
 	case "json", "long", "scroll":
-	case "navigation":
-		check(*auto, "navigation requires -auto")
+	case "navigation", "typing":
+		check(*auto, "navigation/typing requires -auto")
 		text, prefix, id = "trade trace true\ntruffle tail", "tr", language.Plain
 	case "html":
 		text, prefix, id = "<di", "di", language.HTML
@@ -186,7 +186,7 @@ func main() {
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(context.Context, source.CompletionContext) ([]source.Completion, error) { return items, nil }})
 	}
 	caret := len(text)
-	if *scenario == "navigation" {
+	if *scenario == "navigation" || *scenario == "typing" {
 		caret = strings.Index(text, "truffle") + len(prefix)
 	}
 	v.SetSelection(textedit.Selection{Anchor: caret, Caret: caret})
@@ -214,6 +214,10 @@ func main() {
 		}
 	}
 	primary, _ := gui.ModPrimary.Resolve()
+	if *scenario == "typing" {
+		verifyTyping(app, win, v, doc, key, probe, *dark)
+		return
+	}
 	if *scenario == "navigation" {
 		verifyNavigation(app, win, v, doc, key, probe, *dark)
 		return
