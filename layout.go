@@ -13,14 +13,49 @@ import (
 
 const padding float32 = 6
 
+// A full reset has no drawable paragraphs to retain while frame work catches
+// up. Its first allocation may prepare the visible region, including widths
+// changed by the host's bounded scrollbar convergence. Paint ends this phase.
+type viewportInitialization struct {
+	document        *Document
+	revision, mount uint64
+}
+
+func (v *SourceView) invalidateTextLayout() {
+	state := v.operationState()
+	v.invalidateLayout()
+	if state.valid(v) && v.mounted && v.frameLayout && !v.Destroyed() {
+		v.initialLayout = &viewportInitialization{v.document, v.document.model.Revision(), v.mountEpoch}
+	}
+}
+
+func (v *SourceView) initializingViewport() bool {
+	s := v.initialLayout
+	if s == nil {
+		return false
+	}
+	if !v.mounted || v.Destroyed() || s.document != v.document || s.revision != v.document.model.Revision() || s.mount != v.mountEpoch {
+		v.initialLayout = nil
+		return false
+	}
+	return true
+}
+
 func (v *SourceView) invalidateLayout() {
 	if v.mounted && v.anchor.valid && v.anchorRevision == v.document.model.Revision() {
 		v.pendingAnchor = true
 	}
 
+	state, epoch := v.operationState(), v.layoutEpoch+1
 	v.dropLayouts()
+	if !state.valid(v) || v.layoutEpoch != epoch || v.Destroyed() {
+		return
+	}
 	v.resetHeights()
 	v.contentWidth = 0
+	if v.frameLayout {
+		v.requestLayoutWork()
+	}
 	v.RequestLayout()
 	v.RequestPaint()
 }
@@ -184,16 +219,31 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 	// paragraphs cover the viewport. Bound the work to two passes per call.
 	old := v.ContentSize()
 	state, epoch := v.operationState(), v.layoutEpoch
+	initialize := v.initializingViewport() && viewport.Width > 0 && viewport.Height > 0
 	measured := false
 	for range 2 {
 		first, last := v.visibleRows()
 		complete := true
 		for row := first; row <= last; row = v.nextDisplayRow(row) {
-			if v.viewportParagraph(row) == nil {
+			var p *paragraph
+			if initialize {
+				if _, failed := v.layoutFailures[v.paragraphKey(row)]; !failed {
+					p = v.paragraph(row)
+				}
+			} else {
+				p = v.viewportParagraph(row)
+			}
+			if p == nil {
 				complete = false
 			}
 			if !state.valid(v) || epoch != v.layoutEpoch || v.Destroyed() {
 				return
+			}
+			if initialize {
+				// A newly measured wrapped paragraph can cover the entire view.
+				// Do not initialize the rows its old one-line estimate exposed.
+				_, currentLast := v.visibleRows()
+				last = min(last, currentLast)
 			}
 		}
 		nextFirst, nextLast := v.visibleRows()

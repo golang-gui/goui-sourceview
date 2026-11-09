@@ -18,6 +18,11 @@ func (v *SourceView) Paint(p gui.Painter) {
 	if v.context == nil || v.mounted && v.observed != v.document.model.Revision() {
 		return
 	}
+	// End reset-only layout preparation when painting begins. Keep it for
+	// a zero-size allocation, whose first usable viewport has not arrived yet.
+	if v.Rect().Width > 0 && v.Rect().Height > 0 && v.initializingViewport() {
+		v.initialLayout = nil
+	}
 	v.ensureMetrics()
 	v.updateGutter()
 	first, last := v.visibleRows()

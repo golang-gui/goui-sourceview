@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -545,6 +546,64 @@ func TestDeferredResizeKeepsMeasuredHeightAsEstimate(t *testing.T) {
 	settle(220)
 	if ctx.created != before {
 		t.Fatal("deferred restore evicted the recent useful width")
+	}
+}
+
+func TestNativeResetPaintsAtAllocatedWidth(t *testing.T) {
+	for _, sample := range []struct{ name, before, after string }{
+		{"long to short", strings.Repeat("old wrapped words ", 400), "new short text"},
+		{"short to long", "old short text", strings.Repeat("new wrapped words ", 400)},
+		{"long to long", strings.Repeat("old wrapped words ", 400), strings.Repeat("new wrapped words ", 400)},
+		{"many rows", "old short text", strings.Repeat("new line\n", 500)},
+		{"fallback text", "old short text", "new 中文 e\u0301 שלום العربية"},
+		{"empty", strings.Repeat("old wrapped words ", 400), ""},
+	} {
+		t.Run(sample.name, func(t *testing.T) {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			native, err := nativeContext()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer native.Destroy()
+			v := NewSourceView()
+			v.SetShowLineNumbers(false)
+			v.SetWrapMode(WrapWordChar)
+			v.Document().Model().SetText(sample.before)
+			observe(t, v)
+			ctx := &countedNativeContext{Context: native}
+			v.context, v.frameLayout = ctx, true
+			defer func() {
+				v.dropLayouts()
+				if ctx.created != ctx.destroyed {
+					t.Fatal("reset leaked native layouts", ctx.created, ctx.destroyed)
+				}
+			}()
+			scroll := gui.NewScrollView()
+			scroll.SetChild(v)
+			for range 8 {
+				scroll.Arrange(geometry.Rect(0, 0, 400, 180))
+				v.layoutStep(time.Time{})
+			}
+			v.Paint(&recordingPainter{})
+			v.Document().Model().SetText(sample.after)
+			// Match the native frame: preparation precedes host arrangement.
+			v.layoutStep(time.Time{})
+			scroll.Arrange(scroll.Rect())
+			first, last := v.visibleRows()
+			for row := first; row <= last; row = v.nextDisplayRow(row) {
+				p := v.cachedParagraph(row)
+				if p == nil || p.text != v.displayText(row) {
+					t.Fatalf("first paint has no current-width text for row %d, viewport=%v", row, v.viewport)
+				}
+			}
+			before := ctx.created
+			p := &recordingPainter{}
+			v.Paint(p)
+			if !slices.Contains(p.order, "text") || ctx.created != before {
+				t.Fatal("reset paint lacks text or performs native layout", p.order, before, ctx.created)
+			}
+		})
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -355,6 +356,159 @@ func TestViewportAndPaintQueueMissingMeasurements(t *testing.T) {
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 100}, geometry.Point{})
 	if len(ctx.requests) != before || v.layoutPending {
 		t.Fatal("paint or shrinking height remeasured ready paragraphs")
+	}
+}
+
+func TestLayoutInvalidationQueuesBeforePaint(t *testing.T) {
+	v, _ := layoutWorkFixture(t, 100)
+	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
+	v.layoutStep(time.Time{})
+	v.invalidateLayout()
+	if !v.layoutPending {
+		t.Fatal("layout invalidation waits for an empty paint before preparing new text")
+	}
+	v.layoutStep(time.Time{})
+	p := &recordingPainter{}
+	v.Paint(p)
+	if !slices.Contains(p.order, "text") {
+		t.Fatal("first paint after invalidation has no prepared text")
+	}
+	v.dropLayouts()
+	if v.layoutPending {
+		t.Fatal("resource disposal scheduled new layout work")
+	}
+}
+
+func TestResetInitializationEndsAfterPaint(t *testing.T) {
+	v, ctx := layoutWorkFixture(t, 100)
+	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
+	v.layoutStep(time.Time{})
+	ctx.requests = nil
+	v.Document().Model().SetText(strings.Repeat("row replacement\n", 10000))
+	if len(ctx.requests) != 0 || v.initialLayout == nil {
+		t.Fatal("reset shaped text immediately or lost its first allocation")
+	}
+	v.LayoutVisible(geometry.Size{}, geometry.Point{})
+	v.Paint(&recordingPainter{})
+	if v.initialLayout == nil || len(ctx.requests) != 0 {
+		t.Fatal("zero-size allocation consumed or measured initialization")
+	}
+	v.Arrange(geometry.Rect(0, 0, 400, 200))
+	v.LayoutVisible(geometry.Size{Width: 392, Height: 200}, geometry.Point{})
+	if v.cachedParagraph(0) == nil || len(ctx.requests) == 0 || len(ctx.requests) > 30 {
+		t.Fatal("reset did not prepare a bounded region at the allocated width", len(ctx.requests))
+	}
+	before := ctx.created
+	v.Paint(&recordingPainter{})
+	if v.initialLayout != nil || ctx.created != before {
+		t.Fatal("paint measured text or retained reset-only initialization")
+	}
+	// Subsequent width changes use the ordinary budgeted frame path.
+	v.LayoutVisible(geometry.Size{Width: 500, Height: 200}, geometry.Point{})
+	if ctx.created != before || !v.layoutPending {
+		t.Fatal("reset changed the ordinary deferred resize contract")
+	}
+}
+
+func TestResetInitializationRejectsStaleWork(t *testing.T) {
+	for _, action := range []string{"edit", "document", "mount", "dispose"} {
+		t.Run(action, func(t *testing.T) {
+			v, _ := layoutWorkFixture(t, 100)
+			v.Document().Model().SetText("row replacement")
+			saved := v.initialLayout
+			if saved == nil {
+				t.Fatal("reset did not register initialization")
+			}
+			switch action {
+			case "edit":
+				if err := v.Document().Model().Replace(textedit.Range{}, "x"); err != nil {
+					t.Fatal(err)
+				}
+			case "document":
+				v.SetDocument(NewDocument("other document"))
+			case "mount":
+				v.mountEpoch++ // Model an old request surviving reattachment.
+			case "dispose":
+				v.dropLayouts()
+			}
+			if v.initializingViewport() && v.initialLayout == saved {
+				t.Fatal("obsolete reset initialization is still usable")
+			}
+		})
+	}
+}
+
+func TestResetInitializationBelongsToEachView(t *testing.T) {
+	a, _ := layoutWorkFixture(t, 100)
+	b, _ := layoutWorkFixture(t, 100)
+	b.SetDocument(a.Document())
+	a.Document().Model().SetText("row shared replacement")
+	if a.initialLayout == nil || b.initialLayout == nil || a.initialLayout == b.initialLayout {
+		t.Fatal("shared document did not create independent viewport initialization")
+	}
+	a.Arrange(geometry.Rect(0, 0, 400, 200))
+	b.Arrange(geometry.Rect(0, 0, 220, 200))
+	pa, pb := a.cachedParagraph(0), b.cachedParagraph(0)
+	if pa == nil || pb == nil || pa == pb || pa.layout == pb.layout {
+		t.Fatal("shared reset mixed the views' native resources")
+	}
+	a.Paint(&recordingPainter{})
+	if a.initialLayout != nil || !b.initializingViewport() {
+		t.Fatal("painting one view completed another view's initialization")
+	}
+	a.dropLayouts()
+	if b.cachedParagraph(0) != pb || !b.initializingViewport() {
+		t.Fatal("disposing one view invalidated another view's reset")
+	}
+}
+
+func TestResetInitializationStopsAfterNativeReentry(t *testing.T) {
+	v, ctx := layoutWorkFixture(t, 100)
+	v.Document().Model().SetText("row obsolete\nrow obsolete")
+	ctx.hook = func() { v.Document().Model().SetText("row current") }
+	v.Arrange(geometry.Rect(0, 0, 400, 200))
+	if len(ctx.requests) != 1 || len(v.layouts) != 0 || !v.initializingViewport() {
+		t.Fatal("interrupted initialization published stale resources or lost the newer reset")
+	}
+	v.Arrange(v.Rect())
+	if p := v.cachedParagraph(0); p == nil || p.text != "row current" {
+		t.Fatal("newer reset did not initialize current text")
+	}
+}
+
+type tallResetContext struct{ layoutWorkContext }
+
+func (c *tallResetContext) NewTextLayout(text string, f typography.TextFormat, w, h float32) (typography.TextLayout, error) {
+	l, err := c.layoutWorkContext.NewTextLayout(text, f, w, h)
+	if err == nil && strings.HasPrefix(text, "row tall") {
+		return &tallResetLayout{l}, nil
+	}
+	return l, err
+}
+
+type tallResetLayout struct{ typography.TextLayout }
+
+func (l *tallResetLayout) MeasureSize() (float32, float32) {
+	w, _ := l.TextLayout.MeasureSize()
+	return w, 1000
+}
+
+func TestResetInitializationShrinksEstimatedVisibleWork(t *testing.T) {
+	v, _ := layoutWorkFixture(t, 100)
+	ctx := &tallResetContext{}
+	v.context = ctx
+	t.Cleanup(func() {
+		v.dropLayouts()
+		if ctx.created != ctx.destroyed {
+			t.Fatal("tall reset leaked native layouts")
+		}
+	})
+	v.Document().Model().SetText(strings.Repeat("row tall paragraph\n", 10000))
+	v.Arrange(geometry.Rect(0, 0, 400, 300))
+	// One 1000-DIP paragraph covers the view; only its one-row overscan
+	// neighbor may also be prepared, not the 16 rows in the initial estimate.
+	if len(ctx.requests) != 2 {
+		t.Fatal("reset initialized paragraphs outside the actual view and overscan", len(ctx.requests))
 	}
 }
 

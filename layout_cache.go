@@ -73,6 +73,7 @@ type paragraphStyle struct {
 func (v *SourceView) dropLayouts() {
 	v.layoutEpoch++
 	v.layoutPending = false
+	v.initialLayout = nil
 	v.layoutFailures = nil
 	old := v.layouts
 	v.layouts = make(map[layoutKey]*paragraph)

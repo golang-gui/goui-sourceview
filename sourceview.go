@@ -106,6 +106,7 @@ type SourceView struct {
 	layoutFailures             map[layoutKey]struct{}
 	layoutEpoch                uint64
 	frameLayout, layoutPending bool
+	initialLayout              *viewportInitialization
 	tick                       uint64
 	anchor                     viewportAnchor
 	anchorRevision             uint64
@@ -267,7 +268,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.pendingAnchor = false
 	v.reveal = nil
 	v.offset = geometry.Point{}
-	v.invalidateLayout()
+	v.invalidateTextLayout()
 	state = v.operationState()
 	if v.mounted {
 		v.updateScheme()
@@ -563,6 +564,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 }
 
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
+	v.initialLayout = nil
 	if e := v.execution; e != nil && e.revision < c.Revision {
 		if e.revision+1 != c.Revision {
 			e.valid = false
@@ -617,7 +619,11 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		v.selectionRevision = c.Revision
 	}
 	if reset || c.Reset || hadHiddenRows {
-		v.invalidateLayout()
+		if c.Reset {
+			v.invalidateTextLayout()
+		} else {
+			v.invalidateLayout()
+		}
 	} else {
 		for _, s := range splices {
 			estimate := v.lineHeight
@@ -693,7 +699,7 @@ func (v *SourceView) mount() {
 	}
 	attachFrame(v)
 	v.updateScheme()
-	v.invalidateLayout()
+	v.invalidateTextLayout()
 	v.blink = gui.App.NewTimer()
 	v.blinkHandle = v.blink.ConnectTimeout(func() {
 		if !v.mounted || !activeFocus(v) || !visible(v) {
