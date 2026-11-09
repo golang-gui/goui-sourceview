@@ -7,7 +7,7 @@
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 1 | Makefile、Batch、GoTemplate、Jinja2 | 已完成 |
-| 2 | AsciiDoc、reStructuredText、LaTeX | 实现中 |
+| 2 | AsciiDoc、reStructuredText、LaTeX | 已完成 |
 | 3 | BibTeX、Gettext PO、Dotenv、Properties、CSV | 待实现 |
 | 4 | Mermaid 的 Flowchart／Sequence 显式块；整体验收 | 待实现 |
 
@@ -69,7 +69,14 @@ AsciiDoc 补足 ==== 示例块而不影响同前缀标题。TeX 在实际扫描�
 固定断言失败保留在 b2-ranges.log，增加已用标记并保持独立预期后通过（b2-language.log）。
 本规则不实现完整文档块树、宏展开、动态环境名、数学分析或 Docutils 扩展。
 
-窗口和最终检查进行中。
+Linux amd64 / GOUI v0.7.0 / Pango，同第一批的专用 TigerVNC／Xfwm4 环境。
+六份新增样本在 Basic SW 1×、Modern Light SW 1.5×、Dark SW 2×、Light GL 1×、Dark GL 1.5×
+均通过；另回归第一批 Basic SW 1×／Dark GL 1.5×、原有折叠 Dark GL 2×，共 8 组。
+键盘／指针、搜索、隐藏删除／Undo、边界编辑重分析、只读与视图隔离均通过。
+实际后端／缩放、两个程序哈希、进程／认证清理、草稿不变已核对（b2-postflight.json）。
+GOWORK=off 全量测试、race、vet、Windows amd64／macOS arm64 交叉构建均通过（b2-checks.json）。
+功能提交 `d51db6d`，核心独立导出 b2-core 全量测试／vet 通过；窗口验收独立导出 b2-final 全量测试／vet 通过。最后补写仅改本记录。
+失败与成功日志均保留在同一临时目录 b2-*。原生平台与合成／硬件 GPU 限制同第一批。
 
 
 ## 第三批
