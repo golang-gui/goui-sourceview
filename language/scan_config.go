@@ -36,6 +36,7 @@ type configState struct {
 	recipePrefix                           byte
 	prefixAssignment                       bool
 	dockerEscape                           byte
+	dockerContent                          bool
 	dockerShell                            *shellState
 	httpStage                              uint8
 	httpRequest                            bool
@@ -95,7 +96,12 @@ func (b configTokenizer) scan(in Input, state State, folds *foldLexemes) (Result
 	w := tokenWriter{base: in.Offset}
 	i := 0
 	text := in.Text
-	add := func(a, z int, k Kind, c Class) { w.add(in.Offset+a, in.Offset+z, k, c) }
+	add := func(a, z int, k Kind, c Class) {
+		w.add(in.Offset+a, in.Offset+z, k, c)
+		if b.id == Dockerfile && k != KindComment {
+			s.dockerContent = true
+		}
+	}
 	// Outer request separators always terminate an embedded HTTP body.
 	if b.id == HTTP && in.Offset == 0 {
 		trim := strings.TrimLeft(text, " \t")
@@ -389,7 +395,7 @@ func (b configTokenizer) scan(in Input, state State, folds *foldLexemes) (Result
 			continue
 		}
 		first := !s.seen
-		if b.id == Dockerfile && first && c == '#' && strings.HasPrefix(strings.ToLower(text[i:]), "# escape=") && i+9 < len(text) {
+		if b.id == Dockerfile && first && !s.continued && c == '#' && strings.HasPrefix(strings.ToLower(text[i:]), "# escape=") && i+9 < len(text) {
 			if e := text[i+9]; e == '\\' || e == '`' {
 				s.dockerEscape = e
 			}
@@ -502,6 +508,10 @@ func (b configTokenizer) scan(in Input, state State, folds *foldLexemes) (Result
 	}
 	if in.LineEnd && i == len(text) {
 		finishWord(in.Offset + i)
+		// Docker removes blank/comment physical lines before joining continued
+		// instructions. An argument consisting only of escapes/variables counts
+		// as content even when it never passed through the ordinary word path.
+		ignoredDockerLine := b.id == Dockerfile && !s.dockerContent && s.dockerShell == nil
 		if b.id == HTTP && s.httpStage == 1 && !s.seen && s.mode == configCode {
 			s.httpStage = 2
 		}
@@ -524,14 +534,15 @@ func (b configTokenizer) scan(in Input, state State, folds *foldLexemes) (Result
 		if b.id == Dockerfile && s.dockerShell != nil && s.dockerShell.active == nil && len(s.dockerShell.pending) == 0 && !s.dockerShell.capture {
 			s.dockerShell = nil
 		}
-		if !s.escape {
+		if !s.escape && !ignoredDockerLine {
 			s.value = false
 			s.continued = false
 			s.recipe = false
 			s.prefixAssignment = false
-		} else {
+		} else if s.escape {
 			s.continued = true
 		}
+		s.dockerContent = false
 		s.escape = false
 		s.seen = false
 		s.httpHeader = ""

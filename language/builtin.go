@@ -576,6 +576,8 @@ var builtinLanguages = sync.OnceValue(func() map[ID]*Language {
 			d.Suggest = func(Context) []string { return vocabulary }
 		}
 		switch info.ID {
+		case Dockerfile:
+			d.Folding = dockerFolding(d.Tokenizer)
 		case HTTP:
 			d.Folding = requestFolding(d.Tokenizer)
 		case Diff:

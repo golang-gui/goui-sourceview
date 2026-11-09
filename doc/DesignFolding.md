@@ -1,6 +1,6 @@
 # 代码折叠
 
-状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；[第十一批](PlanFoldingLanguages11.md) 补充基础 DOT／普通 Diff；[第十二批](PlanFoldingLanguages12.md) 补充 SSH 配置／HTTP 请求块。上述扩展均尚未发布。
+状态：已确认设计，基础实现与验证见 [编辑能力计划](PlanEditorFeatures.md)。基础实现始于 GOUI v0.2.0，当前分支依赖 v0.7.0。新增语言覆盖已有 [第一批](PlanFoldingLanguages.md)、[第二批](PlanFoldingLanguages2.md)，[第三批](PlanFoldingLanguages3.md) 为 JSX/TSX/PHP 混合文档，[第四批](PlanFoldingLanguages4.md) 为 Lua/Ruby/Shell/CMake/SQL，[第五批](PlanFoldingLanguages5.md) 为 Zig/R/GraphQL/HCL/Protobuf/Starlark，[第六批](PlanFoldingLanguages6.md) 为 Objective-C/Objective-C++/SCSS/Less/Perl，[第七批](PlanFoldingLanguages7.md) 为 Nix/jq/PromQL/Clojure/EDN，[第八批](PlanFoldingLanguages8.md) 为 Elixir/Erlang/Julia/OCaml，[第九批](PlanFoldingLanguages9.md) 为 F#/Haskell，[第十批](PlanFoldingLanguages10.md) 为 Nginx、Go 模块／工作区及分节配置文件；[第十一批](PlanFoldingLanguages11.md) 补充基础 DOT／普通 Diff；[第十二批](PlanFoldingLanguages12.md) 补充 SSH 配置／HTTP 请求块；第十三批补充 Dockerfile 阶段与多行指令。上述扩展均尚未发布。
 
 ## 范围与所有权
 
@@ -100,10 +100,34 @@ GOUI HeightIndex 将高度限制为至少 1，因此仅索引可见段落，不�
 | Diff（第十一批） | 普通 Git／unified 文件区域及 `@@` hunk，文件头沿用词法分类，不解释补丁内容 |
 | SSHConfig（第十二批） | 大小写不敏感的 Host／Match 配置分节，排除参数／注释中的伪标题 |
 | HTTP／REST（第十二批） | 由 `###` 分隔的请求块，首个请求可无分隔符；正文保持整体 |
+| Dockerfile（第十三批） | FROM 阶段、已结束的显式续行指令和 heredoc；正文不分析 Shell 块 |
 
 其他内置语言本轮不增加通用括号或缩进回退，避免将字符串、关键字块或嵌入语言误判。
 不完整结构只发布已确认范围；结束行包含其他语句时保持该行可见。第一批五种语言的
 结束行若仅剩分号或逗号，视为原结构的终止符，可随结构折叠。后续批次沿用这一规则。
+
+### Dockerfile 阶段与多行指令
+
+按既有 configTokenizer 确认的行首指令与状态生成区域。真正的 `FROM` 开始阶段，
+标题保留，后续文本折叠到下一个 FROM 前；尾部空行可见，首个阶段之前的前导不并入阶段。
+指令不区分大小写，参数中的 FROM、COPY --from、ONBUILD 参数、注释、续行正文和
+heredoc 中的 FROM 不切分阶段。缺少参数的 FROM 不开始新阶段，单行空阶段不发布。
+阶段是文本范围，最后一个可延伸到 EOF，不校验镜像、别名、选项、构建依赖或 Shell 含义。
+
+显式续行或 heredoc 让同一条指令跨行时，从指令行到确认结束行生成子区域。
+沿用现有转义设置（默认反斜线，可配置反引号），以及已有 heredoc 的引用、制表符剥离和
+多终止符队列。未结束的续行／heredoc 不发布独立指令区域；外层阶段仍可保留已有文本。
+不根据 JSON exec form 的普通括号回退，不解析 heredoc 内的条件／循环；参数和正文保持整体。
+同标题的阶段与多行 FROM 指令保留外层，其余候选排序、去交叉沿用原机制。
+
+修正 Docker 扫描器在续行中经过空行／整行注释时提前清除 continued 的问题。
+增加单行私有 dockerContent 标记，按实际非注释 token 识别内容；只有空行／注释才忽略，
+变量和转义参数可正常结束续行，注释中的反斜线不主动创建续行。
+续行期间同形的 escape 注释不改变设置。标记按扫描片段保存、在真正 LF 结束时复位，
+不在折叠层另写一套续行解析，也不修改其他配置 profile 的规则。
+这是现有词法 profile 的基本折叠，不承诺完整 Docker frontend／parser directive 语法兼容。
+
+复用当前全文 worker、取消、候选与视图状态，不增加公共 API、依赖或 GUI 分支。
 
 ### SSH 配置与 HTTP 请求块
 
@@ -591,6 +615,11 @@ provider 与视图状态分离沿用前述 Monaco／Scintilla 取舍，不复制
 的 `###` 分隔与省略 GET 形式（2026-11-09 核对）。仅采用明确文本边界，不承诺完整
 SSH／REST Client 语法兼容。继续沿用前述 Monaco provider 与 Scintilla 视图状态分离方式，
 复用本仓现有 tokenizer，不复制外部解析器或引入依赖。
+
+第十三批参照 [Dockerfile reference](https://docs.docker.com/reference/dockerfile/)
+的 FROM、escape、注释与 Here-Documents（2026-11-09 核对）。只采用文本／词法边界，
+不运行 Docker 构建、解析镜像依赖或执行 Shell。沿用前述 Monaco provider 与 Scintilla
+视图状态分离方式，边界继续来自本仓扫描器，不引入外部解析器。
 
 折叠占位的水平范围预留行尾标记开启时的最大宽度，切换纯绘制标记不改变正文排版或滚动范围。
 
