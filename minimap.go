@@ -173,7 +173,7 @@ func (v *SourceView) minimapStep(deadline time.Time) {
 			s.next++
 			continue
 		}
-		index, _ := v.visibleLines.index(row)
+		index, _ := v.visibleLines.Index(row)
 		top, bottom := v.heights.Top(index), v.heights.Top(index+1)
 		start := 0
 		if v.wrap != WrapNone && bottom-top > v.lineHeight*1.5 {

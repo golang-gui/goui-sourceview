@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"math"
 	"strings"
@@ -163,11 +164,11 @@ func TestMinimapBoundedLongLineAndFolds(t *testing.T) {
 	}
 
 	folded := mapView("head\nhidden\ntail")
-	folded.hiddenLines = []lineInterval{{1, 2}}
+	folded.hiddenLines = []folding.Interval{{1, 2}}
 	folded.resetHeights()
 	folded.prepareMinimap()
 	finishMap(t, folded)
-	if folded.paragraphAt(21) != 2 || folded.visibleLines.count != 2 {
+	if folded.paragraphAt(21) != 2 || folded.visibleLines.Count() != 2 {
 		t.Fatal("折叠后的地图没有复用正文行索引")
 	}
 	// 显示首行后必须紧接 tail，而不是再采样隐藏行。

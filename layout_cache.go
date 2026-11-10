@@ -157,7 +157,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		return nil
 	}
 	v.ensureHeights()
-	if _, visible := v.visibleLines.index(row); !visible {
+	if _, visible := v.visibleLines.Index(row); !visible {
 		return nil
 	}
 	r := v.displayRange(row)
@@ -482,7 +482,7 @@ func (v *SourceView) pruneLayouts(keep layoutKey) {
 		if key != expected && (key.id != 0 || key.revision != v.document.model.Revision() || key.row != p.row) {
 			return false // Old revisions/line identities must not be pinned by a reused row number.
 		}
-		_, shown := v.visibleLines.index(p.row)
+		_, shown := v.visibleLines.Index(p.row)
 		return shown && (p.row >= first && p.row <= last || p.row >= revealFirst && p.row <= revealLast || p.row == anchor)
 	}
 	for widths > 2 || len(v.layouts) > maxLayouts || bytes > 8*1024*1024 && len(v.layouts) > 1 {

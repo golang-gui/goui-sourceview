@@ -48,11 +48,11 @@ func (v *SourceView) ConnectLineMarkAction(fn func(LineMarkEvent)) signal.Handle
 
 func (v *SourceView) markRow(line int) int {
 	for _, hidden := range v.hiddenLines {
-		if line < hidden.start {
+		if line < hidden.Start {
 			break
 		}
-		if line < hidden.end {
-			return hidden.start - 1
+		if line < hidden.End {
+			return hidden.Start - 1
 		}
 	}
 	return line

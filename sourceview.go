@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"errors"
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"time"
 
@@ -99,8 +100,8 @@ type SourceView struct {
 	offset                     geometry.Point
 	heights                    textedit.HeightIndex
 	heightEstimated            bool
-	visibleLines               visibleLineMap
-	hiddenLines                []lineInterval
+	visibleLines               folding.VisibleLines
+	hiddenLines                []folding.Interval
 	contentWidth               float32
 	layouts                    map[layoutKey]*paragraph
 	layoutFailures             map[layoutKey]struct{}
@@ -653,7 +654,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		}
 		// With no collapsed ranges, logical/display rows still correspond
 		// directly. Update their count without throwing away spliced heights.
-		v.visibleLines.reset(v.displayCount(), nil)
+		v.visibleLines.Reset(v.displayCount(), nil)
 		v.contentWidth = 0
 		// Stable line IDs retain layouts of untouched suffixes; changed paragraphs
 		// receive new IDs and are evicted by the bounded view-local cache.

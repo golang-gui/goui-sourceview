@@ -2,6 +2,7 @@ package sourceview
 
 import (
 	"context"
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"slices"
 	"strings"
 	"testing"
@@ -60,7 +61,7 @@ func foldingFixture(t *testing.T) *SourceView {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ranges, err = normalizeFolds(ranges, v.document.model.LineCount())
+	ranges, err = folding.Normalize(ranges, v.document.model.LineCount())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,18 +147,6 @@ func TestFoldSnapshotHasTrueDiscontinuousText(t *testing.T) {
 	spans := meta["visibleSpans"].([]map[string]any)
 	if len(spans) != 2 || spans[1]["text"] != "tail" || len(info.Children) != 1 {
 		t.Fatal("missing visible fragments/fold control", spans)
-	}
-}
-
-func TestFoldValidation(t *testing.T) {
-	for _, bad := range [][]language.FoldRange{{{StartLine: -1, EndLine: 2}}, {{StartLine: 0, EndLine: 4}}, {{StartLine: 2, EndLine: 2}}, {{StartLine: 0, EndLine: 2}, {StartLine: 1, EndLine: 3}}} {
-		if _, err := normalizeFolds(bad, 4); err == nil {
-			t.Fatal("accepted invalid ranges", bad)
-		}
-	}
-	got, err := normalizeFolds([]language.FoldRange{{StartLine: 1, EndLine: 2}, {StartLine: 0, EndLine: 3}, {StartLine: 0, EndLine: 2}}, 4)
-	if err != nil || len(got) != 2 || got[0] != (language.FoldRange{StartLine: 0, EndLine: 3}) {
-		t.Fatal(got, err)
 	}
 }
 

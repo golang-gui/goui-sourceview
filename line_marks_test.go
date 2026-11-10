@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"testing"
 
 	"github.com/golang-gui/goui/core/geometry"
@@ -168,7 +169,7 @@ func TestLineMarkViewsAndExecution(t *testing.T) {
 	if row, ok := a.lineMarkHit(point); !ok || row != 2 || a.cursorAt(point) != gui.CursorPointing {
 		t.Fatal("mark hit/cursor")
 	}
-	a.hiddenLines = []lineInterval{{start: 1, end: 4}}
+	a.hiddenLines = []folding.Interval{{Start: 1, End: 4}}
 	a.resetHeights()
 	if marks := a.marksOnRow(0); len(marks) != 1 || marks[0].Line != 2 {
 		t.Fatal("fold lost original mark line")

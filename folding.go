@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"slices"
 	"sort"
@@ -30,40 +31,6 @@ type FoldRegion struct {
 type foldEntry struct {
 	FoldRegion
 	start, end int
-}
-
-func normalizeFolds(ranges []language.FoldRange, lines int) ([]language.FoldRange, error) {
-	ranges = slices.Clone(ranges)
-	for _, r := range ranges {
-		if r.StartLine < 0 || r.EndLine <= r.StartLine || r.EndLine >= lines {
-			return nil, fmt.Errorf("sourceview: invalid fold range %v", r)
-		}
-	}
-	slices.SortFunc(ranges, func(a, b language.FoldRange) int {
-		if a.StartLine != b.StartLine {
-			return a.StartLine - b.StartLine
-		}
-		return b.EndLine - a.EndLine
-	})
-	var out []language.FoldRange
-	var stack []int
-	for _, r := range ranges {
-		if r.StartLine < 0 || r.EndLine <= r.StartLine || r.EndLine >= lines {
-			return nil, fmt.Errorf("sourceview: invalid fold range %v", r)
-		}
-		if len(out) > 0 && out[len(out)-1].StartLine == r.StartLine {
-			continue
-		}
-		for len(stack) > 0 && r.StartLine > stack[len(stack)-1] {
-			stack = stack[:len(stack)-1]
-		}
-		if len(stack) > 0 && r.EndLine > stack[len(stack)-1] {
-			return nil, fmt.Errorf("sourceview: crossing fold range %v", r)
-		}
-		stack = append(stack, r.EndLine)
-		out = append(out, r)
-	}
-	return out, nil
 }
 
 func (v *SourceView) FoldingEnabled() bool { return v.foldingEnabled }
@@ -205,19 +172,14 @@ func (v *SourceView) finishFoldCommand() {
 	}
 }
 
-func (v *SourceView) foldedLines() []lineInterval {
-	var hidden []lineInterval
+func (v *SourceView) foldedLines() []folding.Interval {
+	var hidden []folding.Interval
 	if v.foldingEnabled {
 		for _, r := range v.folds {
 			if !r.Collapsed {
 				continue
 			}
-			h := lineInterval{r.StartLine + 1, r.EndLine + 1}
-			if n := len(hidden); n > 0 && h.start <= hidden[n-1].end {
-				hidden[n-1].end = max(hidden[n-1].end, h.end)
-			} else {
-				hidden = append(hidden, h)
-			}
+			hidden = folding.AppendHidden(hidden, r.StartLine+1, r.EndLine+1)
 		}
 	}
 	return hidden
@@ -266,7 +228,7 @@ func (v *SourceView) acceptFolds(ranges []language.FoldRange) {
 	v.foldDefinition = v.document.definition
 	// Candidate analysis changes controls, not paragraph visibility, when no
 	// collapsed extent changed. Preserve measured rows and completed reveals.
-	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.total == v.displayCount() && v.heights.Count() == v.visibleLines.count {
+	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.Total() == v.displayCount() && v.heights.Count() == v.visibleLines.Count() {
 		v.RequestPaint()
 	} else {
 		v.refreshFoldGeometry()
@@ -441,7 +403,7 @@ func NewFolds(text string, ranges []FoldRange) (*Folds, error) {
 		at += n + 1
 		starts = append(starts, at)
 	}
-	ranges, err := normalizeFolds(ranges, len(starts))
+	ranges, err := folding.Normalize(ranges, len(starts))
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +519,7 @@ func (v *SourceView) foldingIntakeStep() {
 	v.folds = q.entries
 	v.foldRevision = q.revision
 	v.foldDefinition = d.definition
-	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.total == v.displayCount() && v.heights.Count() == v.visibleLines.count {
+	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.Total() == v.displayCount() && v.heights.Count() == v.visibleLines.Count() {
 		v.RequestLayout()
 		v.RequestPaint()
 	} else {

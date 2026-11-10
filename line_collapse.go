@@ -104,7 +104,7 @@ func (v *SourceView) longLineCandidate(row int) bool {
 	if v.Destroyed() || v.wrap == WrapNone || v.projection != nil || row < 0 || row >= v.document.model.LineCount() || v.lineCollapsed(row) {
 		return false
 	}
-	if _, visible := v.visibleLines.index(row); !visible {
+	if _, visible := v.visibleLines.Index(row); !visible {
 		return false
 	}
 	p := v.cachedParagraph(row)

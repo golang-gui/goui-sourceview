@@ -190,7 +190,7 @@ func (v *SourceView) restoreInlineExtent(s *inlineSuggestionState) {
 	// changed() invokes this before splicing the old row/height map, even when
 	// Model already has the new revision. Restore the old index before mapping.
 	if s.state.document == v.document && s.state.mount == v.mountEpoch && s.baseHeight > 0 {
-		if i, ok := v.visibleLines.index(s.row); ok && i < v.heights.Count() {
+		if i, ok := v.visibleLines.Index(s.row); ok && i < v.heights.Count() {
 			v.heights.Set(i, s.baseHeight)
 		}
 		if v.anchor.valid {
