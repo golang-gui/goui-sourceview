@@ -12,11 +12,11 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer. SourceView v0.4.0 depends on GOUI v0.7.0,
+Requires Go 1.24 or newer. SourceView v0.5.0 depends on GOUI v0.7.0,
 which Go downloads automatically.
 
 ```sh
-go get github.com/golang-gui/goui-sourceview@v0.4.0
+go get github.com/golang-gui/goui-sourceview@v0.5.0
 ```
 
 ## Features
@@ -34,6 +34,7 @@ go get github.com/golang-gui/goui-sourceview@v0.4.0
 - **Code editing** with Unicode and structural selection, word-part navigation, clipboard, undo/redo, reindentation and cleanup commands.
 - **Line marks and minimap** with breakpoint/bookmark presentation, execution lines and color-block navigation.
 - **External analysis** with independent highlight/fold snapshots and completion refresh.
+- **Inline suggestions** with optional host-provided single-line/multiline ghost text, Tab acceptance, Escape dismissal and single-edit undo.
 - **Completion and brackets** with suggestions, automatic pairs, matching-bracket navigation and linked tag names.
 - **Custom languages** with application-defined highlighting, editing rules and completion.
 - **Find and replace** in a floating panel, with multiline queries, regular expressions, capture replacements and selection scopes.

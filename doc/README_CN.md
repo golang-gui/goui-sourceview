@@ -11,10 +11,10 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 
 ## 安装
 
-需要 Go 1.24 或更新版本。SourceView v0.4.0 依赖 GOUI v0.7.0，由 Go 自动下载。
+需要 Go 1.24 或更新版本。SourceView v0.5.0 依赖 GOUI v0.7.0，由 Go 自动下载。
 
 ```sh
-go get github.com/golang-gui/goui-sourceview@v0.4.0
+go get github.com/golang-gui/goui-sourceview@v0.5.0
 ```
 
 ## 主要能力
@@ -29,6 +29,7 @@ go get github.com/golang-gui/goui-sourceview@v0.4.0
 - **源码编辑：** Unicode 与结构选区、子词导航、剪贴板、撤销/重做、重新缩进和整理命令。
 - **行标记与地图：** 断点/书签呈现、执行行和色块 Minimap 导航。
 - **外部分析：** 独立高亮/折叠快照及补全刷新。
+- **影子建议：** 可选的宿主提供型单行/多行预览，支持 Tab 接受、Esc 取消及单步撤销。
 - **补全与括号：** 补全建议、自动配对、匹配括号跳转及标签名称联动。
 - **自定义语言：** 由应用配置高亮、编辑规则及补全。
 - **查找替换：** 浮动面板，支持多行、正则、捕获组替换及选区内搜索。
