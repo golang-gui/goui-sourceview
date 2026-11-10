@@ -21,17 +21,17 @@ import (
 // 四边 Padding 迁移保持原先的等边留白，不依赖桌面和原生字体度量。
 func TestCompanionControlsKeepUniformPadding(t *testing.T) {
 	find := newFindBar()
-	if find.find.Padding() != geometry.UniformInsets(4) || find.replacement.Padding() != geometry.UniformInsets(4) {
+	if find.Find.Padding() != geometry.UniformInsets(4) || find.ReplacementInput.Padding() != geometry.UniformInsets(4) {
 		t.Fatal("查找或替换输入框的四边留白不一致")
 	}
-	if find.close.Padding() != geometry.UniformInsets(3) || find.matchCase.Padding() != geometry.UniformInsets(2) {
+	if find.CloseButton.Padding() != geometry.UniformInsets(3) || find.MatchCase.Padding() != geometry.UniformInsets(2) {
 		t.Fatal("查找操作或选项按钮的四边留白不一致")
 	}
 	goTo := newGoToBar()
-	if goTo.input.Padding() != geometry.UniformInsets(4) || goTo.close.Padding() != geometry.UniformInsets(3) {
+	if goTo.Input.Padding() != geometry.UniformInsets(4) || goTo.CloseButton.Padding() != geometry.UniformInsets(3) {
 		t.Fatal("跳转栏输入框或关闭按钮的四边留白不一致")
 	}
-	if goTo.surface.LayoutManager().(*layout.LinearLayout).Padding != geometry.UniformInsets(12) {
+	if goTo.Surface.LayoutManager().(*layout.LinearLayout).Padding != geometry.UniformInsets(12) {
 		t.Fatal("跳转栏初始容器留白改变")
 	}
 }
@@ -129,13 +129,13 @@ func TestFindBarTranslatedInputsAndHints(t *testing.T) {
 			t.Fatal(err)
 		}
 		bar := newFindBar()
-		if bar.find.Name() != tc.find || bar.replacement.Name() != tc.replacement || bar.find.Placeholder() != tc.find || bar.replacement.Placeholder() != tc.replace {
-			t.Errorf("%s: names=%q/%q hints=%q/%q", tc.tag, bar.find.Name(), bar.replacement.Name(), bar.find.Placeholder(), bar.replacement.Placeholder())
+		if bar.Find.Name() != tc.find || bar.ReplacementInput.Name() != tc.replacement || bar.Find.Placeholder() != tc.find || bar.ReplacementInput.Placeholder() != tc.replace {
+			t.Errorf("%s: names=%q/%q hints=%q/%q", tc.tag, bar.Find.Name(), bar.ReplacementInput.Name(), bar.Find.Placeholder(), bar.ReplacementInput.Placeholder())
 		}
-		setFindText(bar.find, "query")
+		setFindText(bar.Find, "query")
 		bar.SetReplacement("replacement")
 		bar.updateLabels()
-		if bar.find.Model().Text() != "query" || bar.Replacement() != "replacement" {
+		if bar.Find.Model().Text() != "query" || bar.Replacement() != "replacement" {
 			t.Fatal("translating hints changed text values")
 		}
 	}
@@ -160,22 +160,22 @@ func TestFindBarTranslatedStatus(t *testing.T) {
 		}
 		bar.count.available, bar.count.done = true, false
 		bar.updateStatus()
-		if bar.status.Text() != tc.counting {
-			t.Errorf("%s counting=%q", tc.tag, bar.status.Text())
+		if bar.Status.Text() != tc.counting {
+			t.Errorf("%s counting=%q", tc.tag, bar.Status.Text())
 		}
 		bar.count.available = false
 		bar.updateStatus()
-		if bar.status.Text() != tc.tooLong {
-			t.Errorf("%s too long=%q", tc.tag, bar.status.Text())
+		if bar.Status.Text() != tc.tooLong {
+			t.Errorf("%s too long=%q", tc.tag, bar.Status.Text())
 		}
 		bar.count.available, bar.count.done, bar.count.total = true, true, 2
 		bar.updateStatus()
-		if bar.status.Text() != tc.count {
-			t.Errorf("%s count=%q", tc.tag, bar.status.Text())
+		if bar.Status.Text() != tc.count {
+			t.Errorf("%s count=%q", tc.tag, bar.Status.Text())
 		}
 		bar.message = "application diagnostic"
 		bar.updateStatus()
-		if bar.status.Text() != bar.message {
+		if bar.Status.Text() != bar.message {
 			t.Fatal("diagnostic error was translated")
 		}
 		bar.message = ""
@@ -193,16 +193,16 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 		// transfer a stylesheet from an unrelated subtree.
 		themedScope(b, sheet)
 		b.StyleChanged()
-		before, find := l.Appearance().Colors, b.appearance
+		before, find := l.Appearance().Colors, b.Appearance
 		for _, c := range []color.NRGBA{before.Background, before.Foreground, before.DetailForeground, before.SelectedForeground, before.SelectedDetailForeground} {
 			if c.A != 255 {
 				t.Fatal("unreadable built-in popup surface/text", c)
 			}
 		}
-		if l.Appearance().Font.Family != "ui-font" || l.Appearance().Font.Size != 19 || l.Appearance().DetailFont.Size != 19*.9 || b.appearance.surface.radius != geometry.UniformCornerRadius(8) || b.appearance.focused.width != 2 {
+		if l.Appearance().Font.Family != "ui-font" || l.Appearance().Font.Size != 19 || l.Appearance().DetailFont.Size != 19*.9 || b.Appearance.Surface.Radius != geometry.UniformCornerRadius(8) || b.Appearance.Focused.Width != 2 {
 			t.Fatal("Modern font, radius or focus metrics were not used")
 		}
-		if got := foreground(gui.ResolveWidgetStyle(b.find, "sourceview.find.input", "", style.Normal)); got.A != 255 || background(gui.ResolveWidgetStyle(b.find, "sourceview.find.input", "frame", style.Normal)).A != 255 {
+		if got := foreground(gui.ResolveWidgetStyle(b.Find, "sourceview.find.input", "", style.Normal)); got.A != 255 || background(gui.ResolveWidgetStyle(b.Find, "sourceview.find.input", "frame", style.Normal)).A != 255 {
 			t.Fatal("unreadable built-in find surface/text")
 		}
 		d := scheme.Dark().Definition()
@@ -215,7 +215,7 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 		l.ReadAppearance()
 		b.SetTarget(v)
 		b.StyleChanged()
-		if l.Appearance().Colors != before || b.appearance != find {
+		if l.Appearance().Colors != before || b.Appearance != find {
 			t.Fatal("code selection changed UI palettes")
 		}
 		if got := foreground(sheet.Resolve(style.Sel{Name: "icon"})); got != foreground(modern.Sheet(modern.Options{Dark: dark}).Resolve(style.Sel{Name: "icon"})) {
@@ -245,8 +245,8 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	b := newFindBar()
 	themedScope(b, owner.StyleSheet())
 	b.StyleChanged()
-	border, _ := gui.ResolveWidgetStyle(b.matchCase, "sourceview.find.option", "button-checked", style.Normal).BorderColor()
-	if b.appearance.surface.shadow.Color.A != 0 || nrgba(border).A != 80 || b.inset != 2 {
+	border, _ := gui.ResolveWidgetStyle(b.MatchCase, "sourceview.find.option", "button-checked", style.Normal).BorderColor()
+	if b.Appearance.Surface.Shadow.Color.A != 0 || nrgba(border).A != 80 || b.Inset != 2 {
 		t.Fatal("find overrides lost explicit alpha or retained shadow space")
 	}
 }
@@ -331,13 +331,13 @@ func TestHidePanelPreservesQuerySelectionAndReplacement(t *testing.T) {
 	bar.SetReplacement("replacement")
 	bar.open = true
 	bar.SetVisible(true)
-	bar.content.SetVisible(true)
+	bar.Content.SetVisible(true)
 	bar.attached = append(bar.attached, v.searchState.Connect(func() {}))
 	t.Cleanup(bar.disconnect)
 	query, selection := v.Search(), v.Selection()
 	v.HidePanel()
 	_, scoped := v.SearchRange()
-	if bar.open || bar.Visible() || bar.content.Visible() || scoped || v.HighlightSearchMatches() {
+	if bar.open || bar.Visible() || bar.Content.Visible() || scoped || v.HighlightSearchMatches() {
 		t.Fatal("hidden companion retained interaction/search state")
 	}
 	if v.Search() != query || v.Selection() != selection || bar.Replacement() != "replacement" {

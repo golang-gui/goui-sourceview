@@ -1,45 +1,33 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"strings"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
-	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
-	"github.com/golang-gui/goui/widgets"
 )
 
 // findBar is the editor-owned find/replace UI. It keeps input state while hidden.
 type findBar struct {
 	gui.WidgetBase
-	pointer                                            *gui.MotionEventController
-	target                                             *SourceView
-	content                                            *findSurface
-	appearance                                         findAppearance
-	inset                                              float32
-	toggleIcon                                         *gui.Icon
-	narrow, reduced                                    bool
-	fieldRect, replacementRect                         geometry.Rectangle
-	find, replacement                                  *gui.TextView
-	findScroll, replacementScroll                      *gui.ScrollView
-	previous, next, replace, replaceAll, close         *gui.Button
-	matchCase, wholeWord, regex, selectionOnly, toggle *widgets.CheckButton
-	status                                             *gui.Label
-	names                                              map[gui.Widget]mlang.Getter
-	keys                                               *gui.KeyEventController
-	attached                                           signal.Handles
-	frame, language                                    signal.Handle
-	mounted, open, replaceMode, syncing                bool
-	epoch                                              uint64
-	openSignal                                         signal.Signal1[bool]
-	errorSignal                                        signal.Signal1[error]
-	count                                              struct {
+	pointer *gui.MotionEventController
+	target  *SourceView
+	*controls.FindUI
+	keys                                *gui.KeyEventController
+	attached                            signal.Handles
+	frame, language                     signal.Handle
+	mounted, open, replaceMode, syncing bool
+	epoch                               uint64
+	openSignal                          signal.Signal1[bool]
+	errorSignal                         signal.Signal1[error]
+	count                               struct {
 		document              *Document
 		revision              uint64
 		query                 SearchQuery
@@ -52,14 +40,44 @@ type findBar struct {
 }
 
 func newFindBar() *findBar {
-	b := &findBar{names: make(map[gui.Widget]mlang.Getter)}
+	b := &findBar{}
 	b.SetLayoutManager(layout.NewFillLayout())
 	b.SetVisible(false)
 	b.pointer = gui.NewMotionEventController()
 	b.AddEventController(b.pointer)
-	b.buildSurface()
-	b.find.ConnectChange(func(textedit.Change) {
-		text := b.find.Model().Text()
+	b.FindUI = controls.NewFindUI(b, controls.FindActions{
+		ReplaceMode: b.SetReplaceMode, MatchCase: func(checked bool) {
+			if v := b.liveTarget(); v != nil {
+				q := v.Search()
+				q.IgnoreCase = !checked
+				v.SetSearch(q)
+			}
+		},
+		WholeWord: func(checked bool) {
+			if v := b.liveTarget(); v != nil {
+				q := v.Search()
+				q.WholeWord = checked
+				v.SetSearch(q)
+			}
+		},
+		Regex: func(checked bool) {
+			if v := b.liveTarget(); v != nil {
+				q := v.Search()
+				q.Regex = checked
+				v.SetSearch(q)
+			}
+		},
+		SelectionOnly: b.setSelectionOnly, Previous: func() { b.navigate(true) }, Next: func() { b.navigate(false) }, Close: b.Close, Replace: b.replaceCurrent, ReplaceAll: b.replaceEverywhere,
+		Replacing: func() bool { return b.replaceMode }, Message: func() string { return b.message }, QueryError: func() error {
+			if v := b.liveTarget(); v != nil {
+				return v.SearchError()
+			}
+			return nil
+		},
+	})
+	b.WidgetBase.AddChild(b, b.Content)
+	b.Find.ConnectChange(func(textedit.Change) {
+		text := b.Find.Model().Text()
 		if !b.syncing {
 			if v := b.liveTarget(); v != nil {
 				q := v.Search()
@@ -108,27 +126,27 @@ func (b *findBar) SetReplaceMode(replace bool) {
 		return
 	}
 	b.replaceMode = replace
-	b.toggle.SetChecked(replace)
-	b.replacementScroll.SetVisible(replace)
-	b.replacement.SetVisible(replace)
-	b.replace.SetVisible(replace && !b.narrow)
-	b.replaceAll.SetVisible(replace && !b.narrow)
-	if b.toggleIcon != nil {
+	b.Toggle.SetChecked(replace)
+	b.ReplacementScroll.SetVisible(replace)
+	b.ReplacementInput.SetVisible(replace)
+	b.Replace.SetVisible(replace && !b.Narrow)
+	b.ReplaceAll.SetVisible(replace && !b.Narrow)
+	if b.ToggleIcon != nil {
 		if replace {
-			b.toggleIcon.SetSource(findIcons["down"])
+			b.ToggleIcon.SetSource(controls.FindIcon("down"))
 		} else {
-			b.toggleIcon.SetSource(findIcons["right"])
+			b.ToggleIcon.SetSource(controls.FindIcon("right"))
 		}
 	}
 	b.RequestLayout()
 	b.refresh()
 }
 
-func (b *findBar) Replacement() string { return b.replacement.Model().Text() }
+func (b *findBar) Replacement() string { return b.ReplacementInput.Model().Text() }
 
 func (b *findBar) SetReplacement(text string) {
 	if !b.Destroyed() {
-		setFindText(b.replacement, text)
+		setFindText(b.ReplacementInput, text)
 		b.RequestLayout()
 	}
 }
@@ -185,16 +203,16 @@ func (b *findBar) Open(replace bool) error {
 	b.open = true
 	b.SetVisible(true)
 	v.SetHighlightSearchMatches(true)
-	b.content.SetVisible(true)
+	b.Content.SetVisible(true)
 	b.refresh()
 	if b.liveTarget() != v || b.epoch != epoch {
 		return ErrOperationChanged
 	}
-	host.SetFocusedWidget(b.find)
+	host.SetFocusedWidget(b.Find)
 	if b.Destroyed() || b.epoch != epoch || !b.open {
 		return nil
 	}
-	b.find.SetSelection(textedit.Selection{Caret: len(b.find.Model().Text())})
+	b.Find.SetSelection(textedit.Selection{Caret: len(b.Find.Model().Text())})
 	if changed && !b.Destroyed() && b.epoch == epoch && b.open {
 		b.openSignal.Emit(true)
 	}
@@ -214,7 +232,7 @@ func (b *findBar) Close() {
 	epoch, v := b.epoch, b.target
 	attached := len(b.attached) != 0
 	valid := func() bool { return !b.Destroyed() && !b.open && b.epoch == epoch && b.target == v }
-	b.content.SetVisible(false)
+	b.Content.SetVisible(false)
 	b.SetVisible(false)
 	if !valid() {
 		return
@@ -319,9 +337,9 @@ func (b *findBar) refresh() {
 		widget  gui.Widget
 		enabled bool
 	}{
-		{b.find, active}, {b.matchCase, active}, {b.wholeWord, active}, {b.regex, active}, {b.selectionOnly, canScope},
-		{b.previous, searchable}, {b.next, searchable},
-		{b.replacement, editable}, {b.replace, editable && searchable}, {b.replaceAll, editable && searchable},
+		{b.Find, active}, {b.MatchCase, active}, {b.WholeWord, active}, {b.Regex, active}, {b.SelectionOnly, canScope},
+		{b.Previous, searchable}, {b.Next, searchable},
+		{b.ReplacementInput, editable}, {b.Replace, editable && searchable}, {b.ReplaceAll, editable && searchable},
 	} {
 		item.widget.SetEnabled(item.enabled)
 		if !valid() {
@@ -329,17 +347,17 @@ func (b *findBar) refresh() {
 		}
 	}
 	if v == nil {
-		b.status.SetText("")
+		b.Status.SetText("")
 		return
 	}
 	q := v.Search()
-	b.matchCase.SetChecked(!q.IgnoreCase)
-	b.wholeWord.SetChecked(q.WholeWord)
-	b.regex.SetChecked(q.Regex)
+	b.MatchCase.SetChecked(!q.IgnoreCase)
+	b.WholeWord.SetChecked(q.WholeWord)
+	b.Regex.SetChecked(q.Regex)
 	scope, limited := v.SearchRange()
-	b.selectionOnly.SetChecked(limited)
+	b.SelectionOnly.SetChecked(limited)
 	// The multiline field preserves programmatic and pasted line breaks.
-	setFindText(b.find, q.Text)
+	setFindText(b.Find, q.Text)
 	if !valid() {
 		return
 	}
@@ -390,27 +408,27 @@ func (b *findBar) updateStatus() {
 			text = resource.Matches(b.count.total)
 		}
 	}
-	changed := b.status.Text() != text
-	b.status.SetText(text)
-	b.status.SetName(text)
+	changed := b.Status.Text() != text
+	b.Status.SetText(text)
+	b.Status.SetName(text)
 	if v := b.liveTarget(); v != nil && v.SearchError() != nil {
-		b.status.SetName(text + ": " + v.SearchError().Error())
+		b.Status.SetName(text + ": " + v.SearchError().Error())
 	}
 	name := "sourceview.find.status"
 	if b.message != "" || b.count.done && b.count.available && b.count.query.Text != "" && b.count.total == 0 {
 		name = "sourceview.find.error"
 	}
-	changed = changed || b.status.StyleName() != name
-	b.status.SetStyleName(name)
+	changed = changed || b.Status.StyleName() != name
+	b.Status.SetStyleName(name)
 	if changed {
-		b.content.RequestPaint()
+		b.Content.RequestPaint()
 	}
 }
 
 func (b *findBar) updateLabels() {
-	b.find.SetPlaceholder(resource.Find())
-	b.replacement.SetPlaceholder(resource.Replace())
-	for widget, getter := range b.names {
+	b.Find.SetPlaceholder(resource.Find())
+	b.ReplacementInput.SetPlaceholder(resource.Replace())
+	for widget, getter := range b.Names {
 		widget.SetName(getter())
 	}
 	b.refresh()
@@ -480,9 +498,9 @@ func (b *findBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 	case b.open && e.Key == events.KeyEscape && e.Modifiers == 0:
 		handled = true
 		b.Close()
-	case b.open && inBar && (b.find.Focused() || b.replacement.Focused()) && e.Key == events.KeyEnter && e.Modifiers&^events.ModifierShift == 0:
+	case b.open && inBar && (b.Find.Focused() || b.ReplacementInput.Focused()) && e.Key == events.KeyEnter && e.Modifiers&^events.ModifierShift == 0:
 		handled = true
-		if b.replacement.Focused() && e.Modifiers == 0 {
+		if b.ReplacementInput.Focused() && e.Modifiers == 0 {
 			b.replaceCurrent()
 		} else {
 			b.navigate(e.Modifiers != 0)
@@ -500,7 +518,7 @@ func (b *findBar) key(ctx gui.EventContext, e events.KeyEvent, inBar bool) {
 func (b *findBar) Snapshot() gui.WidgetInfo {
 	info := b.WidgetBase.Snapshot()
 	info.Role = gui.Role("sourceview-find-bar")
-	info.Text = b.find.Model().Text()
+	info.Text = b.Find.Model().Text()
 	queryError := ""
 	if v := b.liveTarget(); v != nil && v.SearchError() != nil {
 		queryError = v.SearchError().Error()
@@ -560,3 +578,5 @@ func (b *findBar) setSelectionOnly(checked bool) {
 	b.refresh()
 	b.countStep()
 }
+
+func (b *findBar) StyleChanged() { b.FindUI.ReadAppearance() }

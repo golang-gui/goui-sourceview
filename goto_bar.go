@@ -2,31 +2,26 @@ package sourceview
 
 import (
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
-	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
-	"github.com/golang-gui/goui/style"
 )
 
 // goToBar is the editor-owned line/column input.
 type goToBar struct {
 	gui.WidgetBase
-	pointer       *gui.MotionEventController
-	target        *SourceView
-	surface       *gotoSurface
-	row           *gui.LinearBox
-	input         *gui.TextInput
-	status        *gui.Label
-	close         *gui.Button
+	pointer *gui.MotionEventController
+	target  *SourceView
+	*controls.GoToUI
 	lifetime      signal.Handles
 	language      signal.Handle
 	mounted, open bool
@@ -41,35 +36,8 @@ func newGoToBar() *goToBar {
 	b.SetVisible(false)
 	b.pointer = gui.NewMotionEventController()
 	b.AddEventController(b.pointer)
-	b.surface = &gotoSurface{bar: b}
-	l := layout.NewLinearLayout(layout.DirectionVertical)
-	l.Padding = geometry.UniformInsets(12)
-	l.Spacing = 4
-	l.CrossAlign = layout.CrossStretch
-	b.surface.SetLayoutManager(l)
-	b.surface.SetVisible(false)
-	b.WidgetBase.AddChild(b, b.surface)
-	b.row = gui.NewLinearBox(layout.DirectionHorizontal)
-	b.row.SetSpacing(4)
-	b.input = gui.NewTextInput()
-	b.input.SetStyleName("sourceview.find.input")
-	b.input.SetPadding(geometry.UniformInsets(4))
-	b.input.SetMainWeight(1)
-	b.input.ConnectText(func(string) { b.refresh() })
-	b.input.ConnectSubmit(b.submit)
-	b.close = gui.NewButton()
-	b.close.SetStyleName("sourceview.find.action")
-	b.close.SetPadding(geometry.UniformInsets(3))
-	icon := gui.NewIcon(findIcons["close"])
-	icon.SetStyleName("sourceview.find.icon")
-	b.close.SetChild(icon)
-	b.close.ConnectClicked(b.Close)
-	b.row.AddChild(b.input)
-	b.row.AddChild(b.close)
-	b.status = gui.NewLabel("")
-	b.status.SetStyleName("sourceview.find.status")
-	b.surface.WidgetBase.AddChild(b.surface, b.row)
-	b.surface.WidgetBase.AddChild(b.surface, b.status)
+	b.GoToUI = controls.NewGoToUI(b.refresh, b.submit, b.Close)
+	b.WidgetBase.AddChild(b, b.Surface)
 	keys := gui.NewKeyEventController()
 	keys.SetPhase(gui.PhaseCapture)
 	keys.ConnectKeyDown(b.key)
@@ -78,7 +46,7 @@ func newGoToBar() *goToBar {
 	b.ConnectUnmount(func() {
 		b.mounted = false
 		b.open = false
-		b.surface.SetVisible(false)
+		b.Surface.SetVisible(false)
 		b.epoch++
 		b.disconnect()
 		if b.language != nil {
@@ -109,10 +77,10 @@ func (b *goToBar) SetTarget(v *SourceView) {
 		b.connect()
 	}
 }
-func (b *goToBar) Query() string { return b.input.Text() }
+func (b *goToBar) Query() string { return b.Input.Text() }
 func (b *goToBar) SetQuery(text string) {
 	if !b.Destroyed() {
-		b.input.SetText(text)
+		b.Input.SetText(text)
 	}
 }
 func (b *goToBar) Opened() bool { return b.open }
@@ -157,17 +125,17 @@ func (b *goToBar) Open() error {
 	line := m.LineAt(at)
 	r, _ := m.LineRange(line)
 	prefix, _ := m.Slice(textedit.Range{Start: r.Start, End: at})
-	b.input.SetText(fmt.Sprintf("%d:%d", line+1, utf8.RuneCountInString(prefix)+1))
+	b.Input.SetText(fmt.Sprintf("%d:%d", line+1, utf8.RuneCountInString(prefix)+1))
 	changed := !b.open
 	b.open = true
 	b.SetVisible(true)
-	b.surface.SetVisible(true)
+	b.Surface.SetVisible(true)
 	b.refresh()
-	host.SetFocusedWidget(b.input)
+	host.SetFocusedWidget(b.Input)
 	if b.Destroyed() || b.epoch != epoch || !b.open {
 		return nil
 	}
-	b.input.SetSelection(textedit.Selection{Caret: len(b.input.Text())})
+	b.Input.SetSelection(textedit.Selection{Caret: len(b.Input.Text())})
 	if changed {
 		b.openSignal.Emit(true)
 	}
@@ -180,7 +148,7 @@ func (b *goToBar) Close() {
 	focus := b.ContainsFocus()
 	b.open = false
 	b.epoch++
-	b.surface.SetVisible(false)
+	b.Surface.SetVisible(false)
 	b.SetVisible(false)
 	if focus {
 		if v := b.liveTarget(); v != nil && visible(v) {
@@ -225,26 +193,26 @@ func (b *goToBar) refresh() {
 	if b.Destroyed() {
 		return
 	}
-	b.input.SetName(resource.GoTo())
-	b.input.SetPlaceholder(resource.GoToPlaceholder())
-	b.close.SetName(resource.Close())
+	b.Input.SetName(resource.GoTo())
+	b.Input.SetPlaceholder(resource.GoToPlaceholder())
+	b.CloseButton.SetName(resource.Close())
 	message := resource.GoToPlaceholder()
 	name := "sourceview.find.status"
-	if v := b.liveTarget(); v != nil && b.input.Text() != "" {
-		if _, err := gotoOffset(v.document.model, b.input.Text()); err != nil {
+	if v := b.liveTarget(); v != nil && b.Input.Text() != "" {
+		if _, err := gotoOffset(v.document.model, b.Input.Text()); err != nil {
 			message = resource.InvalidPosition()
 			name = "sourceview.find.error"
 		}
 	}
-	b.status.SetText(message)
-	b.status.SetStyleName(name)
+	b.Status.SetText(message)
+	b.Status.SetStyleName(name)
 }
 func (b *goToBar) submit() {
 	v := b.liveTarget()
 	if v == nil {
 		return
 	}
-	at, err := gotoOffset(v.document.model, b.input.Text())
+	at, err := gotoOffset(v.document.model, b.Input.Text())
 	if err != nil {
 		b.refresh()
 		return
@@ -288,32 +256,4 @@ func (b *goToBar) Snapshot() gui.WidgetInfo {
 	info.Role = "sourceview-goto-bar"
 	info.SetAttribute("goui.sourceview.goto", map[string]any{"open": b.open})
 	return info
-}
-
-type gotoSurface struct {
-	gui.WidgetBase
-	inset float32
-	bar   *goToBar
-}
-
-func (s *gotoSurface) Measure(c layout.Constraint) layout.Measurement {
-	if !s.Visible() {
-		return layout.Measurement{}
-	}
-	s.inset = max(1, boxOf(gui.ResolveWidgetStyle(s, "sourceview.find", "", style.Normal)).outset()+1)
-	s.LayoutManager().(*layout.LinearLayout).Padding = geometry.UniformInsets(s.inset + 6)
-	width := min(float32(360), c.Max.Width)
-	c.Min.Width = width
-	c.Max.Width = width
-	return s.WidgetBase.Measure(c)
-}
-func (s *gotoSurface) Paint(p gui.Painter) {
-	boxOf(gui.ResolveWidgetStyle(s, "sourceview.find", "", style.Normal)).paint(p, geometry.Rect(0, 0, s.Rect().Width, s.Rect().Height).Inset(s.inset))
-	b := s.bar
-	state := style.Normal
-	if b.input.Focused() {
-		state = style.Focused
-	}
-	r := b.input.Rect().Translate(geometry.Point{X: b.row.Rect().X, Y: b.row.Rect().Y})
-	boxOf(gui.ResolveWidgetStyle(b.input, "sourceview.find.input", "frame", state)).paint(p, r)
 }

@@ -4,14 +4,11 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"image/color"
 	"maps"
-	"math"
 	"slices"
 
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
-	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
@@ -83,62 +80,6 @@ func styleFont(s style.Style) typography.FontInfo {
 	family, _ := s.FontFamily()
 	size, _ := s.FontSize()
 	return typography.FontInfo{Family: family, Size: size}
-}
-
-// Box values are copied to ordinary comparable data; native resources stay on
-// the consuming widget. An explicit transparent fill/border/shadow is retained.
-type styleBox struct {
-	background, border graphics.Color
-	width              float32
-	radius             geometry.CornerRadius
-	sides              style.BorderSides
-	shadow             graphics.BoxShadow
-}
-
-// Keep cached radii comparable even when an application supplies NaN/Inf.
-// Geometry normalization against the allocated size remains GOUI's job.
-func cleanCornerRadius(r geometry.CornerRadius) geometry.CornerRadius {
-	clean := func(v float32) float32 {
-		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
-			return 0
-		}
-		return max(0, v)
-	}
-	return geometry.CornerRadius{TopLeft: clean(r.TopLeft), TopRight: clean(r.TopRight), BottomRight: clean(r.BottomRight), BottomLeft: clean(r.BottomLeft)}
-}
-
-func boxOf(s style.Style) styleBox {
-	bg, _ := s.BackgroundColor()
-	border, _ := s.BorderColor()
-	width, _ := s.BorderWidth()
-	radius, _ := s.CornerRadius()
-	sides, set := s.BorderSides()
-	if !set {
-		sides = style.BorderAll
-	}
-	shadow, _ := s.Shadow()
-	return styleBox{graphics.ColorOf(nrgba(bg)), graphics.ColorOf(nrgba(border)), max(0, width), cleanCornerRadius(radius), sides, graphics.BoxShadow{
-		Color: graphics.ColorOf(nrgba(shadow.Color)), Offset: shadow.Offset, BlurRadius: max(0, shadow.BlurRadius), SpreadRadius: shadow.SpreadRadius,
-	}}
-}
-
-func (b styleBox) paint(p gui.Painter, r geometry.Rectangle) {
-	if r.Width <= 0 || r.Height <= 0 {
-		return
-	}
-	if b.shadow.Color.A > 0 {
-		p.DrawBoxShadow(r, b.radius, b.shadow)
-	}
-	gui.PaintStyledBox(p, r, style.Rule{}.BackgroundColor(b.background).BorderColor(b.border).
-		BorderWidth(b.width).BorderSides(b.sides).CornerRadius(b.radius).Style)
-}
-
-func (b styleBox) outset() float32 {
-	if b.shadow.Color.A <= 0 {
-		return 0
-	}
-	// DrawBoxShadow's documented sigma is blur/2, with a 3-sigma extent.
-	return float32(math.Ceil(float64(max(0, b.shadow.BlurRadius*1.5+b.shadow.SpreadRadius) + float32(max(math.Abs(float64(b.shadow.Offset.X)), math.Abs(float64(b.shadow.Offset.Y)))))))
 }
 
 // Defaults follow the actual code background, including an explicit Scheme.

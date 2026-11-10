@@ -58,7 +58,7 @@ GOUI 不反向依赖本模块。
 | `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠范围校验、隐藏区间合并与可见行索引；不导入 gui |
-| `internal/controls` | 私有补全列表、控件呈现与配套样式；不导入根包 |
+| `internal/controls` | 私有补全列表、查找／定位栏呈现与配套样式；不导入根包 |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
@@ -82,8 +82,9 @@ FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 
 补全、折叠、语言编辑辅助及 FindBar/GoToBar 仍按已有领域组织。
 同一领域的队列、绘制辅助或小控件合入所属功能文件；独立类型不要求独立文件。
-补全保留会话和列表两个实现文件，面板与滚动组合在列表文件内；
-FindBar 保留行为和外观两个文件；折叠及普通编辑辅助各自集中维护。
+补全会话、FindBar／GoToBar 行为保留在根包；列表、面板、栏内控件、
+布局及外观放在 internal/controls，控件动作通过窄回调交回根包。
+折叠及普通编辑辅助按领域维护。
 声明式层只绑定 SourceView，不单独声明查找或定位栏。
 SourceViewView 实现 GOUI WidgetView 的 Mount／Update／Unmount，不再提供
 返回自身的 Build 占位方法。组合应用组件使用 GOUI ComposeView.Build(ctx)，

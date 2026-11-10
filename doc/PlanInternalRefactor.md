@@ -37,3 +37,8 @@
   根包判断是否关闭原生弹窗。控件测试迁移保留断言，根包集成测试继续运行。
   验证：go test ./...、GOWORK=off go test ./... 通过；独立 X11 会话的
   completion typing、navigation、Basic Unicode、Modern 暗色 scroll 均通过。
+- 批次 4：查找／定位栏的控件构建、布局、绘制和样式盒移入 controls。
+  根包栏仍是原有生命周期子控件，负责订阅、失效、查找／替换／导航及焦点；
+  内部呈现对象只借用动作，不新增文档或选区状态。样式盒去重，测试随实现迁移。
+  原生 find_appearance 首轮发现状态样式键大小写误改，修正后重跑通过。
+  验证：两种全量测试通过；独立会话 find、find_appearance、localization 通过。
