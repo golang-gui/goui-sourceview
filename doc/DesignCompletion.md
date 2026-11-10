@@ -1,6 +1,7 @@
 # 补全设计
 
-本专题描述 `completion.go`、`completion_list.go` 与 `ui` 的当前实现。
+本专题主体描述 `completion.go`、`completion_list.go` 与 `ui` 的当前实现。
+末尾的 P1 补全呈现为尚未实现的提案，不属于当前 API 契约。
 会话及提供器队列集中在 `completion.go`，列表、面板及 ScrollView 组合集中在 `completion_list.go`。
 补全是 SourceView 的语言和交互能力；GOUI 提供普通 Popover、事件、排版和绘制，
 不反向依赖本模块，也不在 TextView 中添加源码特例。
@@ -237,3 +238,132 @@ ui 使用既有控件引用调用，不复制会话状态或增加特殊生命�
 [CompletionItemProvider](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.CompletionItemProvider.html)
 请求上下文与取消契约。已有结果过滤不同于外部索引更新后的重新查询；本项目显式方法
 是针对现有 Provider 和调用方所有权的选择，不声称参考框架提供同名接口。
+
+## P1 补全呈现提案（尚未实现）
+
+状态：2026-11-04 下一阶段设计。用户决定暂缓 [代码片段](DesignSnippets.md)，
+本批仅扩充候选类型、完整说明和弃用状态，不改变普通文本插入、过滤排序或历史语义。
+2026-11-10 框架对照复核后仍列为近期第一项，见 [能力差距与优先级](DesignCapabilityGaps.md)。
+已发布的影子建议继续采用现有互斥规则，不把 AI 请求、片段会话或部分接受混入本批。
+以下新增字段、尺寸和预算均是实施目标，不能作为已发布能力使用。
+
+### 公共数据
+
+在 Completion 增加三个字段，已有字段和零值行为不变：
+
+```go
+Kind          CompletionKind
+Documentation string
+Deprecated    bool
+```
+
+CompletionKind 使用枚举；首批为 CompletionKindText（零值）、Keyword、Function、Method、
+Variable、Constant、Type、Property、Module、Value，各常量均使用 CompletionKind 前缀。
+只依据显式 Kind 选择图标；未知值降为 Text，不拒绝可用的文本候选，不分析 Label/Detail 猜种类。
+不预建一套 LSP 枚举或插件图标注册服务；片段暂缓时不增加暗示片段能力的常量。
+
+- Detail 仍是列表中单行简短签名/类型说明，沿用现有规范化及 1024 byte 上限。
+- Documentation 是独立纯文本说明，保留段落换行，统一 UTF-8/LF；不解释 Markdown/HTML，
+  不读取外部资源，不自动打开链接。空说明正常且不产生占位提示。
+- Deprecated 仅表示不推荐使用，仍可选择与接受。Provider 决定是否保留及排序，控件不隐藏、
+  降序或禁用此类项。通过划线和本地化状态文字表达，不只用颜色。
+- 三字段均由 Complete 的现有结果返回，不添加 Resolve 回调、可变候选对象或文档请求队列。
+  应用索引变化仍通过 RefreshCompletion 重查；不在鼠标 hover 时调用 Provider。
+- ui/types.go 同步类型与所有常量别名。CompletionProvider 绑定保持不变，不为呈现元数据
+  添加新的声明式状态或重复配置项。
+
+内建关键词仅在来源确定时标为 Keyword，附近文档词保留 Text；不从语言 ID 猜测其语义类型。
+外部分析示例依据已有语义对象映射 Function/Variable/Type 等，可提供自己的说明。
+
+### 列表和说明区
+
+继续使用一个无原生焦点的 Popover。列表上方/下方的定位由原有锚点和工作区约束决定，
+内部列表在上、说明区在下，不新增第二个浮窗或对外暴露说明控件。
+
+- 任一候选有非 Text 种类时，为整个列表预留统一图标列；全为 Text 时不占该列。
+  图标约 16 DIP，间隔 6 DIP，使用已有矢量设施，不使用 emoji 或平台字体图标猜测。
+  词首对齐仍按名称列计算，图标不能推偏正文锚点。
+- 保留名称/Detail 共基线、行高和选中圆角规则。名称省略后仍保留完整语义文字。
+  弃用名称划线不改变文字排版宽度；前缀强调与选中态仍可辨识。
+- 说明区按“完整 Detail → 弃用状态 → Documentation”显示，空项省略。
+  短 Detail 已在列表完整呈现且没有其他信息时，不重复建立说明区。
+- 本次候选集中存在说明内容时统一保留说明区；切到空内容项显示空区域，不留上一项文字。
+  这样上下导航不使列表在光标附近反复跳动。候选集整体刷新后可以重新确定尺寸。
+- 初始目标沿用列表 240..520 DIP 自然宽度；说明按列表宽度折行，不按文档最长行扩宽弹窗。
+  说明区目标高度 120 DIP，并在本次候选集内固定；工作区不足时先缩小说明区，
+  优先保留可交互的候选列表。无法同时展示一行候选与有效说明时隐藏视觉说明区。
+  最终尺寸必须由父布局约束确定，不硬编码物理像素。
+- 说明内容用自己的 ScrollView；滚轮按指针所在区域滚动，拖动说明滚动条不改变候选。
+  候选切换重置说明滚动位置；同一候选且说明内容未变时保留。列表选中项和列表滚动
+  不受说明布局或说明滚动影响。
+- 鼠标进入说明区不确认候选、不改变选中项；输入继续送到编辑器，说明区不请求焦点。
+  上下、Enter、Tab、Escape 和左右移动沿用既有规则，不默认增加冲突快捷键。
+  说明暂不提供文本编辑/选择能力；语义树仍公开内容。
+
+### 更新、资源和预算
+
+保持 sameCompletion 目前按 Label 和实际编辑比较的身份规则；Kind、Detail、Documentation、
+Deprecated 只属于呈现，不参与编辑身份。因此仅说明变化仍保留选中候选，但必须重绘其内容。
+同编辑的多项候选仍按现有首次匹配规则保留，不借此次扩展添加公共 ID。
+
+pending 期间保留旧候选预览并禁用接受，说明同步处于 pending 状态；新结果一次替换对应
+候选和说明，不能把新候选配上旧文档。关闭、失焦、过期、销毁时按现有生命周期清理。
+
+预算提案：每项 Documentation 最多保留 16 KiB，整个有效候选集的文档保留量最多 256 KiB。
+超过时按 Provider 顺序在 UTF-8 边界截断说明，内部标记截断并在界面/语义中提示；
+不丢弃可插入候选，也不改动其 Text。保留原有 64 项、替换文本和附加编辑上限。
+按有界前缀规范化文档，不能先复制/规范化任意大的字符串再截断；复制保留字符串，避免
+小切片继续引用 Provider 的巨大底层内容。Provider 自身分配与执行时间仍归应用管理。
+
+仅为当前选中项建立说明布局，不为全部候选预排版。说明区拥有布局，键包括内容、字体、
+宽度和缩放；颜色变化使用样式失效路径，不跨视图共享原生对象。切换项、宽度/字体改变、
+关闭或卸载释放旧资源。16 KiB 是输入上限而非延迟保证，长单行和复杂文字需实测；
+若原生测量造成可见停顿，使用已有上层分段设施或事件循环调度，不能改坏 Unicode 排版语义。
+图标复用已有资源约定；不向 typography 增加领域接口。
+
+### 样式、语义和本地化
+
+在既有 sourceview.completion 下扩充 kind、documentation、separator、deprecated 命名 part，
+Basic/Modern 分别注册；字体、前景和分隔线取主题规则，代码 Scheme 不影响弹窗。
+selected 状态下图标和弃用文字均使用可读配色；高 DPI 使用 DIP 和矢量绘制。
+
+候选语义快照继续提供完整 Label/Detail，增加稳定的种类字符串、deprecated 布尔值；
+当前说明区发布静态文本及滚动范围，不为图标、分隔线、状态标签伪造点击动作。
+说明的语义文本与实际保留内容一致，截断和 pending 可识别；被工作区隐藏的视觉内容
+仍可通过当前候选的描述读取。若 GOUI 公共语义设施不能表达某项，记录明确缺口再取舍，
+不擅自模拟未经支持的原生辅助功能行为。
+“已弃用”“说明已截断”等控件文字进入既有多语言资源；Provider 的内容不自动翻译。
+
+### 实施切片与验收
+
+1. 修改 completion.go、ui/types.go，补充元数据清理、预算、身份保留测试；文档与代码同步。
+2. 修改 completion_list.go、样式与本地化，加入图标、弃用和说明区；复用原有资源生命周期。
+   说明区实现确有独立职责时才拆文件，不为几十行建立零碎组件。
+3. 扩充外部分析示例及已有补全窗口验证主题，提供函数/变量/类型、长说明、弃用和动态刷新。
+   不添加片段语法，不改变示例实际编辑效果。各切片具备测试并按功能提交。
+
+逻辑测试覆盖零值、未知种类、UTF-8/CRLF、截断边界、总预算、Provider 顺序、元数据变化
+保留选择、pending 禁止接受、过期结果、回调重入和双视图隔离。原有文本与附加编辑回归保留。
+布局测试覆盖窄窗口、长单行、中文/组合字符/双向文本、说明滚动、候选切换及资源释放；
+原有原生布局数量断言需分别计入列表与新增说明，保留有界性检查，不能仅扩大容差通过。
+
+独立 X11 会话通过正常 DispatchEvent、CommitText 和指针路径验证真实交互，检查
+Basic/Modern、亮暗主题、100%/150%、屏幕边缘和小工作区。说明出现不能跳选、提交候选、
+改变正文、产生历史或抢焦点。记录输入到显示的延迟及事件循环间隔，不仅测接口返回。
+执行 go test ./... 与 GOWORK=off go test ./...，按风险加 race、Windows/macOS 编译；
+原生未运行的平台明确记录，不以交叉编译代替桌面验收。
+当前提案不要求 GOUI 新接口；相邻 GOUI 工作区的版本差异与本批需求分别报告。
+
+### 参考依据
+
+2026-11-10 复核官方契约；没有执行参考框架的外观或性能对比。
+
+- [Monaco CompletionItem](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.CompletionItem.html)
+  在线 API（页面未固定版本）区分 kind、detail、documentation、Deprecated tags。
+  采用信息分工，不照搬 Markdown、提交字符、命令或完整 LSP 数据模型。
+- [GtkSourceView 5.22.1 CompletionColumn](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/enum.CompletionColumn.html)
+  列出 ICON、TYPED_TEXT、COMMENT、DETAILS 等列。采用图标/正文/说明分离，
+  不引入每一列的公共回调或可任意拼装单元系统。
+- [Scintilla 自动补全](https://www.scintilla.org/ScintillaDoc.html#Autocompletion)
+  文档标注 2026-10-01，支持候选类型图像及有界列表尺寸。采用类型提示和受约束滚动，
+  不采用字符串中的类型分隔符；说明区尺寸、预算和选择保持是本项目设计取舍。

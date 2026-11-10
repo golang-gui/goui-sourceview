@@ -106,3 +106,14 @@ GOUI v0.7.0 `typography.TextFormat.TabWidth` 只提供重复间隔，没有独�
   没有把注释直接映射为正文或自动接受的补全。
 
 上述是公开契约与固定版本源码核对；本仓实际通过的环境与限制见验收记录。
+
+## 后续交互提案（尚未实现）
+
+2026-11-10 对照 Monaco 的普通 InlineCompletion 契约：含换行的 insertText 也要求范围在行末结束，
+替换范围本身在同一行内；Provider 另有部分接受通知。当前行末追加属于有意简化的子集。
+按应用需要依次评估按词/按行接受、输入匹配时保留剩余建议、单行范围替换；
+恢复布局、撤销边界、余文重定位、IME 和过期结果必须先有明确契约，不直接扩成任意多行改写。
+这些不属于已发布 API，AI 服务和请求调度继续由宿主负责。总优先级见 [能力差距](DesignCapabilityGaps.md)。
+
+依据：[InlineCompletion](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.InlineCompletion.html)、
+[部分接受通知](https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor_editor_api.languages.InlineCompletionsProvider.html#handlePartialAccept)。
