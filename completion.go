@@ -3,13 +3,12 @@ package sourceview
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -162,28 +161,7 @@ func DocumentCompletions(c CompletionContext) []Completion {
 	if c.Definition == nil {
 		return nil
 	}
-	text := c.NearbyText
-	start, end := c.NearbyOffset, c.NearbyOffset+len(text)
-	var out []Completion
-	wordStart := -1
-	for i, r := range text {
-		if c.Definition.IsWord(r) {
-			if wordStart < 0 {
-				wordStart = i
-			}
-			continue
-		}
-		if wordStart >= 0 {
-			if start+wordStart != c.Range.Start && (wordStart > 0 || start == 0) {
-				out = append(out, Completion{Label: text[wordStart:i], Detail: "word"})
-			}
-			wordStart = -1
-		}
-	}
-	if wordStart >= 0 && end == c.DocumentLength && start+wordStart != c.Range.Start {
-		out = append(out, Completion{Label: text[wordStart:], Detail: "word"})
-	}
-	return out
+	return editor.DocumentWords(c.NearbyText, c.NearbyOffset, c.DocumentLength, c.Range.Start, c.Definition.IsWord, func(word string) Completion { return Completion{Label: word, Detail: "word"} })
 }
 
 // DefaultCompletions explicitly combines language suggestions and nearby words,
@@ -197,76 +175,6 @@ func DefaultCompletions(c CompletionContext) []Completion {
 }
 
 func (v *SourceView) proposals(c CompletionContext) []Completion { return DefaultCompletions(c) }
-
-func sanitizeCompletions(items []Completion) []Completion {
-	out := make([]Completion, 0, min(64, len(items)))
-	for _, item := range items {
-		if len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 || len(item.AdditionalEdits) > 128 {
-			continue
-		}
-		item.Label = textedit.Normalize(item.Label)
-		item.Detail = strings.Join(strings.Fields(textedit.Normalize(item.Detail)), " ")
-		if item.Text == "" {
-			item.Text = item.Label
-		}
-		item.Text = textedit.Normalize(item.Text)
-		if item.Label == "" || len(item.Text) > 64<<10 || strings.ContainsAny(item.Label, "\r\n\t\v\f\u0085\u2028\u2029") {
-			continue
-		}
-		total := len(item.Text)
-		valid := true
-		for _, e := range item.AdditionalEdits {
-			total += len(e.Text)
-			if len(e.Text) > 64<<10 || total > 1<<20 {
-				valid = false
-				break
-			}
-		}
-		if !valid {
-			continue
-		}
-		if item.Range != nil {
-			r := *item.Range
-			item.Range = &r
-		}
-		if item.Caret != nil {
-			at := *item.Caret
-			item.Caret = &at
-		}
-		item.AdditionalEdits = slices.Clone(item.AdditionalEdits)
-		out = append(out, item)
-		if len(out) == 64 {
-			break
-		}
-	}
-	return out
-}
-
-func normalizeCompletions(items []Completion, c CompletionContext) []Completion {
-	var out []Completion
-	seen := map[string]bool{}
-	prefix := strings.ToLower(c.Prefix)
-	for _, candidate := range items {
-		if len(candidate.Label) > 512 || !strings.HasPrefix(strings.ToLower(textedit.Normalize(candidate.Label)), prefix) {
-			continue
-		}
-		clean := sanitizeCompletions([]Completion{candidate})
-		if len(clean) == 0 {
-			continue
-		}
-		item := clean[0]
-		if item.Text == c.Prefix || seen[item.Text] {
-			continue
-		}
-		seen[item.Text] = true
-		out = append(out, item)
-		if len(out) == 64 {
-			break
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Label < out[j].Label })
-	return out
-}
 
 func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rectangle) geometry.Point {
 	x := caret.X
@@ -477,17 +385,6 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	return nil
 }
 
-// Candidate identity includes the actual edit, not its transient list index.
-func sameCompletion(a, b Completion) bool {
-	if a.Label != b.Label || a.Text != b.Text || !slices.Equal(a.AdditionalEdits, b.AdditionalEdits) {
-		return false
-	}
-	if (a.Range == nil) != (b.Range == nil) || (a.Caret == nil) != (b.Caret == nil) {
-		return false
-	}
-	return (a.Range == nil || *a.Range == *b.Range) && (a.Caret == nil || *a.Caret == *b.Caret)
-}
-
 func (v *SourceView) completionLanguageCurrent(s *completionSession) bool {
 	if s.definition != nil {
 		return s.definition == v.definitionAt(v.Selection().Caret)
@@ -570,30 +467,9 @@ func (v *SourceView) acceptCompletion(s *completionSession, index int) error {
 		return nil
 	}
 	item := s.items[index]
-	r := s.range_
-	if item.Range != nil {
-		r = *item.Range
-	}
-	caret := len(item.Text)
-	if item.Caret != nil {
-		caret = *item.Caret
-	}
-	if caret < 0 || caret > len(item.Text) || !utf8.ValidString(item.Text[:caret]) {
-		return fmt.Errorf("sourceview: invalid completion caret")
-	}
-	edits := slices.Clone(item.AdditionalEdits)
-	for _, e := range edits {
-		if e.Range.Start < r.End && e.Range.End > r.Start || e.Range.Start == r.Start || e.Range.End == r.Start && e.Range.Start == e.Range.End {
-			return fmt.Errorf("sourceview: overlapping completion edits")
-		}
-	}
-	edits = append(edits, textedit.Edit{Range: r, Text: item.Text})
-	sort.SliceStable(edits, func(i, j int) bool { return edits[i].Range.Start < edits[j].Range.Start })
-	end := r.Start + caret
-	for _, e := range item.AdditionalEdits {
-		if e.Range.End <= r.Start {
-			end += len(textedit.Normalize(e.Text)) - (e.Range.End - e.Range.Start)
-		}
+	edits, end, err := editor.CompletionEdits(item, s.range_)
+	if err != nil {
+		return err
 	}
 	v.closeCompletion()
 	if !s.state.valid(v) {
@@ -759,3 +635,9 @@ func newCompletionList(v *SourceView, s *completionSession) *controls.Completion
 		Changed: ErrOperationChanged,
 	})
 }
+
+func sanitizeCompletions(items []Completion) []Completion { return editor.SanitizeCompletions(items) }
+func normalizeCompletions(items []Completion, c CompletionContext) []Completion {
+	return editor.NormalizeCompletions(items, c.Prefix)
+}
+func sameCompletion(a, b Completion) bool { return editor.SameCompletion(a, b) }

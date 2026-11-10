@@ -410,7 +410,7 @@ func (r *pasteRequest) complete(text string, err error) {
 		if known && !ctx.String && !ctx.Comment && definition.Editing().Reindent != nil && strings.Trim(prefix, " \t") == "" {
 			s, o := v.Selection(), v.indent
 			v.report(v.startEditRange(textedit.Range{}, func(ctx context.Context, _ string) (editor.Plan, error) {
-				value, err := reindentedPaste(ctx, text, prefix, o, definition)
+				value, err := editor.ReindentedPaste(ctx, text, prefix, editor.IndentOptions(o), definition)
 				at := s.Range().Start + len(value)
 				return editor.Plan{Before: s, After: textedit.Selection{Anchor: at, Caret: at}, Edits: []textedit.Edit{{Range: s.Range(), Text: value}}}, err
 			}))

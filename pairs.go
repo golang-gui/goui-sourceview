@@ -235,7 +235,7 @@ func (v *SourceView) mapPairs(c textedit.Change) {
 	for _, e := range c.Edits {
 		kept := v.pairs[:0]
 		for _, p := range v.pairs {
-			if touchesPair(e.Range, p.open, len(p.left)) || touchesPair(e.Range, p.close, len(p.right)) {
+			if editor.TouchesPair(e.Range, p.open, len(p.left)) || editor.TouchesPair(e.Range, p.close, len(p.right)) {
 				continue
 			}
 			p.open = textedit.MapOffset(p.open, e)
@@ -244,13 +244,6 @@ func (v *SourceView) mapPairs(c textedit.Change) {
 		}
 		v.pairs = kept
 	}
-}
-
-func touchesPair(r textedit.Range, at, size int) bool {
-	if r.Start == r.End {
-		return r.Start > at && r.Start < at+size
-	}
-	return r.Start < at+size && r.End > at
 }
 
 type bracketState struct {
@@ -289,7 +282,7 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 		definition = context.Embedded
 	}
 	rules := definition.Editing()
-	candidates := v.bracketCandidates(s.Caret, rules.Brackets)
+	candidates := editor.BracketCandidates(m, s.Caret, rules.Brackets)
 	if len(candidates) == 0 {
 		// No neighboring sequence can become a match. Do not demand lexical
 		// payload for an entire search window (possibly far offscreen) just to
@@ -384,114 +377,8 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 			}
 		}
 	}
-	type delimiter struct {
-		at, end, pair int
-		open          bool
-	}
-	var delimiters []delimiter
-	for i := 0; i < len(text); {
-		best := delimiter{}
-		found := false
-		for index, p := range rules.Brackets {
-			for side, seq := range []string{p.Open, p.Close} {
-				if i+len(seq) > len(text) || !strings.HasPrefix(text[i:], seq) {
-					continue
-				}
-				valid := true
-				for j := i; j < i+len(seq); j++ {
-					if !allowed[j] {
-						valid = false
-						break
-					}
-				}
-				if valid && (!found || len(seq) > best.end-best.at) {
-					best = delimiter{i, i + len(seq), index, side == 0}
-					found = true
-				}
-			}
-		}
-		if found {
-			delimiters = append(delimiters, best)
-			i = best.end
-		} else {
-			i++
-		}
-	}
-	at := -1
-	local := s.Caret - start
-	for i, d := range delimiters {
-		if d.at <= local && local < d.end {
-			at = i
-			break
-		}
-	}
-	if at < 0 {
-		for i, d := range delimiters {
-			if d.end == local {
-				at = i
-				break
-			}
-		}
-	}
-	if at < 0 {
-		result.valid = true
-		v.brackets = result
-		return nil
-	}
-	current := delimiters[at]
-	step := 1
-	if !current.open {
-		step = -1
-	}
-	stack := []int{current.pair}
-	result.ranges = []textedit.Range{{Start: start + current.at, End: start + current.end}}
-	for i := at + step; i >= 0 && i < len(delimiters); i += step {
-		d := delimiters[i]
-		if d.open == current.open {
-			stack = append(stack, d.pair)
-			continue
-		}
-		if stack[len(stack)-1] != d.pair {
-			break
-		}
-		stack = stack[:len(stack)-1]
-		if len(stack) == 0 {
-			result.ranges = append(result.ranges, textedit.Range{Start: start + d.at, End: start + d.end})
-			break
-		}
-	}
+	result.ranges = editor.MatchingBrackets(text, start, s.Caret, allowed, rules.Brackets)
 	result.valid = true
 	v.brackets = result
 	return result.ranges
-}
-
-func (v *SourceView) bracketCandidates(caret int, pairs []language.Pair) []textedit.Range {
-	longest := 0
-	for _, p := range pairs {
-		longest = max(longest, len(p.Open), len(p.Close))
-	}
-	if longest == 0 {
-		return nil
-	}
-	m := v.document.model
-	start, end := max(0, caret-longest), min(m.Len(), caret+longest)
-	for !m.IsRuneBoundary(start) {
-		start--
-	}
-	for !m.IsRuneBoundary(end) {
-		end++
-	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: end})
-	local := caret - start
-	var candidates []textedit.Range
-	for _, p := range pairs {
-		for _, sequence := range []string{p.Open, p.Close} {
-			for at := max(0, local-len(sequence)); at <= local && at+len(sequence) <= len(text); at++ {
-				if strings.HasPrefix(text[at:], sequence) {
-					candidates = append(candidates, textedit.Range{Start: start + at, End: start + at + len(sequence)})
-				}
-			}
-		}
-	}
-	return candidates
 }

@@ -3,6 +3,7 @@ package sourceview
 import (
 	"testing"
 
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -114,7 +115,7 @@ func TestLineAnchorSequentialEdits(t *testing.T) {
 		{Range: textedit.Range{Start: 0, End: 2}, Text: ""},
 		{Range: textedit.Range{Start: 0, End: 0}, Text: "abc"},
 	}}
-	if offset, valid := mapLineAnchor(2, true, c); offset != 3 || !valid {
+	if offset, valid := editor.MapLineAnchor(2, true, c); offset != 3 || !valid {
 		t.Fatalf("got %d %t", offset, valid)
 	}
 }

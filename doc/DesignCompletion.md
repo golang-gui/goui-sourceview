@@ -1,8 +1,14 @@
 # 补全设计
 
-本专题主体描述 `completion.go`、`completion_list.go` 与 `ui` 的当前实现。
+本专题主体描述根包 `completion.go`、`internal/controls`、`internal/editor` 与 `ui` 的当前实现。
 末尾的 P1 补全呈现为尚未实现的提案，不属于当前 API 契约。
-会话及提供器队列集中在 `completion.go`，列表、面板及 ScrollView 组合集中在 `completion_list.go`。
+会话、提供器队列及单次输入保留权限位于根包 `completion.go` 和 `completion_input.go`；列表、面板及
+ScrollView 组合集中在 `internal/controls/completion.go`。候选规范化、去重、排序、
+附近词扫描和最终编辑列表规划位于 `internal/editor/completion.go`。
+Completion、CompletionContext 和 CompletionProvider 仍是真实的根包类型。
+内部值算法使用结构约束直接处理根包的候选切片，保留原有数量／大小边界、
+指针与附加编辑的副本，不增加一份无界中间候选列表。会话身份、异步取消、
+焦点与关闭回调后的修订校验、最终 ApplyEdits 留在根包。
 补全是 SourceView 的语言和交互能力；GOUI 提供普通 Popover、事件、排版和绘制，
 不反向依赖本模块，也不在 TextView 中添加源码特例。
 

@@ -104,21 +104,6 @@ func (v *SourceView) SetRulers(columns []int) error {
 	return nil
 }
 
-func leadingColumns(text string, tabWidth int) (bytes, columns int) {
-	for bytes < len(text) {
-		switch text[bytes] {
-		case ' ':
-			columns++
-		case '\t':
-			columns += tabWidth - columns%tabWidth
-		default:
-			return
-		}
-		bytes++
-	}
-	return
-}
-
 func (v *SourceView) deleteIndent() (bool, error) {
 	if !v.smartBackspace || v.projection != nil {
 		return false, nil
@@ -132,7 +117,7 @@ func (v *SourceView) deleteIndent() (bool, error) {
 	if len(before) != s.Caret-r.Start {
 		return false, nil
 	}
-	n, col := leadingColumns(before, v.indent.TabWidth)
+	n, col := editor.LeadingColumns(before, v.indent.TabWidth)
 	if n != len(before) || col == 0 {
 		return false, nil
 	}
@@ -276,7 +261,7 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 		draw.DrawLine(geometry.Point{X: x, Y: top}, geometry.Point{X: x, Y: bottom}, 1, ruler)
 	}
 	if v.indentGuides && p.textStart == 0 {
-		bytes, columns := leadingColumns(p.text, v.indent.TabWidth)
+		bytes, columns := editor.LeadingColumns(p.text, v.indent.TabWidth)
 		guide := graphics.ColorOf(v.partColor("indent-guide", tint(v.colors.GutterForeground, 65)))
 		col, target := 0, v.indent.IndentWidth
 		for at := 0; at < bytes && target < columns; at++ {

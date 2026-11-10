@@ -3,6 +3,7 @@ package sourceview
 import (
 	"errors"
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"image/color"
 	"testing"
 
@@ -67,7 +68,7 @@ func TestGoToOffsetUsesOneBasedRuneColumns(t *testing.T) {
 		at    int
 		valid bool
 	}{{"1", 0, true}, {"2:2", 7, true}, {"2:4", 10, true}, {"3:1", 12, true}, {"0", 0, false}, {"2:6", 0, false}, {"1:0", 0, false}, {"1:2:3", 0, false}, {"no", 0, false}} {
-		at, err := gotoOffset(m, tc.query)
+		at, err := editor.GoToOffset(m, tc.query)
 		if (err == nil) != tc.valid || tc.valid && at != tc.at {
 			t.Fatal(tc, at, err)
 		}

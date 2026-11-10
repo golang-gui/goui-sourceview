@@ -2,11 +2,10 @@ package sourceview
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -199,7 +198,7 @@ func (b *goToBar) refresh() {
 	message := resource.GoToPlaceholder()
 	name := "sourceview.find.status"
 	if v := b.liveTarget(); v != nil && b.Input.Text() != "" {
-		if _, err := gotoOffset(v.document.model, b.Input.Text()); err != nil {
+		if _, err := editor.GoToOffset(v.document.model, b.Input.Text()); err != nil {
 			message = resource.InvalidPosition()
 			name = "sourceview.find.error"
 		}
@@ -212,7 +211,7 @@ func (b *goToBar) submit() {
 	if v == nil {
 		return
 	}
-	at, err := gotoOffset(v.document.model, b.Input.Text())
+	at, err := editor.GoToOffset(v.document.model, b.Input.Text())
 	if err != nil {
 		b.refresh()
 		return
@@ -223,34 +222,7 @@ func (b *goToBar) submit() {
 		b.Close()
 	}
 }
-func gotoOffset(m *textedit.Model, query string) (int, error) {
-	parts := strings.Split(strings.TrimSpace(query), ":")
-	if len(parts) < 1 || len(parts) > 2 {
-		return 0, fmt.Errorf("sourceview: invalid line/column")
-	}
-	line, err := strconv.Atoi(parts[0])
-	if err != nil || line < 1 || line > m.LineCount() {
-		return 0, fmt.Errorf("sourceview: line out of range")
-	}
-	column := 1
-	if len(parts) == 2 {
-		column, err = strconv.Atoi(parts[1])
-		if err != nil || column < 1 {
-			return 0, fmt.Errorf("sourceview: column out of range")
-		}
-	}
-	r, _ := m.LineRange(line - 1)
-	text, _ := m.Slice(r)
-	at := 0
-	for n := 1; n < column; n++ {
-		if at == len(text) {
-			return 0, fmt.Errorf("sourceview: column out of range")
-		}
-		_, size := utf8.DecodeRuneInString(text[at:])
-		at += size
-	}
-	return r.Start + at, nil
-}
+
 func (b *goToBar) Snapshot() gui.WidgetInfo {
 	info := b.WidgetBase.Snapshot()
 	info.Role = "sourceview-goto-bar"

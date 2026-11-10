@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui/textedit"
 )
@@ -159,28 +160,13 @@ func (d *Document) lineMarksChanged() {
 	d.marksChanged.Emit()
 }
 
-// Mapping uses change coordinates, never the possibly newer model contents.
-// Insertions at an anchor use right gravity; deletion covering it invalidates it.
-func mapLineAnchor(offset int, valid bool, c textedit.Change) (int, bool) {
-	if c.Reset {
-		return offset, false
-	}
-	for _, edit := range c.Edits {
-		if edit.Range.Start <= offset && offset < edit.Range.End {
-			valid = false
-		}
-		offset = textedit.MapOffset(offset, edit)
-	}
-	return offset, valid
-}
-
 func (d *Document) mapLineMarks(c textedit.Change) {
 	changed := false
 	for _, mark := range d.marks {
 		if mark.revision >= c.Revision {
 			continue
 		}
-		mark.offset, mark.valid = mapLineAnchor(mark.offset, mark.valid, c)
+		mark.offset, mark.valid = editor.MapLineAnchor(mark.offset, mark.valid, c)
 		mark.revision = c.Revision
 		changed = true
 	}

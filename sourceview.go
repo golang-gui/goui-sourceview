@@ -585,7 +585,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		if e.revision+1 != c.Revision {
 			e.valid = false
 		}
-		e.offset, e.valid = mapLineAnchor(e.offset, e.valid, c)
+		e.offset, e.valid = editor.MapLineAnchor(e.offset, e.valid, c)
 		e.revision = c.Revision
 	}
 	defer v.searchState.Emit()

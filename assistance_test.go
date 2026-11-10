@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"math"
 	"reflect"
 	"strings"
@@ -29,7 +30,7 @@ func TestSmartIndentBackspaceIsOneUndo(t *testing.T) {
 		options.TabWidth = 8
 		options.IndentWidth = 4
 		_ = v.SetIndentOptions(options)
-		n, _ := leadingColumns(tc.before, 8)
+		n, _ := editor.LeadingColumns(tc.before, 8)
 		v.SetSelection(textedit.Selection{Anchor: n, Caret: n})
 		ok, err := v.deleteIndent()
 		if !ok || err != nil || v.document.model.Text() != tc.after || v.Selection().Caret != tc.caret {
@@ -462,7 +463,7 @@ func TestBracketCandidateHandlesSequenceEdgesAndUTF8(t *testing.T) {
 		at   int
 		want bool
 	}{{0, false}, {3, true}, {5, true}, {7, true}, {8, true}, {10, true}, {12, true}, {13, false}} {
-		if got := len(v.bracketCandidates(tc.at, pairs)) > 0; got != tc.want {
+		if got := len(editor.BracketCandidates(v.document.model, tc.at, pairs)) > 0; got != tc.want {
 			t.Fatal("candidate mismatch", tc, got)
 		}
 	}

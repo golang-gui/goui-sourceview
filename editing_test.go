@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui/textedit"
 )
@@ -23,7 +24,7 @@ func TestCleanupPlansAndUndo(t *testing.T) {
 		{"one", "join", "one", textedit.Selection{}},
 	} {
 		m := textedit.NewModel(tc.text)
-		p, err := cleanupPlan(context.Background(), tc.text, tc.s, tc.kind)
+		p, err := editor.CleanupPlan(context.Background(), tc.text, tc.s, tc.kind)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -47,11 +48,11 @@ func TestReindentPlanValidatesBeforeMutation(t *testing.T) {
 	text := "{\n\"a\": 1\n}"
 	s := textedit.Selection{Anchor: len(text)}
 	for _, bad := range [][]language.LineIndent{{{Line: 1, Text: "x"}}, {{Line: 1, Text: "\n"}}, {{Line: 1, Text: " "}, {Line: 1, Text: "  "}}, {{Line: 3, Text: " "}}, {{Line: -1, Text: " "}}} {
-		if _, err := reindentPlan(context.Background(), text, s, 0, 2, bad); err == nil {
+		if _, err := editor.ReindentPlan(context.Background(), text, s, 0, 2, bad); err == nil {
 			t.Fatal("未拒绝非法结果", bad)
 		}
 	}
-	p, err := reindentPlan(context.Background(), text, s, 0, 2, []language.LineIndent{{Line: 0, Text: ""}, {Line: 1, Text: "  "}, {Line: 2, Text: ""}})
+	p, err := editor.ReindentPlan(context.Background(), text, s, 0, 2, []language.LineIndent{{Line: 0, Text: ""}, {Line: 1, Text: "  "}, {Line: 2, Text: ""}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestPasteRelativeIndentAndLiteralProtection(t *testing.T) {
 		{language.JSON, "\t{\r\n\t\t1\r\n\t}", "  ", "{\n      1\n  }"},
 	} {
 		l, _ := language.Builtin(tc.id)
-		got, err := reindentedPaste(context.Background(), tc.text, tc.prefix, o, l)
+		got, err := editor.ReindentedPaste(context.Background(), tc.text, tc.prefix, editor.IndentOptions(o), l)
 		if err != nil || got != tc.want {
 			t.Fatalf("%s: %q != %q (%v)", tc.id, got, tc.want, err)
 		}
