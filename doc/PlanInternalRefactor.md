@@ -16,6 +16,7 @@
 8. 代码主题规则、标记标签、空白和括号装饰 → internal/view。
 9. 快捷键校验、菜单命令资源和输入框刷新 → internal/controls。
 10. 根包中仍需真实编辑状态的协调按领域合并，核对 API、资源与原生场景。
+11. 折叠私有记录、不可变快照构建、候选重建和顺序／批量编辑映射 → internal/folding。
 
 后四批用于继续实现根目录整理目标，不将完成前六批等同于所有私有逻辑已下沉。
 纯算法与呈现下沉；必须访问真实文档、修订、焦点及生命周期的协调仍由根包拥有。
@@ -127,3 +128,29 @@
 主题／绘制组初次导出发现菜单尚引用迁出后的 containsPoint；补齐同组的内部几何
 调用后重新导出并通过，未留下依赖后续提交才能构建的中间提交。完整日志位于
 /tmp/sourceview-refactor-commits-0ff2u997，不包含 doc/Doing.md 或 example/temp/。
+
+### 批次 11：折叠快照与编辑映射
+
+接续 f2064dd。公开 FoldRegion 和 Folds 保留根包的真实定义；私有记录下沉，
+公开快照只复制其值。规范化快照构建、按字节端点保留意图、普通和单调批量编辑
+映射、隐藏区间合并移入 internal/folding。根包保留修订／Reset／IME 检查、
+分步接收预算、选区保护、可见区刷新、通知和生命周期，不另建编辑状态。
+折叠主文件从 903 行降到 774 行；根包实现合计从 11,247 行降到 11,118 行。
+原有根包折叠、共享文档、接收取消、重入与撤销断言保留，新增内部快照字节端点、
+升／降序及非单调编辑、边界失效、无 splice 映射、切片隔离和隐藏区间断言。
+
+验证：go test ./...、GOWORK=off go test ./...、go test -race ./...、
+go vet ./...、git diff --check 通过；公开声明对比和外部消费者类型身份／枚举／
+快照接口检查通过。Windows amd64、macOS arm64 的 CGO_ENABLED=0 go build ./...
+通过，未执行其原生窗口。
+
+Linux amd64 / Go 1.25.8 / GOUI v0.7.0，独立 X11 :190、Xvnc + Xfwm4、
+独立 D-Bus／配置／GOCACHE，Pango：7 组窗口场景通过，分别为 resize_cache
+软件 1×、folding 的软件 1×与暗色 OpenGL 1.5×、folding_data 的 Basic 软件
+1×、structural 的 Modern 暗色 OpenGL 1×、fold_preview OpenGL 1×、
+line_collapse 软件 1×。覆盖候选重建、共享视图隔离、隐藏区域删除、搜索显露、
+批量编辑与撤销／重做、外部十万候选分步接收、首行预览和长行收起。
+所属桌面进程已退出，剪贴板操作仅作用于该显示连接；用户文档、设置和其他桌面
+会话未改动。物理 IME、混合 DPI、其他原生 OS 及性能对照未执行。
+日志和产物位于 /tmp/sourceview-folding-split-xqre5fl8。
+提交前另从暂存区导出独立源码，GOWORK=off go test ./... 通过。

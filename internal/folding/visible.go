@@ -1,4 +1,4 @@
-// Package folding contains detached fold validation and visible-line indexes.
+// Package folding contains detached snapshots, change mapping and visible-line indexes.
 package folding
 
 import "sort"

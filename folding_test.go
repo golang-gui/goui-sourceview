@@ -226,8 +226,8 @@ func TestFoldMappingUsesSequentialLineChanges(t *testing.T) {
 					t.Fatalf("incremental=%v: wanted lines %v, got %v", incremental, tc.lines, v.folds)
 				}
 				r := v.folds[0]
-				text, err := m.Slice(textedit.Range{Start: r.start, End: r.end})
-				if err != nil || text != "{\n one\n two\n}" || m.LineAt(r.start) != r.StartLine || m.LineAt(r.end) != r.EndLine {
+				text, err := m.Slice(textedit.Range{Start: r.Start, End: r.End})
+				if err != nil || text != "{\n one\n two\n}" || m.LineAt(r.Start) != r.StartLine || m.LineAt(r.End) != r.EndLine {
 					t.Fatal("mapped line and byte endpoints disagree", r, text, err)
 				}
 			}
@@ -269,9 +269,9 @@ func BenchmarkFoldMapping(b *testing.B) {
 			v := NewSourceView()
 			m := v.document.model
 			m.SetText("prefix\n" + strings.Repeat("{\nvalue\n}\n", count))
-			folds := make([]foldEntry, count)
+			folds := make([]folding.Entry, count)
 			for i := range folds {
-				folds[i] = foldEntry{FoldRegion: FoldRegion{StartLine: 1 + i*3, EndLine: 3 + i*3}, start: 7 + i*10, end: 16 + i*10}
+				folds[i] = folding.Entry{Region: folding.Region{StartLine: 1 + i*3, EndLine: 3 + i*3}, Start: 7 + i*10, End: 16 + i*10}
 			}
 			if err := m.ReplaceAtomic(textedit.Range{}, "new\n"); err != nil {
 				b.Fatal(err)
@@ -281,7 +281,7 @@ func BenchmarkFoldMapping(b *testing.B) {
 			if incremental {
 				splices = []highlight.Splice{{Removed: 1, Added: 2}}
 			}
-			v.folds = make([]foldEntry, count)
+			v.folds = make([]folding.Entry, count)
 			b.ResetTimer()
 			for range b.N {
 				copy(v.folds, folds)
@@ -368,7 +368,7 @@ func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
 }
 func TestNewFoldsCanonicalAndCrossing(t *testing.T) {
 	f, err := NewFolds("a\r\nb\r\nc", []FoldRange{{StartLine: 0, EndLine: 2}, {StartLine: 0, EndLine: 1}, {StartLine: 0, EndLine: 2}, {StartLine: 0, EndLine: 1}})
-	if err != nil || len(f.entries) != 1 || f.entries[0].end != 5 {
+	if err != nil || len(f.entries) != 1 || f.entries[0].End != 5 {
 		t.Fatal(f, err)
 	}
 	for _, ranges := range [][]FoldRange{{{StartLine: 0, EndLine: 2}, {StartLine: 1, EndLine: 3}}, {{StartLine: -1, EndLine: 2}}, {{StartLine: 0, EndLine: 0}}, {{StartLine: 0, EndLine: 4}}} {
@@ -409,11 +409,11 @@ func TestFoldBatchMappingAndUndo(t *testing.T) {
 	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "AA\nA"}, {Range: textedit.Range{Start: 2, End: 3}, Text: "B\nB"}}, textedit.BatchOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if len(v.folds) != 1 || v.folds[0].StartLine != 4 || v.folds[0].EndLine != 6 || v.folds[0].start != 9 || !v.folds[0].Collapsed {
+	if len(v.folds) != 1 || v.folds[0].StartLine != 4 || v.folds[0].EndLine != 6 || v.folds[0].Start != 9 || !v.folds[0].Collapsed {
 		t.Fatal("批量前缀移动", v.folds)
 	}
 	d.model.Undo()
-	if d.model.Text() != original || len(v.folds) != 1 || v.folds[0].StartLine != 2 || v.folds[0].start != 4 || !v.folds[0].Collapsed {
+	if d.model.Text() != original || len(v.folds) != 1 || v.folds[0].StartLine != 2 || v.folds[0].Start != 4 || !v.folds[0].Collapsed {
 		t.Fatal("批量撤销映射", v.folds)
 	}
 	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "prefix"}, {Range: textedit.Range{Start: 6, End: 7}, Text: "body"}}, textedit.BatchOptions{}); err != nil {

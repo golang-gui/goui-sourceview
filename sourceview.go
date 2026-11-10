@@ -121,7 +121,7 @@ type SourceView struct {
 	foldState                                                                         uint64
 	foldColumn                                                                        float32
 	foldingEnabled                                                                    bool
-	folds                                                                             []foldEntry
+	folds                                                                             []folding.Entry
 	collapsedLines                                                                    map[int]textedit.Range
 	collapsedRevision                                                                 uint64
 	foldRevision                                                                      uint64

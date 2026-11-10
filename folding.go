@@ -29,11 +29,6 @@ type FoldRegion struct {
 	Collapsed          bool
 }
 
-type foldEntry struct {
-	FoldRegion
-	start, end int
-}
-
 func (v *SourceView) FoldingEnabled() bool { return v.foldingEnabled }
 
 func (v *SourceView) SetFoldingEnabled(enabled bool) {
@@ -59,7 +54,7 @@ func (v *SourceView) FoldingRegions() []FoldRegion {
 	}
 	out := make([]FoldRegion, len(v.folds))
 	for i, r := range v.folds {
-		out[i] = r.FoldRegion
+		out[i] = FoldRegion(r.Region)
 	}
 	return out
 }
@@ -174,16 +169,10 @@ func (v *SourceView) finishFoldCommand() {
 }
 
 func (v *SourceView) foldedLines() []folding.Interval {
-	var hidden []folding.Interval
-	if v.foldingEnabled {
-		for _, r := range v.folds {
-			if !r.Collapsed {
-				continue
-			}
-			hidden = folding.AppendHidden(hidden, r.StartLine+1, r.EndLine+1)
-		}
+	if !v.foldingEnabled {
+		return nil
 	}
-	return hidden
+	return folding.Hidden(v.folds)
 }
 
 func (v *SourceView) refreshFoldGeometry() {
@@ -213,18 +202,7 @@ func (v *SourceView) acceptFolds(ranges []language.FoldRange) {
 	if v.projection != nil {
 		return
 	}
-	old := make(map[[2]int]bool, len(v.folds))
-	for _, r := range v.folds {
-		old[[2]int{r.start, r.end}] = r.Collapsed
-	}
-	v.folds = make([]foldEntry, 0, len(ranges))
-	for _, r := range ranges {
-		a, _ := v.document.model.LineRange(r.StartLine)
-		b, _ := v.document.model.LineRange(r.EndLine)
-		entry := foldEntry{FoldRegion: FoldRegion{StartLine: r.StartLine, EndLine: r.EndLine}, start: a.Start, end: b.End}
-		entry.Collapsed = old[[2]int{entry.start, entry.end}]
-		v.folds = append(v.folds, entry)
-	}
+	v.folds = folding.Reconcile(v.folds, ranges, v.document.model.LineRange)
 	v.foldRevision = v.document.model.Revision()
 	v.foldDefinition = v.document.definition
 	// Candidate analysis changes controls, not paragraph visibility, when no
@@ -260,37 +238,7 @@ func (v *SourceView) mapFolds(c textedit.Change, splices []highlight.Splice) {
 	// untouched fold only needs the line-count delta of edits before it, not
 	// two document position queries for every candidate on every keystroke.
 	incremental := v.foldRevision+1 == c.Revision && len(splices) == len(c.Edits)
-	if incremental && len(c.Edits) > 1 && v.mapFoldBatch(c, splices) {
-		return
-	}
-	out := v.folds[:0]
-	for _, r := range v.folds {
-		valid := true
-		for i, e := range c.Edits {
-			before := e.Range.Start == r.start && e.Range.Start == e.Range.End && strings.HasSuffix(e.Text, "\n")
-			if !before && e.Range.Start <= r.end && e.Range.End >= r.start {
-				valid = false
-				break
-			}
-			if incremental && e.Range.Start <= r.start {
-				delta := splices[i].Added - splices[i].Removed
-				r.StartLine += delta
-				r.EndLine += delta
-			}
-			r.start = textedit.MapOffset(r.start, e)
-			r.end = textedit.MapOffset(r.end, e)
-		}
-		if valid {
-			if !incremental {
-				r.StartLine = v.document.model.LineAt(r.start)
-				r.EndLine = v.document.model.LineAt(r.end)
-			}
-			if r.EndLine > r.StartLine {
-				out = append(out, r)
-			}
-		}
-	}
-	v.folds = out
+	v.folds = folding.MapEntries(v.folds, c, splices, incremental, v.document.model.LineAt)
 	v.foldRevision = c.Revision
 	// Candidate changes alone do not change paragraph visibility. The change
 	// observer splices ordinary row heights and preserves unchanged layouts.
@@ -311,7 +259,7 @@ func (v *SourceView) expandFoldRange(r textedit.Range) bool {
 		header, _ := v.document.model.LineRange(f.StartLine)
 		headerHidden := r.End >= header.Start && r.Start <= header.End && v.lineCollapsed(f.StartLine) &&
 			(r.Start != r.End || v.collapsedOffsetHidden(f.StartLine, v.cachedParagraph(f.StartLine), r.Start, false))
-		if r.Start <= f.end && r.End >= start.Start || headerHidden {
+		if r.Start <= f.End && r.End >= start.Start || headerHidden {
 			f.Collapsed = false
 			delete(v.collapsedLines, f.StartLine)
 			changed = true
@@ -384,7 +332,7 @@ func (v *SourceView) resumeFolding() {
 // Folds is an immutable, worker-safe folding snapshot. It retains ranges and
 // normalized byte endpoints, never the source text or a mutable model.
 type Folds struct {
-	entries       []foldEntry
+	entries       []folding.Entry
 	length, lines int
 }
 
@@ -394,29 +342,11 @@ type FoldRange = language.FoldRange
 // NewFolds copies and validates candidates against normalized UTF-8/LF text.
 // Duplicate headers retain their outermost range; crossing ranges are invalid.
 func NewFolds(text string, ranges []FoldRange) (*Folds, error) {
-	text = textedit.Normalize(text)
-	starts := []int{0}
-	for at := 0; at < len(text); {
-		n := strings.IndexByte(text[at:], '\n')
-		if n < 0 {
-			break
-		}
-		at += n + 1
-		starts = append(starts, at)
-	}
-	ranges, err := folding.Normalize(ranges, len(starts))
+	snapshot, err := folding.BuildSnapshot(text, ranges)
 	if err != nil {
 		return nil, err
 	}
-	f := &Folds{length: len(text), lines: len(starts), entries: make([]foldEntry, len(ranges))}
-	for i, r := range ranges {
-		end := len(text)
-		if r.EndLine+1 < len(starts) {
-			end = starts[r.EndLine+1] - 1
-		}
-		f.entries[i] = foldEntry{FoldRegion: FoldRegion{StartLine: r.StartLine, EndLine: r.EndLine}, start: starts[r.StartLine], end: end}
-	}
-	return f, nil
+	return &Folds{entries: snapshot.Entries, length: snapshot.Length, lines: snapshot.Lines}, nil
 }
 
 // SetFolds publishes analysis for revision on the document's owning sequence.
@@ -465,7 +395,7 @@ type foldIntake struct {
 	snapshot                    *Folds
 	generation, revision, state uint64
 	old                         map[[2]int]bool
-	entries                     []foldEntry
+	entries                     []folding.Entry
 	oldAt, at                   int
 }
 
@@ -493,7 +423,7 @@ func (v *SourceView) foldingIntakeStep() {
 	for n := 0; n < 256 && time.Now().Before(deadline); n++ {
 		if q.oldAt < len(v.folds) {
 			r := v.folds[q.oldAt]
-			q.old[[2]int{r.start, r.end}] = r.Collapsed
+			q.old[[2]int{r.Start, r.End}] = r.Collapsed
 			q.oldAt++
 			continue
 		}
@@ -501,7 +431,7 @@ func (v *SourceView) foldingIntakeStep() {
 			break
 		}
 		r := q.snapshot.entries[q.at]
-		r.Collapsed = q.old[[2]int{r.start, r.end}]
+		r.Collapsed = q.old[[2]int{r.Start, r.End}]
 		q.entries = append(q.entries, r)
 		q.at++
 	}
@@ -722,7 +652,7 @@ func (v *SourceView) paintFoldBadge(p gui.Painter, row int, item *paragraph) {
 	if r.Width == 0 {
 		return
 	}
-	if s := v.Selection().Range(); s.Start <= v.folds[v.foldHeader(row)].start && s.End > v.folds[v.foldHeader(row)].end {
+	if s := v.Selection().Range(); s.Start <= v.folds[v.foldHeader(row)].Start && s.End > v.folds[v.foldHeader(row)].End {
 		p.FillRect(r, graphics.ColorOf(v.colors.SelectionBackground))
 	}
 	c := graphics.ColorOf(v.partColor("fold-placeholder", v.colors.GutterForeground))
@@ -841,63 +771,4 @@ func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 	if len(v.hiddenLines) > 0 {
 		meta["visibleSpans"] = spans
 	}
-}
-
-// Monotone non-overlapping batch notifications can be mapped in O(E+F log E).
-// Undo publishes ascending sequential coordinates; normalize those before
-// searching. Ordinary arbitrary sequential changes retain the general path.
-func (v *SourceView) mapFoldBatch(c textedit.Change, splices []highlight.Splice) bool {
-	type change struct {
-		edit         textedit.Edit
-		bytes, lines int
-	}
-	changes := make([]change, len(c.Edits))
-	ascending := c.Edits[0].Range.Start < c.Edits[1].Range.Start
-	delta := 0
-	for i, e := range c.Edits {
-		size := len(e.Text) - (e.Range.End - e.Range.Start)
-		if ascending {
-			e.Range.Start -= delta
-			e.Range.End -= delta
-			delta += size
-		}
-		at := i
-		if !ascending {
-			at = len(changes) - 1 - i
-		}
-		changes[at] = change{e, size, splices[i].Added - splices[i].Removed}
-	}
-	bytes, lines := make([]int, len(changes)+1), make([]int, len(changes)+1)
-	for i, e := range changes {
-		if i > 0 && (e.edit.Range.Start <= changes[i-1].edit.Range.Start || e.edit.Range.Start < changes[i-1].edit.Range.End) {
-			return false
-		}
-		bytes[i+1] = bytes[i] + e.bytes
-		lines[i+1] = lines[i] + e.lines
-	}
-	out := v.folds[:0]
-	for _, r := range v.folds {
-		at := sort.Search(len(changes), func(i int) bool { return changes[i].edit.Range.End >= r.start })
-		next := at
-		if at < len(changes) {
-			e := changes[at].edit
-			if e.Range.Start == r.start && e.Range.End == r.start && strings.HasSuffix(e.Text, "\n") {
-				next++
-			}
-		}
-		if next < len(changes) && changes[next].edit.Range.Start <= r.end {
-			continue
-		}
-		r.start += bytes[next]
-		r.end += bytes[next]
-		r.StartLine += lines[next]
-		r.EndLine += lines[next]
-		out = append(out, r)
-	}
-	v.folds = out
-	v.foldRevision = c.Revision
-	if len(v.hiddenLines) > 0 || len(v.foldedLines()) > 0 {
-		v.refreshFoldGeometry()
-	}
-	return true
 }
