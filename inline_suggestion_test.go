@@ -91,7 +91,7 @@ func TestInlineSuggestionRejectsInvalidAndStaleResults(t *testing.T) {
 	}
 	v.SetInlineSuggestionsEnabled(true)
 	showInline(t, v, "suffix")
-	for _, text := range []string{"", "   ", "one\ntwo", "one\rtwo", "a\tb", "a\u2028b", string([]byte{0xff}), strings.Repeat("x", 4097)} {
+	for _, text := range []string{"", "   ", "a\tb", "a\u2028b", string([]byte{0xff}), strings.Repeat("x", (64<<10)+1)} {
 		if ok, err := v.SetInlineSuggestion(d, rev, InlineSuggestion{6, text}); ok || err == nil {
 			t.Fatal("invalid literal accepted", len(text), err)
 		}

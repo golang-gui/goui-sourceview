@@ -15,8 +15,9 @@ import (
 	"github.com/golang-gui/goui/platform/typography"
 )
 
-// InlineSuggestion is a literal, single-line suffix at a UTF-8 byte position.
-// The first version accepts only logical line ends and at most 4096 UTF-8 bytes.
+// InlineSuggestion is a literal suffix at a UTF-8 byte position. Logical line
+// ends accept up to 64 KiB / 256 lines, normalized to UTF-8/LF. Tabs are allowed
+// after the first newline; the initial appended fragment requires literal spaces.
 // Text is uncommitted: it is never part of Model, copy, search or saved output.
 type InlineSuggestion struct {
 	Position int
@@ -24,12 +25,15 @@ type InlineSuggestion struct {
 }
 
 type inlineSuggestionState struct {
-	request  InlineSuggestion
-	state    operationState
-	layout   typography.TextLayout
-	geometry textedit.Geometry
-	font     typography.FontInfo
-	color    color.NRGBA
+	request    InlineSuggestion
+	state      operationState
+	layout     typography.TextLayout
+	geometry   textedit.Geometry
+	font       typography.FontInfo
+	color      color.NRGBA
+	multi      *multilineInlineLayout
+	row        int
+	baseHeight float32
 }
 
 func (v *SourceView) InlineSuggestionsEnabled() bool { return v.inlineSuggestionsEnabled }
@@ -55,8 +59,15 @@ func (v *SourceView) SetInlineSuggestion(document *Document, revision uint64, su
 	if suggestion.Position < 0 || suggestion.Position > document.model.Len() || !document.model.IsRuneBoundary(suggestion.Position) {
 		return false, fmt.Errorf("sourceview: invalid inline suggestion position")
 	}
-	if strings.TrimSpace(suggestion.Text) == "" || len(suggestion.Text) > 4096 || !utf8.ValidString(suggestion.Text) || strings.ContainsFunc(suggestion.Text, func(r rune) bool { return unicode.IsControl(r) || r == '\u2028' || r == '\u2029' }) {
-		return false, fmt.Errorf("sourceview: inline suggestion requires 1..4096 bytes of single-line text without controls")
+	if !utf8.ValidString(suggestion.Text) || len(suggestion.Text) > 64<<10 {
+		return false, fmt.Errorf("sourceview: invalid or oversized inline suggestion")
+	}
+	suggestion.Text = textedit.Normalize(suggestion.Text)
+	head, _, _ := strings.Cut(suggestion.Text, "\n")
+	if strings.TrimSpace(suggestion.Text) == "" || strings.Count(suggestion.Text, "\n") >= 256 || strings.ContainsRune(head, '\t') || strings.ContainsFunc(suggestion.Text, func(r rune) bool {
+		return unicode.IsControl(r) && r != '\n' && r != '\t' || r == '\u2028' || r == '\u2029'
+	}) {
+		return false, fmt.Errorf("sourceview: inline suggestion requires nonblank text, at most 256 lines, and no first-fragment tabs or other controls")
 	}
 	if !v.inlineSuggestionAvailable() {
 		return false, nil
@@ -71,7 +82,7 @@ func (v *SourceView) SetInlineSuggestion(document *Document, revision uint64, su
 	if !state.valid(v) || v.Destroyed() {
 		return false, ErrOperationChanged
 	}
-	s := &inlineSuggestionState{request: suggestion, state: state}
+	s := &inlineSuggestionState{request: suggestion, state: state, row: document.model.LineAt(suggestion.Position)}
 	v.inlineSuggestion = s
 	if err := v.prepareInlineSuggestion(); err != nil {
 		return false, err
@@ -95,6 +106,11 @@ func (v *SourceView) ClearInlineSuggestion() {
 		return
 	}
 	v.inlineSuggestion = nil
+	v.restoreInlineExtent(s)
+	if s.multi != nil {
+		s.multi.destroy()
+		s.multi = nil
+	}
 	if s.layout != nil {
 		s.layout.Destroy()
 		s.layout = nil
@@ -112,8 +128,8 @@ func (v *SourceView) inlineSuggestionCurrent() bool {
 	return s != nil && s.state.valid(v) && v.inlineSuggestionAvailable() && v.Selection() == (textedit.Selection{Anchor: s.request.Position, Caret: s.request.Position})
 }
 
-// prepareInlineSuggestion owns one native layout; Paint and Snapshot only read
-// it. Width/scroll changes reuse it. Font/theme changes replace it outside Paint.
+// Native preparation stays outside Paint/Snapshot: one layout for a single-line
+// request, or a measured head/tail pair for multiline view-local space.
 func (v *SourceView) prepareInlineSuggestion() error {
 	s := v.inlineSuggestion
 	if s == nil {
@@ -127,6 +143,9 @@ func (v *SourceView) prepareInlineSuggestion() error {
 		return nil
 	}
 	c := v.partColor("inline-suggestion", v.colors.GutterForeground)
+	if strings.ContainsRune(s.request.Text, '\n') {
+		return v.prepareMultilineInline(s, c)
+	}
 	if s.layout != nil && s.font == v.font && s.color == c {
 		return nil
 	}
@@ -170,6 +189,9 @@ type inlinePreview struct {
 // withheld: appending an independent run there could overlap real source text.
 func (v *SourceView) inlinePreview() (inlinePreview, bool) {
 	s := v.inlineSuggestion
+	if s != nil && s.multi != nil {
+		return v.multilineInlinePreview(s)
+	}
 	if !v.inlineSuggestionCurrent() || s.layout == nil || s.font != v.font || s.color != v.partColor("inline-suggestion", v.colors.GutterForeground) || s.geometry.LineCount() != 1 {
 		return inlinePreview{}, false
 	}
@@ -232,6 +254,10 @@ func (v *SourceView) paintInlineSuggestion(p gui.Painter) {
 		return
 	}
 	s := v.inlineSuggestion
+	if s.multi != nil {
+		v.paintMultilineInline(p, s)
+		return
+	}
 	p.Save()
 	p.SetClipRect(preview.textClip)
 	p.DrawTextLayout(preview.origin, s.layout)
@@ -288,6 +314,6 @@ func (v *SourceView) snapshotInlineSuggestion(info *gui.WidgetInfo) {
 	meta["inlineSuggestionsEnabled"] = v.inlineSuggestionsEnabled
 	if suggestion, ok := v.InlineSuggestion(); ok {
 		preview, visible := v.inlinePreview()
-		meta["inlineSuggestion"] = map[string]any{"position": suggestion.Position, "text": suggestion.Text, "visible": visible, "bounds": preview.bounds.Translate(info.Bounds.Pos), "truncated": preview.truncated}
+		meta["inlineSuggestion"] = map[string]any{"position": suggestion.Position, "text": suggestion.Text, "visible": visible, "bounds": preview.bounds.Translate(info.Bounds.Pos), "truncated": preview.truncated, "lineCount": strings.Count(suggestion.Text, "\n") + 1}
 	}
 }

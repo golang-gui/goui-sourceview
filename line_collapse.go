@@ -132,6 +132,7 @@ func (v *SourceView) CollapseLine(line int) bool {
 	if !v.canCollapseLine(line) {
 		return false
 	}
+	v.ClearInlineSuggestion()
 	state := v.operationState()
 	v.closeCompletion()
 	if !state.valid(v) || !v.canCollapseLine(line) {

@@ -142,6 +142,7 @@ type SourceView struct {
 	pointerPoint     geometry.Point
 	dragging         bool
 	dragPoint        geometry.Point
+	dragInline       bool // keep the initial hit while dismissed inline space closes
 	dragGutter       bool
 	dragUnit         int // 0: caret, 1: word, 2: logical line
 	dragRange        textedit.Range

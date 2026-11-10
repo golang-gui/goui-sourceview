@@ -161,6 +161,7 @@ func (v *SourceView) setAllFolded(collapsed bool) {
 }
 
 func (v *SourceView) finishFoldCommand() {
+	v.ClearInlineSuggestion()
 	s := v.Selection()
 	upstream := v.upstream
 	for _, r := range v.folds {

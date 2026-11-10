@@ -103,6 +103,7 @@ func (v *SourceView) installInput() {
 			return
 		}
 		pos := v.hit(point)
+		v.dragInline = v.inlineSuggestion != nil && v.inlineSuggestion.multi != nil
 		s := v.Selection()
 		v.dragGutter = point.X < v.gutter
 		v.dragPoint = point
@@ -149,6 +150,9 @@ func (v *SourceView) installInput() {
 			return
 		}
 		if v.dragging {
+			if point != v.dragPoint {
+				v.dragInline = false
+			}
 			v.dragPoint = point
 			v.dragSelection(point)
 		}
@@ -163,6 +167,7 @@ func (v *SourceView) installInput() {
 			v.dragSelection(point)
 		}
 		v.dragging = false
+		v.dragInline = false
 	})
 	drag.ConnectCancel(func() { v.dragging = false; v.endMinimapDrag() })
 	v.AddEventController(drag)
@@ -212,6 +217,11 @@ func (v *SourceView) cursorAt(point geometry.Point) gui.Cursor {
 func (v *SourceView) dragSelection(point geometry.Point) {
 	if !v.mounted || !gui.IsEnabled(v) {
 		v.dragging = false
+		return
+	}
+	// A stationary release/motion or blink must retain the initial hit while
+	// dismissed inline space closes. Real pointer movement resumes selection.
+	if v.dragInline && point == v.dragPoint && point.Y >= 0 && point.Y <= v.viewport.Height {
 		return
 	}
 	state := v.operationState()

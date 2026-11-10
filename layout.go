@@ -189,7 +189,7 @@ func (v *SourceView) ContentSize() geometry.Size {
 	v.ensureHeights()
 	// Geometry.Caret is 1 DIP wide at the final text stop. Its full rectangle,
 	// as well as the text and padding, must fit in the horizontal extent.
-	width := ceilCoordinate(float64(v.contentWidth) + 1 + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
+	width := ceilCoordinate(float64(max(v.contentWidth, v.inlineExtraWidth())) + 1 + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
 	if v.wrap != WrapNone {
 		width = v.viewport.Width
 	}
@@ -240,7 +240,7 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		complete := true
 		for row := first; row <= last; row = v.nextDisplayRow(row) {
 			var p *paragraph
-			if initialize || resizeCollapsed && v.lineCollapsed(row) {
+			if initialize || resizeCollapsed && (v.lineCollapsed(row) || v.inlineSuggestion != nil && v.inlineSuggestion.row == row) {
 				if _, failed := v.layoutFailures[v.paragraphKey(row)]; !failed {
 					p = v.paragraph(row)
 				}
@@ -408,6 +408,10 @@ func (v *SourceView) paragraphAt(y float32) int {
 }
 
 func (v *SourceView) setParagraphHeight(row int, height float32) {
+	if s := v.inlineSuggestion; s != nil && s.row == row && s.multi != nil {
+		s.baseHeight = height
+	}
+	height += v.inlineExtraHeight(row)
 	if v.lineCollapsed(row) {
 		_, height = v.linePreview(v.cachedParagraph(row))
 	}
@@ -593,6 +597,9 @@ func (v *SourceView) hit(point geometry.Point) textedit.Position {
 
 // Hit and its scroll target must use one measured snapshot and local origin.
 func (v *SourceView) hitCaret(point geometry.Point) (textedit.Position, geometry.Rectangle, bool) {
+	if pos, caret, ok := v.inlineVirtualHit(point); ok {
+		return pos, caret, true
+	}
 	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	r := v.displayRange(row)
 	pos := textedit.Position{Offset: r.Start}
