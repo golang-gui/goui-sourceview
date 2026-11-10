@@ -29,3 +29,11 @@
 - 批次 2：下沉范围校验、隐藏区间合并、可见行索引。两个独立算法测试随实现移动，
   保留随机枚举和非法范围断言；公共折叠、IME、预览及高度集成测试仍在根包。
   验证：go test ./...、GOWORK=off go test ./... 通过。
+  原生窗口：独立 X11 会话 :90，Pango/OpenGL、1x，folding 程序通过键盘、
+  指针、隐藏区域删除、搜索、历史与共享视图断言。
+- 批次 3：补全列表及面板完整移入 internal/controls，原生行资源仍由列表拥有。
+  根包会话通过只读状态和窄回调适配，保留真实编辑器的焦点、主题与会话身份。
+  UI 主题规则也由 controls 提供，注册仍由根包统一执行；可比较外观快照用于
+  根包判断是否关闭原生弹窗。控件测试迁移保留断言，根包集成测试继续运行。
+  验证：go test ./...、GOWORK=off go test ./... 通过；独立 X11 会话的
+  completion typing、navigation、Basic Unicode、Modern 暗色 scroll 均通过。

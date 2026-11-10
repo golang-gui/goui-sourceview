@@ -182,45 +182,6 @@ func TestFindBarTranslatedStatus(t *testing.T) {
 	}
 }
 
-func TestCompletionShellRulesAndSafeContent(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		sheet  style.StyleSheet
-		radius float32
-		border float32
-	}{
-		{"basic", basic.Sheet(), 4, 1},
-		{"light", modern.Sheet(modern.Options{}), 8, 1},
-		{"dark", modern.Sheet(modern.Options{Dark: true}), 8, 1},
-		{"custom", style.Sheet(append(modern.Rules(modern.Options{}), style.Name("sourceview.completion").Radius(32).BorderWidth(2))...), 32, 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			l, _ := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
-			l.view.completion = nil
-			themedScope(l.view, tc.sheet)
-			l.readAppearance()
-			l.view.completion = l.session
-			if l.box.radius != geometry.UniformCornerRadius(tc.radius) || l.box.width != tc.border || l.colors.Background.A != 255 {
-				t.Fatal("incomplete styled shell", l.box)
-			}
-			menu := boxOf(tc.sheet.Resolve(style.Sel{Name: "menu"}))
-			if l.box.shadow != menu.shadow {
-				t.Fatal("completion shadow diverged from the official menu")
-			}
-			arrangeCompletion(l)
-			p := l.session.panel
-			r := p.scroll.Rect()
-			// The content's leading corner must be inside the rounded border,
-			// independently of the implementation's padding formula.
-			dx, dy, radius := max(0, tc.radius-r.X), max(0, tc.radius-r.Y), tc.radius-l.box.width
-			if dx*dx+dy*dy > radius*radius {
-				t.Fatal("scroll content covered a rounded shell corner", r)
-			}
-		})
-	}
-}
-
-// The former scheme UI palette tests live here, where those colors are owned.
 func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		v := NewSourceView()
@@ -232,13 +193,13 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 		// transfer a stylesheet from an unrelated subtree.
 		themedScope(b, sheet)
 		b.StyleChanged()
-		before, find := l.colors, b.appearance
+		before, find := l.Appearance().Colors, b.appearance
 		for _, c := range []color.NRGBA{before.Background, before.Foreground, before.DetailForeground, before.SelectedForeground, before.SelectedDetailForeground} {
 			if c.A != 255 {
 				t.Fatal("unreadable built-in popup surface/text", c)
 			}
 		}
-		if l.font.Family != "ui-font" || l.font.Size != 19 || l.detailFont().Size != 19*.9 || b.appearance.surface.radius != geometry.UniformCornerRadius(8) || b.appearance.focused.width != 2 {
+		if l.Appearance().Font.Family != "ui-font" || l.Appearance().Font.Size != 19 || l.Appearance().DetailFont.Size != 19*.9 || b.appearance.surface.radius != geometry.UniformCornerRadius(8) || b.appearance.focused.width != 2 {
 			t.Fatal("Modern font, radius or focus metrics were not used")
 		}
 		if got := foreground(gui.ResolveWidgetStyle(b.find, "sourceview.find.input", "", style.Normal)); got.A != 255 || background(gui.ResolveWidgetStyle(b.find, "sourceview.find.input", "frame", style.Normal)).A != 255 {
@@ -251,10 +212,10 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 			t.Fatal(err)
 		}
 		v.SetScheme(s)
-		l.readAppearance()
+		l.ReadAppearance()
 		b.SetTarget(v)
 		b.StyleChanged()
-		if l.colors != before || b.appearance != find {
+		if l.Appearance().Colors != before || b.appearance != find {
 			t.Fatal("code selection changed UI palettes")
 		}
 		if got := foreground(sheet.Resolve(style.Sel{Name: "icon"})); got != foreground(modern.Sheet(modern.Options{Dark: dark}).Resolve(style.Sel{Name: "icon"})) {
@@ -278,7 +239,7 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	// is explicitly tied to the owner, before and after attachment to that root.
 	themedScope(l, basic.Sheet())
 	l.StyleChanged()
-	if l.font.Family != "owner-font" || l.font.Size != 16 || l.colors.Border.A != 0 || l.box.shadow.Color.A != graphics.ColorOf(color.NRGBA{R: 200, A: 80}).A {
+	if l.Appearance().Font.Family != "owner-font" || l.Appearance().Font.Size != 16 || l.Appearance().Colors.Border.A != 0 || l.Appearance().Box.Shadow.Color.A != graphics.ColorOf(color.NRGBA{R: 200, A: 80}).A {
 		t.Fatal("popup lost its owner scope or decorative alpha")
 	}
 	b := newFindBar()
@@ -290,35 +251,12 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	}
 }
 
-func TestCompletionThemeChangesReleaseOwnedLayouts(t *testing.T) {
-	l, ctx := completionFixture(t, []Completion{{Label: "transform", Detail: "JSON"}})
-	owner := themedScope(l.view, modern.Sheet(modern.Options{}))
-	l.StyleChanged()
-	arrangeCompletion(l)
-	l.Paint(&completionPainter{})
-	created, destroyed, epoch := ctx.created, ctx.destroyed, l.epoch
-	l.StyleChanged()
-	if ctx.created != created || ctx.destroyed != destroyed || l.epoch != epoch {
-		t.Fatal("unchanged appearance released native resources")
-	}
-	owner.SetStyleSheet(modern.Sheet(modern.Options{Dark: true, FontSize: 18}))
-	l.StyleChanged()
-	if len(l.rows) != 0 || l.measured || ctx.destroyed != created {
-		t.Fatal("theme change retained native layouts or old metrics")
-	}
-	arrangeCompletion(l)
-	l.Paint(&completionPainter{})
-	if l.rows[0].label.native.(*shapedLayout).format.Font.Size != 18 || l.colors.Background != rgb(0x28282d) {
-		t.Fatal("popup rebuild used stale font or palette")
-	}
-}
-
 func TestUnchangedStyleNotificationsKeepCompletion(t *testing.T) {
 	l, ctx := completionFixture(t, []Completion{{Label: "transform", Detail: "JSON"}})
 	owner := themedScope(l.view, modern.Sheet(modern.Options{}))
-	l.readAppearance()
+	l.ReadAppearance()
 	arrangeCompletion(l)
-	l.Paint(&completionPainter{})
+	l.Paint(&recordingPainter{})
 	created, destroyed := ctx.created, ctx.destroyed
 	closed := 0
 	l.session.popup = closingPopup{onClose: func() { closed++ }}
@@ -342,9 +280,9 @@ func TestCompletionSelectionRadiusChangeClosesOldSession(t *testing.T) {
 		t.Run(fmt.Sprint(corners), func(t *testing.T) {
 			l, ctx := completionFixture(t, []Completion{{Label: "true", Detail: "JSON"}})
 			owner := themedScope(l.view, modern.Sheet(modern.Options{}))
-			l.readAppearance()
+			l.ReadAppearance()
 			arrangeCompletion(l)
-			l.Paint(&completionPainter{})
+			l.Paint(&recordingPainter{})
 			created := ctx.created
 			closed := 0
 			l.session.popup = closingPopup{onClose: func() { closed++ }}

@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"image/color"
 	"maps"
 	"math"
@@ -292,7 +293,7 @@ func (v *SourceView) StyleChanged() {
 	}
 	// Hover and other unchanged style notifications must preserve a popup.
 	// Its own UI appearance can change even with an explicit code scheme.
-	if s := v.completion; s != nil && s.list.readAppearance() {
+	if s := v.completion; s != nil && completionAppearanceChanged(s.list) {
 		v.closeCompletion()
 		if v.Destroyed() {
 			return
@@ -349,16 +350,7 @@ func rgb(v uint32) color.NRGBA {
 func basicRules(base style.StyleSheet) []style.Rule {
 	rules := codeRules(scheme.Light().Definition())
 	rules = append(rules, editorScrollRules(base)...)
-	c := completionColors{
-		Background: rgb(0xf8fafc), Foreground: rgb(0x24292f), DetailForeground: rgb(0x626d7a), Border: rgb(0xb9c3cf),
-		SelectedBackground: rgb(0xe3edf9), SelectedForeground: rgb(0x172b44), SelectedDetailForeground: rgb(0x4e627b),
-		MatchForeground: rgb(0x005fb8), SelectedMatchForeground: rgb(0x0055a5),
-	}
-	f := findColors{Background: rgb(0xf3f3f3), Foreground: rgb(0x333333), MutedForeground: rgb(0x6c6c6c), Border: rgb(0xd0d0d0), InputBackground: rgb(0xffffff),
-		InputBorder: rgb(0xcecece), FocusBorder: rgb(0x0078d4), HoverBackground: rgb(0xe1e1e1), OptionBackground: rgb(0xcce5ff), OptionBorder: rgb(0x0078d4), ErrorForeground: rgb(0xb42318), Shadow: color.NRGBA{A: 42}}
-	rules = append(rules, findRules(base, f, 9.75, geometry.UniformCornerRadius(4), geometry.UniformCornerRadius(2), 1)...)
-	shadow, _ := base.Resolve(style.Sel{Name: "menu"}).Shadow()
-	rules = append(rules, completionRules(c, base, 12, geometry.UniformCornerRadius(4), geometry.UniformCornerRadius(2), shadow)...)
+	rules = append(rules, controls.BasicRules(base)...)
 	return rules
 }
 
@@ -381,95 +373,12 @@ func modernRules(o modern.Options, base style.StyleSheet) []style.Rule {
 	d.InactiveSelectionBackground.A = 32
 	rules := codeRules(d)
 	rules = append(rules, editorScrollRules(base)...)
-	menu := base.Resolve(style.Sel{Name: "menu"})
-	input := base.Resolve(style.Sel{Name: "text-input"})
-	border, _ := input.BorderColor()
-	menuBorder, _ := menu.BorderColor()
-	shadow, _ := menu.Shadow()
-	muted := foreground(base.Resolve(style.Sel{Name: modern.MutedText}))
-	accent := foreground(base.Resolve(style.Sel{Name: modern.AccentIcon}))
-	hover := background(base.Resolve(style.Sel{Name: "menu-item", State: style.Hovered}))
-	selected := background(base.Resolve(style.Sel{Name: "text-input", Part: "selection"}))
-	f := findColors{Background: background(menu), Foreground: foreground(input), MutedForeground: muted, Border: nrgba(menuBorder), InputBackground: background(input), InputBorder: nrgba(border), FocusBorder: nrgba(focusBorder),
-		HoverBackground: hover, OptionBackground: selected, OptionBorder: nrgba(focusBorder), ErrorForeground: foreground(base.Resolve(style.Sel{Name: modern.Error})), Shadow: nrgba(shadow.Color)}
-	radius, _ := menu.CornerRadius()
-	inputRadius, _ := input.CornerRadius()
-	focusWidth, _ := focus.BorderWidth()
-	rules = append(rules, findRules(base, f, o.FontSize, radius, inputRadius, focusWidth)...)
-	c := completionColors{Background: background(menu), Foreground: foreground(menu), DetailForeground: muted, Border: nrgba(menuBorder), SelectedBackground: selected,
-		SelectedForeground: foreground(menu), SelectedDetailForeground: muted, MatchForeground: accent, SelectedMatchForeground: accent}
-	selectedRadius, _ := base.Resolve(style.Sel{Name: "menu-item"}).CornerRadius()
-	rules = append(rules, completionRules(c, base, o.FontSize, radius, selectedRadius, shadow)...)
+	rules = append(rules, controls.ModernRules(o, base)...)
 	return rules
 }
 
-func findRules(base style.StyleSheet, c findColors, size float32, radius, inputRadius geometry.CornerRadius, focusWidth float32) []style.Rule {
-	family, _ := base.Resolve(style.Sel{Name: "label"}).FontFamily()
-	selection := base.Resolve(style.Sel{Name: "text-input", Part: "selection"})
-	rules := []style.Rule{
-		style.Name("sourceview.find").BackgroundColor(c.Background).ForegroundColor(c.Foreground).BorderColor(c.Border).BorderWidth(1).CornerRadius(radius).
-			Shadow(style.Shadow{Color: c.Shadow, Offset: geometry.Point{Y: 2}, BlurRadius: 4}),
-		style.Name("sourceview.find.input").FontFamily(family).FontSize(size).ForegroundColor(c.Foreground).BackgroundColor(transparent).BorderWidth(0),
-		style.Name("sourceview.find.input").State(style.Focused).BorderWidth(0),
-		style.Name("sourceview.find.input").State(style.Disabled).ForegroundColor(c.MutedForeground),
-		{Sel: style.Sel{Name: "sourceview.find.input", Part: "selection"}, Style: selection},
-		style.Name("sourceview.find.input").Part("caret").ForegroundColor(c.Foreground),
-		style.Name("sourceview.find.input").Part("placeholder").ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.input").Part("frame").BackgroundColor(c.InputBackground).BorderColor(c.InputBorder).BorderWidth(1).CornerRadius(inputRadius),
-		style.Name("sourceview.find.input").Part("frame").State(style.Focused).BorderColor(c.FocusBorder).BorderWidth(focusWidth),
-		style.Name("sourceview.find.input").Part("error-frame").BackgroundColor(c.InputBackground).BorderColor(c.ErrorForeground).BorderWidth(focusWidth).CornerRadius(inputRadius),
-		style.Name("sourceview.find.input").Part("frame").State(style.Disabled).BorderColor(c.InputBorder).BorderWidth(1),
-		style.Name("sourceview.find.action").BackgroundColor(transparent).BorderWidth(0).CornerRadius(inputRadius),
-		style.Name("sourceview.find.action").State(style.Hovered).BackgroundColor(c.HoverBackground),
-		style.Name("sourceview.find.action").State(style.Pressed).BackgroundColor(c.OptionBackground),
-		style.Name("sourceview.find.action").Part("focus").State(style.Focused).BackgroundColor(transparent).BorderWidth(0),
-		style.Name("sourceview.find.action").Part("focus").State(style.FocusVisible).BorderColor(c.FocusBorder).BorderWidth(1).CornerRadius(inputRadius),
-		style.Name("sourceview.find.icon").ForegroundColor(c.Foreground), style.Name("sourceview.find.icon").State(style.Disabled).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.option-text").FontFamily(family).FontSize(size * .92).ForegroundColor(c.Foreground),
-		style.Name("sourceview.find.option-text").State(style.Disabled).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.status").FontFamily(family).FontSize(size * .92).ForegroundColor(c.MutedForeground),
-		style.Name("sourceview.find.error").FontFamily(family).FontSize(size * .92).ForegroundColor(c.ErrorForeground),
-	}
-	for _, name := range []string{"sourceview.find.option", "sourceview.find.expand"} {
-		for _, part := range []string{"button", "button-checked"} {
-			bg, border := transparent, transparent
-			if part == "button-checked" && name != "sourceview.find.expand" {
-				bg = c.OptionBackground
-				border = c.OptionBorder
-			}
-			rules = append(rules, style.Name(name).Part(part).BackgroundColor(bg).BorderColor(border).BorderWidth(1).CornerRadius(inputRadius).FontFamily(family).FontSize(size),
-				style.Name(name).Part(part).State(style.Hovered).BackgroundColor(c.HoverBackground), style.Name(name).Part(part).State(style.Pressed).BackgroundColor(c.OptionBackground))
-		}
-		rules = append(rules, style.Name(name).Part("focus").State(style.FocusVisible).BorderColor(c.FocusBorder).BorderWidth(1).CornerRadius(inputRadius))
-	}
-	return rules
-}
-
-func completionRules(c completionColors, base style.StyleSheet, size float32, radius, selectedRadius geometry.CornerRadius, shadow style.Shadow) []style.Rule {
-	family, _ := base.Resolve(style.Sel{Name: "label"}).FontFamily()
-	return []style.Rule{
-		style.Name("sourceview.completion").BackgroundColor(c.Background).ForegroundColor(c.Foreground).BorderColor(c.Border).BorderWidth(1).CornerRadius(radius).Shadow(shadow).FontFamily(family).FontSize(size),
-		style.Name("sourceview.completion").Part("detail").ForegroundColor(c.DetailForeground).FontSize(size * .9),
-		style.Name("sourceview.completion").Part("selected").BackgroundColor(c.SelectedBackground).ForegroundColor(c.SelectedForeground).CornerRadius(selectedRadius),
-		style.Name("sourceview.completion").Part("selected-detail").ForegroundColor(c.SelectedDetailForeground),
-		style.Name("sourceview.completion").Part("match").ForegroundColor(c.MatchForeground),
-		style.Name("sourceview.completion").Part("selected-match").ForegroundColor(c.SelectedMatchForeground),
-	}
-}
-
-var transparent = color.NRGBA{}
-
-type completionColors struct {
-	Background, Foreground, DetailForeground color.NRGBA
-	Border                                   color.NRGBA
-	SelectedBackground, SelectedForeground   color.NRGBA
-	SelectedDetailForeground                 color.NRGBA
-	MatchForeground, SelectedMatchForeground color.NRGBA
-}
-
-type findColors struct {
-	Background, Foreground, MutedForeground           color.NRGBA
-	Border, InputBackground, InputBorder, FocusBorder color.NRGBA
-	HoverBackground, OptionBackground, OptionBorder   color.NRGBA
-	ErrorForeground, Shadow                           color.NRGBA
+func completionAppearanceChanged(list *controls.CompletionList) bool {
+	before := list.Appearance()
+	list.ReadAppearance()
+	return before != list.Appearance()
 }

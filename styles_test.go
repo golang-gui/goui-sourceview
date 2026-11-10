@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"image/color"
 	"math"
 	"reflect"
@@ -153,7 +154,7 @@ func TestThemeChangeReadsCurrentStateAfterPopupTeardown(t *testing.T) {
 			v := NewSourceView()
 			owner := themedScope(v, modern.Sheet(modern.Options{}))
 			v.StyleChanged()
-			s := &completionSession{list: &completionList{}}
+			s := &completionSession{list: &controls.CompletionList{}}
 			s.popup = closingPopup{onClose: func() {
 				switch change {
 				case "scheme":

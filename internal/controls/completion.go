@@ -1,10 +1,12 @@
-package sourceview
+package controls
 
 import (
 	"cmp"
 	"image/color"
 	"math"
 	"slices"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui/core/geometry"
@@ -25,10 +27,9 @@ const (
 
 // Only visible rows own native layouts. All-candidate measurements are retained
 // as scalar metrics, so scrolling never changes the panel width or columns.
-type completionList struct {
+type CompletionList struct {
 	gui.WidgetBase
-	view                           *SourceView
-	session                        *completionSession
+	host                           CompletionHost
 	first, visible                 int
 	viewport                       geometry.Size
 	offset                         geometry.Point
@@ -41,9 +42,9 @@ type completionList struct {
 	rows                           map[int]*completionRow
 	epoch                          uint64
 	err                            error
-	colors                         completionColors
+	colors                         CompletionColors
 	font, secondaryFont            typography.FontInfo
-	box                            styleBox
+	box                            Box
 	selectedRadius                 geometry.CornerRadius
 }
 
@@ -59,15 +60,37 @@ type completionText struct {
 	kept                    int // original bytes before an optional ellipsis
 }
 
-func newCompletionList(v *SourceView, s *completionSession) *completionList {
-	l := &completionList{view: v, session: s}
-	l.readAppearance()
-	l.ConnectUnmount(l.release)
+// CompletionState is borrowed from the root-owned completion session.
+type CompletionState struct {
+	Count, Index   int
+	Prefix         string
+	Pending, Shown bool
+}
+type CompletionItem struct{ Label, Detail string }
+
+// CompletionHost retains editing and session identity at the owning editor.
+// Accessors are sequential, allocation-free reads; callbacks may invalidate it.
+type CompletionHost struct {
+	Owner   gui.Widget
+	Context func() typography.Context
+	Current func() bool
+	State   func() CompletionState
+	Item    func(int) CompletionItem
+	Select  func(int)
+	Accept  func(int)
+	Fail    func(error)
+	Changed error
+}
+
+func NewCompletionList(host CompletionHost) *CompletionList {
+	l := &CompletionList{host: host}
+	l.ReadAppearance()
+	l.ConnectUnmount(l.Release)
 	click := gui.NewClickEventController()
 	click.ConnectClicked(func(ctx gui.EventContext) {
 		if p, ok := ctx.Position(); ok {
 			if index, hit := l.itemAt(p); hit {
-				v.report(v.acceptCompletion(s, index))
+				host.Accept(index)
 				ctx.StopPropagation()
 			}
 		}
@@ -75,8 +98,8 @@ func newCompletionList(v *SourceView, s *completionSession) *completionList {
 	l.AddEventController(click)
 	motion := gui.NewMotionEventController()
 	motion.ConnectMotion(func(info gui.MotionInfo) {
-		if index, hit := l.itemAt(info.Position); hit && s.index != index {
-			s.index = index
+		if index, hit := l.itemAt(info.Position); hit && host.State().Index != index {
+			host.Select(index)
 			l.RequestPaint()
 		}
 	})
@@ -84,16 +107,16 @@ func newCompletionList(v *SourceView, s *completionSession) *completionList {
 	return l
 }
 
-func (l *completionList) release() {
+func (l *CompletionList) Release() {
 	l.epoch++
 	rows := l.rows
 	l.rows = nil
 	for _, row := range rows {
-		row.release()
+		row.Release()
 	}
 }
 
-func (r *completionRow) release() {
+func (r *completionRow) Release() {
 	for _, text := range []*completionText{r.label, r.detail} {
 		if text != nil {
 			text.native.Destroy()
@@ -101,38 +124,38 @@ func (r *completionRow) release() {
 	}
 }
 
-func (l *completionList) refresh() {
-	l.reveal.Emit(geometry.Rect(0, float32(l.session.index)*l.rowHeight, l.viewport.Width, l.rowHeight))
+func (l *CompletionList) Refresh() {
+	l.reveal.Emit(geometry.Rect(0, float32(l.host.State().Index)*l.rowHeight, l.viewport.Width, l.rowHeight))
 	l.RequestPaint()
 }
 
-func (l *completionList) ConnectScrollIntoView(fn func(geometry.Rectangle)) signal.Handle {
+func (l *CompletionList) ConnectScrollIntoView(fn func(geometry.Rectangle)) signal.Handle {
 	return l.reveal.Connect(fn)
 }
 
-var _ gui.Scrollable = (*completionList)(nil)
+var _ gui.Scrollable = (*CompletionList)(nil)
 
-func (l *completionList) detailFont() typography.FontInfo { return l.secondaryFont }
+func (l *CompletionList) detailFont() typography.FontInfo { return l.secondaryFont }
 
-func (l *completionList) StyleChanged() { l.readAppearance() }
+func (l *CompletionList) StyleChanged() { l.ReadAppearance() }
 
-func (l *completionList) readAppearance() bool {
+func (l *CompletionList) ReadAppearance() bool {
 	resolve := func(part string) style.Style {
-		return gui.ResolveWidgetStyle(l.view, "sourceview.completion", part, style.Normal)
+		return gui.ResolveWidgetStyle(l.host.Owner, "sourceview.completion", part, style.Normal)
 	}
 	root := resolve("")
 	selected := resolve("selected")
 	selectedRadius, _ := selected.CornerRadius()
 	selectedRadius = cleanCornerRadius(selectedRadius)
 	border, _ := root.BorderColor()
-	colors := completionColors{Background: background(root), Foreground: foreground(root), Border: nrgba(border), DetailForeground: foreground(resolve("detail")),
+	colors := CompletionColors{Background: background(root), Foreground: foreground(root), Border: nrgba(border), DetailForeground: foreground(resolve("detail")),
 		SelectedBackground: background(selected), SelectedForeground: foreground(selected), SelectedDetailForeground: foreground(resolve("selected-detail")),
 		MatchForeground: foreground(resolve("match")), SelectedMatchForeground: foreground(resolve("selected-match"))}
-	font, detail, box := styleFont(root), styleFont(resolve("detail")), boxOf(root)
+	font, detail, box := styleFont(root), styleFont(resolve("detail")), BoxOf(root)
 	if colors == l.colors && font == l.font && detail == l.secondaryFont && box == l.box && selectedRadius == l.selectedRadius {
 		return false
 	}
-	l.release()
+	l.Release()
 	l.measured = false
 	l.layoutReady = false
 	l.colors, l.font, l.secondaryFont, l.box = colors, font, detail, box
@@ -145,19 +168,19 @@ func (l *completionList) readAppearance() bool {
 // A build transaction owns every layout until its rows are published. Native
 // callbacks can cancel/unmount the panel without releasing an in-flight probe.
 type completionBuild struct {
-	list    *completionList
+	list    *CompletionList
 	context typography.Context
 	epoch   uint64
 	live    []typography.TextLayout
 }
 
-func (l *completionList) build() *completionBuild {
-	return &completionBuild{list: l, context: l.view.context, epoch: l.epoch}
+func (l *CompletionList) build() *completionBuild {
+	return &completionBuild{list: l, context: l.host.Context(), epoch: l.epoch}
 }
 
 func (b *completionBuild) valid() bool {
 	l := b.list
-	return b.context != nil && l.epoch == b.epoch && l.view.completion == l.session && l.view.context == b.context
+	return b.context != nil && l.epoch == b.epoch && l.host.Current() && l.host.Context() == b.context
 }
 
 func (b *completionBuild) discard(native typography.TextLayout) {
@@ -174,25 +197,25 @@ func (b *completionBuild) destroy() {
 
 func (b *completionBuild) text(text string, font typography.FontInfo, foreground color.NRGBA) (*completionText, error) {
 	if !b.valid() {
-		return nil, ErrOperationChanged
+		return nil, b.list.host.Changed
 	}
 	native, err := b.context.NewTextLayout(text, typography.TextFormat{Font: font, TextColor: foreground, WrapMode: typography.WrapNone}, 1<<20, 1<<16)
 	if native != nil {
 		b.live = append(b.live, native)
 	}
 	if !b.valid() {
-		return nil, ErrOperationChanged
+		return nil, b.list.host.Changed
 	}
 	if err != nil {
 		return nil, err
 	}
 	w, h := native.MeasureSize()
 	if !b.valid() {
-		return nil, ErrOperationChanged
+		return nil, b.list.host.Changed
 	}
 	lines, clusters := native.MeasureMetrics()
 	if !b.valid() {
-		return nil, ErrOperationChanged
+		return nil, b.list.host.Changed
 	}
 	baseline := h * .8
 	if len(lines) > 0 && lines[0].Baseline > 0 {
@@ -201,18 +224,17 @@ func (b *completionBuild) text(text string, font typography.FontInfo, foreground
 	return &completionText{native: native, width: w, height: h, baseline: baseline, clusters: clusters, kept: len(text)}, nil
 }
 
-func (l *completionList) fail(b *completionBuild, err error) {
+func (l *CompletionList) fail(b *completionBuild, err error) {
 	if err == nil || !b.valid() {
 		return
 	}
 	l.err = err
-	if l.session.shown {
-		l.view.closeCompletion()
-		l.view.report(err)
+	if l.host.State().Shown {
+		l.host.Fail(err)
 	}
 }
 
-func (l *completionList) measureItems() {
+func (l *CompletionList) measureItems() {
 	if l.measured || l.err != nil || l.preparing {
 		return
 	}
@@ -221,7 +243,8 @@ func (l *completionList) measureItems() {
 	b := l.build()
 	defer b.destroy()
 	var label, detail, ascent, descent float32
-	for _, item := range l.session.items {
+	for i := range l.host.State().Count {
+		item := l.host.Item(i)
 		for column, value := range []string{item.Label, item.Detail} {
 			if value == "" {
 				continue
@@ -256,35 +279,35 @@ func (l *completionList) measureItems() {
 	if detail > 0 {
 		width += completionGap + l.detailWidth
 	}
-	if len(l.session.items) > completionRows {
+	if l.host.State().Count > completionRows {
 		width += completionScrollWidth
 	}
 	l.width, l.measured = max(240, min(520, width)), true
 }
 
-func (l *completionList) Measure(c layout.Constraint) layout.Measurement {
+func (l *CompletionList) Measure(c layout.Constraint) layout.Measurement {
 	l.measureItems()
-	return layout.Measured(c.Clamp(geometry.Size{Width: max(0, l.width-2*completionInset), Height: float32(min(completionRows, len(l.session.items))) * l.rowHeight}))
+	return layout.Measured(c.Clamp(geometry.Size{Width: max(0, l.width-2*completionInset), Height: float32(min(completionRows, l.host.State().Count)) * l.rowHeight}))
 }
 
-func (l *completionList) ContentSize() geometry.Size {
-	return geometry.Size{Width: l.viewport.Width, Height: float32(len(l.session.items)) * l.rowHeight}
+func (l *CompletionList) ContentSize() geometry.Size {
+	return geometry.Size{Width: l.viewport.Width, Height: float32(l.host.State().Count) * l.rowHeight}
 }
 
-func (l *completionList) LayoutVisible(viewport geometry.Size, offset geometry.Point) {
+func (l *CompletionList) LayoutVisible(viewport geometry.Size, offset geometry.Point) {
 	if l.layoutReady && viewport == l.viewport && offset == l.offset {
 		return
 	}
 	if viewport.Width != l.viewport.Width {
-		l.release()
+		l.Release()
 	}
 	l.epoch++
 	l.viewport, l.offset = viewport, offset
 	l.layoutReady = true
 	l.first, l.visible = 0, 0
 	if l.rowHeight > 0 && viewport.Width > 0 && viewport.Height > 0 {
-		l.first = min(len(l.session.items), max(0, int(offset.Y/l.rowHeight)))
-		end := min(len(l.session.items), int(math.Ceil(float64((offset.Y+viewport.Height)/l.rowHeight))))
+		l.first = min(l.host.State().Count, max(0, int(offset.Y/l.rowHeight)))
+		end := min(l.host.State().Count, int(math.Ceil(float64((offset.Y+viewport.Height)/l.rowHeight))))
 		l.visible = max(0, end-l.first)
 	}
 	var removed []*completionRow
@@ -295,12 +318,12 @@ func (l *completionList) LayoutVisible(viewport geometry.Size, offset geometry.P
 		}
 	}
 	for _, row := range removed {
-		row.release()
+		row.Release()
 	}
 	l.RequestPaint()
 }
 
-func (l *completionList) columns() (labelWidth, detailX, detailWidth float32) {
+func (l *CompletionList) columns() (labelWidth, detailX, detailWidth float32) {
 	inset := completionTextInset - completionInset
 	right := max(inset, l.viewport.Width-inset)
 	available := right - inset
@@ -378,13 +401,13 @@ func (b *completionBuild) fit(value string, font typography.FontInfo, foreground
 		}
 	}
 	if !b.valid() {
-		return nil, ErrOperationChanged
+		return nil, b.list.host.Changed
 	}
 	best.clusters = nil
 	return best, nil
 }
 
-func (l *completionList) ensureRows() {
+func (l *CompletionList) ensureRows() {
 	if l.err != nil || !l.measured || l.preparing || len(l.rows) == l.visible {
 		return
 	}
@@ -394,11 +417,11 @@ func (l *completionList) ensureRows() {
 	defer b.destroy()
 	labelWidth, _, detailWidth := l.columns()
 	rows := make(map[int]*completionRow)
-	for i := l.first; i < min(len(l.session.items), l.first+l.visible); i++ {
+	for i := l.first; i < min(l.host.State().Count, l.first+l.visible); i++ {
 		if l.rows[i] != nil {
 			continue
 		}
-		item := l.session.items[i]
+		item := l.host.Item(i)
 		label, err := b.fit(item.Label, l.font, l.colors.Foreground, labelWidth)
 		if err != nil {
 			l.fail(b, err)
@@ -423,23 +446,23 @@ func (l *completionList) ensureRows() {
 	b.live = nil
 }
 
-func (l *completionList) rowRect(slot int) geometry.Rectangle {
+func (l *CompletionList) rowRect(slot int) geometry.Rectangle {
 	return geometry.Rect(0, float32(l.first+slot)*l.rowHeight-l.offset.Y, l.viewport.Width, l.rowHeight)
 }
 
-func (l *completionList) itemAt(p geometry.Point) (int, bool) {
-	if l.view.completion != l.session || l.session.pending || l.rowHeight <= 0 || p.X < 0 || p.X >= l.viewport.Width || p.Y < 0 || p.Y >= l.viewport.Height {
+func (l *CompletionList) itemAt(p geometry.Point) (int, bool) {
+	if !l.host.Current() || l.host.State().Pending || l.rowHeight <= 0 || p.X < 0 || p.X >= l.viewport.Width || p.Y < 0 || p.Y >= l.viewport.Height {
 		return 0, false
 	}
 	index := int((p.Y + l.offset.Y) / l.rowHeight)
-	if index >= len(l.session.items) {
+	if index >= l.host.State().Count {
 		return 0, false
 	}
 	return index, true
 }
 
-func (l *completionList) styleRow(row *completionRow, index int, b *completionBuild) bool {
-	selected := index == l.session.index
+func (l *CompletionList) styleRow(row *completionRow, index int, b *completionBuild) bool {
+	selected := index == l.host.State().Index
 	if row.styled && row.selected == selected {
 		return b.valid()
 	}
@@ -454,7 +477,7 @@ func (l *completionList) styleRow(row *completionRow, index int, b *completionBu
 		if !b.valid() {
 			return false
 		}
-		if end := min(row.label.kept, completionPrefixEnd(l.session.items[index].Label, l.session.prefix)); end > 0 {
+		if end := min(row.label.kept, completionPrefixEnd(l.host.Item(index).Label, l.host.State().Prefix)); end > 0 {
 			native.SetTextColor(0, end, match)
 			if !b.valid() {
 				return false
@@ -471,7 +494,7 @@ func (l *completionList) styleRow(row *completionRow, index int, b *completionBu
 	return true
 }
 
-func (l *completionList) Paint(p gui.Painter) {
+func (l *CompletionList) Paint(p gui.Painter) {
 	l.ensureRows()
 	b := l.build()
 	if !b.valid() || l.err != nil {
@@ -517,18 +540,18 @@ func (l *completionList) Paint(p gui.Painter) {
 	}
 }
 
-func (l *completionList) Snapshot() gui.WidgetInfo {
+func (l *CompletionList) Snapshot() gui.WidgetInfo {
 	info := l.WidgetBase.Snapshot()
 	info.Role = gui.Role("completion-list")
-	info.SetAttribute("sourceview.completion.pending", l.session.pending)
-	info.ItemCount, info.VisibleStart, info.VisibleEnd = len(l.session.items), l.first, l.first+l.visible
+	info.SetAttribute("sourceview.completion.pending", l.host.State().Pending)
+	info.ItemCount, info.VisibleStart, info.VisibleEnd = l.host.State().Count, l.first, l.first+l.visible
 	for slot := 0; slot < l.visible; slot++ {
 		i := l.first + slot
-		item := l.session.items[i]
+		item := l.host.Item(i)
 		r := l.rowRect(slot)
 		top, bottom := max(0, r.Y), min(l.viewport.Height, r.Y+r.Height)
 		r.Y, r.Height = top, max(0, bottom-top)
-		row := gui.WidgetInfo{Role: gui.Role("completion-item"), Text: item.Label, Visible: true, Enabled: info.Enabled && !l.session.pending, Selected: i == l.session.index, Bounds: r.Translate(info.Bounds.Pos)}
+		row := gui.WidgetInfo{Role: gui.Role("completion-item"), Text: item.Label, Visible: true, Enabled: info.Enabled && !l.host.State().Pending, Selected: i == l.host.State().Index, Bounds: r.Translate(info.Bounds.Pos)}
 		if row.Enabled {
 			row.Actions = []gui.Action{gui.ActionClick}
 		}
@@ -539,15 +562,15 @@ func (l *completionList) Snapshot() gui.WidgetInfo {
 }
 
 // The panel owns finite popup geometry and padding. ScrollView owns scrolling;
-// completionList owns only the candidate layouts intersecting that viewport.
-type completionPanel struct {
+// CompletionList owns only the candidate layouts intersecting that viewport.
+type CompletionPanel struct {
 	gui.WidgetBase
-	list   *completionList
+	list   *CompletionList
 	scroll *gui.ScrollView
 }
 
-func newCompletionPanel(list *completionList) *completionPanel {
-	p := &completionPanel{list: list, scroll: gui.NewScrollView()}
+func NewCompletionPanel(list *CompletionList) *CompletionPanel {
+	p := &CompletionPanel{list: list, scroll: gui.NewScrollView()}
 	p.scroll.SetDirection(gui.ScrollVertical)
 	p.scroll.SetMainWeight(0)
 	p.scroll.SetChild(list)
@@ -555,29 +578,70 @@ func newCompletionPanel(list *completionList) *completionPanel {
 	return p
 }
 
-func (p *completionPanel) Measure(c layout.Constraint) layout.Measurement {
+func (p *CompletionPanel) Measure(c layout.Constraint) layout.Measurement {
 	l := p.list
 	l.measureItems()
-	inset := p.inset()
-	size := c.Clamp(geometry.Size{Width: min(520, l.width+2*(inset-completionInset)), Height: 2*inset + float32(min(completionRows, len(l.session.items)))*l.rowHeight})
+	inset := p.Inset()
+	size := c.Clamp(geometry.Size{Width: min(520, l.width+2*(inset-completionInset)), Height: 2*inset + float32(min(completionRows, l.host.State().Count))*l.rowHeight})
 	p.scroll.SetLineHeight(l.rowHeight)
 	p.scroll.Measure(layout.Tight(size.Inset(inset)))
 	return layout.Measured(size)
 }
 
-func (p *completionPanel) Arrange(r geometry.Rectangle) {
+func (p *CompletionPanel) Arrange(r geometry.Rectangle) {
 	p.WidgetBase.Arrange(r)
-	p.scroll.Arrange(geometry.Rect(0, 0, r.Width, r.Height).Inset(p.inset()))
+	p.scroll.Arrange(geometry.Rect(0, 0, r.Width, r.Height).Inset(p.Inset()))
 }
 
 // Reserve a conservative safe interior for the styled Popover's rounded
 // corners. The shell, shadow and border are drawn only by Popover itself.
-func (p *completionPanel) inset() float32 {
-	return max(completionInset, float32(math.Ceil(float64(p.list.box.radius.Max()/2)))+p.list.box.width)
+func (p *CompletionPanel) Inset() float32 {
+	return max(completionInset, float32(math.Ceil(float64(p.list.box.Radius.Max()/2)))+p.list.box.Width)
 }
 
-func (p *completionPanel) Snapshot() gui.WidgetInfo {
+func (p *CompletionPanel) Snapshot() gui.WidgetInfo {
 	info := p.WidgetBase.Snapshot()
 	info.Role = "completion-panel"
 	return info
 }
+
+// Reset invalidates content metrics after the owner replaces the candidate set.
+func (l *CompletionList) Reset() {
+	l.measured, l.layoutReady = false, false
+	l.first, l.visible = 0, 0
+	l.measureItems()
+}
+func (l *CompletionList) Error() error { return l.err }
+
+// Prefix matching folds Unicode runes, whose UTF-8 lengths can change (İ -> i).
+// Convert the folded prefix length back to a boundary in the original label.
+func completionPrefixEnd(label, prefix string) int {
+	folded := strings.ToLower(prefix)
+	if folded == "" || !strings.HasPrefix(strings.ToLower(label), folded) {
+		return 0
+	}
+	length := 0
+	for at, r := range label {
+		length += utf8.RuneLen(unicode.ToLower(r))
+		if length >= len(folded) {
+			return at + utf8.RuneLen(r)
+		}
+	}
+	return 0
+}
+
+// CompletionAppearance is a comparable snapshot used by the owner to invalidate
+// the native popup when UI appearance changes independently of the code scheme.
+type CompletionAppearance struct {
+	Colors           CompletionColors
+	Font, DetailFont typography.FontInfo
+	Box              Box
+	SelectedRadius   geometry.CornerRadius
+}
+
+func (l *CompletionList) Appearance() CompletionAppearance {
+	return CompletionAppearance{l.colors, l.font, l.secondaryFont, l.box, l.selectedRadius}
+}
+
+const CompletionTextInset = completionTextInset
+const CompletionInset = completionInset

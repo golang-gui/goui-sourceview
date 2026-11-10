@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"slices"
 	"sort"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/language"
@@ -16,6 +16,7 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/platform/typography"
 )
 
 // Completion is a literal edit. Nil Range uses the requested word range. Empty
@@ -66,8 +67,8 @@ type completionSession struct {
 	items             []Completion
 	index             int
 	popup             gui.Popover
-	list              *completionList
-	panel             *completionPanel
+	list              *controls.CompletionList
+	panel             *controls.CompletionPanel
 	shown             bool
 	definition        *language.Language
 	explicit, pending bool
@@ -267,23 +268,6 @@ func normalizeCompletions(items []Completion, c CompletionContext) []Completion 
 	return out
 }
 
-// Prefix matching folds Unicode runes, whose UTF-8 lengths can change (İ -> i).
-// Convert the folded prefix length back to a boundary in the original label.
-func completionPrefixEnd(label, prefix string) int {
-	folded := strings.ToLower(prefix)
-	if folded == "" || !strings.HasPrefix(strings.ToLower(label), folded) {
-		return 0
-	}
-	length := 0
-	for at, r := range label {
-		length += utf8.RuneLen(unicode.ToLower(r))
-		if length >= len(folded) {
-			return at + utf8.RuneLen(r)
-		}
-	}
-	return 0
-}
-
 func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rectangle) geometry.Point {
 	x := caret.X
 	row := v.document.model.LineAt(c.Range.Start)
@@ -297,7 +281,7 @@ func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rect
 			x = start.X
 		}
 	}
-	return geometry.Point{X: x - completionTextInset, Y: caret.Y + caret.Height + 2}
+	return geometry.Point{X: x - controls.CompletionTextInset, Y: caret.Y + caret.Height + 2}
 }
 
 // RefreshCompletion re-queries an existing visible or pending completion session.
@@ -423,7 +407,7 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	}
 	if s := v.completion; s != nil {
 		selected := s.items[s.index]
-		s.list.release()
+		s.list.Release()
 		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch {
 			return nil
 		}
@@ -433,22 +417,20 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 		if index := slices.IndexFunc(items, func(item Completion) bool { return sameCompletion(item, selected) }); index >= 0 {
 			s.index = index
 		}
-		s.list.measured, s.list.layoutReady = false, false
-		s.list.first, s.list.visible = 0, 0
-		s.list.measureItems()
+		s.list.Reset()
 		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch {
 			return nil
 		}
-		position.X -= s.panel.inset() - completionInset
+		position.X -= s.panel.Inset() - controls.CompletionInset
 		s.popup.SetPosition(position)
 		s.list.RequestLayout()
-		s.list.refresh()
+		s.list.Refresh()
 		return nil
 	}
 	s := &completionSession{state: state, language: c.Language, range_: c.Range, prefix: c.Prefix, items: items, definition: c.Definition, explicit: c.Explicit}
 	s.list = newCompletionList(v, s)
-	s.panel = newCompletionPanel(s.list)
-	position.X -= s.panel.inset() - completionInset
+	s.panel = controls.NewCompletionPanel(s.list)
+	position.X -= s.panel.Inset() - controls.CompletionInset
 	newPopup := func(transparent bool) gui.Popover {
 		p := gui.NewPopover(v, &gui.PopoverOptions{Transparent: transparent})
 		p.SetStyleName("sourceview.completion")
@@ -462,7 +444,7 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	err := s.popup.Show()
 	// Unsupported/unavailable alpha surfaces are a normal presentation fallback.
 	// Content errors and stale sessions must never trigger a second Show.
-	if err != nil && s.list.err == nil && (errors.Is(err, platform.ErrUnsupported) || errors.Is(err, platform.ErrUnavailable)) && v.completion == s && state.valid(v) && epoch == v.completionEpoch {
+	if err != nil && s.list.Error() == nil && (errors.Is(err, platform.ErrUnsupported) || errors.Is(err, platform.ErrUnavailable)) && v.completion == s && state.valid(v) && epoch == v.completionEpoch {
 		s.popup.SetWidget(nil)
 		s.popup.Destroy()
 		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch || !v.mounted || !v.Focused() || v.editable() != nil {
@@ -484,7 +466,7 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 		}
 		return err
 	}
-	if err := s.list.err; err != nil {
+	if err := s.list.Error(); err != nil {
 		v.closeCompletion()
 		return err
 	}
@@ -578,7 +560,7 @@ func (v *SourceView) closeCompletion() {
 	s := v.completion
 	v.completion = nil
 	if s != nil {
-		s.list.release()
+		s.list.Release()
 		s.popup.Destroy()
 	}
 }
@@ -655,7 +637,7 @@ func (v *SourceView) completionKey(event events.KeyEvent) bool {
 			delta = -1
 		}
 		s.index = (s.index + delta + len(s.items)) % len(s.items)
-		s.list.refresh()
+		s.list.Refresh()
 		return true
 	case events.KeyEnter, events.KeyTab:
 		v.report(v.acceptCompletion(s, s.index))
@@ -759,4 +741,21 @@ func (q *completionQueue) finish(items []Completion, err error, post func(func()
 			next.cancel()
 		}
 	}
+}
+
+func newCompletionList(v *SourceView, s *completionSession) *controls.CompletionList {
+	return controls.NewCompletionList(controls.CompletionHost{
+		Owner: v, Context: func() typography.Context { return v.context },
+		Current: func() bool { return v.completion == s },
+		State: func() controls.CompletionState {
+			return controls.CompletionState{Count: len(s.items), Index: s.index, Prefix: s.prefix, Pending: s.pending, Shown: s.shown}
+		},
+		Item: func(i int) controls.CompletionItem {
+			return controls.CompletionItem{Label: s.items[i].Label, Detail: s.items[i].Detail}
+		},
+		Select:  func(i int) { s.index = i },
+		Accept:  func(i int) { v.report(v.acceptCompletion(s, i)) },
+		Fail:    func(err error) { v.closeCompletion(); v.report(err) },
+		Changed: ErrOperationChanged,
+	})
 }

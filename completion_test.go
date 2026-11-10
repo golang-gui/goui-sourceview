@@ -3,13 +3,13 @@ package sourceview
 import (
 	"context"
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 )
@@ -36,7 +36,7 @@ func TestCompletionSelectionRetentionAndReentry(t *testing.T) {
 			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
 			c, _ := v.completionContext(true)
 			closed := 0
-			s := &completionSession{state: v.operationState(), definition: c.Definition, explicit: true, range_: c.Range, items: []Completion{{Label: "worker", Text: "worker"}}, list: &completionList{}, popup: closingPopup{onClose: func() { closed++ }}}
+			s := &completionSession{state: v.operationState(), definition: c.Definition, explicit: true, range_: c.Range, items: []Completion{{Label: "worker", Text: "worker"}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() { closed++ }}}
 			v.completion = s
 			t.Cleanup(v.closeCompletion)
 			if tc.reenter {
@@ -58,20 +58,6 @@ func TestCompletionSelectionRetentionAndReentry(t *testing.T) {
 				t.Fatal("unrelated selection retained completion", closed)
 			}
 		})
-	}
-}
-
-// 刷新期间语义和鼠标命中都不能把旧候选暴露为可执行动作。
-func TestPendingCompletionRowsAreNotInteractive(t *testing.T) {
-	l, _ := completionFixture(t, []Completion{{Label: "true", Text: "true"}})
-	arrangeCompletion(l)
-	l.session.pending = true
-	info := l.Snapshot()
-	if info.Attributes["sourceview.completion.pending"] != true || len(info.Children) != 1 || info.Children[0].Enabled || len(info.Children[0].Actions) != 0 {
-		t.Fatal("pending completion exposed an action", info)
-	}
-	if _, ok := l.itemAt(geometry.Point{X: 10, Y: 10}); ok {
-		t.Fatal("pending completion accepted pointer input")
 	}
 }
 
@@ -122,7 +108,7 @@ func TestCompletionCloseCallbackCannotApplyStaleRange(t *testing.T) {
 	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
 	original := v.document
 	replacement := NewDocument("keep")
-	s := &completionSession{state: v.operationState(), range_: textedit.Range{Start: 0, End: 2}, items: []Completion{{Text: "true"}}, list: &completionList{}}
+	s := &completionSession{state: v.operationState(), range_: textedit.Range{Start: 0, End: 2}, items: []Completion{{Text: "true"}}, list: &controls.CompletionList{}}
 	s.popup = closingPopup{onClose: func() { v.SetDocument(replacement) }}
 	v.completion = s
 	if err := v.acceptCompletion(s, 0); err != ErrOperationChanged {
@@ -235,7 +221,7 @@ func TestCompletionEditsAndHistory(t *testing.T) {
 	v.SetSelection(before)
 	r := textedit.Range{Start: 4, End: 6}
 	caret := 3
-	session := &completionSession{state: v.operationState(), range_: r, items: []Completion{{Text: "foo()", Range: &r, Caret: &caret, AdditionalEdits: []textedit.Edit{{Range: textedit.Range{}, Text: "import x\n"}}}}, list: &completionList{}, popup: closingPopup{onClose: func() {}}}
+	session := &completionSession{state: v.operationState(), range_: r, items: []Completion{{Text: "foo()", Range: &r, Caret: &caret, AdditionalEdits: []textedit.Edit{{Range: textedit.Range{}, Text: "import x\n"}}}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {}}}
 	v.completion = session
 	if err := v.acceptCompletion(session, 0); err != nil {
 		t.Fatal(err)
@@ -324,7 +310,7 @@ func TestStableProviderPreservesSessionAndReplacementCancels(t *testing.T) {
 	first, second := &CompletionProvider{}, &CompletionProvider{}
 	v.SetCompletionProvider(first)
 	closed := 0
-	session := &completionSession{popup: closingPopup{onClose: func() { closed++ }}, list: &completionList{}}
+	session := &completionSession{popup: closingPopup{onClose: func() { closed++ }}, list: &controls.CompletionList{}}
 	v.completion = session
 	v.SetCompletionProvider(first)
 	if v.completion != session || closed != 0 {

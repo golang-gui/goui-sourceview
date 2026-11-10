@@ -52,12 +52,13 @@ GOUI 不反向依赖本模块。
 
 | 包或目录 | 首版职责 |
 | --- | --- |
-| 根包 `sourceview` | Document、SourceView、内部配套界面、公共编辑与查找 API、信号 |
+| 根包 `sourceview` | Document、SourceView、公共 API、状态、生命周期和跨功能协调 |
 | `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
 | `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠范围校验、隐藏区间合并与可见行索引；不导入 gui |
+| `internal/controls` | 私有补全列表、控件呈现与配套样式；不导入根包 |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 

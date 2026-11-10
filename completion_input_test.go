@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"testing"
 
 	"github.com/golang-gui/goui-sourceview/language"
@@ -26,7 +27,7 @@ func TestCompletionInputWordCallbackReplacement(t *testing.T) {
 	original.SetLanguageDefinition(definition)
 	original.Model().SetText("word")
 	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
-	s := &completionSession{state: v.operationState(), definition: definition, range_: textedit.Range{Start: 0, End: 4}, list: &completionList{}, popup: closingPopup{onClose: func() {}}}
+	s := &completionSession{state: v.operationState(), definition: definition, range_: textedit.Range{Start: 0, End: 4}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {}}}
 	v.completion = s
 	armed = true
 	_, err = v.completionInput(textedit.Range{Start: 2, End: 2}, "a", false)
@@ -44,7 +45,7 @@ func TestCompletionOwnedEditRetention(t *testing.T) {
 			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
 			c, _ := v.completionContext(true)
 			closed := 0
-			s := &completionSession{state: v.operationState(), definition: c.Definition, language: c.Language, range_: c.Range, explicit: true, items: []Completion{{Label: "worker", Text: "worker"}}, list: &completionList{}, popup: closingPopup{onClose: func() { closed++ }}}
+			s := &completionSession{state: v.operationState(), definition: c.Definition, language: c.Language, range_: c.Range, explicit: true, items: []Completion{{Label: "worker", Text: "worker"}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() { closed++ }}}
 			v.completion = s
 			t.Cleanup(v.closeCompletion)
 			r, text := textedit.Range{Start: 2, End: 2}, "a"
@@ -116,7 +117,7 @@ func TestCompletionTextKeyRetention(t *testing.T) {
 	} {
 		v := NewSourceView()
 		closed := 0
-		s := &completionSession{state: v.operationState(), definition: v.document.definition, list: &completionList{}, popup: closingPopup{onClose: func() { closed++ }}}
+		s := &completionSession{state: v.operationState(), definition: v.document.definition, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() { closed++ }}}
 		v.completion = s
 		if v.completionKey(events.KeyEvent{Key: tc.key, Modifiers: tc.mods}) {
 			t.Fatal("completion consumed a delegated key")

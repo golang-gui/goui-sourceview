@@ -69,6 +69,11 @@ GOUI 依赖版本，不以本地工作区成功代替。纯文档阶段以上命
 `language/language_test.go` 集中内置语言、Markdown 与折叠规则；
 `language/definition_test.go` 保持 `package language_test`，继续从外部验证公开契约。
 
+补全列表的缓存、布局、颜色、省略及原生资源测试位于 `internal/controls`，
+以独立会话替身验证呈现契约；根包继续验证真实 SourceView 的会话、编辑、
+主题变化和失效行为。折叠校验与可见行随机枚举位于 `internal/folding`。
+不为跨包白盒测试给公开 SourceView 增加访问器。
+
 窗口验证保留现有入口路径；`tests/window/editor` 是基础集成程序，
 各子目录是专题场景，`tests/window/experience` 是跨功能交互验证。
 `go test ./...` 编译这些入口但不会执行其窗口场景，窗口验收必须单独启动并记录。
