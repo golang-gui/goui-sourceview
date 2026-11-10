@@ -108,7 +108,7 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 		if v.whitespace != WhitespaceNone || v.showLineEndings {
 			v.refreshWhitespace(p, r.Start, p.paged.Version())
 		}
-	} else if (v.whitespace != WhitespaceNone || v.showLineEndings) && (p.whitespace == nil || p.whitespace.textStart != r.Start || p.whitespace.version != p.paged.Version() || p.whitespace.revision != v.document.model.Revision()) {
+	} else if (v.whitespace != WhitespaceNone || v.showLineEndings) && (p.whitespace == nil || p.whitespace.TextStart != r.Start || p.whitespace.Version != p.paged.Version() || p.whitespace.Revision != v.document.model.Revision()) {
 		v.requestLayoutWork()
 	}
 	if !p.styled || p.style != style || p.pageVersion != p.paged.Version() || p.colorRange != r {

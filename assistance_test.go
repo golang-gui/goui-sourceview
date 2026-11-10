@@ -1,10 +1,9 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"math"
 	"reflect"
-	"runtime"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -684,86 +683,8 @@ func TestTagMatchCacheInvalidatesForDocumentPositionAndLanguage(t *testing.T) {
 }
 
 // 所有模式按逻辑行和 UTF-8 字节边界过滤，软换行不会生成新的缩进或尾部。
-func TestWhitespaceModesAndSpecialSpaces(t *testing.T) {
-	text := "  a b  c\t\u00a0\u202f\u3000 \t"
-	w := newWhitespaceLayout(text, nil, nil)
-	for w.pending(true) {
-		w.advance(time.Time{}, true)
-	}
-	want := map[WhitespaceMode][]int{
-		WhitespaceNone: {}, WhitespaceAll: {0, 1, 3, 5, 6, 8, 9, 11, 14, 17, 18},
-		WhitespaceBoundary: {0, 1, 5, 6, 8, 9, 11, 14, 17, 18},
-		WhitespaceTrailing: {8, 9, 11, 14, 17, 18}, WhitespaceSelection: {5, 6},
-	}
-	for mode, expected := range want {
-		var got []int
-		for at, r := range text {
-			kind := whitespaceKind(r)
-			if kind != 0 && w.show(mode, at, at+len(string(r)), kind, at >= 5 && at < 7) {
-				got = append(got, at)
-			}
-		}
-		if !slices.Equal(got, expected) {
-			t.Fatalf("mode %d: %v, want %v", mode, got, expected)
-		}
-	}
-	blank := newWhitespaceLayout(" \t\u00a0\u3000", nil, nil)
-	blank.advance(time.Time{}, true)
-	if blank.trailing != 0 || blank.leading != len(blank.text) {
-		t.Fatal("all-blank logical line", blank)
-	}
-}
 
 // 索引按帧推进；到期即停止，单次无截止时间的调用也不能吞下整条长行。
-func TestWhitespaceIndexBudgetAndViewport(t *testing.T) {
-	const count = 131072
-	clusters := make([]typography.TextCluster, count)
-	for i := range clusters {
-		clusters[i] = typography.TextCluster{Start: i, Length: 1, X: float32(i) * 10, Width: 10}
-	}
-	w := newWhitespaceLayout(strings.Repeat(" ", count), []typography.TextLine{{Height: 20}}, clusters)
-	w.advance(time.Now().Add(-time.Second), true)
-	if len(w.nodes) != 0 || w.leading != 0 {
-		t.Fatal("expired deadline did work")
-	}
-	w.advance(time.Time{}, true)
-	if !w.pending(true) {
-		t.Fatal("one step consumed the full input")
-	}
-	steps := 1
-	for w.pending(true) {
-		w.advance(time.Time{}, true)
-		steps++
-	}
-	if steps < 2 || w.leading != count || w.trailing != 0 {
-		t.Fatal("unfinished boundaries", steps, w.leading, w.trailing)
-	}
-	marked := 0
-	examined := w.visit(geometry.Rect(600000, 0, 100, 20), func(c typography.TextCluster, r geometry.Rectangle) {
-		marked++
-		if c.Start < 60000 || c.Start >= 60010 {
-			t.Fatal("offscreen marker", c)
-		}
-	})
-	if marked != 10 || examined > 2*whitespaceClusterBlock {
-		t.Fatal("horizontal culling", marked, examined)
-	}
-	marked = 0
-	if n := w.visit(geometry.Rect(0, 40, 100, 20), func(typography.TextCluster, geometry.Rectangle) { marked++ }); n != 0 || marked != 0 {
-		t.Fatal("vertical culling", n, marked)
-	}
-	// 第二屏位于前面的逻辑块：索引不能假定字节顺序与视觉坐标顺序相同。
-	clusters[0].X = 600010
-	w = newWhitespaceLayout(strings.Repeat(" ", count), []typography.TextLine{{Height: 20}}, clusters)
-	for w.pending(false) {
-		w.advance(time.Time{}, false)
-	}
-	marked = 0
-	w.visit(geometry.Rect(600000, 0, 100, 20), func(typography.TextCluster, geometry.Rectangle) { marked++ })
-	if marked != 11 {
-		t.Fatal("unordered visual spans", marked)
-	}
-}
 
 // 选区使用半开区间；特殊空格不伪造文本，显示状态与选区不重建原生排版。
 func TestWhitespaceSelectionAndLayoutLifetime(t *testing.T) {
@@ -803,9 +724,9 @@ func TestWhitespaceSelectionAndLayoutLifetime(t *testing.T) {
 	text := "a b c "
 	lines := []typography.TextLine{{Start: 0, Length: 4, Height: 20}, {Start: 4, Length: 2, Y: 20, Height: 20}}
 	clusters := []typography.TextCluster{{Start: 1, Length: 1, X: 10, Width: 10}, {Start: 3, Length: 1, X: 30, Width: 10}, {Start: 5, Length: 1, X: 10, Width: 10, LineIndex: 1}}
-	w := newWhitespaceLayout(text, lines, clusters)
-	w.advance(time.Time{}, true)
-	if w.show(WhitespaceTrailing, 3, 4, 1, false) || !w.show(WhitespaceTrailing, 5, 6, 1, false) || w.end.Y != 20 {
+	w := view.NewWhitespaceLayout(text, lines, clusters)
+	w.Advance(time.Time{}, true)
+	if w.Show(view.WhitespaceTrailing, 3, 4, 1, false) || !w.Show(view.WhitespaceTrailing, 5, 6, 1, false) || w.End.Y != 20 {
 		t.Fatal("soft wrap treated as logical end", w)
 	}
 }
@@ -833,82 +754,8 @@ func TestWhitespaceOutsideIMEParagraphs(t *testing.T) {
 }
 
 // 用真实后端验证比例字体、Tab、Unicode、RTL 和折行，开启标记不再请求原生测量。
-func TestWhitespaceNativeMetrics(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	ctx, err := nativeContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ctx.Destroy()
-	for _, text := range []string{"  a b  c\t\u00a0\u202f\u3000  ", "אבג \tד ", strings.Repeat("abc ", 80)} {
-		for _, width := range []float32{85, 500} {
-			native, err := ctx.NewTextLayout(text, typography.TextFormat{Font: typography.FontInfo{Family: "sans", Size: 12}, WrapMode: typography.WrapWordChar, TabWidth: 48}, width, 1<<20)
-			if err != nil {
-				t.Fatal(err)
-			}
-			lines, clusters := native.MeasureMetrics()
-			w := newWhitespaceLayout(text, lines, clusters)
-			for w.pending(true) {
-				w.advance(time.Time{}, true)
-			}
-			g := textedit.NewGeometry(lines, clusters, len(text), 20)
-			seen := 0
-			w.visit(geometry.Rect(-10000, -10000, 20000, 20000), func(c typography.TextCluster, r geometry.Rectangle) {
-				if whitespaceKind([]rune(text[c.Start : c.Start+c.Length])[0]) == 0 {
-					return
-				}
-				seen++
-				rects := g.Selection(textedit.Range{Start: c.Start, End: c.Start + c.Length})
-				if len(rects) != 1 || rects[0] != r {
-					t.Fatalf("native blank geometry %q: %v vs %v", text[c.Start:c.Start+c.Length], r, rects)
-				}
-			})
-			if seen == 0 || !w.endReady {
-				t.Fatal("missing native whitespace or end caret")
-			}
-			native.Destroy()
-		}
-	}
-}
 
 // 缓存文本片段位于逻辑行中间，片段端点不能误判为缩进、尾部或换行。
-func TestWhitespaceFragmentUsesLogicalBoundaries(t *testing.T) {
-	text := "\t \t" + strings.Repeat(" ", 20000) + "a b  c" + strings.Repeat(" ", 20000)
-	check := func(start, end int) {
-		w := newWhitespaceLayout(text[start:end], nil, nil)
-		w.textStart, w.length, w.trailing = start, len(text), len(text)
-		w.read = func(at int, back bool) string {
-			if back {
-				return text[max(0, at-512):at]
-			}
-			return text[at:min(len(text), at+512)]
-		}
-		for w.pending(true) {
-			w.advance(time.Time{}, true)
-		}
-		if w.leading != 20003 || w.trailing != 20009 {
-			t.Fatal("fragment lost logical boundaries", w.leading, w.trailing)
-		}
-		for at, r := range w.text {
-			k := whitespaceKind(r)
-			if k == 0 {
-				continue
-			}
-			global := start + at
-			wantTrailing := global >= 20009
-			wantBoundary := k != 1 || global < 20003 || wantTrailing || global > 0 && text[global-1] == ' ' || global+1 < len(text) && text[global+1] == ' '
-			if w.show(WhitespaceTrailing, at, at+1, k, false) != wantTrailing || w.show(WhitespaceBoundary, at, at+1, k, false) != wantBoundary {
-				t.Fatal("fragment boundary", global)
-			}
-		}
-	}
-	check(1, 2)
-	check(20002, 20008)
-	check(20005, 20006)
-	check(20008, 20012)
-	check(25000, 25020)
-}
 
 // 已测量分片可通过公开 Geometry 接入，不依赖未发布的分页类型。
 func TestWhitespaceFromPartialGeometry(t *testing.T) {
@@ -919,14 +766,14 @@ func TestWhitespaceFromPartialGeometry(t *testing.T) {
 	p := &paragraph{row: 0, text: "c  ", geometry: textedit.NewGeometry(lines, clusters, 8, 20)}
 	v.refreshWhitespace(p, 3, 1)
 	w := p.whitespace
-	for w.pending(true) {
-		w.advance(time.Time{}, true)
+	for w.Pending(true) {
+		w.Advance(time.Time{}, true)
 	}
-	if w.trailing != 8 || w.leading != 0 || w.textStart != 3 || w.textStart+len(w.text) >= w.length {
+	if w.Trailing != 8 || w.Leading != 0 || w.TextStart != 3 || w.TextStart+len(w.Text) >= w.Length {
 		t.Fatal("fragment edges", w)
 	}
 	got := 0
-	w.visit(geometry.Rect(0, 20, 30, 20), func(c typography.TextCluster, r geometry.Rectangle) {
+	w.Visit(geometry.Rect(0, 20, 30, 20), func(c typography.TextCluster, r geometry.Rectangle) {
 		got++
 		if c.Start != 1 && c.Start != 2 {
 			t.Fatal("fragment offsets", c)

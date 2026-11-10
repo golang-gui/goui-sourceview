@@ -2,12 +2,12 @@ package sourceview
 
 import (
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"image"
 	"image/color"
 	"math"
 	"sort"
 	"time"
-	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
@@ -217,7 +217,6 @@ func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimap
 		end--
 	}
 	text, _ := v.document.model.Slice(textedit.Range{Start: r.Start + start, End: end})
-	pixels := make([]color.NRGBA, key.columns)
 	var tokenAt func(int) color.NRGBA
 	if e != nil && e.Ready() {
 		tokens, _, ok := e.PaintTokens(row)
@@ -235,32 +234,20 @@ func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimap
 	}
 	spans := v.document.highlightSpans(textedit.Range{Start: r.Start + start, End: end})
 	si := 0
-	column := 0
-	for at := 0; at < len(text) && column < key.columns; {
-		ch, size := utf8.DecodeRuneInString(text[at:])
-		if ch == '\t' {
-			column += key.tab - column%key.tab
-		} else {
-			if ch != ' ' && ch != '\r' && ch != '\n' {
-				c := v.colors.Foreground
-				if tokenAt != nil {
-					c = tokenAt(start + at)
-				}
-				absolute := r.Start + start + at
-				for si < len(spans) && spans[si].Range.End <= absolute {
-					si++
-				}
-				if si < len(spans) && spans[si].Range.Start <= absolute {
-					c = v.highlightColor(spans[si].Kind)
-				}
-				// Ordinary sRGB NRGBA; alpha makes the overview quieter than source text.
-				c.A = uint8(uint16(c.A) * 180 / 255)
-				pixels[column] = c
-			}
-			column++
+	pixels := view.MinimapCells(text, key.columns, key.tab, func(at int) color.NRGBA {
+		c := v.colors.Foreground
+		if tokenAt != nil {
+			c = tokenAt(start + at)
 		}
-		at += size
-	}
+		absolute := r.Start + start + at
+		for si < len(spans) && spans[si].Range.End <= absolute {
+			si++
+		}
+		if si < len(spans) && spans[si].Range.Start <= absolute {
+			c = v.highlightColor(spans[si].Kind)
+		}
+		return c
+	})
 	if key.id != 0 {
 		if len(s.cache) >= 2048 {
 			clear(s.cache)
@@ -280,15 +267,7 @@ func (v *SourceView) minimapThumb() geometry.Rectangle {
 	if s.dragging {
 		total, extent = s.dragTotal, s.dragHeight
 	}
-	h := min(extent, max(8, extent*v.viewport.Height/max(1, total)))
-	if s.dragging {
-		h = s.dragThumb
-	}
-	y := float32(0)
-	if total > v.viewport.Height {
-		y = (extent - h) * max(0, min(1, v.offset.Y/(total-v.viewport.Height)))
-	}
-	return geometry.Rect(r.X, y, r.Width, h)
+	return view.MinimapThumb(r, total, extent, v.viewport.Height, v.offset.Y, s.dragThumb, s.dragging)
 }
 func (v *SourceView) beginMinimapDrag(point geometry.Point) {
 	v.dragging = false

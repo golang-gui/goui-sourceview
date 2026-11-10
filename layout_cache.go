@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"image/color"
 	"slices"
 
@@ -34,7 +35,7 @@ type paragraph struct {
 	sourceRange          textedit.Range
 	geometry             textedit.Geometry
 	geometryX, geometryY float64
-	whitespace           *whitespaceLayout
+	whitespace           *view.WhitespaceLayout
 	fragment             textedit.Fragment
 	text                 string
 	width, height        float32
@@ -280,7 +281,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	}
 	w, h := native.MeasureSize()
 	lines, clusters := native.MeasureMetrics()
-	p.whitespace = newWhitespaceLayout(text, lines, clusters)
+	p.whitespace = view.NewWhitespaceLayout(text, lines, clusters)
 	var g textedit.Geometry
 	fragment, fragmentErr := textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
 	if fragmentErr == nil {

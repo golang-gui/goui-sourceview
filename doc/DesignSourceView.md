@@ -59,6 +59,7 @@ GOUI 不反向依赖本模块。
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠范围校验、隐藏区间合并与可见行索引；不导入 gui |
 | `internal/controls` | 私有补全列表、查找／定位栏呈现与配套样式；不导入根包 |
+| `internal/view` | 视图私有的空白符几何索引、缩略图采样和几何计算；不导入根包 |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
