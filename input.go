@@ -334,7 +334,8 @@ func (v *SourceView) inputKey(event events.KeyEvent) bool {
 		case events.KeyBackspace, events.KeyDelete, events.KeyEnter:
 			known, mutates = true, true
 		case events.KeyTab:
-			known, mutates = v.acceptsTab && !v.escapeTab, true
+			_, inlineVisible := v.inlinePreview()
+			known, mutates = (v.acceptsTab || inlineVisible) && !v.escapeTab, true
 		}
 	}
 	if known && v.delayInput(deferredInput{apply: func() { v.applyKey(event) }, geometry: geometry, mutates: mutates}) {
@@ -352,6 +353,9 @@ func (v *SourceView) applyKey(event events.KeyEvent) bool {
 	// Closing transient UI invokes external callbacks. They may replace the
 	// document, bindings or focus; the same key must not edit replacement state.
 	if v.Destroyed() || !v.mounted || !state.valid(v) || v.keyBindingsEpoch != bindingsEpoch || !v.Focused() || !gui.IsEnabled(v) {
+		return true
+	}
+	if v.inlineSuggestionKey(event) {
 		return true
 	}
 	if bound && v.runBoundCommand(command) {

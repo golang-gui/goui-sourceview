@@ -40,6 +40,7 @@ func (v *SourceView) applyPreedit(text string, caret int) {
 		v.invalidateLayout()
 		return
 	}
+	v.ClearInlineSuggestion()
 	v.closeCompletion()
 	v.compositionSeen = true
 	m := v.document.model

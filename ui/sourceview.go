@@ -36,6 +36,7 @@ type SourceViewView struct {
 	onChange                                                             func(TextChange)
 	onSelection                                                          func(TextSelection)
 	onError                                                              func(error)
+	inlineSuggestions                                                    *bool
 	autoPairs, automaticCompletion                                       *bool
 	completionProvider                                                   *CompletionProvider
 	whitespace                                                           *WhitespaceMode
@@ -139,6 +140,11 @@ func (v *SourceViewView) AutomaticCompletion(enabled bool) *SourceViewView {
 }
 func (v *SourceViewView) CompletionProvider(provider *CompletionProvider) *SourceViewView {
 	v.completionProvider = provider
+	return v
+}
+
+func (v *SourceViewView) InlineSuggestionsEnabled(enabled bool) *SourceViewView {
+	v.inlineSuggestions = &enabled
 	return v
 }
 
@@ -280,6 +286,7 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	w.SetLinkedTags(boolOption(v.linkedTags, true))
 	w.SetAutoPairs(autoPairs)
 	w.SetAutomaticCompletion(automatic)
+	w.SetInlineSuggestionsEnabled(boolOption(v.inlineSuggestions, false))
 	w.SetCompletionProvider(v.completionProvider)
 	indent := s.indent
 	if v.indent != nil {

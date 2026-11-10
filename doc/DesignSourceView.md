@@ -12,6 +12,7 @@ GOUI 不反向依赖本模块。
 首版交付可编辑的单光标代码控件：IME、导航与选择、剪切复制粘贴、删除、撤销重做、
 基础缩进、字面量查找替换、行号、滚动、配色及 **JSON、XML、HTML 三种语言高亮**。
 只读是可选模式。基础补全和括号交互见 [补全设计](DesignCompletion.md) 与 [括号设计](DesignPairs.md)。
+可选的宿主提供型单行影子文字见 [内联建议](DesignInlineSuggestion.md)，默认关闭，AI 服务由宿主负责。
 查找、替换和定位作为 SourceView 的[内置配套界面](DesignFindBar.md)，固定在视口右上角；
 控件和输入框使用所属 GUI 样式环境，裸控件只提供操作与高亮能力。
 [行标记与执行位置](DesignLineMarks.md) 由文档模型和视图分别拥有；

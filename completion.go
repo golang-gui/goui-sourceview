@@ -366,6 +366,7 @@ func (v *SourceView) refreshCompletions(state operationState, c CompletionContex
 func (v *SourceView) complete(explicit bool) error { return v.completeTriggered(explicit, "") }
 
 func (v *SourceView) completeTriggered(explicit bool, trigger string) error {
+	v.ClearInlineSuggestion()
 	if v.closingCompletion {
 		return ErrOperationChanged
 	}

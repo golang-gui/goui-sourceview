@@ -21,6 +21,7 @@ type (
 	WhitespaceMode     = source.WhitespaceMode
 	SearchQuery        = source.SearchQuery
 	FoldRegion         = source.FoldRegion
+	InlineSuggestion   = source.InlineSuggestion
 	Completion         = source.Completion
 	CompletionContext  = source.CompletionContext
 	CompletionProvider = source.CompletionProvider

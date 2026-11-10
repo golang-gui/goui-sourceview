@@ -169,6 +169,7 @@ func codeRules(d scheme.Definition) []style.Rule {
 		style.Name("source-view").Part("minimap-border").ForegroundColor(tint(d.GutterForeground, 90)),
 		style.Name("source-view").Part("execution-line").ForegroundColor(tint(rgb(0xe6b422), 35)),
 		style.Name("source-view").Part("fold-placeholder").ForegroundColor(d.GutterForeground),
+		style.Name("source-view").Part("inline-suggestion").ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("current-line").BackgroundColor(d.CurrentLine),
 		// An explicit zero foreground prevents the root foreground fallback;
 		// SourceView treats zero alpha here as preserving syntax, not invisible text.
@@ -284,6 +285,7 @@ func (v *SourceView) styledFont() typography.FontInfo {
 }
 
 func (v *SourceView) StyleChanged() {
+	defer func() { v.report(v.prepareInlineSuggestion()) }()
 	v.updateScheme()
 	if v.Destroyed() {
 		return
@@ -297,6 +299,7 @@ func (v *SourceView) StyleChanged() {
 		}
 	}
 	if !gui.IsEnabled(v) {
+		v.ClearInlineSuggestion()
 		v.closeCompletion()
 		if v.Destroyed() {
 			return

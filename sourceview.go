@@ -163,6 +163,10 @@ type SourceView struct {
 	searchRange            *textedit.Range
 	currentMatch           *searchMatch
 
+	// Optional host-provided inline suffix; its native layout belongs to this view.
+	inlineSuggestionsEnabled bool
+	inlineSuggestion         *inlineSuggestionState
+
 	// Completion sessions and their cancellable provider work.
 	completion                             *completionSession
 	completionProvider                     *CompletionProvider
@@ -196,6 +200,7 @@ func NewSourceView() *SourceView {
 	v.ConnectUnmount(v.unmount)
 	v.ConnectFocused(func(focused bool) {
 		if !focused {
+			v.ClearInlineSuggestion()
 			v.cancelEdit()
 			v.pendingInput = nil
 			v.closeCompletion()
@@ -223,6 +228,7 @@ func (v *SourceView) SetDocument(d *Document) {
 		return
 	}
 	defer v.searchState.Emit()
+	v.ClearInlineSuggestion()
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -320,6 +326,7 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 // Only owned input or keyboard movement inside a completion word retains its UI.
 // Explicit setters, pointer input and reentrant callbacks use setSelection.
 func (v *SourceView) setSelectionKeepingCompletion(s textedit.Selection, upstream, reveal bool, keep *completionSession) {
+	v.ClearInlineSuggestion()
 	defer v.searchState.Emit()
 	state := v.operationState()
 	s = v.clampSelection(s)
@@ -391,6 +398,7 @@ func (v *SourceView) SetReadOnly(value bool) {
 	v.readOnly = value
 	defer v.searchState.Emit()
 	if value {
+		v.ClearInlineSuggestion()
 		v.closeCompletion()
 		v.cancelPreedit()
 		v.cancelPaste()
@@ -559,6 +567,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	v.snapshotCollapsedLines(&info, first, last)
 	v.snapshotLineMarks(&info, first, last)
 	v.snapshotMinimap(&info)
+	v.snapshotInlineSuggestion(&info)
 	if v.projection != nil {
 		text := v.projection.Text()
 		limit := textedit.ClampOffset(text, min(len(text), 64*1024))
@@ -568,6 +577,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 }
 
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
+	v.ClearInlineSuggestion()
 	v.initialLayout = nil
 	if e := v.execution; e != nil && e.revision < c.Revision {
 		if e.revision+1 != c.Revision {
@@ -685,6 +695,7 @@ func (v *SourceView) mount() {
 	if win := v.Window(); win != nil {
 		v.windowFocus = win.ConnectFocus(func(focused bool) {
 			if !focused {
+				v.ClearInlineSuggestion()
 				v.pendingInput = nil
 				v.closeCompletion()
 			}
@@ -738,6 +749,7 @@ func (v *SourceView) unmount() {
 	v.execution = nil
 	v.minimap = nil
 	v.pendingInput = nil
+	v.ClearInlineSuggestion()
 	v.mounted = false
 	v.HidePanel()
 	v.mountEpoch++

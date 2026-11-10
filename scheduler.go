@@ -76,6 +76,7 @@ func (q *frameQueue) frame(_ time.Time) {
 		}
 		until := minTime(deadline, time.Now().Add(2*time.Millisecond))
 		v.layoutStep(until)
+		v.report(v.prepareInlineSuggestion())
 		if v.mounted && !v.Destroyed() {
 			v.inputStep(until)
 		}

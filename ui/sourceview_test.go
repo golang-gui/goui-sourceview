@@ -228,3 +228,22 @@ func TestExternalHighlightsAliases(t *testing.T) {
 		t.Fatal(ok, err)
 	}
 }
+
+func TestInlineSuggestionsConfiguration(t *testing.T) {
+	ctx := &context{}
+	initial := SourceView()
+	widget := initial.Mount(ctx).(*source.SourceView)
+	initial.Update(ctx, widget)
+	if widget.InlineSuggestionsEnabled() {
+		t.Fatal("inline suggestions should default off")
+	}
+	SourceView().InlineSuggestionsEnabled(true).Update(ctx, widget)
+	if !widget.InlineSuggestionsEnabled() {
+		t.Fatal("inline suggestions option ignored")
+	}
+	initial.Update(ctx, widget)
+	if widget.InlineSuggestionsEnabled() {
+		t.Fatal("inline suggestions default not restored")
+	}
+	initial.Unmount(ctx, widget)
+}

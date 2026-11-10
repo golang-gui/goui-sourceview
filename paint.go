@@ -126,6 +126,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 			v.paintLineCollapseBadge(p, row, item)
 		}
 	}
+	v.paintInlineSuggestion(p)
 	if activeFocus(v) && v.caretOn && gui.IsEnabled(v) {
 		if r, ok := v.cachedCaretRect(); ok && !v.collapsedOffsetHidden(caretRow, v.cachedParagraph(caretRow), v.Selection().Caret, v.upstream) {
 			p.FillRect(r, graphics.ColorOf(v.colors.Caret))
