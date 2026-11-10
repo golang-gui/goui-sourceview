@@ -1,15 +1,14 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/view"
 	"image/color"
 	"slices"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -27,26 +26,25 @@ func (k layoutKey) sameText(other layoutKey) bool {
 }
 
 type paragraph struct {
-	layout, number       typography.TextLayout
-	paged                *gui.ParagraphLayout
-	pageVersion          uint64
-	colorRange           textedit.Range
-	textStart            int
-	sourceRange          textedit.Range
-	geometry             textedit.Geometry
-	geometryX, geometryY float64
-	whitespace           *view.WhitespaceLayout
-	fragment             textedit.Fragment
-	text                 string
-	width, height        float32
-	style                paragraphStyle
-	styled               bool
-	replaced             bool
-	foreground           color.NRGBA
-	colors               []paragraphColor
-	used                 uint64
-	row                  int
-	numberText           string
+	view.ParagraphResources
+
+	pageVersion uint64
+	colorRange  textedit.Range
+	textStart   int
+	sourceRange textedit.Range
+
+	whitespace    *view.WhitespaceLayout
+	fragment      textedit.Fragment
+	text          string
+	width, height float32
+	style         paragraphStyle
+	styled        bool
+	replaced      bool
+	foreground    color.NRGBA
+	colors        []paragraphColor
+	used          uint64
+	row           int
+	numberText    string
 }
 
 // Non-default effective foreground ranges, after token and selection overlays.
@@ -79,15 +77,7 @@ func (v *SourceView) dropLayouts() {
 	old := v.layouts
 	v.layouts = make(map[layoutKey]*paragraph)
 	for _, p := range old {
-		if p.layout != nil {
-			p.layout.Destroy()
-		}
-		if p.paged != nil {
-			p.paged.Destroy()
-		}
-		if p.number != nil {
-			p.number.Destroy()
-		}
+		p.ParagraphResources.Destroy()
 	}
 }
 
@@ -274,7 +264,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		return nil
 	}
 	delete(v.layoutFailures, key)
-	p = &paragraph{layout: native, text: text, used: v.tick, row: row, foreground: v.colors.Foreground}
+	p = &paragraph{ParagraphResources: view.ParagraphResources{Layout: native}, text: text, used: v.tick, row: row, foreground: v.colors.Foreground}
 	if !v.colorParagraph(key, p, style, tokens, focus) {
 		native.Destroy() // Not cached yet: the local call still owns this object.
 		return nil
@@ -291,7 +281,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		g = textedit.NewGeometry(lines, clusters, len(text), v.lineHeight)
 	}
 	p.fragment = fragment
-	p.geometry, p.width, p.height = g, w, max(v.lineHeight, h)
+	p.Geometry, p.width, p.height = g, w, max(v.lineHeight, h)
 	oldSize := v.ContentSize()
 	v.layouts[key] = p
 	v.setParagraphHeight(row, p.height)
@@ -319,13 +309,13 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 		return false
 	}
 	length := len(p.text)
-	if p.paged != nil {
+	if p.Paged != nil {
 		length = v.displayRange(p.row).End - v.displayRange(p.row).Start
 	}
 	r := v.displayRange(p.row)
 	local := textedit.Range{End: length}
-	if p.paged != nil {
-		local = p.paged.VisibleRange()
+	if p.Paged != nil {
+		local = p.Paged.VisibleRange()
 	}
 	spans := v.displayHighlights(textedit.Range{Start: r.Start + local.Start, End: r.Start + local.End})
 	for i := range spans {
@@ -333,8 +323,8 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 		spans[i].Range.End -= r.Start
 	}
 	colors := v.paragraphColors(length, style, tokens, spans...)
-	if p.paged != nil {
-		visible := p.paged.VisibleRange()
+	if p.Paged != nil {
+		visible := p.Paged.VisibleRange()
 		clipped := colors[:0]
 		for _, c := range colors {
 			c.start, c.end = max(c.start, visible.Start), min(c.end, visible.End)
@@ -343,20 +333,20 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 			}
 		}
 		colors = clipped
-		if p.foreground != v.colors.Foreground || !slices.Equal(p.colors, colors) || p.pageVersion != p.paged.Version() || p.colorRange != visible {
-			p.paged.SetColor(v.colors.Foreground)
+		if p.foreground != v.colors.Foreground || !slices.Equal(p.colors, colors) || p.pageVersion != p.Paged.Version() || p.colorRange != visible {
+			p.Paged.SetColor(v.colors.Foreground)
 			if !valid() {
 				return false
 			}
 			for _, c := range colors {
-				p.paged.SetTextColor(textedit.Range{Start: c.start, End: c.end}, c.color)
+				p.Paged.SetTextColor(textedit.Range{Start: c.start, End: c.end}, c.color)
 				if !valid() {
 					return false
 				}
 			}
 		}
 		p.style, p.styled, p.colors, p.foreground = style, true, colors, v.colors.Foreground
-		p.pageVersion = p.paged.Version()
+		p.pageVersion = p.Paged.Version()
 		p.colorRange = visible
 		return valid()
 	}
@@ -364,21 +354,21 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 		// Complete replacement clears obsolete tokens/selection and bounds
 		// backend attributes. A fresh layout already has TextFormat's base.
 		if len(p.text) > 0 && (p.foreground != v.colors.Foreground || len(p.colors) > 0) {
-			p.layout.SetTextColor(0, len(p.text), v.colors.Foreground)
+			p.Layout.SetTextColor(0, len(p.text), v.colors.Foreground)
 			if !valid() {
 				return false
 			}
 		}
 		for _, c := range colors {
-			p.layout.SetTextColor(c.start, c.end-c.start, c.color)
+			p.Layout.SetTextColor(c.start, c.end-c.start, c.color)
 			if !valid() {
 				return false
 			}
 		}
 		p.foreground, p.colors = v.colors.Foreground, colors
 	}
-	if p.number != nil && (!p.styled || p.style.scheme != style.scheme) {
-		p.number.SetTextColor(0, len(p.numberText), v.colors.GutterForeground)
+	if p.Number != nil && (!p.styled || p.style.scheme != style.scheme) {
+		p.Number.SetTextColor(0, len(p.numberText), v.colors.GutterForeground)
 		if !valid() {
 			return false
 		}
@@ -510,15 +500,7 @@ func (v *SourceView) pruneLayouts(keep layoutKey) {
 		}
 		bytes -= len(p.text)
 		delete(v.layouts, oldest)
-		if p.layout != nil {
-			p.layout.Destroy()
-		}
-		if p.paged != nil {
-			p.paged.Destroy()
-		}
-		if p.number != nil {
-			p.number.Destroy()
-		}
+		p.ParagraphResources.Destroy()
 		if epoch != v.layoutEpoch || v.Destroyed() {
 			return
 		}

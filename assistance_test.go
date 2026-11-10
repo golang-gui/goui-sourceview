@@ -1,13 +1,13 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/view"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -763,7 +763,7 @@ func TestWhitespaceFromPartialGeometry(t *testing.T) {
 	v.SetDocument(NewDocument("ab c  de\n"))
 	lines := []typography.TextLine{{Start: 3, Length: 3, Y: 20, Height: 20}}
 	clusters := []typography.TextCluster{{Start: 3, Length: 1, X: 0, Width: 10}, {Start: 4, Length: 1, X: 10, Width: 10}, {Start: 5, Length: 1, X: 20, Width: 10}}
-	p := &paragraph{row: 0, text: "c  ", geometry: textedit.NewGeometry(lines, clusters, 8, 20)}
+	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, 8, 20)}, row: 0, text: "c  "}
 	v.refreshWhitespace(p, 3, 1)
 	w := p.whitespace
 	for w.Pending(true) {

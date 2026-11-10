@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
@@ -69,7 +70,7 @@ func TestRecentWidthsReuseParagraphs(t *testing.T) {
 	}
 	a := show(220, 200)
 	b := show(310, 200)
-	if a == nil || b == nil || a == b || a.layout == b.layout {
+	if a == nil || b == nil || a == b || a.Layout == b.Layout {
 		t.Fatal("width-dependent native resources must be independent")
 	}
 	created := ctx.created
@@ -84,7 +85,7 @@ func TestRecentWidthsReuseParagraphs(t *testing.T) {
 	// The third width evicts the least recently used one, rather than growing
 	// a cache for every intermediate position during a window drag.
 	show(400, 200)
-	if !a.layout.(*shapedLayout).dead || b.layout.(*shapedLayout).dead || len(v.layouts) != 2 {
+	if !a.Layout.(*shapedLayout).dead || b.Layout.(*shapedLayout).dead || len(v.layouts) != 2 {
 		t.Fatal("per-text width LRU did not evict the older width")
 	}
 	for i := range 40 {
@@ -104,7 +105,7 @@ func TestRecentWidthsInvalidateTogether(t *testing.T) {
 			var old []*shapedLayout
 			for _, width := range []float32{220, 310} {
 				v.LayoutVisible(geometry.Size{Width: width, Height: 200}, geometry.Point{})
-				old = append(old, v.paragraph(0).layout.(*shapedLayout))
+				old = append(old, v.paragraph(0).Layout.(*shapedLayout))
 			}
 			switch reason {
 			case "tabs":
@@ -144,7 +145,7 @@ func TestRestoredWidthRecolorsWithoutChangingGeometry(t *testing.T) {
 	if v.paragraph(0) != a || ctx.created != created {
 		t.Fatal("returning after a color-only change discarded measured geometry")
 	}
-	for _, c := range a.layout.(*shapedLayout).colors {
+	for _, c := range a.Layout.(*shapedLayout).colors {
 		if c != v.colors.Foreground {
 			t.Fatal("restored width retained obsolete colors")
 		}
@@ -159,12 +160,11 @@ func TestSnapshotDoesNotUseAnotherWidth(t *testing.T) {
 	v.offset.X = 700000
 	// 直接准备当前宽度的已测片段，避免让不支持软折行的替身驱动分页。
 	// 缓存位置与全文起点相距足够远，以独立验证快照确实使用了它。
-	v.layouts[v.paragraphKey(0)] = &paragraph{
-		geometry: textedit.NewGeometry(
-			[]typography.TextLine{{Start: 70000, Length: 100, Width: 1000, Height: 20}},
-			[]typography.TextCluster{{Start: 70000, Length: 100, Width: 1000, Height: 20}},
-			80000, 20),
-		geometryX: 700000,
+	v.layouts[v.paragraphKey(0)] = &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(
+		[]typography.TextLine{{Start: 70000, Length: 100, Width: 1000, Height: 20}},
+		[]typography.TextCluster{{Start: 70000, Length: 100, Width: 1000, Height: 20}},
+		80000, 20),
+		GeometryX: 700000},
 	}
 	if v.Snapshot().TextEditing.VisibleRange.Start == 0 {
 		t.Fatal("fixture did not anchor its measured width")
@@ -209,7 +209,7 @@ func TestWidthEvictionReentryDiscardsReleasedParagraph(t *testing.T) {
 	v, _ := widthCacheFixture(t)
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
 	a := v.paragraph(0)
-	a.layout = &widthCacheDestroyCallback{TextLayout: a.layout, after: func() {
+	a.Layout = &widthCacheDestroyCallback{TextLayout: a.Layout, after: func() {
 		v.SetDocument(NewDocument("replacement from destroy callback"))
 	}}
 	v.LayoutVisible(geometry.Size{Width: 310, Height: 200}, geometry.Point{})
@@ -276,7 +276,7 @@ func TestColdIndexAdoptsWidthsWithinCacheBound(t *testing.T) {
 	if show(220) != a || show(310) != b || ctx.created != created {
 		t.Fatal("cold widths were remeasured instead of adopted")
 	}
-	if len(v.layouts) != 2 || !c.layout.(*shapedLayout).dead {
+	if len(v.layouts) != 2 || !c.Layout.(*shapedLayout).dead {
 		t.Fatal("adoption retained more than two widths of one stable line")
 	}
 }
@@ -308,7 +308,7 @@ func TestParagraphHistoryReusesExactTextMeasurements(t *testing.T) {
 	if !v.Undo() || v.paragraph(0) != original {
 		t.Fatal("theme change discarded text measurement reuse")
 	}
-	for _, c := range original.layout.(*shapedLayout).colors {
+	for _, c := range original.Layout.(*shapedLayout).colors {
 		if c != v.colors.Foreground {
 			t.Fatal("restored paragraph retained stale colors")
 		}
@@ -322,7 +322,7 @@ func TestRestoredTextDoesNotShareLiveParagraphResources(t *testing.T) {
 	v.frameLayout = false
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
 	a, b := v.paragraph(0), v.paragraph(1)
-	if a == b || a.layout == b.layout {
+	if a == b || a.Layout == b.Layout {
 		t.Fatal("equal live paragraphs share a mutable native object")
 	}
 	if err := v.Document().Model().ReplaceAtomic(textedit.Range{}, "x"); err != nil {
@@ -332,7 +332,7 @@ func TestRestoredTextDoesNotShareLiveParagraphResources(t *testing.T) {
 	if !v.Undo() || v.paragraph(0) != a || v.paragraph(1) != b {
 		t.Fatal("restoring one paragraph stole another live paragraph's layout")
 	}
-	if a == b || a.layout == b.layout {
+	if a == b || a.Layout == b.Layout {
 		t.Fatal("restoration introduced resource aliasing")
 	}
 }
@@ -346,7 +346,7 @@ func TestRestoredParagraphStopsAfterRecolorReentry(t *testing.T) {
 	}
 	v.paragraph(0)
 	v.SetScheme(scheme.Dark())
-	original.layout.(*shapedLayout).onColor = func() {
+	original.Layout.(*shapedLayout).onColor = func() {
 		v.SetDocument(NewDocument("replacement during restored recolor"))
 	}
 	if !v.Document().Model().Undo() {
@@ -429,10 +429,10 @@ func TestNativeRecentWidthsKeepMetricsAndPixels(t *testing.T) {
 	if a == nil || a.fragment.LineCount() < 64 {
 		t.Fatal("missing wrapped native fixture")
 	}
-	wantLines, wantClusters := copyMetrics(a.layout)
-	wantCaret := a.geometry.Caret(textedit.Position{Offset: strings.Index(text, "XYZ")})
+	wantLines, wantClusters := copyMetrics(a.Layout)
+	wantCaret := a.Geometry.Caret(textedit.Position{Offset: strings.Index(text, "XYZ")})
 	region := image.Rect(0, 0, 220, 120)
-	wantBitmap, err := a.layout.Rasterize(1, region, nil)
+	wantBitmap, err := a.Layout.Rasterize(1, region, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,10 +447,10 @@ func TestNativeRecentWidthsKeepMetricsAndPixels(t *testing.T) {
 		t.Fatal("restored width performed native measurement/formatting", before, *ctx)
 	}
 	gotLines, gotClusters := a.fragment.Metrics()
-	if !reflect.DeepEqual(gotLines, wantLines) || !reflect.DeepEqual(gotClusters, wantClusters) || a.geometry.Caret(textedit.Position{Offset: strings.Index(text, "XYZ")}) != wantCaret {
+	if !reflect.DeepEqual(gotLines, wantLines) || !reflect.DeepEqual(gotClusters, wantClusters) || a.Geometry.Caret(textedit.Position{Offset: strings.Index(text, "XYZ")}) != wantCaret {
 		t.Fatal("restored metrics or caret changed")
 	}
-	gotBitmap, err := a.layout.Rasterize(1, region, nil)
+	gotBitmap, err := a.Layout.Rasterize(1, region, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,8 +459,8 @@ func TestNativeRecentWidthsKeepMetricsAndPixels(t *testing.T) {
 	}
 	// Independent native input at this width remains the authority, including
 	// bidi context. This is no substring-shaping approximation.
-	boxWidth, boxHeight := a.layout.Size()
-	fresh, err := native.NewTextLayout(text, a.layout.Format(), boxWidth, boxHeight)
+	boxWidth, boxHeight := a.Layout.Size()
+	fresh, err := native.NewTextLayout(text, a.Layout.Format(), boxWidth, boxHeight)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -662,7 +662,7 @@ func TestNativeParagraphHistoryPreservesCompleteBidiLayout(t *testing.T) {
 	original := v.paragraph(0)
 	wantLines, wantClusters := original.fragment.Metrics()
 	region := image.Rect(0, 0, 310, 200)
-	want, err := original.layout.Rasterize(1, region, nil)
+	want, err := original.Layout.Rasterize(1, region, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,12 +679,12 @@ func TestNativeParagraphHistoryPreservesCompleteBidiLayout(t *testing.T) {
 	if !reflect.DeepEqual(lines, wantLines) || !reflect.DeepEqual(clusters, wantClusters) {
 		t.Fatal("history changed ordinary measured values")
 	}
-	got, err := original.layout.Rasterize(1, region, nil)
+	got, err := original.Layout.Rasterize(1, region, nil)
 	if err != nil || !bytes.Equal(got.Pixels, wantPixels) {
 		t.Fatal("history changed native pixels", err)
 	}
-	w, h := original.layout.Size()
-	fresh, err := native.NewTextLayout(text, original.layout.Format(), w, h)
+	w, h := original.Layout.Size()
+	fresh, err := native.NewTextLayout(text, original.Layout.Format(), w, h)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,7 +798,7 @@ func TestNativeRecolorMatchesFreshLayout(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := p.layout.Rasterize(1, rasterRegion(p.layout, 1), nil)
+		got, err := p.Layout.Rasterize(1, rasterRegion(p.Layout, 1), nil)
 		if err != nil {
 			fresh.Destroy()
 			t.Fatal(err)
@@ -875,7 +875,7 @@ func TestNativeRecolorViewIsolation(t *testing.T) {
 		v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	}
 	peer := b.paragraph(0)
-	before, err := peer.layout.Rasterize(1, rasterRegion(peer.layout, 1), nil)
+	before, err := peer.Layout.Rasterize(1, rasterRegion(peer.Layout, 1), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -885,7 +885,7 @@ func TestNativeRecolorViewIsolation(t *testing.T) {
 	if b.paragraph(0) != peer {
 		t.Fatal("another view's recolor invalidated peer layout")
 	}
-	after, err := peer.layout.Rasterize(1, rasterRegion(peer.layout, 1), nil)
+	after, err := peer.Layout.Rasterize(1, rasterRegion(peer.Layout, 1), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1018,7 +1018,7 @@ func TestNativeConfigurationAndShellColors(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer fresh.Destroy()
-				got, err := p.layout.Rasterize(1, rasterRegion(p.layout, 1), nil)
+				got, err := p.Layout.Rasterize(1, rasterRegion(p.Layout, 1), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1076,7 +1076,7 @@ func TestNativeTemplateHostColors(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer fresh.Destroy()
-					got, err := p.layout.Rasterize(1, rasterRegion(p.layout, 1), nil)
+					got, err := p.Layout.Rasterize(1, rasterRegion(p.Layout, 1), nil)
 					if err != nil {
 						t.Fatal(err)
 					}

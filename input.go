@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -242,8 +243,8 @@ func (v *SourceView) dragSelection(point geometry.Point) {
 		}
 		if vertical {
 			y := max(0, float64(v.offset.Y)+float64(point.Y))
-			target.Y = floorCoordinate(y)
-			target.Height = ceilCoordinate(y + float64(v.lineHeight) - float64(target.Y))
+			target.Y = view.FloorCoordinate(y)
+			target.Height = view.CeilCoordinate(y + float64(v.lineHeight) - float64(target.Y))
 		}
 		v.scrollSignal.Emit(target)
 		if !state.valid(v) || !v.mounted || v.Destroyed() || !v.dragging {
@@ -286,10 +287,10 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 	row := v.document.model.LineAt(pos.Offset)
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil && pos.Offset > r.Start {
-		previous := p.geometry.Adjacent(pos.Offset-r.Start, false)
+		previous := p.Geometry.Adjacent(pos.Offset-r.Start, false)
 		origin := v.paragraphOrigin(row, p)
 		local := geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y}
-		for _, rect := range p.geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
+		for _, rect := range p.Geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
 			if containsPoint(rect, local) {
 				pos.Offset = r.Start + previous
 				break
@@ -298,7 +299,7 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 	}
 	selected := editor.WordRange(v.document.model, pos.Offset, v.definitionAt(v.Selection().Caret).IsWord)
 	if p := v.paragraph(row); p != nil && selected.End > selected.Start {
-		selected.End = max(selected.End, r.Start+p.geometry.Adjacent(selected.Start-r.Start, true))
+		selected.End = max(selected.End, r.Start+p.Geometry.Adjacent(selected.Start-r.Start, true))
 	}
 	return selected
 }
@@ -467,7 +468,7 @@ func (v *SourceView) adjacent(at int, forward bool) int {
 		return max(0, r.Start-1)
 	}
 	if p := v.paragraph(row); p != nil {
-		return r.Start + p.geometryAt(at-r.Start).Adjacent(at-r.Start, forward)
+		return r.Start + p.GeometryAt(at-r.Start).Adjacent(at-r.Start, forward)
 	}
 	if forward {
 		at++
@@ -527,7 +528,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 		v.moveToKeepingCompletion(caret, false, extend, keep)
 		return
 	}
-	g := p.geometryAt(pos.Offset)
+	g := p.GeometryAt(pos.Offset)
 	vertical := false
 	x := v.preferredX
 	switch key {
@@ -548,7 +549,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 		if !v.preferredSet {
 			x = g.Caret(pos).X
 		}
-		if p.paged != nil {
+		if p.Paged != nil {
 			rect, ok := v.paragraphCaret(row, p, pos, false)
 			if !ok {
 				break
@@ -576,7 +577,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 			r, _ = m.LineRange(row)
 			p = v.paragraph(row)
 			if p != nil {
-				g = &p.geometry
+				g = &p.Geometry
 			}
 			if p != nil {
 				pos = g.Hit(geometry.Point{X: x, Y: target - v.paragraphTop(row)})
@@ -598,11 +599,11 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 					}
 					p = v.paragraph(row)
 					if p != nil {
-						g = &p.geometry
-						if enterCollapsedEnd && p.paged != nil {
+						g = &p.Geometry
+						if enterCollapsedEnd && p.Paged != nil {
 							// The preview keeps page zero active. Up from the next
 							// paragraph needs the actual last page, not that cache.
-							g = p.geometryAt(r.End - r.Start)
+							g = p.GeometryAt(r.End - r.Start)
 							if !state.valid(v) || v.Destroyed() {
 								return
 							}
@@ -670,7 +671,7 @@ func (v *SourceView) inputGeometryReady() bool {
 		if p == nil {
 			return false
 		}
-		if p.paged != nil && p.paged.GeometryAt(at-r.Start) == nil {
+		if p.Paged != nil && p.Paged.GeometryAt(at-r.Start) == nil {
 			return false
 		}
 	}

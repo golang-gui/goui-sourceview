@@ -4,36 +4,12 @@ import (
 	"image/color"
 	"strings"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
 )
-
-// The source paragraph retains its native text/geometry. A view-local extent
-// after it reserves space for the remaining ghost lines. Model row identities
-// and all following paragraphs are unchanged; only their measured tops move.
-type multilineInlineLayout struct {
-	head, tail                 typography.TextLayout
-	headGeometry, tailGeometry textedit.Geometry
-	headText, tailText         string
-	bodyWidth, headWidth       float32
-	wrap                       WrapMode
-	tabWidth                   float32
-	extra, width               float32
-	tailHeight, headExtra      float32
-}
-
-func (m *multilineInlineLayout) destroy() {
-	if m.head != nil {
-		m.head.Destroy()
-		m.head = nil
-	}
-	if m.tail != nil {
-		m.tail.Destroy()
-		m.tail = nil
-	}
-}
 
 // Cached source geometry, also when only the virtual continuation is on screen.
 func (v *SourceView) inlineAnchor(s *inlineSuggestionState) (*paragraph, geometry.Point, typography.TextLine, geometry.Rectangle, bool) {
@@ -46,9 +22,9 @@ func (v *SourceView) inlineAnchor(s *inlineSuggestionState) (*paragraph, geometr
 	}
 	r, _ := v.document.model.LineRange(s.row)
 	pos := textedit.Position{Offset: s.request.Position - r.Start, Upstream: true}
-	g, origin := &p.geometry, v.paragraphOrigin(s.row, p)
-	if p.paged != nil {
-		frame := p.paged.CachedGeometryAt(pos.Offset)
+	g, origin := &p.Geometry, v.paragraphOrigin(s.row, p)
+	if p.Paged != nil {
+		frame := p.Paged.CachedGeometryAt(pos.Offset)
 		if frame == nil {
 			return nil, geometry.Point{}, typography.TextLine{}, geometry.Rectangle{}, false
 		}
@@ -80,98 +56,36 @@ func (v *SourceView) prepareMultilineInline(s *inlineSuggestionState, c color.NR
 		headWidth = 1 << 20
 	}
 	tabWidth := float32(v.indent.TabWidth) * v.spaceWidth
-	if m := s.multi; m != nil && m.bodyWidth == bodyWidth && m.headWidth == headWidth && m.wrap == v.wrap && m.tabWidth == tabWidth && s.font == v.font && s.color == c {
+	if m := s.multi; m != nil && m.BodyWidth == bodyWidth && m.HeadWidth == headWidth && m.Wrap == v.wrap && m.TabWidth == tabWidth && s.font == v.font && s.color == c {
 		v.setParagraphHeight(s.row, p.height)
 		return nil
 	}
-	m := &multilineInlineLayout{bodyWidth: bodyWidth, headWidth: headWidth, wrap: v.wrap, tabWidth: tabWidth}
+	m := &view.InlineLayout{BodyWidth: bodyWidth, HeadWidth: headWidth, Wrap: v.wrap, TabWidth: tabWidth}
 	font, epoch := v.font, v.layoutEpoch
 	valid := func() bool {
 		return v.inlineSuggestion == s && v.inlineSuggestionCurrent() && !v.Destroyed() &&
-			v.layoutEpoch == epoch && v.font == font && v.wrap == m.wrap && float32(v.indent.TabWidth)*v.spaceWidth == tabWidth &&
+			v.layoutEpoch == epoch && v.font == font && v.wrap == m.Wrap && float32(v.indent.TabWidth)*v.spaceWidth == tabWidth &&
 			v.partColor("inline-suggestion", v.colors.GutterForeground) == c && v.textRight()-v.gutter-2*padding == bodyWidth
 	}
-	makeLayout := func(text string, width float32) (typography.TextLayout, textedit.Geometry, error) {
-		l, err := v.context.NewTextLayout(text, typography.TextFormat{Font: font, WrapMode: m.wrap, TextColor: c, TabWidth: tabWidth}, max(1, width), 1<<20)
-		if err != nil {
-			return nil, textedit.Geometry{}, err
-		}
-		if !valid() {
-			l.Destroy()
-			return nil, textedit.Geometry{}, nil
-		}
-		lines, clusters := l.MeasureMetrics()
-		if !valid() {
-			l.Destroy()
-			return nil, textedit.Geometry{}, nil
-		}
-		return l, textedit.NewGeometry(lines, clusters, len(text), v.lineHeight), nil
-	}
-	var err error
-	overflow := ""
-	if first != "" && headWidth >= 1 {
-		m.headText = first
-		m.head, m.headGeometry, err = makeLayout(first, headWidth)
-		if err != nil {
-			m.destroy()
-			if valid() {
-				v.ClearInlineSuggestion()
-			}
-			return err
-		}
-		if !valid() {
-			m.destroy()
-			return nil
-		}
-		if m.headGeometry.LineCount() > 1 {
-			at := m.headGeometry.LineMetrics(1).Start
-			overflow = first[at:]
-		}
-	} else if first != "" {
-		overflow = first
-	}
-	m.tailText = rest
-	if overflow != "" {
-		m.tailText = overflow + "\n" + rest
-	}
-	m.tail, m.tailGeometry, err = makeLayout(m.tailText, bodyWidth)
+	ready, err := m.Build(func() typography.Context { return v.context }, first, rest, view.InlineMetrics{
+		Font: font, Color: c, LineHeight: func() float32 { return v.lineHeight }, SourceLine: line, GeometryX: func() float64 { return p.GeometryX }, CaretX: caret.X,
+	}, valid)
 	if err != nil {
-		m.destroy()
 		if valid() {
 			v.ClearInlineSuggestion()
 		}
 		return err
 	}
-	if !valid() {
-		m.destroy()
+	if !ready {
 		return nil
 	}
-	tailWidth, tailHeight := m.tail.MeasureSize()
-	extraHead := float32(0)
-	if m.head != nil {
-		h := m.headGeometry.LineMetrics(0)
-		extraHead = max(0, (line.Baseline-line.Y)-(h.Baseline-h.Y)+h.Height-line.Height)
-	}
-	m.tailHeight, m.headExtra = tailHeight, extraHead
-	m.extra = extraHead + tailHeight
-	m.width = bodyWidth
-	if v.wrap == WrapNone {
-		m.width = tailWidth
-		if m.head != nil {
-			h := m.headGeometry.LineMetrics(0)
-			m.width = max(m.width, ceilCoordinate(p.geometryX+float64(caret.X)+1+float64(h.Width)))
-		}
-	}
-	if !valid() {
-		m.destroy()
-		return nil
-	}
+
 	old := s.multi
 	s.multi = m
 	s.font, s.color = font, c
 	s.baseHeight = p.height
 	if old != nil {
-		old.destroy()
+		old.Destroy()
 	}
 	if !valid() {
 		return nil
@@ -209,12 +123,12 @@ func (v *SourceView) inlineExtraHeight(row int) float32 {
 	if s == nil || s.multi == nil || row != s.row || !v.inlineSuggestionCurrent() || v.lineCollapsed(row) {
 		return 0
 	}
-	return s.multi.extra
+	return s.multi.Extra
 }
 func (v *SourceView) inlineExtraWidth() float32 {
 	s := v.inlineSuggestion
 	if s != nil && s.multi != nil && v.inlineSuggestionCurrent() && v.wrap == WrapNone {
-		return s.multi.width
+		return s.multi.Width
 	}
 	return 0
 }
@@ -232,31 +146,31 @@ func (v *SourceView) multilineSegments(s *inlineSuggestionState) []inlineSegment
 	}
 	m := s.multi
 	p, origin, line, caret, ok := v.inlineAnchor(s)
-	if !ok || m.bodyWidth != v.textRight()-v.gutter-2*padding || m.wrap != v.wrap {
+	if !ok || m.BodyWidth != v.textRight()-v.gutter-2*padding || m.Wrap != v.wrap {
 		return nil
 	}
 	viewport := geometry.Rect(v.gutter, 0, max(0, v.textRight()-v.gutter), v.viewport.Height)
 	var segments []inlineSegment
-	if m.head != nil {
-		h := m.headGeometry.LineMetrics(0)
+	if m.Head != nil {
+		h := m.HeadGeometry.LineMetrics(0)
 		at := geometry.Point{X: origin.X + caret.X + 1 - h.X, Y: origin.Y + line.Baseline - h.Baseline}
 		top := max(origin.Y+line.Y, at.Y+h.Y)
 		r := geometry.Rect(origin.X+caret.X+1, top, h.Width, max(0, at.Y+h.Y+h.Height-top)).Intersect(viewport)
 		if r.Width > 0 && r.Height > 0 {
-			segments = append(segments, inlineSegment{m.head, at, r, m.headText})
+			segments = append(segments, inlineSegment{m.Head, at, r, m.HeadText})
 		}
 	}
 	// Tail coordinates start at column zero; every newline/soft wrap remains a
 	// view extent within the anchor paragraph and therefore has no line number.
-	extraHead, height := m.headExtra, m.tailHeight
+	extraHead, height := m.HeadExtra, m.TailHeight
 	at := v.geometryOrigin(s.row, 0, float64(p.height+extraHead))
-	width := m.bodyWidth
+	width := m.BodyWidth
 	if v.wrap == WrapNone {
-		width = m.width
+		width = m.Width
 	}
 	r := geometry.Rect(at.X, at.Y, width, height).Intersect(viewport)
 	if r.Width > 0 && r.Height > 0 {
-		segments = append(segments, inlineSegment{m.tail, at, r, m.tailText})
+		segments = append(segments, inlineSegment{m.Tail, at, r, m.TailText})
 	}
 	return segments
 }
@@ -299,7 +213,7 @@ func (v *SourceView) inlineVirtualHit(point geometry.Point) (textedit.Position, 
 		return textedit.Position{}, geometry.Rectangle{}, false
 	}
 	top := padding + v.paragraphTop(s.row) + p.height - v.offset.Y
-	if point.Y < top || point.Y >= top+s.multi.extra {
+	if point.Y < top || point.Y >= top+s.multi.Extra {
 		return textedit.Position{}, geometry.Rectangle{}, false
 	}
 	r, _ := v.document.model.LineRange(s.row)

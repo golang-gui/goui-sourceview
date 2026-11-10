@@ -1,12 +1,13 @@
 package sourceview
 
 import (
+	"testing"
+
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
-	"testing"
 )
 
 type completionFixtureView struct {

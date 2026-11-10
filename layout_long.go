@@ -10,15 +10,6 @@ import (
 	"github.com/golang-gui/goui/platform/typography"
 )
 
-func (p *paragraph) geometryAt(offset int) *textedit.Geometry {
-	if p.paged != nil {
-		if g := p.paged.GeometryAt(offset); g != nil {
-			return &g.Geometry
-		}
-	}
-	return &p.geometry
-}
-
 func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, style paragraphStyle, tokens []highlight.Token, focus, measure bool) *paragraph {
 	state, epoch := v.operationState(), v.layoutEpoch
 	if _, failed := v.layoutFailures[key]; failed {
@@ -26,7 +17,7 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 	}
 	if p == nil {
 		for old, candidate := range v.layouts {
-			if candidate.paged != nil && candidate.row == row {
+			if candidate.Paged != nil && candidate.row == row {
 				delete(v.layouts, old)
 				p = candidate
 				v.layouts[key] = p
@@ -44,7 +35,7 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 		format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
 		r := v.displayRange(row)
 		p.sourceRange = r
-		p.paged = gui.NewParagraphLayout(v.context, format, key.width, r.End-r.Start, func(local textedit.Range) (string, error) {
+		p.Paged = gui.NewParagraphLayout(v.context, format, key.width, r.End-r.Start, func(local textedit.Range) (string, error) {
 			r := v.displayRange(p.row)
 			local.Start += r.Start
 			local.End += r.Start
@@ -55,15 +46,15 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 		})
 		v.layouts[key] = p
 	}
-	p.paged.SetWidth(key.width)
+	p.Paged.SetWidth(key.width)
 	if measure && v.reveal != nil {
 		r := v.displayRange(row)
-		if p.paged.GeometryAt(v.displayCaret()-r.Start) == nil {
+		if p.Paged.GeometryAt(v.displayCaret()-r.Start) == nil {
 			v.requestLayoutWork()
 		}
 	} else if measure && v.pendingAnchor && v.anchor.valid {
 		r := v.displayRange(row)
-		if v.anchor.offset >= r.Start && v.anchor.offset <= r.End && p.paged.GeometryAt(v.anchor.offset-r.Start) == nil {
+		if v.anchor.offset >= r.Start && v.anchor.offset <= r.End && p.Paged.GeometryAt(v.anchor.offset-r.Start) == nil {
 			v.requestLayoutWork()
 		}
 	}
@@ -71,16 +62,16 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 	if v.lineCollapsed(row) {
 		viewport.X, viewport.Y, viewport.Height = 0, 0, v.lineHeight
 	}
-	ready := p.paged.Prepare(viewport, measure)
+	ready := p.Paged.Prepare(viewport, measure)
 	// An unattached/offscreen view has no frame source. Allow a small fixed
 	// number of bounded steps, never an unbounded walk to distant text.
 	for step := 0; !ready && measure && v.Root() == nil && step < 4; step++ {
-		ready = p.paged.Prepare(viewport, true)
+		ready = p.Paged.Prepare(viewport, true)
 	}
 	if !state.valid(v) || epoch != v.layoutEpoch || v.layouts[key] != p {
 		return nil
 	}
-	if err := p.paged.Err(); err != nil {
+	if err := p.Paged.Err(); err != nil {
 		if v.layoutFailures == nil || len(v.layoutFailures) >= maxLayouts {
 			v.layoutFailures = make(map[layoutKey]struct{})
 		}
@@ -91,27 +82,27 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 	if !ready {
 		v.requestLayoutWork()
 	}
-	frame := p.paged.Geometry()
-	p.geometry = frame.Geometry
-	p.geometryX, p.geometryY = frame.X, frame.Y
-	size := p.paged.Size()
+	frame := p.Paged.Geometry()
+	p.Geometry = frame.Geometry
+	p.GeometryX, p.GeometryY = frame.X, frame.Y
+	size := p.Paged.Size()
 	p.width, p.height = size.Width, size.Height
 	v.setParagraphHeight(row, p.height)
 	v.contentWidth = max(v.contentWidth, p.width)
-	r := p.paged.VisibleRange()
+	r := p.Paged.VisibleRange()
 	if !measure && p.textStart != r.Start {
 		p.text = ""
 	}
 	p.textStart = r.Start
 	if measure {
-		p.text = p.paged.Text(r)
+		p.text = p.Paged.Text(r)
 		if v.whitespace != WhitespaceNone || v.showLineEndings {
-			v.refreshWhitespace(p, r.Start, p.paged.Version())
+			v.refreshWhitespace(p, r.Start, p.Paged.Version())
 		}
-	} else if (v.whitespace != WhitespaceNone || v.showLineEndings) && (p.whitespace == nil || p.whitespace.TextStart != r.Start || p.whitespace.Version != p.paged.Version() || p.whitespace.Revision != v.document.model.Revision()) {
+	} else if (v.whitespace != WhitespaceNone || v.showLineEndings) && (p.whitespace == nil || p.whitespace.TextStart != r.Start || p.whitespace.Version != p.Paged.Version() || p.whitespace.Revision != v.document.model.Revision()) {
 		v.requestLayoutWork()
 	}
-	if !p.styled || p.style != style || p.pageVersion != p.paged.Version() || p.colorRange != r {
+	if !p.styled || p.style != style || p.pageVersion != p.Paged.Version() || p.colorRange != r {
 		if !measure {
 			v.requestLayoutWork()
 		} else if !v.colorParagraph(key, p, style, tokens, focus) {
@@ -130,7 +121,7 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 // Byte ranges remain model-relative even when the native working set is small.
 func (v *SourceView) changeLongParagraphs(c textedit.Change) {
 	for key, p := range v.layouts {
-		if p.paged == nil || c.Reset {
+		if p.Paged == nil || c.Reset {
 			continue
 		}
 		r := p.sourceRange
@@ -160,15 +151,15 @@ func (v *SourceView) changeLongParagraphs(c textedit.Change) {
 		}
 		if invalid {
 			delete(v.layouts, key)
-			p.paged.Destroy()
-			if p.number != nil {
-				p.number.Destroy()
+			p.Paged.Destroy()
+			if p.Number != nil {
+				p.Number.Destroy()
 			}
 			continue
 		}
 		p.sourceRange = r
 		if len(local) > 0 {
-			p.paged.Change(r.End-r.Start, local)
+			p.Paged.Change(r.End-r.Start, local)
 			p.styled = false
 		}
 	}
@@ -180,16 +171,16 @@ func (v *SourceView) geometryOrigin(row int, x, y float64) geometry.Point {
 	return geometry.Point{X: v.gutter + padding + float32(x-float64(v.offset.X)), Y: float32(float64(padding) + v.paragraphTop64(row) + y - float64(v.offset.Y))}
 }
 func (v *SourceView) paragraphOrigin(row int, p *paragraph) geometry.Point {
-	return v.geometryOrigin(row, p.geometryX, p.geometryY)
+	return v.geometryOrigin(row, p.GeometryX, p.GeometryY)
 }
 func (v *SourceView) paragraphCaret(row int, p *paragraph, pos textedit.Position, cached bool) (geometry.Rectangle, bool) {
-	g, origin := &p.geometry, v.paragraphOrigin(row, p)
-	if p.paged != nil {
+	g, origin := &p.Geometry, v.paragraphOrigin(row, p)
+	if p.Paged != nil {
 		var frame *gui.ParagraphGeometry
 		if cached {
-			frame = p.paged.CachedGeometryAt(pos.Offset)
+			frame = p.Paged.CachedGeometryAt(pos.Offset)
 		} else {
-			frame = p.paged.GeometryAt(pos.Offset)
+			frame = p.Paged.GeometryAt(pos.Offset)
 		}
 		if frame == nil {
 			return geometry.Rectangle{}, false

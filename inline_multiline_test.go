@@ -28,7 +28,7 @@ func TestInlineMultilineExtentIsViewLocalAndAcceptIsAtomic(t *testing.T) {
 	top, size := v.paragraphTop(1), v.ContentSize()
 	showInline(t, v, "\n\treturn value\n}")
 	m := v.inlineSuggestion.multi
-	if m == nil || m.extra <= 0 || v.paragraphTop(1) != top+m.extra || v.ContentSize().Height != size.Height+m.extra {
+	if m == nil || m.Extra <= 0 || v.paragraphTop(1) != top+m.Extra || v.ContentSize().Height != size.Height+m.Extra {
 		t.Fatal("multiline preview does not shift following source by measured height")
 	}
 	if model.Text() != original || model.Revision() != revision || model.LineCount() != 2 || model.CanUndo() {
@@ -114,7 +114,7 @@ func TestInlineMultilineHitUsesCommittedCoordinates(t *testing.T) {
 	showInline(t, v, "tail\nvirtual one\nvirtual two")
 	m := v.inlineSuggestion.multi
 	gapTop := padding + v.paragraphTop(0) + v.cachedParagraph(0).height
-	pos, _, ok := v.hitCaret(geometry.Point{X: v.gutter + 30, Y: gapTop + m.extra/2})
+	pos, _, ok := v.hitCaret(geometry.Point{X: v.gutter + 30, Y: gapTop + m.Extra/2})
 	if !ok || pos.Offset != 6 {
 		t.Fatal("virtual-only space mapped to ghost bytes", pos)
 	}
@@ -132,22 +132,22 @@ func TestInlineMultilineWrapUsesMeasuredRemainder(t *testing.T) {
 	v, _ := multilineFixture(t)
 	text := strings.Repeat("中文e\u0301 ", 40) + "\n\treturn 1\n}"
 	showInline(t, v, text)
-	wide := v.inlineSuggestion.multi.extra
+	wide := v.inlineSuggestion.multi.Extra
 	for _, width := range []float32{210.3, 310.7, 400} {
 		v.Arrange(geometry.Rect(0, 0, width, 180))
 		m := v.inlineSuggestion.multi
-		if m == nil || m.headGeometry.LineCount() < 2 || !utf8.ValidString(m.tailText) || m.tailGeometry.LineCount() < 3 {
+		if m == nil || m.HeadGeometry.LineCount() < 2 || !utf8.ValidString(m.TailText) || m.TailGeometry.LineCount() < 3 {
 			t.Fatal("long first fragment did not flow into full-width continuation")
 		}
-		split := m.headGeometry.LineMetrics(1).Start
+		split := m.HeadGeometry.LineMetrics(1).Start
 		head, rest, _ := strings.Cut(text, "\n")
-		if head[:split]+strings.TrimSuffix(m.tailText, "\n"+rest) != head {
+		if head[:split]+strings.TrimSuffix(m.TailText, "\n"+rest) != head {
 			t.Fatal("native wrap lost/duplicated prefix text")
 		}
-		if width < 400 && m.extra < wide {
+		if width < 400 && m.Extra < wide {
 			t.Fatal("narrow width unexpectedly reduced measured preview height")
 		}
-		if v.paragraphTop(1) != v.cachedParagraph(0).height+m.extra {
+		if v.paragraphTop(1) != v.cachedParagraph(0).height+m.Extra {
 			t.Fatal("reflow extent does not match native suggestion layouts")
 		}
 	}
@@ -174,7 +174,7 @@ func TestInlineMultilineNormalizedLimitsAndTabs(t *testing.T) {
 		}
 	}
 	showInline(t, v, "\n"+strings.Repeat("\tline\n", 100)+"end")
-	if v.inlineSuggestion.multi.tailGeometry.LineCount() < 101 {
+	if v.inlineSuggestion.multi.TailGeometry.LineCount() < 101 {
 		t.Fatal("multiline indentation/newlines lost")
 	}
 }
@@ -282,7 +282,7 @@ func TestInlineMultilineTabWidthReflowsAndDisposesOldLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	v.Arrange(v.Rect())
-	if v.inlineSuggestion.multi == old || v.inlineSuggestion.multi.tabWidth != 8*v.spaceWidth || ctx.destroyed <= before {
+	if v.inlineSuggestion.multi == old || v.inlineSuggestion.multi.TabWidth != 8*v.spaceWidth || ctx.destroyed <= before {
 		t.Fatal("tab change retained stale native preview")
 	}
 }
@@ -294,7 +294,7 @@ func TestInlineMultilineReentryCannotOverwriteNewLayoutConfiguration(t *testing.
 	v.context = probe
 	showInline(t, v, "head\ntail\nend")
 	m := v.inlineSuggestion.multi
-	if m.wrap != WrapNone || m.head.Format().WrapMode != WrapNone {
+	if m.Wrap != WrapNone || m.Head.Format().WrapMode != WrapNone {
 		t.Fatal("old preparation overwrote reentrant current-width layout")
 	}
 }
@@ -329,7 +329,7 @@ func TestInlineMultilinePagedSourceUsesCachedEndGeometry(t *testing.T) {
 	v.SetSelection(textedit.Selection{Anchor: len(prefix), Caret: len(prefix)})
 	v.Arrange(v.Rect())
 	p := v.paragraph(0)
-	if p == nil || p.paged == nil || p.paged.GeometryAt(len(prefix)) == nil {
+	if p == nil || p.Paged == nil || p.Paged.GeometryAt(len(prefix)) == nil {
 		t.Fatal("missing source end page")
 	}
 	v.LayoutVisible(v.viewport, geometry.Point{})

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
@@ -53,7 +54,7 @@ func TestBracketDecorationUsesQuietFillAndInsetBorder(t *testing.T) {
 			v.Arrange(geometry.Rect(0, 0, 400, 200))
 			focusBracketFixture(t, v)
 			item := v.paragraph(0)
-			native := item.layout.(*shapedLayout)
+			native := item.Layout.(*shapedLayout)
 			foreground := slices.Clone(native.colors)
 			created := ctx.created
 			p := &recordingPainter{}
@@ -170,7 +171,7 @@ func TestBracketDecorationSuppressionAndLayering(t *testing.T) {
 func TestBracketRectanglesFollowWrappedAndBidiGeometry(t *testing.T) {
 	lines := []typography.TextLine{{Start: 0, Length: 1, Height: 20}, {Start: 1, Length: 1, Y: 20, Height: 20}}
 	clusters := []typography.TextCluster{{Start: 0, Length: 1, X: 0, Width: 10, Height: 20}, {Start: 1, Length: 1, X: 30, Y: 20, Width: 10, Height: 20, LineIndex: 1, Direction: typography.TextRightToLeft}}
-	p := &paragraph{geometry: textedit.NewGeometry(lines, clusters, 2, 20)}
+	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, 2, 20)}}
 	pair := []textedit.Range{{Start: 10, End: 11}, {Start: 11, End: 12}}
 	got := bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{X: -5, Y: 6}, pair)
 	want := []geometry.Rectangle{geometry.Rect(-5, 7, 10, 18), geometry.Rect(25, 27, 10, 18)}
@@ -180,7 +181,7 @@ func TestBracketRectanglesFollowWrappedAndBidiGeometry(t *testing.T) {
 	if got := bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair[:1]); len(got) != 0 {
 		t.Fatal("lone candidate decorated", got)
 	}
-	p.geometry = textedit.NewGeometry([]typography.TextLine{{Length: 2, Height: 20}}, []typography.TextCluster{{Length: 2, Width: 20, Height: 20}}, 2, 20)
+	p.Geometry = textedit.NewGeometry([]typography.TextLine{{Length: 2, Height: 20}}, []typography.TextCluster{{Length: 2, Width: 20, Height: 20}}, 2, 20)
 	got = bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair)
 	if !reflect.DeepEqual(got, []geometry.Rectangle{geometry.Rect(0, 1, 20, 18)}) {
 		t.Fatal("shared shaping cluster painted twice", got)
@@ -195,7 +196,7 @@ func TestPaintRangeCullsWrappedLines(t *testing.T) {
 		lines[i] = typography.TextLine{Start: i, Length: 1, Y: float32(i * 20), Height: 20}
 		clusters[i] = typography.TextCluster{Start: i, Length: 1, Width: 10, LineIndex: i}
 	}
-	item := &paragraph{geometry: textedit.NewGeometry(lines, clusters, count, 20)}
+	item := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, count, 20)}}
 	v := NewSourceView()
 	v.viewport = geometry.Size{Width: 200, Height: 38}
 	p := &recordingPainter{}

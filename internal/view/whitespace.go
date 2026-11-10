@@ -3,11 +3,12 @@
 package view
 
 import (
-	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/platform/typography"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/platform/typography"
 )
 
 type WhitespaceMode uint8

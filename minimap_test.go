@@ -1,13 +1,13 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"math"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
@@ -164,7 +164,7 @@ func TestMinimapBoundedLongLineAndFolds(t *testing.T) {
 	}
 
 	folded := mapView("head\nhidden\ntail")
-	folded.hiddenLines = []folding.Interval{{1, 2}}
+	folded.hiddenLines = []folding.Interval{{Start: 1, End: 2}}
 	folded.resetHeights()
 	folded.prepareMinimap()
 	finishMap(t, folded)

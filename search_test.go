@@ -130,7 +130,7 @@ func TestSearchHighlightVisibilityPreservesSyntaxAndSelection(t *testing.T) {
 		t.Fatal("new view did not highlight the current match")
 	}
 	item := v.paragraph(0)
-	native := item.layout.(*shapedLayout)
+	native := item.Layout.(*shapedLayout)
 	foreground, created, selected, query := slices.Clone(native.colors), ctx.created, v.Selection(), v.Search()
 	v.SetHighlightSearchMatches(false)
 	p := paint()

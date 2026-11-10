@@ -1,6 +1,9 @@
 package controls
 
 import (
+	"image/color"
+	"unicode/utf8"
+
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/platform/graphics"
@@ -8,8 +11,6 @@ import (
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
-	"image/color"
-	"unicode/utf8"
 )
 
 func init() {

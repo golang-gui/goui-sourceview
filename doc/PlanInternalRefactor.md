@@ -12,6 +12,13 @@
 4. 查找、定位栏呈现 → internal/controls。编辑动作与失效检查留在根包。
 5. 空白符与缩略图辅助计算 → internal/view。
 6. 原生排版缓存与预览资源辅助 → internal/view。保持单一几何来源。
+7. 快照编辑计划、结构／括号扫描、补全值算法、定位和锚点映射 → internal/editor。
+8. 代码主题规则、标记标签、空白和括号装饰 → internal/view。
+9. 快捷键校验、菜单命令资源和输入框刷新 → internal/controls。
+10. 根包中仍需真实编辑状态的协调按领域合并，核对 API、资源与原生场景。
+
+后四批用于继续实现根目录整理目标，不将完成前六批等同于所有私有逻辑已下沉。
+纯算法与呈现下沉；必须访问真实文档、修订、焦点及生命周期的协调仍由根包拥有。
 
 ## 验证
 
@@ -48,3 +55,27 @@
   四个独立索引测试跟随移动；选区、片段、IME、资源和绘制集成测试保留根包。
   验证：两种全量测试通过；独立窗口 assistance（Modern／Basic）、
   minimap（Modern 暗色）通过，包括空白绘制和定位导航。
+- 批次 6：段落原生资源及其测量几何、多行建议的试排和释放、首行预览几何、
+  分页预览裁剪和大坐标定向舍入移入 internal/view。根包继续拥有段落缓存键、
+  成员、着色、修订、失效、淘汰、视口及建议会话；绘制、命中和光标仍使用
+  同一份测量几何。原有缓存、预览、多行建议及重入集成断言保留在根包，
+  新增内部资源释放顺序、预览不触发排版、裁剪及舍入边界断言。
+  补齐此前跨包 Interval 初始化的字段名，消除 go vet 的三处警告。
+  验证：go test ./...、GOWORK=off go test ./...、go test -race ./...、
+  go vet ./... 通过；Windows amd64、macOS arm64 的 CGO_ENABLED=0
+  go build ./... 通过。公开声明与初始基线一致，外部消费者的根包类型身份、
+  ui 导入、空白符枚举及高亮／折叠快照接口检查通过。
+  原生窗口：Linux amd64 / Go 1.25.8 / GOUI v0.7.0，独立 X11 会话 :190，
+  Xvnc + Xfwm4、Pango，未使用本地工作区替换依赖。resize_cache 软件 1×／2×；
+  fold_preview Modern 软件及 Basic OpenGL 1×；inline_multiline Modern 软件／
+  OpenGL 及 Basic OpenGL 1×；line_collapse、horizontal_scroll Modern 软件 1×
+  均通过原有事件、几何、实际绘制、历史及资源断言。所属桌面进程已退出，
+  剪贴板操作仅作用于该独立显示连接；没有更改用户文档或桌面设置。
+  首次多行建议产物在首帧日志编码时两次 SIGTRAP，反汇编发现标准库
+  internal/abi.NoEscape 字节为 00，与 PlanInlineSuggestion.md 的既有记录相同；
+  用仓库外独立 GOCACHE 及 GOWORK=off go build -a 重建后恢复 RET。
+  重建后一次 Modern 首次发布返回拒绝；在独立 D-Bus 会话、等待窗口管理器
+  初始化并先运行缓存场景后，Modern 软件／OpenGL 均通过，未修改或放宽窗口断言。
+  初始化拒绝的具体原因尚未定位；上述失败不计为通过，也不归因为本次拆分或
+  GOUI 功能缺口。日志与产物保留在 /tmp/sourceview-internal-finish-0sdxjmkr。
+  Windows/macOS 仅编译，未执行其原生窗口、物理 IME、混合 DPI 或性能验收。

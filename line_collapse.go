@@ -16,18 +16,6 @@ const (
 	lineCollapseMinLines           = 3
 )
 
-// ParagraphLayout sets explicit page clips; Painter.SetClipRect replaces its
-// caller's explicit clip. Keep those page clips inside the preview using only
-// the public Painter contract, without changing the paragraph's geometry.
-type linePreviewPainter struct {
-	gui.Painter
-	bounds geometry.Rectangle
-}
-
-func (p *linePreviewPainter) SetClipRect(rect geometry.Rectangle) {
-	p.Painter.SetClipRect(rect.Intersect(p.bounds))
-}
-
 // CollapsedLines returns the zero-based logical lines manually shortened in
 // this view. Intent survives resizing and temporarily disabling wrapping.
 // Editing a shortened line, resetting text or switching Document clears it.
@@ -113,11 +101,11 @@ func (v *SourceView) longLineCandidate(row int) bool {
 	}
 	// Measured local geometry is sufficient evidence, including a paged
 	// paragraph's active window. Never infer row count from estimated height.
-	if p.geometry.LineCount() >= lineCollapseMinLines {
+	if p.Geometry.LineCount() >= lineCollapseMinLines {
 		return true
 	}
-	if p.paged != nil {
-		if first := p.paged.CachedGeometryAt(0); first != nil {
+	if p.Paged != nil {
+		if first := p.Paged.CachedGeometryAt(0); first != nil {
 			return first.LineCount() >= lineCollapseMinLines
 		}
 	}
@@ -142,7 +130,7 @@ func (v *SourceView) CollapseLine(line int) bool {
 	if p == nil || !state.valid(v) {
 		return false
 	}
-	if p.paged != nil && p.paged.GeometryAt(0) == nil {
+	if p.Paged != nil && p.Paged.GeometryAt(0) == nil {
 		return false
 	}
 	if !state.valid(v) || v.Destroyed() {
@@ -215,18 +203,7 @@ func (v *SourceView) linePreview(p *paragraph) (*textedit.Geometry, float32) {
 	if p == nil {
 		return nil, v.lineHeight
 	}
-	g := &p.geometry
-	if p.paged != nil {
-		frame := p.paged.CachedGeometryAt(0)
-		if frame == nil {
-			return nil, v.lineHeight
-		}
-		g = &frame.Geometry
-	}
-	if g.LineCount() == 0 {
-		return nil, v.lineHeight
-	}
-	return g, max(1, g.LineMetrics(0).Height)
+	return p.PreviewGeometry(v.lineHeight)
 }
 
 func (v *SourceView) linePreviewRect(row int, p *paragraph) geometry.Rectangle {

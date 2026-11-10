@@ -1,9 +1,9 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"testing"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"

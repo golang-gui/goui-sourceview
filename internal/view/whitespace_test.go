@@ -1,14 +1,15 @@
 package view
 
 import (
-	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
-	"github.com/golang-gui/goui/platform/typography"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/gui/textedit"
+	"github.com/golang-gui/goui/platform/typography"
 )
 
 func TestWhitespaceModesAndSpecialSpaces(t *testing.T) {

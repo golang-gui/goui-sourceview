@@ -2,12 +2,12 @@ package sourceview
 
 import (
 	"context"
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"

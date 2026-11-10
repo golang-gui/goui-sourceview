@@ -284,7 +284,7 @@ func TestWrappedPagedStructuralHeaderKeepsPreviewClip(t *testing.T) {
 	v.SetFoldingEnabled(true)
 	v.acceptFolds([]language.FoldRange{{StartLine: 0, EndLine: 2}})
 	v.Arrange(v.Rect())
-	if v.paragraph(0).paged == nil || !v.Fold(0) {
+	if v.paragraph(0).Paged == nil || !v.Fold(0) {
 		t.Fatal("paged structural fixture did not fold")
 	}
 	v.Arrange(v.Rect())

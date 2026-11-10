@@ -219,7 +219,7 @@ func TestLongLineCollapsePreviewDoesNotCutClusters(t *testing.T) {
 		v.Arrange(geometry.Rect(0, 0, width, 180))
 		p := v.paragraph(0)
 		right := v.linePreviewRect(0, p).Width
-		_, clusters := p.layout.MeasureMetrics()
+		_, clusters := p.Layout.MeasureMetrics()
 		for _, c := range clusters {
 			if c.LineIndex == 0 && c.Width > 0 && c.X < right-.01 && c.X+c.Width > right+.01 {
 				t.Fatal("preview ends inside a native shaping cluster", width, right, c)
@@ -236,13 +236,13 @@ func TestLongLineCollapsePreviewDoesNotCutClusters(t *testing.T) {
 func TestLongLineCollapsePagedText(t *testing.T) {
 	text := strings.Repeat("paged words ", 10000) + "\ntail"
 	v, _ := collapsedLineFixture(t, text)
-	if v.paragraph(0).paged == nil || !v.CollapseLine(0) {
+	if v.paragraph(0).Paged == nil || !v.CollapseLine(0) {
 		t.Fatal("paged fixture did not collapse")
 	}
 	v.Arrange(v.Rect())
 	p := v.paragraph(0)
 	_, height := v.linePreview(p)
-	if v.paragraphTop(1) != height || p.geometryY != 0 || v.Snapshot().TextEditing.VisibleRange.End > 1024 {
+	if v.paragraphTop(1) != height || p.GeometryY != 0 || v.Snapshot().TextEditing.VisibleRange.End > 1024 {
 		t.Fatal("paged preview used distant geometry or exposed its hidden suffix")
 	}
 	v.SetSelection(textedit.Selection{Anchor: 100000, Caret: 100000})

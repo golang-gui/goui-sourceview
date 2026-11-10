@@ -430,13 +430,13 @@ func pendingInputFixture(t *testing.T, tail string) *SourceView {
 	v.context = &boundedParagraphContext{t: t}
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 160}, geometry.Point{})
 	p := v.paragraph(0)
-	if p == nil || p.paged == nil {
+	if p == nil || p.Paged == nil {
 		t.Fatal("missing long paragraph")
 	}
-	p.paged.Destroy()
+	p.Paged.Destroy()
 	model := v.document.model
 	format := typography.TextFormat{Font: v.font, WrapMode: typography.WrapNone, TextColor: v.colors.Foreground, TabWidth: 4 * v.spaceWidth}
-	p.paged = gui.NewParagraphLayout(v.context, format, v.paragraphWidth(), model.Len(), func(r textedit.Range) (string, error) { time.Sleep(3 * time.Millisecond); return model.Slice(r) })
+	p.Paged = gui.NewParagraphLayout(v.context, format, v.paragraphWidth(), model.Len(), func(r textedit.Range) (string, error) { time.Sleep(3 * time.Millisecond); return model.Slice(r) })
 	p.styled = false
 	t.Cleanup(v.dropLayouts)
 	focusBracketFixture(t, v)

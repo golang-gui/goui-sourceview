@@ -18,13 +18,13 @@ func thresholdFixture(t *testing.T, count int) (*SourceView, *countedNativeConte
 	v, ctx := collapsedLineFixture(t, strings.Repeat("1", 120))
 	p := v.cachedParagraph(0)
 	advance := float32(0)
-	for i := 0; i < p.geometry.LineCount(); i++ {
-		advance += p.geometry.LineMetrics(i).Width
+	for i := 0; i < p.Geometry.LineCount(); i++ {
+		advance += p.Geometry.LineMetrics(i).Width
 	}
 	v.SetFoldingEnabled(true)
 	v.updateGutter()
 	v.Arrange(geometry.Rect(0, 0, advance/(float32(count)-.5)+v.gutter+2*padding, 240))
-	if got := v.cachedParagraph(0).geometry.LineCount(); got != count {
+	if got := v.cachedParagraph(0).Geometry.LineCount(); got != count {
 		t.Fatalf("fixture native display rows=%d, want %d", got, count)
 	}
 	return v, ctx, advance
@@ -83,7 +83,7 @@ func TestLongLineCollapseThresholdResizeKeepsExpandEntry(t *testing.T) {
 		t.Fatal("three-row line has no collapse action")
 	}
 	v.Arrange(geometry.Rect(0, 0, advance+v.gutter+2*padding+20, 240))
-	if v.cachedParagraph(0).geometry.LineCount() != 1 {
+	if v.cachedParagraph(0).Geometry.LineCount() != 1 {
 		t.Fatal("wide fixture did not fit one native row")
 	}
 	if collapsed, ok := v.gutterFold(0); !ok || !collapsed {
@@ -106,7 +106,7 @@ func TestLongLineCollapseThresholdResizeKeepsExpandEntry(t *testing.T) {
 func TestLongLineCollapseThresholdPagedGeometry(t *testing.T) {
 	v, ctx := collapsedLineFixture(t, strings.Repeat("paged words ", 10000))
 	p := v.cachedParagraph(0)
-	if p.paged == nil || p.geometry.LineCount() < 3 {
+	if p.Paged == nil || p.Geometry.LineCount() < 3 {
 		t.Fatal("fixture has no measured paged rows")
 	}
 	p.height = v.lineHeight // Unmeasured global extent must not control eligibility.
@@ -116,7 +116,7 @@ func TestLongLineCollapseThresholdPagedGeometry(t *testing.T) {
 	}
 	// The painting window may have moved to a small final page while page zero
 	// is still cached. Existing first-page geometry remains valid evidence.
-	p.geometry = textedit.NewGeometry(nil, nil, len(v.Document().Model().Text()), v.lineHeight)
+	p.Geometry = textedit.NewGeometry(nil, nil, len(v.Document().Model().Text()), v.lineHeight)
 	if !v.canCollapseLine(0) || ctx.created != created {
 		t.Fatal("eligibility lost a cached first page or shaped text")
 	}
@@ -131,7 +131,7 @@ func TestLongLineCollapseThresholdJSONArrowsStayOnTheirRows(t *testing.T) {
 	}
 	v.acceptFolds([]language.FoldRange{{StartLine: 0, EndLine: 1}})
 	v.Arrange(geometry.Rect(0, 0, advance/2.5+v.gutter+2*padding, 240))
-	if v.cachedParagraph(1).geometry.LineCount() != 3 {
+	if v.cachedParagraph(1).Geometry.LineCount() != 3 {
 		t.Fatal("JSON string does not span three native rows")
 	}
 	entries := map[int]string{}

@@ -2,7 +2,6 @@ package sourceview
 
 import (
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/view"
 	"image/color"
 	"slices"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -155,7 +155,7 @@ func (v *SourceView) deleteIndent() (bool, error) {
 }
 
 func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.Key) textedit.Position {
-	if p.paged != nil && v.wrap == WrapNone {
+	if p.Paged != nil && v.wrap == WrapNone {
 		r := v.displayRange(p.row)
 		edge := textedit.Position{}
 		if key == events.KeyEnd {
@@ -192,7 +192,7 @@ func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.K
 		}
 		return edge
 	}
-	g := p.geometryAt(pos.Offset)
+	g := p.GeometryAt(pos.Offset)
 	index := g.LineIndex(pos)
 	edge := g.LineEdge(index, key == events.KeyEnd)
 	if !v.smartHomeEnd {
@@ -285,8 +285,8 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 				next = col + v.indent.TabWidth - col%v.indent.TabWidth
 			}
 			for target <= next && target < columns {
-				start := p.geometry.Caret(textedit.Position{Offset: at})
-				end := p.geometry.Caret(textedit.Position{Offset: at + 1, Upstream: true})
+				start := p.Geometry.Caret(textedit.Position{Offset: at})
+				end := p.Geometry.Caret(textedit.Position{Offset: at + 1, Upstream: true})
 				if start.Y == end.Y {
 					x := origin.X + start.X + (end.X-start.X)*float32(target-col)/float32(next-col)
 					draw.DrawLine(geometry.Point{X: x, Y: origin.Y + start.Y}, geometry.Point{X: x, Y: origin.Y + start.Y + start.Height}, 1, guide)
@@ -490,19 +490,19 @@ func (v *SourceView) refreshWhitespace(p *paragraph, start int, version uint64) 
 	var lines []typography.TextLine
 	var clusters []typography.TextCluster
 	for at := 0; at < len(p.text); {
-		end := p.geometry.Snap(start+at+1, true) - start
+		end := p.Geometry.Snap(start+at+1, true) - start
 		if end <= at || end > len(p.text) {
 			break
 		}
 		r, _ := utf8.DecodeRuneInString(p.text[at:end])
 		if view.WhitespaceKind(r) != 0 {
-			a := p.geometry.Caret(textedit.Position{Offset: start + at})
-			b := p.geometry.Caret(textedit.Position{Offset: start + end, Upstream: true})
+			a := p.Geometry.Caret(textedit.Position{Offset: start + at})
+			b := p.Geometry.Caret(textedit.Position{Offset: start + end, Upstream: true})
 			direction := typography.TextLeftToRight
 			if a.Y == b.Y && a.X > b.X {
 				direction = typography.TextRightToLeft
 			}
-			for _, rect := range p.geometry.Selection(textedit.Range{Start: start + at, End: start + end}) {
+			for _, rect := range p.Geometry.Selection(textedit.Range{Start: start + at, End: start + end}) {
 				clusters = append(clusters, typography.TextCluster{Start: at, Length: end - at, X: rect.X, Width: rect.Width, LineIndex: len(lines), Direction: direction})
 				lines = append(lines, typography.TextLine{Y: rect.Y, Height: rect.Height})
 			}
@@ -535,11 +535,11 @@ func (v *SourceView) refreshWhitespace(p *paragraph, start int, version uint64) 
 		return text
 	}
 	if start+len(p.text) == length {
-		w.End = p.geometry.Caret(textedit.Position{Offset: length, Upstream: true})
+		w.End = p.Geometry.Caret(textedit.Position{Offset: length, Upstream: true})
 		w.EndReady = true
 		if length > start {
-			at := p.geometry.Snap(length-1, false)
-			before := p.geometry.Caret(textedit.Position{Offset: at})
+			at := p.Geometry.Snap(length-1, false)
+			before := p.Geometry.Caret(textedit.Position{Offset: at})
 			w.EndRTL = before.Y == w.End.Y && before.X > w.End.X
 		}
 	}

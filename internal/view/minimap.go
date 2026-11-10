@@ -1,9 +1,10 @@
 package view
 
 import (
-	"github.com/golang-gui/goui/core/geometry"
 	"image/color"
 	"unicode/utf8"
+
+	"github.com/golang-gui/goui/core/geometry"
 )
 
 // MinimapCells samples a bounded source fragment; colorAt is called only for visible ink.

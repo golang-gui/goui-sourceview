@@ -1,10 +1,11 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"math"
 	"strconv"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
@@ -189,11 +190,11 @@ func (v *SourceView) ContentSize() geometry.Size {
 	v.ensureHeights()
 	// Geometry.Caret is 1 DIP wide at the final text stop. Its full rectangle,
 	// as well as the text and padding, must fit in the horizontal extent.
-	width := ceilCoordinate(float64(max(v.contentWidth, v.inlineExtraWidth())) + 1 + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
+	width := view.CeilCoordinate(float64(max(v.contentWidth, v.inlineExtraWidth())) + 1 + float64(v.gutter) + float64(v.minimapWidth()) + 2*float64(padding))
 	if v.wrap != WrapNone {
 		width = v.viewport.Width
 	}
-	return geometry.Size{Width: max(v.viewport.Width, width), Height: ceilCoordinate(float64(v.heights.Total()) + 2*float64(padding))}
+	return geometry.Size{Width: max(v.viewport.Width, width), Height: view.CeilCoordinate(float64(v.heights.Total()) + 2*float64(padding))}
 }
 
 func (v *SourceView) ensureHeights() {
@@ -279,10 +280,10 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 		row := v.document.model.LineAt(at)
 		r, _ := v.document.model.LineRange(row)
 		if p := v.viewportParagraph(row); p != nil {
-			g := &p.geometry
-			baseY := p.geometryY
-			if p.paged != nil {
-				frame := p.paged.CachedGeometryAt(at - r.Start)
+			g := &p.Geometry
+			baseY := p.GeometryY
+			if p.Paged != nil {
+				frame := p.Paged.CachedGeometryAt(at - r.Start)
 				if frame == nil {
 					v.requestLayoutWork()
 					return
@@ -325,7 +326,7 @@ func (v *SourceView) resetHeights() {
 			if h.End <= first {
 				hidden = append(hidden, h)
 			} else if h.Start > last {
-				hidden = append(hidden, folding.Interval{h.Start + delta, h.End + delta})
+				hidden = append(hidden, folding.Interval{Start: h.Start + delta, End: h.End + delta})
 			}
 		}
 	}
@@ -387,14 +388,14 @@ func (v *SourceView) snapOffset(offset int, forward bool) int {
 	row := v.document.model.LineAt(offset)
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil {
-		if p.paged != nil {
-			if g := p.paged.GeometryAt(offset - r.Start); g != nil {
+		if p.Paged != nil {
+			if g := p.Paged.GeometryAt(offset - r.Start); g != nil {
 				return r.Start + g.Snap(offset-r.Start, forward)
 			}
 			v.requestLayoutWork()
 			return v.clampOffset(offset)
 		}
-		return r.Start + p.geometry.Snap(offset-r.Start, forward)
+		return r.Start + p.Geometry.Snap(offset-r.Start, forward)
 	}
 	return v.clampOffset(offset)
 }
@@ -510,23 +511,8 @@ func (v *SourceView) revealBounds(rect geometry.Rectangle) geometry.Rectangle {
 	y := float64(v.offset.Y) + float64(rect.Y)
 	right := float64(v.offset.X) + float64(rect.X) + float64(rect.Width) + float64(padding) + float64(v.minimapWidth())
 	bottom := y + float64(rect.Height)
-	left, top := floorCoordinate(x), floorCoordinate(y)
-	return geometry.Rect(left, top, ceilCoordinate(right-float64(left)), ceilCoordinate(bottom-float64(top)))
-}
-
-func ceilCoordinate(value float64) float32 {
-	n := float32(value)
-	if float64(n) < value {
-		n = math.Nextafter32(n, float32(math.Inf(1)))
-	}
-	return n
-}
-func floorCoordinate(value float64) float32 {
-	n := float32(value)
-	if float64(n) > value {
-		n = math.Nextafter32(n, float32(math.Inf(-1)))
-	}
-	return n
+	left, top := view.FloorCoordinate(x), view.FloorCoordinate(y)
+	return geometry.Rect(left, top, view.CeilCoordinate(right-float64(left)), view.CeilCoordinate(bottom-float64(top)))
 }
 
 func (v *SourceView) hit(point geometry.Point) textedit.Position {
@@ -546,7 +532,7 @@ func (v *SourceView) hitCaret(point geometry.Point) (textedit.Position, geometry
 	measured := false
 	if p := v.paragraph(row); p != nil {
 		origin := v.paragraphOrigin(row, p)
-		g := &p.geometry
+		g := &p.Geometry
 		if v.lineCollapsed(row) {
 			if first, _ := v.linePreview(p); first != nil {
 				g = first
@@ -573,14 +559,14 @@ func (v *SourceView) captureAnchor() {
 	row := v.paragraphAt(max(0, v.offset.Y-padding))
 	r := v.displayRange(row)
 	p := v.viewportParagraph(row)
-	if p == nil || p.paged != nil && p.paged.VisibleRange().End == 0 {
+	if p == nil || p.Paged != nil && p.Paged.VisibleRange().End == 0 {
 		return
 	}
 	origin := v.paragraphOrigin(row, p)
 	y := -origin.Y
-	pos := p.geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: y})
-	index := p.geometry.LineIndex(pos)
-	edge := p.geometry.LineEdge(index, false)
-	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: -origin.Y - p.geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
+	pos := p.Geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: y})
+	index := p.Geometry.LineIndex(pos)
+	edge := p.Geometry.LineEdge(index, false)
+	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: -origin.Y - p.Geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
 	v.anchorRevision = v.document.model.Revision()
 }

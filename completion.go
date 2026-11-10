@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -273,7 +273,7 @@ func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rect
 	row := v.document.model.LineAt(c.Range.Start)
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil {
-		start := p.geometry.Caret(textedit.Position{Offset: c.Range.Start - r.Start})
+		start := p.Geometry.Caret(textedit.Position{Offset: c.Range.Start - r.Start})
 		start = start.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y})
 		// A wrapped or horizontally hidden word start cannot anchor the visible
 		// list. Keep it at the caret in that case; never alter editor selection.

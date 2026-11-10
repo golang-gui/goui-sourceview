@@ -2,8 +2,9 @@ package folding
 
 import (
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/language"
 	"slices"
+
+	"github.com/golang-gui/goui-sourceview/language"
 )
 
 func Normalize(ranges []language.FoldRange, lines int) ([]language.FoldRange, error) {

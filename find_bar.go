@@ -1,10 +1,10 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"strings"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"

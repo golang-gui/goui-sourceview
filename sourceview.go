@@ -2,11 +2,11 @@ package sourceview
 
 import (
 	"errors"
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
@@ -546,9 +546,9 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 		// Snapshot reads cached geometry only: it must not shape text, recolor,
 		// emit callbacks or alter the viewport just to describe visible content.
 		p := v.cachedParagraph(firstDisplay)
-		if p != nil && p.geometry.LineCount() > 0 {
+		if p != nil && p.Geometry.LineCount() > 0 {
 			origin := v.paragraphOrigin(firstDisplay, p)
-			pos := p.geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: -origin.Y})
+			pos := p.Geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: -origin.Y})
 			anchor := v.displayRange(firstDisplay).Start + pos.Offset
 			if v.projection != nil {
 				anchor = v.projection.ModelOffset(anchor, pos.Upstream)

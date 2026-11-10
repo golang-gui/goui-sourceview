@@ -59,13 +59,15 @@ GOUI 不反向依赖本模块。
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠范围校验、隐藏区间合并与可见行索引；不导入 gui |
 | `internal/controls` | 私有补全列表、查找／定位栏呈现与配套样式；不导入根包 |
-| `internal/view` | 视图私有的空白符几何索引、缩略图采样和几何计算；不导入根包 |
+| `internal/view` | 视图私有的排版资源、预览几何与裁剪、多行建议排版、空白符索引及缩略图计算；不导入根包 |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
 `sourceview` 可以使用 GOUI 的 gui、core、layout、typography、graphics 公开能力；
 FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
-算法包可消费 typography 度量类型，不创建原生 Context 或 TextLayout。
+纯算法包可消费 typography 度量类型，不创建原生 Context 或 TextLayout。
+`internal/view` 的资源辅助借用根包提供的 Context，不创建窗口或另一套编辑状态；
+根包仍管理缓存键、修订、失效、淘汰、视口和生命周期。
 不将每个内部结构都提升为独立包，不导出行缓存、布局缓存或调度器。
 
 根包内按职责组织文件，不以文件拆分新增包或公共接口：

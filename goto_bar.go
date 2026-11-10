@@ -2,11 +2,11 @@ package sourceview
 
 import (
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"

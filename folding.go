@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui-sourceview/language"
@@ -688,7 +688,7 @@ func (v *SourceView) foldBadgeRect(row int, p *paragraph) geometry.Rectangle {
 	if i := v.foldHeader(row); i < 0 || !v.folds[i].Collapsed || v.projection != nil || v.lineCollapsed(row) {
 		return geometry.Rectangle{}
 	}
-	edge := p.geometry.Caret(textedit.Position{Offset: len(p.text), Upstream: true})
+	edge := p.Geometry.Caret(textedit.Position{Offset: len(p.text), Upstream: true})
 	r := geometry.Rect(v.gutter+padding-v.offset.X+edge.X+5, padding+v.paragraphTop(row)-v.offset.Y+edge.Y, 16, edge.Height)
 	if v.showLineEndings {
 		r.X += 12

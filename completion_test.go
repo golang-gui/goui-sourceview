@@ -3,12 +3,12 @@ package sourceview
 import (
 	"context"
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"

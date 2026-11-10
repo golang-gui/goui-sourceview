@@ -1,12 +1,13 @@
 package controls
 
 import (
-	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/platform/graphics"
-	"github.com/golang-gui/goui/style"
 	"image/color"
 	"math"
 	"testing"
+
+	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/platform/graphics"
+	"github.com/golang-gui/goui/style"
 )
 
 type shadowPainter struct {

@@ -1,14 +1,15 @@
 package controls
 
 import (
+	"image/color"
+	"math"
+
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/modern"
-	"image/color"
-	"math"
 )
 
 func nrgba(c color.Color) color.NRGBA {

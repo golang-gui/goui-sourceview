@@ -3,7 +3,6 @@ package sourceview
 import (
 	"errors"
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"image/color"
 	"reflect"
 	"runtime"
@@ -13,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
@@ -449,7 +449,7 @@ func TestResetInitializationBelongsToEachView(t *testing.T) {
 	a.Arrange(geometry.Rect(0, 0, 400, 200))
 	b.Arrange(geometry.Rect(0, 0, 220, 200))
 	pa, pb := a.cachedParagraph(0), b.cachedParagraph(0)
-	if pa == nil || pb == nil || pa == pb || pa.layout == pb.layout {
+	if pa == nil || pb == nil || pa == pb || pa.Layout == pb.Layout {
 		t.Fatal("shared reset mixed the views' native resources")
 	}
 	a.Paint(&recordingPainter{})
@@ -558,7 +558,7 @@ func TestDeferredRecolorKeepsMeasuredGeometry(t *testing.T) {
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
 	v.layoutStep(time.Time{})
 	p := v.cachedParagraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	calls, created := native.colorCalls, ctx.created
 	v.SetScheme(scheme.Dark())
 	v.Paint(&recordingPainter{})
@@ -688,7 +688,7 @@ func TestHiddenParagraphsUseVisibleHeightsAndSourceCoordinates(t *testing.T) {
 	t.Cleanup(v.dropLayouts)
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	tail := v.paragraph(4)
-	v.hiddenLines = []folding.Interval{{1, 4}}
+	v.hiddenLines = []folding.Interval{{Start: 1, End: 4}}
 	v.resetHeights()
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	if v.heights.Count() != 2 || v.heights.Total() != 40 || v.paragraph(2) != nil || v.paragraph(4) != tail {
@@ -732,10 +732,10 @@ func TestNativeLongWidthsUseExistingLayoutContract(t *testing.T) {
 		t.Fatal("missing measured long paragraph")
 	}
 	position := textedit.Position{Offset: strings.Index(text, "END")}
-	wantCaret := a.geometry.Caret(position)
+	wantCaret := a.Geometry.Caret(position)
 	fragment := a.fragment
-	w, h := a.layout.Size()
-	reference, err := native.NewTextLayout(text, a.layout.Format(), w, h)
+	w, h := a.Layout.Size()
+	reference, err := native.NewTextLayout(text, a.Layout.Format(), w, h)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -746,7 +746,7 @@ func TestNativeLongWidthsUseExistingLayoutContract(t *testing.T) {
 		t.Fatal("cached values differ from complete native context")
 	}
 	b := show(310, 200)
-	if b == a || b.layout == a.layout {
+	if b == a || b.Layout == a.Layout {
 		t.Fatal("different widths shared mutable native resources")
 	}
 	before := *ctx
@@ -825,13 +825,13 @@ func TestNativeInitialWrappedEstimateAvoidsSecondScrollbarWidth(t *testing.T) {
 			}
 			// Independent full-context native reference, including persistent bidi
 			// controls and text whose many bytes have zero advance.
-			reference, err := native.NewTextLayout(text, p.layout.Format(), v.paragraphWidth(), 1<<24)
+			reference, err := native.NewTextLayout(text, p.Layout.Format(), v.paragraphWidth(), 1<<24)
 			if err != nil {
 				t.Fatal(err)
 			}
 			w, h := reference.MeasureSize()
 			wantLines, wantClusters := reference.MeasureMetrics()
-			gotLines, gotClusters := p.layout.MeasureMetrics()
+			gotLines, gotClusters := p.Layout.MeasureMetrics()
 			reference.Destroy()
 			if p.width != w || p.height != max(v.lineHeight, h) || !reflect.DeepEqual(gotLines, wantLines) || !reflect.DeepEqual(gotClusters, wantClusters) {
 				t.Fatal("provisional sampling changed confirmed full-context geometry")
@@ -947,7 +947,7 @@ func TestSourceViewRetainsFragmentAfterNativeCacheRelease(t *testing.T) {
 		t.Fatal("missing measured fragment")
 	}
 	f := p.fragment
-	want := p.geometry.Caret(textedit.Position{Offset: 500})
+	want := p.Geometry.Caret(textedit.Position{Offset: 500})
 	v.dropLayouts()
 	g := f.Geometry(v.lineHeight)
 	if got := g.Caret(textedit.Position{Offset: 500}); got != want {
@@ -1565,7 +1565,7 @@ func TestPlainIndexCompletionDoesNotMutateNativeColors(t *testing.T) {
 	t.Cleanup(v.dropLayouts)
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	if native.colorCalls != 0 {
 		t.Fatal("plain layout overwrote the foreground already supplied in TextFormat")
 	}
@@ -1590,23 +1590,23 @@ func TestEditingKeepsParagraphColorsWhileAnalysisPending(t *testing.T) {
 	t.Cleanup(v.dropLayouts)
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	current, suffix := v.paragraph(0), v.paragraph(1)
-	before := append([]color.NRGBA(nil), suffix.layout.(*shapedLayout).colors...)
-	calls := suffix.layout.(*shapedLayout).colorCalls
+	before := append([]color.NRGBA(nil), suffix.Layout.(*shapedLayout).colors...)
+	calls := suffix.Layout.(*shapedLayout).colorCalls
 	if err := v.Document().Model().ReplaceAtomic(textedit.Range{Start: 3, End: 3}, "X"); err != nil {
 		t.Fatal(err)
 	}
 	current = v.paragraph(0)
-	if got := current.layout.(*shapedLayout).colors; len(got) != 8 || got[1] != v.colors.Tokens[language.KindString] || got[3] != got[1] || got[6] != got[1] {
+	if got := current.Layout.(*shapedLayout).colors; len(got) != 8 || got[1] != v.colors.Tokens[language.KindString] || got[3] != got[1] || got[6] != got[1] {
 		t.Fatal("editing cleared unchanged/inserted string colors", got)
 	}
-	if got := v.paragraph(1); got != suffix || !reflect.DeepEqual(got.layout.(*shapedLayout).colors, before) || got.layout.(*shapedLayout).colorCalls != calls {
+	if got := v.paragraph(1); got != suffix || !reflect.DeepEqual(got.Layout.(*shapedLayout).colors, before) || got.Layout.(*shapedLayout).colorCalls != calls {
 		t.Fatal("pending analysis cleared untouched suffix colors")
 	}
 	if _, _, valid := v.Document().engine.Tokens(1); valid {
 		t.Fatal("paint fallback exposed stale semantic tokens")
 	}
 	v.Document().engine.Advance(time.Time{})
-	if v.paragraph(0) != current || v.paragraph(1) != suffix || suffix.layout.(*shapedLayout).colorCalls != calls {
+	if v.paragraph(0) != current || v.paragraph(1) != suffix || suffix.Layout.(*shapedLayout).colorCalls != calls {
 		t.Fatal("analysis convergence unnecessarily recolored or reshaped suffix")
 	}
 }
@@ -1614,7 +1614,7 @@ func TestEditingKeepsParagraphColorsWhileAnalysisPending(t *testing.T) {
 func TestEquivalentTokenColorsDoNotMutateNativeLayout(t *testing.T) {
 	v, _ := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	tokens, _, _ := v.Document().engine.Tokens(0)
 	tokens = append([]highlight.Token(nil), tokens...)
 	before := append([]color.NRGBA(nil), native.colors...)
@@ -1642,7 +1642,7 @@ func TestEquivalentTokenColorsDoNotMutateNativeLayout(t *testing.T) {
 func TestParagraphColorsPreserveSelectionAndClearObsoleteTokens(t *testing.T) {
 	v, _ := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	tokens, _, _ := v.Document().engine.Tokens(0)
 	v.colors.SelectionForeground = color.NRGBA{R: 100, G: 10, B: 50, A: 255}
 	// Exercise effective range construction directly; focus/lifetime validation
@@ -1672,13 +1672,13 @@ func TestParagraphColorsPreserveSelectionAndClearObsoleteTokens(t *testing.T) {
 func TestColorChangesReuseParagraph(t *testing.T) {
 	v, ctx := colorFixture(t)
 	p := v.paragraph(0)
-	original := p.layout.(*shapedLayout)
+	original := p.Layout.(*shapedLayout)
 	created := ctx.created
 	height, width := v.heights.Total(), v.contentWidth
 	for i := 0; i < 20; i++ {
 		v.SetSelection(textedit.Selection{Anchor: i % 4, Caret: 8})
 		v.SetScheme([]*scheme.Scheme{scheme.Dark(), scheme.Light()}[i%2])
-		if got := v.paragraph(0); got != p || got.layout != original || ctx.created != created {
+		if got := v.paragraph(0); got != p || got.Layout != original || ctx.created != created {
 			t.Fatal("color-only change recreated native paragraph", ctx.created, created)
 		}
 		if v.heights.Total() != height || v.contentWidth != width {
@@ -1694,7 +1694,7 @@ func TestColorChangesReuseParagraph(t *testing.T) {
 func TestLanguageChangePreservesTextLayoutAndClearsTokens(t *testing.T) {
 	v, ctx := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	if native.colors[2] != v.colors.Tokens[language.KindProperty] {
 		t.Fatal("fixture lacks property color", native.colors[2])
 	}
@@ -1727,7 +1727,7 @@ func TestLanguageChangePreservesTextLayoutAndClearsTokens(t *testing.T) {
 func TestUnchangedColorStateDoesNoNativeWork(t *testing.T) {
 	v, _ := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	calls := native.colorCalls
 	for i := 0; i < 10; i++ {
 		if v.paragraph(0) != p {
@@ -1757,7 +1757,7 @@ func TestColdIndexAdoptsPlainLayout(t *testing.T) {
 	if got := v.paragraph(0); got != p || ctx.created != created {
 		t.Fatal("initial index completion reshaped unchanged text")
 	}
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	for _, c := range native.colors {
 		if c != v.colors.Tokens[language.KindKeyword] {
 			t.Fatal("first lexical colors were not applied")
@@ -1768,7 +1768,7 @@ func TestColdIndexAdoptsPlainLayout(t *testing.T) {
 func TestRecolorReentryStopsUsingReleasedLayout(t *testing.T) {
 	v, ctx := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	native.onColor = func() { native.onColor = nil; v.SetDocument(NewDocument("replacement")) }
 	v.SetScheme(scheme.Dark())
 	if got := v.paragraph(0); got != nil {
@@ -1790,9 +1790,9 @@ func TestGutterRecolorKeepsNativeNumber(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.number, p.numberText = number, "1"
+	p.Number, p.numberText = number, "1"
 	v.SetScheme(scheme.Dark())
-	if v.paragraph(0) != p || p.number != number {
+	if v.paragraph(0) != p || p.Number != number {
 		t.Fatal("gutter color rebuilt native number")
 	}
 	if got := number.(*shapedLayout).colors[0]; got != v.colors.GutterForeground {
@@ -1803,7 +1803,7 @@ func TestGutterRecolorKeepsNativeNumber(t *testing.T) {
 func TestSameIDWithoutTokenizerClearsNativeColors(t *testing.T) {
 	v, ctx := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	if native.colors[2] != v.colors.Tokens[language.KindProperty] {
 		t.Fatal("fixture has no syntax color")
 	}
@@ -1878,7 +1878,7 @@ func TestSelectionForegroundOverridesAndReset(t *testing.T) {
 func TestSelectionMovementWithoutOverrideDoesNotRecolor(t *testing.T) {
 	v, ctx := colorFixture(t)
 	p := v.paragraph(0)
-	native := p.layout.(*shapedLayout)
+	native := p.Layout.(*shapedLayout)
 	calls, created := native.colorCalls, ctx.created
 	height, width := v.heights.Total(), v.contentWidth
 	for _, selected := range []textedit.Selection{{Anchor: 0, Caret: 7}, {Anchor: 12, Caret: 2}, {}, {Anchor: 0, Caret: 15}} {
@@ -1933,16 +1933,16 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 	v.ensureMetrics()
 	v.Arrange(geometry.Rect(0, 0, 400, 200))
 	p := v.paragraph(1)
-	if p == nil || p.paged == nil {
+	if p == nil || p.Paged == nil {
 		t.Fatal("长段落未启用有界测量")
 	}
-	cache := p.paged
+	cache := p.Paged
 	if err := model.Replace(textedit.Range{Start: 0, End: 0}, "new\n"); err != nil {
 		t.Fatal(err)
 	}
 	v.document.engine.Advance(time.Time{})
 	p = v.paragraph(2)
-	if p == nil || p.paged != cache {
+	if p == nil || p.Paged != cache {
 		t.Fatal("前段变化丢失未受影响的段落缓存")
 	}
 	r, _ := model.LineRange(2)
@@ -1955,10 +1955,10 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 	}
 	v.document.engine.Advance(time.Time{})
 	p = v.paragraph(2)
-	if p == nil || p.paged != cache {
+	if p == nil || p.Paged != cache {
 		t.Fatal("局部编辑丢失段落所有权")
 	}
-	if g := p.paged.GeometryAt(101); g == nil || g.Snap(101, false) != 101 {
+	if g := p.Paged.GeometryAt(101); g == nil || g.Snap(101, false) != 101 {
 		t.Fatal("局部编辑光标错误")
 	}
 	if err := model.Replace(textedit.Range{Start: at, End: at}, "\n"); err != nil {
@@ -1966,7 +1966,7 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 	}
 	v.document.engine.Advance(time.Time{})
 	p = v.paragraph(3)
-	if p == nil || p.paged == cache {
+	if p == nil || p.Paged == cache {
 		t.Fatal("分段后沿用旧段落的读取状态")
 	}
 	v.dropLayouts()
@@ -1986,7 +1986,7 @@ func TestLongParagraphIgnoresOffscreenTokenChanges(t *testing.T) {
 	v.SetShowLineNumbers(false)
 	v.Arrange(geometry.Rect(0, 0, 400, 200))
 	p := v.paragraph(0)
-	if p == nil || p.paged == nil {
+	if p == nil || p.Paged == nil {
 		t.Fatal("缺少长行窗口")
 	}
 	key, style := v.paragraphKey(0), p.style
@@ -2026,11 +2026,11 @@ func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
 	var p *paragraph
 	for i := 0; i < 256; i++ {
 		p = v.paragraph(0)
-		if p != nil && p.paged != nil && p.paged.VisibleRange().Start > 20_000_000 {
+		if p != nil && p.Paged != nil && p.Paged.VisibleRange().Start > 20_000_000 {
 			break
 		}
 	}
-	if p == nil || p.paged == nil || p.geometry.LineCount() != 1 {
+	if p == nil || p.Paged == nil || p.Geometry.LineCount() != 1 {
 		t.Fatal("远处单行视区没有就绪")
 	}
 	// byte 26843546 的真实文档 X 为 268435460，即视口 X=10。

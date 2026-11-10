@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -70,8 +71,8 @@ func (v *SourceView) Paint(p gui.Painter) {
 			}
 			if v.highlightSearchMatches {
 				searchRange := r
-				if item.paged != nil {
-					visible := item.paged.VisibleRange()
+				if item.Paged != nil {
+					visible := item.Paged.VisibleRange()
 					searchRange = textedit.Range{Start: r.Start + visible.Start, End: r.Start + visible.End}
 				}
 				for _, match := range v.search.InRange(v.document.model, searchRange, 2000) {
@@ -94,19 +95,19 @@ func (v *SourceView) Paint(p gui.Painter) {
 					p.DrawRect(geometry.Rect(rect.X+.5, rect.Y+.5, rect.Width-1, rect.Height-1), 1, graphics.ColorOf(c))
 				}
 			}
-			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 && (item.paged == nil || item.paged.CachedOffset(r.End-r.Start)) {
-				edge := item.geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
+			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 && (item.Paged == nil || item.Paged.CachedOffset(r.End-r.Start)) {
+				edge := item.Geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
 				p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))
 			}
 		}
-		if item.paged != nil {
+		if item.Paged != nil {
 			if collapsed {
-				item.paged.Paint(&linePreviewPainter{Painter: p, bounds: v.linePreviewRect(row, item)}, origin)
+				item.Paged.Paint(&view.PreviewPainter{Painter: p, Bounds: v.linePreviewRect(row, item)}, origin)
 			} else {
-				item.paged.Paint(p, origin)
+				item.Paged.Paint(p, origin)
 			}
 		} else {
-			p.DrawTextLayout(origin, item.layout)
+			p.DrawTextLayout(origin, item.Layout)
 		}
 		v.paintWhitespace(p, row, item, origin)
 		v.paintFoldBadge(p, row, item)
@@ -153,20 +154,20 @@ func (v *SourceView) Paint(p gui.Painter) {
 				number = v.document.model.LineAt(v.projection.ModelOffset(v.displayRange(row).Start, false)) + 1
 			}
 			numberText := strconv.Itoa(number)
-			if item.number == nil || item.numberText != numberText {
-				if item.number != nil {
-					item.number.Destroy()
-					item.number = nil
+			if item.Number == nil || item.numberText != numberText {
+				if item.Number != nil {
+					item.Number.Destroy()
+					item.Number = nil
 				}
 				native, err := v.context.NewTextLayout(numberText, typography.TextFormat{Font: v.font, TextColor: v.colors.GutterForeground}, 1<<16, 1<<16)
 				if err != nil {
 					continue
 				}
-				item.number = native
+				item.Number = native
 				item.numberText = numberText
 			}
-			w, _ := item.number.MeasureSize()
-			p.DrawTextLayout(geometry.Point{X: v.gutter - v.foldColumn - padding - w, Y: padding + v.paragraphTop(row) - v.offset.Y}, item.number)
+			w, _ := item.Number.MeasureSize()
+			p.DrawTextLayout(geometry.Point{X: v.gutter - v.foldColumn - padding - w, Y: padding + v.paragraphTop(row) - v.offset.Y}, item.Number)
 		}
 		p.Restore()
 		p.DrawLine(geometry.Point{X: v.gutter - .5}, geometry.Point{X: v.gutter - .5, Y: bounds.Height}, 1, graphics.ColorOf(v.colors.Border))
@@ -186,7 +187,7 @@ func bracketRectangles(item *paragraph, line textedit.Range, origin geometry.Poi
 			continue
 		}
 		local := textedit.Range{Start: max(line.Start, bracket.Start) - line.Start, End: min(line.End, bracket.End) - line.Start}
-		for _, rect := range item.geometry.Selection(local) {
+		for _, rect := range item.Geometry.Selection(local) {
 			// Native visual-line geometry keeps wrapped/bidi positions exact.
 			// A small vertical inset separates the box from neighboring rows.
 			if rect.Width <= 1 || rect.Height <= 3 {
@@ -219,7 +220,7 @@ func (v *SourceView) visibleSelection(item *paragraph, r textedit.Range, origin 
 	if v.viewport.Height <= 0 {
 		return nil
 	}
-	first := item.geometry.LineAtY(-origin.Y)
-	end := item.geometry.LineAtY(v.viewport.Height-origin.Y) + 1
-	return item.geometry.SelectionLines(r, first, end)
+	first := item.Geometry.LineAtY(-origin.Y)
+	end := item.Geometry.LineAtY(v.viewport.Height-origin.Y) + 1
+	return item.Geometry.SelectionLines(r, first, end)
 }

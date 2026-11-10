@@ -302,13 +302,13 @@ func (v *SourceView) selectionContains(point geometry.Point) bool {
 		return false
 	}
 	local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
-	for _, rect := range p.geometry.Selection(textedit.Range{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
+	for _, rect := range p.Geometry.Selection(textedit.Range{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
 		if containsPoint(rect, local) {
 			return true
 		}
 	}
 	if s.End > r.End && row+1 < v.document.model.LineCount() {
-		rect := p.geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
+		rect := p.Geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
 		rect.Width = v.spaceWidth
 		return containsPoint(rect, local)
 	}

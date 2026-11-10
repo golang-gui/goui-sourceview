@@ -1,9 +1,9 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"testing"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"

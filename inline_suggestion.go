@@ -7,6 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -31,7 +32,7 @@ type inlineSuggestionState struct {
 	geometry   textedit.Geometry
 	font       typography.FontInfo
 	color      color.NRGBA
-	multi      *multilineInlineLayout
+	multi      *view.InlineLayout
 	row        int
 	baseHeight float32
 }
@@ -108,7 +109,7 @@ func (v *SourceView) ClearInlineSuggestion() {
 	v.inlineSuggestion = nil
 	v.restoreInlineExtent(s)
 	if s.multi != nil {
-		s.multi.destroy()
+		s.multi.Destroy()
 		s.multi = nil
 	}
 	if s.layout != nil {
@@ -205,9 +206,9 @@ func (v *SourceView) inlinePreview() (inlinePreview, bool) {
 	}
 	r, _ := v.document.model.LineRange(row)
 	pos := textedit.Position{Offset: s.request.Position - r.Start, Upstream: true}
-	g, origin := &p.geometry, v.paragraphOrigin(row, p)
-	if p.paged != nil {
-		frame := p.paged.CachedGeometryAt(pos.Offset)
+	g, origin := &p.Geometry, v.paragraphOrigin(row, p)
+	if p.Paged != nil {
+		frame := p.Paged.CachedGeometryAt(pos.Offset)
 		if frame == nil {
 			return inlinePreview{}, false
 		}

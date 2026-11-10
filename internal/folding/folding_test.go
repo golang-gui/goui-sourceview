@@ -1,9 +1,10 @@
 package folding
 
 import (
-	"github.com/golang-gui/goui-sourceview/language"
 	"math/rand"
 	"testing"
+
+	"github.com/golang-gui/goui-sourceview/language"
 )
 
 func TestVisibleLineMapAgainstEnumeration(t *testing.T) {

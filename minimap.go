@@ -2,13 +2,13 @@ package sourceview
 
 import (
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/view"
 	"image"
 	"image/color"
 	"math"
 	"sort"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"

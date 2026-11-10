@@ -218,11 +218,11 @@ func TestHighlightsReuseNativeGeometry(t *testing.T) {
 	if len(p.colors) == 0 {
 		t.Fatal("没有更新颜色")
 	}
-	calls := p.layout.(*shapedLayout).colorCalls
+	calls := p.Layout.(*shapedLayout).colorCalls
 	d.SetHighlights(revision, h)
 	v.Paint(&recordingPainter{})
 	v.layoutStep(time.Time{})
-	if p.layout.(*shapedLayout).colorCalls != calls {
+	if p.Layout.(*shapedLayout).colorCalls != calls {
 		t.Fatal("相同有效颜色重复修改原生布局")
 	}
 }

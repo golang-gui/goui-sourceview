@@ -1,11 +1,11 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"image/color"
 	"maps"
 	"slices"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/gui"
