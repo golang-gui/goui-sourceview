@@ -546,7 +546,8 @@ func TestLayoutWorkOnlyMeasuresLatestWidthAndViewport(t *testing.T) {
 	for _, r := range ctx.requests {
 		// Native fixture rows are 20 DIP. The 6-DIP content inset makes the
 		// first containing row floor((10000-6)/20)=499; include one overscan row.
-		if r.width != 400-2*padding || r.text < "row 00499" || r.text > "row 00510" {
+		// Wrapping reserves the folding column for measured long-line entries.
+		if r.width != 400-v.gutter-2*padding || r.text < "row 00499" || r.text > "row 00510" {
 			t.Fatal("measured obsolete width/viewport", r)
 		}
 	}

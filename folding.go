@@ -134,6 +134,9 @@ func (v *SourceView) setFolded(line int, collapsed bool) bool {
 		return false
 	}
 	v.folds[i].Collapsed = collapsed
+	if !collapsed {
+		delete(v.collapsedLines, line)
+	}
 	v.finishFoldCommand()
 	return true
 }
@@ -146,6 +149,9 @@ func (v *SourceView) setAllFolded(collapsed bool) {
 	for i := range v.folds {
 		if v.folds[i].Collapsed != collapsed {
 			v.folds[i].Collapsed = collapsed
+			if !collapsed {
+				delete(v.collapsedLines, v.folds[i].StartLine)
+			}
 			changed = true
 		}
 	}
@@ -156,6 +162,7 @@ func (v *SourceView) setAllFolded(collapsed bool) {
 
 func (v *SourceView) finishFoldCommand() {
 	s := v.Selection()
+	upstream := v.upstream
 	for _, r := range v.folds {
 		if !r.Collapsed {
 			continue
@@ -167,6 +174,22 @@ func (v *SourceView) finishFoldCommand() {
 			break
 		}
 	}
+	// A wrapped header is itself a one-row preview. Do not leave either
+	// endpoint in its hidden suffix (including the endpoint moved above).
+	for _, at := range []int{s.Anchor, s.Caret} {
+		row := v.document.model.LineAt(at)
+		p := v.cachedParagraph(row)
+		if v.collapsedOffsetHidden(row, p, at, false) {
+			header, _ := v.document.model.LineRange(row)
+			pos := textedit.Position{}
+			if g, _ := v.linePreview(p); g != nil {
+				pos = g.HitLine(0, 0)
+			}
+			s = textedit.Selection{Anchor: header.Start + pos.Offset, Caret: header.Start + pos.Offset}
+			upstream = pos.Upstream
+			break
+		}
+	}
 	state := v.operationState()
 	v.closeCompletion()
 	if !state.valid(v) || v.Destroyed() {
@@ -174,7 +197,7 @@ func (v *SourceView) finishFoldCommand() {
 	}
 	v.refreshFoldGeometry()
 	if s != v.Selection() {
-		v.setSelection(s, false, true)
+		v.setSelection(s, upstream, true)
 	}
 	if !v.Destroyed() && v.document == state.document && v.mountEpoch == state.mount {
 		v.foldingSignal.Emit()
@@ -216,6 +239,8 @@ func (v *SourceView) refreshFoldGeometry() {
 	v.layoutEpoch++
 	v.resetHeights()
 	v.contentWidth = 0
+	v.beginViewportInitialization()
+	v.requestLayoutWork()
 	v.RequestLayout()
 	v.RequestPaint()
 }
@@ -319,8 +344,12 @@ func (v *SourceView) expandFoldRange(r textedit.Range) bool {
 			continue
 		}
 		start, _ := v.document.model.LineRange(f.StartLine + 1)
-		if r.Start <= f.end && r.End >= start.Start {
+		header, _ := v.document.model.LineRange(f.StartLine)
+		headerHidden := r.End >= header.Start && r.Start <= header.End && v.lineCollapsed(f.StartLine) &&
+			(r.Start != r.End || v.collapsedOffsetHidden(f.StartLine, v.cachedParagraph(f.StartLine), r.Start, false))
+		if r.Start <= f.end && r.End >= start.Start || headerHidden {
 			f.Collapsed = false
+			delete(v.collapsedLines, f.StartLine)
 			changed = true
 		}
 	}
@@ -693,7 +722,7 @@ func (v *SourceView) foldButtonRect(row int) geometry.Rectangle {
 }
 
 func (v *SourceView) foldBadgeRect(row int, p *paragraph) geometry.Rectangle {
-	if i := v.foldHeader(row); i < 0 || !v.folds[i].Collapsed || v.projection != nil {
+	if i := v.foldHeader(row); i < 0 || !v.folds[i].Collapsed || v.projection != nil || v.lineCollapsed(row) {
 		return geometry.Rectangle{}
 	}
 	edge := p.geometry.Caret(textedit.Position{Offset: len(p.text), Upstream: true})
@@ -708,14 +737,14 @@ func (v *SourceView) foldBadgeRect(row int, p *paragraph) geometry.Rectangle {
 }
 
 func (v *SourceView) paintFoldButton(p gui.Painter, row int) {
-	i := v.foldHeader(row)
-	if v.foldColumn == 0 || i < 0 || v.projection != nil {
+	collapsed, ok := v.gutterFold(row)
+	if !ok {
 		return
 	}
 	r := v.foldButtonRect(row)
 	x, y := r.X+r.Width/2, r.Y+r.Height/2
 	c := graphics.ColorOf(v.partColor("fold-toggle", v.colors.GutterForeground))
-	if v.folds[i].Collapsed {
+	if collapsed {
 		p.DrawLine(geometry.Point{X: x - 2, Y: y - 4}, geometry.Point{X: x + 2, Y: y}, 1, c)
 		p.DrawLine(geometry.Point{X: x + 2, Y: y}, geometry.Point{X: x - 2, Y: y + 4}, 1, c)
 	} else {
@@ -743,7 +772,7 @@ func (v *SourceView) foldHit(point geometry.Point) (int, bool) {
 		return 0, false
 	}
 	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
-	if v.foldHeader(row) < 0 {
+	if _, ok := v.gutterFold(row); !ok {
 		return 0, false
 	}
 	if containsPoint(v.foldButtonRect(row), point) {
@@ -755,6 +784,32 @@ func (v *SourceView) foldHit(point geometry.Point) (int, bool) {
 		return row, true
 	}
 	return 0, false
+}
+
+// Structural headers take precedence over long-line candidates. One gutter
+// control describes the combined visible state and expands both intents.
+func (v *SourceView) gutterFold(row int) (collapsed, available bool) {
+	if v.Destroyed() || !v.foldingEnabled || v.foldColumn == 0 || v.projection != nil || v.foldRevision != v.document.model.Revision() || v.foldDefinition != v.document.definition {
+		return false, false
+	}
+	if i := v.foldHeader(row); i >= 0 {
+		return v.folds[i].Collapsed || v.wrap != WrapNone && v.manuallyCollapsed(row), true
+	}
+	return v.lineCollapsed(row), v.lineCollapsed(row) || v.longLineCandidate(row)
+}
+
+func (v *SourceView) toggleGutterFold(row int) bool {
+	collapsed, ok := v.gutterFold(row)
+	if !ok {
+		return false
+	}
+	if collapsed {
+		return v.expandLinePreview(row)
+	}
+	if v.foldHeader(row) >= 0 {
+		return v.Fold(row)
+	}
+	return v.CollapseLine(row)
 }
 
 func (v *SourceView) foldAtCaret(collapsed bool) bool {
@@ -796,14 +851,26 @@ func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 			info.TextEditing.VisibleRange = r
 			info.TextEditing.VisibleText = text
 		}
-		if i := v.foldHeader(row); i >= 0 && v.foldColumn > 0 {
+		if collapsed, ok := v.gutterFold(row); ok {
 			label := resource.Fold()
-			if v.folds[i].Collapsed {
+			end, kind := row, "line"
+			if i := v.foldHeader(row); i >= 0 {
+				end, kind = v.folds[i].EndLine, "structure"
+			} else {
+				label = resource.CollapseLongLine()
+			}
+			if collapsed {
 				label = resource.Unfold()
+				if kind == "line" {
+					label = resource.ExpandLongLine()
+				}
 			}
 			r := v.foldButtonRect(row).Translate(geometry.Point{X: info.Bounds.X, Y: info.Bounds.Y})
-			child := gui.WidgetInfo{ID: fmt.Sprintf("%s.fold.%d", info.ID, row), Role: gui.RoleButton, Name: label, Bounds: r, Visible: true, Enabled: gui.IsEnabled(v), Actions: []gui.Action{gui.ActionClick}}
-			child.SetAttribute("goui.sourceview.fold", map[string]any{"startLine": row, "endLine": v.folds[i].EndLine, "collapsed": v.folds[i].Collapsed})
+			child := gui.WidgetInfo{ID: fmt.Sprintf("%s.fold.%d", info.ID, row), Role: gui.RoleButton, Name: label, Bounds: r, Visible: true, Enabled: gui.IsEnabled(v)}
+			if child.Enabled {
+				child.Actions = []gui.Action{gui.ActionClick}
+			}
+			child.SetAttribute("goui.sourceview.fold", map[string]any{"startLine": row, "endLine": end, "collapsed": collapsed, "kind": kind})
 			info.Children = append(info.Children, child)
 		}
 	}

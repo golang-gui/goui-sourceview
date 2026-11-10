@@ -95,7 +95,11 @@ func (v *SourceView) canCommand(c Command) bool {
 	case CommandCollapseLine:
 		return v.canCollapseLine(v.document.model.LineAt(v.Selection().Caret))
 	case CommandExpandLine:
-		return v.lineCollapsed(v.document.model.LineAt(v.Selection().Caret))
+		row := v.document.model.LineAt(v.Selection().Caret)
+		if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
+			return false // The structure's Unfold action expands both intents.
+		}
+		return v.wrap != WrapNone && v.manuallyCollapsed(row)
 	case CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll:
 		return v.canFold() && len(v.folds) > 0
 	case CommandUndo:

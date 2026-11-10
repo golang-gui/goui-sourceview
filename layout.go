@@ -59,7 +59,7 @@ func (v *SourceView) invalidateLayout() {
 	}
 	v.resetHeights()
 	v.contentWidth = 0
-	if len(v.collapsedLines) > 0 && v.collapsedRevision == v.document.model.Revision() && v.wrap != WrapNone {
+	if v.wrap != WrapNone && (len(v.hiddenLines) > 0 || len(v.collapsedLines) > 0 && v.collapsedRevision == v.document.model.Revision()) {
 		v.beginViewportInitialization()
 	}
 	if v.frameLayout {
@@ -110,7 +110,9 @@ func (v *SourceView) updateGutter() {
 		v.markColumn = max(24, min(32, v.lineHeight*1.35))
 		v.gutter += v.markColumn
 	}
-	if v.foldingEnabled && v.document.hasFolding() {
+	// Reserve the column while wrapping, even before a long paragraph is
+	// measured. Candidate discovery must not change its own wrapping width.
+	if v.foldingEnabled && (v.document.hasFolding() || v.wrap != WrapNone) {
 		v.foldColumn = max(16, min(24, v.lineHeight))
 		v.gutter += v.foldColumn
 	}

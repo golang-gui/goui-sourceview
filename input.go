@@ -94,12 +94,12 @@ func (v *SourceView) installInput() {
 		}
 		if line, ok := v.collapsedLineHit(point); ok {
 			v.dragging = false
-			v.ExpandLine(line)
+			v.expandLinePreview(line)
 			return
 		}
 		if line, ok := v.foldHit(point); ok {
 			v.dragging = false
-			v.ToggleFold(line)
+			v.toggleGutterFold(line)
 			return
 		}
 		pos := v.hit(point)
@@ -484,7 +484,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 	row := m.LineAt(caret)
 	r, _ := m.LineRange(row)
 	if v.lineCollapsed(row) && (key == events.KeyArrowDown || key == events.KeyPageDown || key == events.KeyEnd) {
-		v.ExpandLine(row)
+		v.expandLinePreview(row)
 		if !state.valid(v) || v.Destroyed() {
 			return
 		}
@@ -577,7 +577,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 					r, _ = m.LineRange(row)
 					enterCollapsedEnd := !down && v.lineCollapsed(row)
 					if enterCollapsedEnd {
-						v.ExpandLine(row)
+						v.expandLinePreview(row)
 						if !state.valid(v) || v.Destroyed() {
 							return
 						}

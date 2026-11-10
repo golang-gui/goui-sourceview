@@ -42,7 +42,12 @@ func (v *SourceView) CollapsedLines() []int {
 
 func (v *SourceView) lineCollapsed(row int) bool {
 	_, ok := v.collapsedLineRange(row)
-	return ok && v.collapsedRevision == v.document.model.Revision() && v.wrap != WrapNone
+	return ok && v.wrap != WrapNone
+}
+
+func (v *SourceView) manuallyCollapsed(row int) bool {
+	_, ok := v.collapsedLines[row]
+	return ok && v.collapsedRevision == v.document.model.Revision()
 }
 
 // Unchanged paragraphs retain their source identity during IME projection,
@@ -52,12 +57,48 @@ func (v *SourceView) collapsedLineRange(row int) (textedit.Range, bool) {
 	if !ok {
 		return textedit.Range{}, false
 	}
-	r, ok := v.collapsedLines[sourceRow]
-	return r, ok
+	if v.manuallyCollapsed(sourceRow) {
+		return v.collapsedLines[sourceRow], true
+	}
+	if v.foldingEnabled && v.foldRevision == v.document.model.Revision() && v.foldDefinition == v.document.definition {
+		if i := v.foldHeader(sourceRow); i >= 0 && v.folds[i].Collapsed {
+			r, err := v.document.model.LineRange(sourceRow)
+			return r, err == nil
+		}
+	}
+	return textedit.Range{}, false
+}
+
+// A preview can belong to an ordinary long line or to a collapsed structure.
+// Expand both intents together, without publishing an intermediate state.
+func (v *SourceView) expandLinePreview(row int) bool {
+	if v.Destroyed() || !gui.IsEnabled(v) || v.projection != nil {
+		return false
+	}
+	manual := v.manuallyCollapsed(row)
+	i := v.foldHeader(row)
+	structure := v.canFold() && i >= 0 && v.folds[i].Collapsed
+	if !manual && !structure {
+		return false
+	}
+	delete(v.collapsedLines, row)
+	if structure {
+		v.folds[i].Collapsed = false
+		v.refreshFoldGeometry()
+	} else {
+		v.refreshCollapsedLine(row)
+	}
+	v.updateMenu()
+	v.foldingSignal.Emit()
+	return true
 }
 
 func (v *SourceView) canCollapseLine(row int) bool {
-	if v.Destroyed() || !gui.IsEnabled(v) || v.wrap == WrapNone || v.projection != nil || row < 0 || row >= v.document.model.LineCount() || v.lineCollapsed(row) {
+	return gui.IsEnabled(v) && v.longLineCandidate(row)
+}
+
+func (v *SourceView) longLineCandidate(row int) bool {
+	if v.Destroyed() || v.wrap == WrapNone || v.projection != nil || row < 0 || row >= v.document.model.LineCount() || v.lineCollapsed(row) {
 		return false
 	}
 	if _, visible := v.visibleLines.index(row); !visible {
@@ -298,7 +339,7 @@ func (v *SourceView) paintLineCollapseBadge(draw gui.Painter, row int, p *paragr
 func (v *SourceView) snapshotCollapsedLines(info *gui.WidgetInfo, first, last int) {
 	meta := info.Attributes["goui.sourceview"].(map[string]any)
 	meta["collapsedLines"] = v.CollapsedLines()
-	if v.wrap == WrapNone || len(v.collapsedLines) == 0 {
+	if v.wrap == WrapNone || len(v.collapsedLines) == 0 && len(v.hiddenLines) == 0 {
 		return
 	}
 	if projection := v.projection; projection != nil {
@@ -316,6 +357,19 @@ func (v *SourceView) snapshotCollapsedLines(info *gui.WidgetInfo, first, last in
 				row += delta
 			}
 			v.snapshotLineCollapseButton(info, row, sourceRow, false)
+		}
+		for _, f := range v.folds {
+			if !f.Collapsed || v.manuallyCollapsed(f.StartLine) {
+				continue
+			}
+			row := f.StartLine
+			if row >= projection.FirstLine() {
+				if row <= projection.LastLine() {
+					continue
+				}
+				row += delta
+			}
+			v.snapshotLineCollapseButton(info, row, f.StartLine, false)
 		}
 		return
 	}
@@ -352,8 +406,12 @@ func (v *SourceView) snapshotLineCollapseButton(info *gui.WidgetInfo, row, sourc
 	if badge.Width <= 0 || badge.Y+badge.Height <= 0 || badge.Y >= v.viewport.Height {
 		return
 	}
+	name := resource.ExpandLongLine()
+	if i := v.foldHeader(sourceRow); i >= 0 && v.folds[i].Collapsed {
+		name = resource.Unfold()
+	}
 	child := gui.WidgetInfo{ID: fmt.Sprintf("%s.line-collapse.%d", info.ID, sourceRow), Role: gui.RoleButton,
-		Name: resource.ExpandLongLine(), Bounds: badge.Translate(info.Bounds.Pos), Visible: true, Enabled: enabled && gui.IsEnabled(v)}
+		Name: name, Bounds: badge.Translate(info.Bounds.Pos), Visible: true, Enabled: enabled && gui.IsEnabled(v)}
 	if child.Enabled {
 		child.Actions = []gui.Action{gui.ActionClick}
 	}

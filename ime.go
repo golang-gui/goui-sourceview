@@ -46,14 +46,15 @@ func (v *SourceView) applyPreedit(text string, caret int) {
 	if v.projection == nil || v.projectionRevision != m.Revision() {
 		v.cancelPaste()
 		line, _ := m.LineRange(m.LineAt(v.Selection().Caret))
+		replacement := v.Selection().Range()
+		line.Start, line.End = min(line.Start, replacement.Start), max(line.End, replacement.End)
 		state := v.operationState()
-		if v.expandCollapsedRange(line) {
+		if v.expandFoldRange(line) {
 			v.foldingSignal.Emit()
 			if !state.valid(v) || v.Destroyed() || !v.mounted || v.editable() != nil {
 				return
 			}
 		}
-		v.expandFoldRange(v.Selection().Range())
 		v.projection = textedit.NewProjection(m, v.Selection())
 		v.projectionRevision = m.Revision()
 		m.BreakUndoGroup()
