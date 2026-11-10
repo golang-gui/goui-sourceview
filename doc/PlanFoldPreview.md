@@ -2,6 +2,8 @@
 
 2026-11-10；实现前基线 `f53248c`。设计见 [长行收起](DesignLineCollapse.md) 与 [结构折叠](DesignFolding.md)。
 
+后续将长行门槛调整为实际至少 3 个显示行，新增边界验收见 [长行门槛](PlanLineCollapseThreshold.md)。本文保留统一入口的首次验收记录。
+
 ## 缺陷与修正
 
 原始样本为约 158 KB、含 Base64 PNG 的有效单行 JSON。此前长行只能从右键菜单收起；在 PNG 字符串引号之前

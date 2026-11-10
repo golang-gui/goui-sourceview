@@ -10,6 +10,8 @@
 // source/revision/history preservation and plain-text gutter support. A Painter
 // observer checks every collapsed window paint for real text with a one-row
 // clip; the footer tags frames for optional independent X11 pixel capture.
+// Short JSON fixtures additionally assert native 1/2/3 display-row boundaries,
+// distinct root/string arrows and an expansion entry retained after widening.
 // PASS closes; timeout, assertion or early close fails. Restart resets fixtures.
 // No clipboard, user settings or files are changed. Other OSes and physical
 // IME require separate verification; this program uses the normal event loop.
@@ -66,6 +68,8 @@ type previewPaint struct {
 	stack  []geometry.Rectangle
 	prefix string
 	seen   bool
+	sample string
+	lines  int
 }
 
 func (p *previewPaint) Save() { p.stack = append(p.stack, p.clip); p.Painter.Save() }
@@ -76,7 +80,11 @@ func (p *previewPaint) Restore() {
 }
 func (p *previewPaint) SetClipRect(r geometry.Rectangle) { p.clip = r; p.Painter.SetClipRect(r) }
 func (p *previewPaint) DrawTextLayout(at geometry.Point, l typography.TextLayout) {
-	if strings.HasPrefix(l.Text(), p.prefix) {
+	if p.sample != "" && l.Text() == p.sample {
+		lines, _ := l.MeasureMetrics()
+		p.lines = len(lines)
+	}
+	if p.prefix != "" && strings.HasPrefix(l.Text(), p.prefix) {
 		check(p.clip.Width > 0 && p.clip.Height > 0 && p.clip.Height < 40, "preview body escaped its one-row clip")
 		p.seen = true
 	}
@@ -85,30 +93,46 @@ func (p *previewPaint) DrawTextLayout(at geometry.Point, l typography.TextLayout
 
 type paintedView struct {
 	*source.SourceView
-	checked int
+	checked     int
+	sampleText  string
+	sampleLines int
 }
 
 func (v *paintedView) Paint(p gui.Painter) {
-	collapsed := len(v.CollapsedLines()) > 0
-	for _, f := range v.FoldingRegions() {
-		collapsed = collapsed || f.Collapsed
+	row := -1
+	if lines := v.CollapsedLines(); len(lines) > 0 {
+		row = lines[0]
 	}
-	if !collapsed || v.WrapMode() == source.WrapNone {
+	for _, f := range v.FoldingRegions() {
+		if f.Collapsed && (row < 0 || f.StartLine < row) {
+			row = f.StartLine
+		}
+	}
+	collapsed := row >= 0 && v.WrapMode() != source.WrapNone
+	if !collapsed && v.sampleText == "" {
 		v.SourceView.Paint(p)
 		return
 	}
-	r, _ := v.Document().Model().LineRange(0)
-	r.End = min(r.End, r.Start+24)
-	for !v.Document().Model().IsRuneBoundary(r.End) {
-		r.End--
+	draw := &previewPaint{Painter: p, sample: v.sampleText}
+	if collapsed {
+		r, _ := v.Document().Model().LineRange(row)
+		r.End = min(r.End, r.Start+24)
+		for !v.Document().Model().IsRuneBoundary(r.End) {
+			r.End--
+		}
+		prefix, err := v.Document().Model().Slice(r)
+		must(err)
+		draw.prefix = prefix
 	}
-	prefix, err := v.Document().Model().Slice(r)
-	must(err)
-	draw := &previewPaint{Painter: p, prefix: prefix}
 	v.SourceView.Paint(draw)
-	check(draw.seen, "collapsed window frame has no current-width text")
+	if draw.lines > 0 {
+		v.sampleLines = draw.lines
+	}
 	check(len(draw.stack) == 0, "preview painter left saved state")
-	v.checked++
+	if collapsed {
+		check(draw.seen, "collapsed window frame has no current-width text")
+		v.checked++
+	}
 }
 
 func gutter(v *source.SourceView) gui.WidgetInfo {
@@ -192,13 +216,16 @@ func main() {
 		frame++
 		info := v.Snapshot()
 		var mark geometry.Rectangle
+		var arrows []map[string]any
 		for _, c := range info.Children {
+			if meta, ok := c.Attributes["goui.sourceview.fold"].(map[string]any); ok {
+				arrows = append(arrows, map[string]any{"range": meta, "bounds": c.Bounds})
+			}
 			if _, ok := c.Attributes["goui.sourceview.collapsedLine"]; ok {
 				mark = c.Bounds
-				break
 			}
 		}
-		must(enc.Encode(map[string]any{"event": "paint", "frame": frame, "phase": phase, "folds": v.FoldingRegions(), "manual": v.CollapsedLines(), "content": v.ContentSize(), "editor": info.Bounds, "badge": mark, "scale": p.PixelScale()}))
+		must(enc.Encode(map[string]any{"event": "paint", "frame": frame, "phase": phase, "folds": v.FoldingRegions(), "manual": v.CollapsedLines(), "content": v.ContentSize(), "editor": info.Bounds, "badge": mark, "scale": p.PixelScale(), "sampleLines": observed.sampleLines, "arrows": arrows}))
 		p.FillRect(geometry.Rect(6, b.Height-22, 3, 16), graphics.ColorOf(color.NRGBA{R: 255, B: 255, A: 255}))
 		for bit := range 16 {
 			c := color.NRGBA{A: 255}
@@ -327,6 +354,69 @@ func main() {
 		phase = "plain-expanded"
 	})
 	settle(func() { check(len(v.CollapsedLines()) == 0, "plain text gutter failed to expand") })
+	var shortDoc *source.Document
+	var shortText string
+	stringArrow := func() (gui.WidgetInfo, bool) {
+		for _, c := range v.Snapshot().Children {
+			if meta, ok := c.Attributes["goui.sourceview.fold"].(map[string]any); ok && meta["startLine"] == 1 {
+				check(meta["kind"] == "line" && meta["endLine"] == 1, "string arrow has a structural or incorrect logical range")
+				return c, true
+			}
+		}
+		return gui.WidgetInfo{}, false
+	}
+	// These digit runs lie well inside native wrap intervals in the recorded
+	// Linux/Pango/default-font matrix. Actual line metrics are asserted below.
+	for _, sample := range []struct{ lines, digits int }{{1, 24}, {2, 120}, {3, 160}} {
+		settle(func() {
+			setPane(0)
+			if sample.lines == 3 {
+				setPane(350)
+			}
+			observed.sampleText = `"` + strings.Repeat("1", sample.digits) + `" }`
+			observed.sampleLines = 0
+			shortText = "{ \"test\":\n" + observed.sampleText
+			shortDoc = source.NewDocument(shortText)
+			must(shortDoc.SetLanguage(language.JSON))
+			v.SetDocument(shortDoc)
+			phase = fmt.Sprintf("threshold-%d", sample.lines)
+		})
+		settle(func() {
+			check(observed.sampleLines == sample.lines, fmt.Sprintf("short JSON has %d native rows, expected %d", observed.sampleLines, sample.lines))
+			root := gutter(v)
+			check(root.Attributes["goui.sourceview.fold"].(map[string]any)["kind"] == "structure", "root structure arrow is missing")
+			entry, ok := stringArrow()
+			check(ok == (sample.lines >= 3), "string arrow does not match native three-row threshold")
+			if ok {
+				check(entry.Bounds.Y > root.Bounds.Y, "string arrow is on the root row")
+				click(entry.Bounds.Center())
+				phase = "threshold-string-collapsed"
+			}
+		})
+	}
+	settle(func() {
+		check(len(v.CollapsedLines()) == 1 && v.CollapsedLines()[0] == 1 && !v.FoldingRegions()[0].Collapsed, "string arrow collapsed the root structure")
+		check(shortDoc.Model().Text() == shortText && shortDoc.Model().Revision() == 0 && !shortDoc.Model().CanUndo(), "short-line collapse changed source/history")
+		setPane(0)
+		phase = "threshold-wide-collapsed"
+	})
+	settle(func() {
+		check(observed.sampleLines == 2, "wider string did not fall below the collapse threshold")
+		entry, ok := stringArrow()
+		check(ok && entry.Attributes["goui.sourceview.fold"].(map[string]any)["collapsed"] == true, "widening removed the expansion entry")
+		click(entry.Bounds.Center())
+		phase = "threshold-wide-expanded"
+	})
+	settle(func() {
+		_, ok := stringArrow()
+		check(!ok && len(v.CollapsedLines()) == 0, "two-row expanded string retained a collapse arrow")
+		click(gutter(v).Bounds.Center())
+		phase = "threshold-root-collapsed"
+	})
+	settle(func() {
+		check(v.FoldingRegions()[0].Collapsed && len(v.CollapsedLines()) == 0, "root arrow did not independently collapse the structure")
+		check(shortDoc.Model().Text() == shortText && shortDoc.Model().Revision() == 0 && !shortDoc.Model().CanUndo(), "short JSON controls changed source/history")
+	})
 	index, done := 0, false
 	deadline := time.Now().Add(40 * time.Second)
 	timer := app.NewTimer()
@@ -341,7 +431,7 @@ func main() {
 		}
 		timer.Stop()
 		done = true
-		log.Printf("PASS unified gutter: %d actual one-row paints; JSON bytes=%d file=%t; long line, structure, caret, badge, resize, wrap, search, undo, plain text; typography=%s basic=%t dark=%t", observed.checked, len(original), *file != "", app.Typography().Name(), *basicTheme, *dark)
+		log.Printf("PASS unified gutter: %d actual one-row paints; JSON bytes=%d file=%t; long line, structure, caret, badge, resize, wrap, search, undo, plain text, native 1/2/3-row threshold and retained expansion; typography=%s basic=%t dark=%t", observed.checked, len(original), *file != "", app.Typography().Name(), *basicTheme, *dark)
 		win.RequestClose()
 	})
 	must(timer.Start(100 * time.Millisecond))
