@@ -173,16 +173,16 @@ func TestBracketRectanglesFollowWrappedAndBidiGeometry(t *testing.T) {
 	clusters := []typography.TextCluster{{Start: 0, Length: 1, X: 0, Width: 10, Height: 20}, {Start: 1, Length: 1, X: 30, Y: 20, Width: 10, Height: 20, LineIndex: 1, Direction: typography.TextRightToLeft}}
 	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, 2, 20)}}
 	pair := []textedit.Range{{Start: 10, End: 11}, {Start: 11, End: 12}}
-	got := bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{X: -5, Y: 6}, pair)
+	got := view.BracketRectangles(&p.Geometry, textedit.Range{Start: 10, End: 12}, geometry.Point{X: -5, Y: 6}, pair)
 	want := []geometry.Rectangle{geometry.Rect(-5, 7, 10, 18), geometry.Rect(25, 27, 10, 18)}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal(got, want)
 	}
-	if got := bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair[:1]); len(got) != 0 {
+	if got := view.BracketRectangles(&p.Geometry, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair[:1]); len(got) != 0 {
 		t.Fatal("lone candidate decorated", got)
 	}
 	p.Geometry = textedit.NewGeometry([]typography.TextLine{{Length: 2, Height: 20}}, []typography.TextCluster{{Length: 2, Width: 20, Height: 20}}, 2, 20)
-	got = bracketRectangles(p, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair)
+	got = view.BracketRectangles(&p.Geometry, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair)
 	if !reflect.DeepEqual(got, []geometry.Rectangle{geometry.Rect(0, 1, 20, 18)}) {
 		t.Fatal("shared shaping cluster painted twice", got)
 	}

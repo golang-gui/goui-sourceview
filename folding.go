@@ -13,6 +13,7 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
@@ -675,7 +676,7 @@ func (v *SourceView) partColor(part string, fallback color.NRGBA) color.NRGBA {
 	}
 	s := gui.ResolveWidgetStyle(v, name, part, style.Normal)
 	if c, ok := s.ForegroundColor(); ok {
-		return nrgba(c)
+		return view.NRGBA(c)
 	}
 	return fallback
 }
@@ -738,12 +739,12 @@ func (v *SourceView) foldHit(point geometry.Point) (int, bool) {
 	if _, ok := v.gutterFold(row); !ok {
 		return 0, false
 	}
-	if containsPoint(v.foldButtonRect(row), point) {
+	if view.ContainsPoint(v.foldButtonRect(row), point) {
 		return row, true
 	}
 	// The badge is painted only from cached geometry. Pointer motion and clicks
 	// must not shape an unmeasured paragraph just to look for an invisible badge.
-	if p := v.cachedParagraph(row); p != nil && containsPoint(v.foldBadgeRect(row, p), point) {
+	if p := v.cachedParagraph(row); p != nil && view.ContainsPoint(v.foldBadgeRect(row, p), point) {
 		return row, true
 	}
 	return 0, false

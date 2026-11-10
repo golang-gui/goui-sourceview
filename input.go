@@ -291,7 +291,7 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 		origin := v.paragraphOrigin(row, p)
 		local := geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y}
 		for _, rect := range p.Geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
-			if containsPoint(rect, local) {
+			if view.ContainsPoint(rect, local) {
 				pos.Offset = r.Start + previous
 				break
 			}
@@ -304,9 +304,6 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 	return selected
 }
 
-func containsPoint(r geometry.Rectangle, p geometry.Point) bool {
-	return p.X >= r.X && p.X < r.X+r.Width && p.Y >= r.Y && p.Y < r.Y+r.Height
-}
 func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 	if !v.mounted || !v.Focused() || !gui.IsEnabled(v) {
 		return

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -152,7 +153,7 @@ func (v *SourceView) highlightColor(kind language.Kind) color.NRGBA {
 		c = base
 	}
 	if value, ok := gui.ResolveWidgetStyle(v, name, "token-"+kind.String(), style.Normal).ForegroundColor(); ok {
-		c = nrgba(value)
+		c = view.NRGBA(value)
 	}
 	if v.highlightColors == nil {
 		v.highlightColors = make(map[language.Kind]color.NRGBA)

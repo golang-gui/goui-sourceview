@@ -324,11 +324,11 @@ func (v *SourceView) paintMinimap(p gui.Painter) {
 			img.Destroy()
 		}
 		thumb := v.minimapThumb()
-		p.FillRect(thumb, graphics.ColorOf(v.partColor("minimap-viewport", tint(v.colors.GutterForeground, 35))))
-		p.DrawRect(geometry.Rect(thumb.X+.5, thumb.Y+.5, max(0, thumb.Width-1), max(0, thumb.Height-1)), 1, graphics.ColorOf(v.partColor("minimap-border", tint(v.colors.GutterForeground, 90))))
+		p.FillRect(thumb, graphics.ColorOf(v.partColor("minimap-viewport", view.Tint(v.colors.GutterForeground, 35))))
+		p.DrawRect(geometry.Rect(thumb.X+.5, thumb.Y+.5, max(0, thumb.Width-1), max(0, thumb.Height-1)), 1, graphics.ColorOf(v.partColor("minimap-border", view.Tint(v.colors.GutterForeground, 90))))
 		if row, ok := v.ExecutionLine(); ok {
 			y := s.extent * (padding + v.paragraphTop(v.markRow(row))) / max(1, v.heights.Total()+2*padding)
-			p.FillRect(geometry.Rect(r.X+r.Width-3, y, 3, 2), graphics.ColorOf(v.partColor("execution-arrow", rgb(0xc39400))))
+			p.FillRect(geometry.Rect(r.X+r.Width-3, y, 3, 2), graphics.ColorOf(v.partColor("execution-arrow", view.RGB(0xc39400))))
 		}
 	}
 	p.DrawLine(geometry.Point{X: r.X + .5}, geometry.Point{X: r.X + .5, Y: r.Height}, 1, graphics.ColorOf(v.colors.Border))

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -142,35 +143,10 @@ func (v *SourceView) RevealLine(line int) error {
 	return nil
 }
 
-func lineMarkLabel(mark LineMarkInfo) string {
-	label := mark.Label
-	if label == "" {
-		switch mark.Kind {
-		case MarkConditionalBreakpoint:
-			label = resource.ConditionalBreakpoint()
-		case MarkLogpoint:
-			label = resource.Logpoint()
-		case MarkBookmark:
-			label = resource.Bookmark()
-		default:
-			label = resource.Breakpoint()
-		}
-	}
-	switch mark.State {
-	case MarkDisabled:
-		label += " · " + resource.MarkDisabled()
-	case MarkPending:
-		label += " · " + resource.MarkPending()
-	case MarkRejected:
-		label += " · " + resource.MarkRejected()
-	}
-	return fmt.Sprintf("%s (%d)", label, mark.Line+1)
-}
-
 func (v *SourceView) lineMarkLabel(row int) string {
 	var labels []string
 	for _, m := range v.marksOnRow(row) {
-		labels = append(labels, lineMarkLabel(m))
+		labels = append(labels, view.MarkerLabel(view.MarkerKind(m.Kind), view.MarkerState(m.State), m.Label, m.Line))
 		if len(labels) == 16 {
 			break
 		}
@@ -208,55 +184,19 @@ func (v *SourceView) paintLineMarks(p gui.Painter) {
 			continue
 		}
 		m := marks[0]
-		part, fallback := "line-mark", rgb(0xd83b36)
+		part, fallback := "line-mark", view.RGB(0xd83b36)
 		if m.Kind == MarkBookmark {
-			part, fallback = "bookmark", rgb(0x3579c8)
+			part, fallback = "bookmark", view.RGB(0x3579c8)
 		}
 		if m.State == MarkDisabled || m.State == MarkPending {
 			part, fallback = "line-mark-muted", v.colors.GutterForeground
 		}
-		c := graphics.ColorOf(v.partColor(part, fallback))
-		x, y := r.Width*.38, r.Y+r.Height/2
-		size := min(5.5, r.Height*.27)
-		switch m.Kind {
-		case MarkLogpoint:
-			path := graphics.MoveTo(x, y-size).LineTo(x+size, y).LineTo(x, y+size).LineTo(x-size, y).Close()
-			if m.State == MarkEnabled {
-				p.FillPath(path, c)
-			} else {
-				p.DrawPath(path, 1.3, c)
-			}
-		case MarkBookmark:
-			path := graphics.MoveTo(x-size*.7, y-size).LineTo(x+size*.7, y-size).LineTo(x+size*.7, y+size).LineTo(x, y+size*.5).LineTo(x-size*.7, y+size).Close()
-			if m.State == MarkEnabled {
-				p.FillPath(path, c)
-			} else {
-				p.DrawPath(path, 1.3, c)
-			}
-		default:
-			if m.State == MarkEnabled {
-				p.FillEllipse(geometry.Point{X: x, Y: y}, size, size, c)
-			} else {
-				p.DrawEllipse(geometry.Point{X: x, Y: y}, size, size, 1.3, c)
-			}
-			if m.Kind == MarkConditionalBreakpoint {
-				p.FillEllipse(geometry.Point{X: x, Y: y}, 1.5, 1.5, graphics.ColorOf(v.colors.GutterBackground))
-			}
-		}
-		if m.State == MarkRejected {
-			p.DrawLine(geometry.Point{X: x - size, Y: y + size}, geometry.Point{X: x + size, Y: y - size}, 1.3, c)
-		}
-		if m.State == MarkPending {
-			p.FillEllipse(geometry.Point{X: x, Y: y}, 1, 1, c)
-		}
-		if len(marks) > 1 {
-			p.FillEllipse(geometry.Point{X: x + size + 2, Y: y - size}, 1.5, 1.5, c)
-		}
+		view.PaintLineMark(p, r, view.MarkerKind(m.Kind), view.MarkerState(m.State), len(marks), v.partColor(part, fallback), v.colors.GutterBackground)
 	}
 	if line, ok := v.ExecutionLine(); ok {
 		r := v.lineMarkRect(v.markRow(line))
 		x, y := r.Width*.78, r.Y+r.Height/2
-		p.FillPath(graphics.MoveTo(x-2, y-4).LineTo(x+3, y).LineTo(x-2, y+4).Close(), graphics.ColorOf(v.partColor("execution-arrow", rgb(0xc39400))))
+		p.FillPath(graphics.MoveTo(x-2, y-4).LineTo(x+3, y).LineTo(x-2, y+4).Close(), graphics.ColorOf(v.partColor("execution-arrow", view.RGB(0xc39400))))
 	}
 }
 

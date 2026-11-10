@@ -1,13 +1,13 @@
 package sourceview
 
 import (
-	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
@@ -808,7 +808,7 @@ func TestWhitespaceDotIsCenteredCircle(t *testing.T) {
 			v.spaceWidth = unit
 			cell := geometry.Rect(11.3, 24.7, width, unit*2+3)
 			out := &recordingPainter{}
-			v.paintWhitespaceCell(out, cell, 1, false, rgb(0x556677))
+			view.PaintWhitespaceCell(out, cell, 1, false, view.RGB(0x556677), v.spaceWidth)
 			if len(out.ellipses) != 1 || len(out.paths) != 0 {
 				t.Fatalf("space %g/%g did not use FillEllipse: %+v", unit, width, out)
 			}
@@ -829,7 +829,7 @@ func TestWhitespaceTabIsShortMirroredPath(t *testing.T) {
 	var points [2][]geometry.Point
 	for i, rtl := range []bool{false, true} {
 		out := &recordingPainter{}
-		v.paintWhitespaceCell(out, cell, 2, rtl, rgb(0x556677))
+		view.PaintWhitespaceCell(out, cell, 2, rtl, view.RGB(0x556677), v.spaceWidth)
 		if len(out.paths) != 1 || out.lines != 0 {
 			t.Fatal("Tab must have one silhouette", rtl, len(out.paths), out.lines)
 		}

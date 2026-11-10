@@ -2,7 +2,6 @@ package sourceview
 
 import (
 	"image/color"
-	"slices"
 	"strconv"
 
 	"github.com/golang-gui/goui-sourceview/internal/view"
@@ -57,13 +56,13 @@ func (v *SourceView) Paint(p gui.Painter) {
 		}
 		if line, ok := v.ExecutionLine(); ok && v.projection == nil && v.markRow(line) == row {
 			top := padding + v.paragraphTop(row) - v.offset.Y
-			p.FillRect(geometry.Rect(v.gutter, max(0, top), max(0, v.textRight()-v.gutter), max(0, min(top+item.height, bounds.Height)-max(0, top))), graphics.ColorOf(v.partColor("execution-line", tint(rgb(0xe6b422), 35))))
+			p.FillRect(geometry.Rect(v.gutter, max(0, top), max(0, v.textRight()-v.gutter), max(0, min(top+item.height, bounds.Height)-max(0, top))), graphics.ColorOf(v.partColor("execution-line", view.Tint(view.RGB(0xe6b422), 35))))
 		}
 		v.paintAssistanceBackground(p, row, item, origin, occurrence)
 		if v.projection == nil {
 			// Put the quiet fill below search/selection, and the outline above
 			// those backgrounds. Neither pass changes syntax foregrounds.
-			bracketRects := bracketRectangles(item, r, origin, brackets)
+			bracketRects := view.BracketRectangles(&item.Geometry, r, origin, brackets)
 			if c := v.colors.BracketMatchBackground; c.A != 0 {
 				for _, rect := range bracketRects {
 					p.FillRect(rect, graphics.ColorOf(c))
@@ -173,37 +172,6 @@ func (v *SourceView) Paint(p gui.Painter) {
 		p.DrawLine(geometry.Point{X: v.gutter - .5}, geometry.Point{X: v.gutter - .5, Y: bounds.Height}, 1, graphics.ColorOf(v.colors.Border))
 	}
 	v.paintMinimap(p)
-}
-
-// Only a confirmed pair receives matching decoration. A lone candidate may be
-// unmatched or simply have its partner beyond the bounded analysis window.
-func bracketRectangles(item *paragraph, line textedit.Range, origin geometry.Point, brackets []textedit.Range) []geometry.Rectangle {
-	if len(brackets) != 2 {
-		return nil
-	}
-	var result []geometry.Rectangle
-	for _, bracket := range brackets {
-		if bracket.End <= line.Start || bracket.Start >= line.End {
-			continue
-		}
-		local := textedit.Range{Start: max(line.Start, bracket.Start) - line.Start, End: min(line.End, bracket.End) - line.Start}
-		for _, rect := range item.Geometry.Selection(local) {
-			// Native visual-line geometry keeps wrapped/bidi positions exact.
-			// A small vertical inset separates the box from neighboring rows.
-			if rect.Width <= 1 || rect.Height <= 3 {
-				continue
-			}
-			rect.Y++
-			rect.Height -= 2
-			rect = rect.Translate(origin)
-			// A shaping cluster may contain both characters. Paint its shared
-			// rectangle once so translucent decorations do not accumulate.
-			if !slices.Contains(result, rect) {
-				result = append(result, rect)
-			}
-		}
-	}
-	return result
 }
 
 func (v *SourceView) paintRange(p gui.Painter, item *paragraph, line textedit.Range, origin geometry.Point, r textedit.Range, c color.NRGBA) {

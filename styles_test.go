@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
@@ -34,17 +35,17 @@ func TestRegisteredStylesAndTokenParts(t *testing.T) {
 		}
 	}
 	for _, d := range []scheme.Definition{scheme.Light().Definition(), scheme.Dark().Definition()} {
-		s := style.Sheet(codeRules(d)...)
+		s := style.Sheet(view.CodeRules(d)...)
 		for kind, expected := range d.Tokens {
-			if got := foreground(s.Resolve(style.Sel{Name: "source-view", Part: "token-" + tokenParts[kind]})); got != expected {
+			if got := view.Foreground(s.Resolve(style.Sel{Name: "source-view", Part: "token-" + kind.String()})); got != expected {
 				t.Fatalf("token %v: %v, want %v", kind, got, expected)
 			}
 		}
-		if tokenParts[language.KindComment] != "comment" || tokenParts[language.KindMeta] != "meta" {
+		if language.KindComment.String() != "comment" || language.KindMeta.String() != "meta" {
 			t.Fatal("token part indices do not match the public kinds")
 		}
 	}
-	o := modern.Options{Dark: true, FontFamily: "test-family", FontSize: 17, AccentColor: rgb(0x427f50)}
+	o := modern.Options{Dark: true, FontFamily: "test-family", FontSize: 17, AccentColor: view.RGB(0x427f50)}
 	if !reflect.DeepEqual(modern.Rules(o), modern.Rules(o)) {
 		t.Fatal("registered rules are not deterministic")
 	}
@@ -55,12 +56,12 @@ func TestStyleChangedUpdatesCodeColorsWithoutReshaping(t *testing.T) {
 	scope := themedScope(v, modern.Sheet(modern.Options{}))
 	v.StyleChanged()
 	before, epoch, font := v.appliedScheme, v.layoutEpoch, v.font
-	if v.colors.Background != rgb(0xffffff) {
+	if v.colors.Background != view.RGB(0xffffff) {
 		t.Fatal("light code surface", v.colors.Background)
 	}
 	scope.SetStyleSheet(modern.Sheet(modern.Options{Dark: true}))
 	v.StyleChanged()
-	if v.appliedScheme == before || v.colors.Background != rgb(0x28282d) || v.font != font || v.layoutEpoch != epoch {
+	if v.appliedScheme == before || v.colors.Background != view.RGB(0x28282d) || v.font != font || v.layoutEpoch != epoch {
 		t.Fatal("color-only update retained colors or invalidated geometry")
 	}
 	before = v.appliedScheme
@@ -75,7 +76,7 @@ func TestStyleChangedUpdatesCodeColorsWithoutReshaping(t *testing.T) {
 		t.Fatal("explicit code scheme lost, or UI font affected code font")
 	}
 	v.SetScheme(nil)
-	if v.colors.Background != rgb(0x28282d) {
+	if v.colors.Background != view.RGB(0x28282d) {
 		t.Fatal("nil scheme did not return to the local stylesheet")
 	}
 }
@@ -91,11 +92,11 @@ func TestConcurrentThemeConstructionKeepsSnapshots(t *testing.T) {
 			if got, _ := s.Resolve(style.Sel{Name: "sourceview.completion"}).FontSize(); got != o.FontSize {
 				t.Errorf("concurrent theme font: %g, want %g", got, o.FontSize)
 			}
-			want := rgb(0xffffff)
+			want := view.RGB(0xffffff)
 			if o.Dark {
-				want = rgb(0x28282d)
+				want = view.RGB(0x28282d)
 			}
-			if got := background(s.Resolve(style.Sel{Name: "sourceview.find"})); got != want {
+			if got := view.Background(s.Resolve(style.Sel{Name: "sourceview.find"})); got != want {
 				t.Errorf("concurrent theme palette: %v, want %v", got, want)
 			}
 		}()
@@ -127,7 +128,7 @@ func TestThemeChangeReadsCurrentStateAfterPopupTeardown(t *testing.T) {
 			} else {
 				v.SetScheme(scheme.Dark())
 			}
-			want := rgb(0xffffff)
+			want := view.RGB(0xffffff)
 			if change == "document" {
 				want = scheme.Dark().Definition().Background
 			}
@@ -141,13 +142,13 @@ func TestThemeChangeReadsCurrentStateAfterPopupTeardown(t *testing.T) {
 func TestCodeFontAndPlainForegroundOverrides(t *testing.T) {
 	rules := modern.Rules(modern.Options{Dark: true})
 	rules = append(rules,
-		style.Name("source-view").ForegroundColor(rgb(0xe1f1e1)).FontFamily("code-family").FontSize(16),
-		style.Name("source-view").Part("token-string").ForegroundColor(rgb(0x99dd99)),
+		style.Name("source-view").ForegroundColor(view.RGB(0xe1f1e1)).FontFamily("code-family").FontSize(16),
+		style.Name("source-view").Part("token-string").ForegroundColor(view.RGB(0x99dd99)),
 	)
 	v := NewSourceView()
 	themedScope(v, style.Sheet(rules...))
 	v.StyleChanged()
-	if v.font.Family != "code-family" || v.font.Size != 16 || v.appliedScheme.Color(language.KindPlain) != rgb(0xe1f1e1) || v.appliedScheme.Color(language.KindString) != rgb(0x99dd99) {
+	if v.font.Family != "code-family" || v.font.Size != 16 || v.appliedScheme.Color(language.KindPlain) != view.RGB(0xe1f1e1) || v.appliedScheme.Color(language.KindString) != view.RGB(0x99dd99) {
 		t.Fatal("code font or foreground overrides were lost")
 	}
 }
@@ -198,7 +199,7 @@ func TestEditorFrameAndScrollBarThemeParts(t *testing.T) {
 				want := sheet.Resolve(style.Sel{Name: "scroll-view", Part: part, State: state})
 				gotRadius, _ := got.CornerRadius()
 				wantRadius, _ := want.CornerRadius()
-				if background(got) != background(want) || gotRadius != wantRadius {
+				if view.Background(got) != view.Background(want) || gotRadius != wantRadius {
 					t.Fatalf("scrollbar theme mismatch: part=%s state=%v", part, state)
 				}
 				if width, _ := got.BorderWidth(); width != 0 {
@@ -223,8 +224,8 @@ func TestWhitespaceStyleParts(t *testing.T) {
 		{modern.Sheet(modern.Options{}), color.NRGBA{0x33, 0x33, 0x33, 0x33}},
 		{modern.Sheet(modern.Options{Dark: true}), color.NRGBA{0xe3, 0xe4, 0xe2, 0x29}},
 	} {
-		normal := foreground(tc.sheet.Resolve(style.Sel{Name: "source-view", Part: "whitespace"}))
-		selected := foreground(tc.sheet.Resolve(style.Sel{Name: "source-view", Part: "selected-whitespace"}))
+		normal := view.Foreground(tc.sheet.Resolve(style.Sel{Name: "source-view", Part: "whitespace"}))
+		selected := view.Foreground(tc.sheet.Resolve(style.Sel{Name: "source-view", Part: "selected-whitespace"}))
 		if normal != tc.want || selected != tc.want {
 			t.Fatal("whitespace theme parts", normal, selected, tc.want)
 		}
@@ -236,7 +237,7 @@ func TestWhitespaceStyleParts(t *testing.T) {
 	t.Cleanup(v.dropLayouts)
 	v.LayoutVisible(geometry.Size{Width: 200, Height: 100}, geometry.Point{})
 	p := v.paragraph(0)
-	normal, selected := rgb(0x116688), rgb(0xec22aa)
+	normal, selected := view.RGB(0x116688), view.RGB(0xec22aa)
 	themedScope(v, style.Sheet(style.Name("source-view").Part("whitespace").ForegroundColor(normal), style.Name("source-view").Part("selected-whitespace").ForegroundColor(selected)))
 	_ = v.SetWhitespaceMode(WhitespaceAll)
 	out := &recordingPainter{}

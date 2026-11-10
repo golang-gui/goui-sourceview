@@ -5,6 +5,10 @@
 SourceView 提供行标记、侧栏输入和执行位置呈现；应用拥有调试会话、断点条件、
 持久化及调试器通信。没有 DAP 依赖，也不把普通标记自动解释为已绑定的断点。
 
+内部实现中，锚点映射位于 `internal/editor`，标记图元和本地化标签位于
+`internal/view`。Document 保留标记身份、修订和通知，SourceView 保留折叠汇总、
+样式解析、命中和语义子项；根包的公开标记类型不移动或重新导出内部类型。
+
 参考核对日期：2026-11-04。
 - [VS Code 调试装饰](https://github.com/microsoft/vscode/blob/4c32afe38baa636e3c29fd16c99169eaf87259b7/src/vs/workbench/contrib/debug/browser/breakpointEditorContribution.ts)：调试层将业务状态映射为编辑器侧栏装饰。
 - [Scintilla Markers](https://www.scintilla.org/ScintillaDoc.html#Markers)：行标记与侧栏操作通知。采用职责划分，不照搬 32 位标记槽和删除后合并到下一行的策略。

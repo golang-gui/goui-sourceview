@@ -3,6 +3,7 @@ package sourceview
 import (
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
@@ -303,14 +304,14 @@ func (v *SourceView) selectionContains(point geometry.Point) bool {
 	}
 	local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
 	for _, rect := range p.Geometry.Selection(textedit.Range{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
-		if containsPoint(rect, local) {
+		if view.ContainsPoint(rect, local) {
 			return true
 		}
 	}
 	if s.End > r.End && row+1 < v.document.model.LineCount() {
 		rect := p.Geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
 		rect.Width = v.spaceWidth
-		return containsPoint(rect, local)
+		return view.ContainsPoint(rect, local)
 	}
 	return false
 }

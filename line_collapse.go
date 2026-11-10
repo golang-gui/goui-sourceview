@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -305,7 +306,7 @@ func (v *SourceView) collapsedLineHit(point geometry.Point) (int, bool) {
 	}
 	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	badge := v.lineCollapseBadge(row, v.cachedParagraph(row))
-	return row, badge.Width > 0 && badge.Height > 0 && containsPoint(badge, point)
+	return row, badge.Width > 0 && badge.Height > 0 && view.ContainsPoint(badge, point)
 }
 
 func (v *SourceView) paintLineCollapseBadge(draw gui.Painter, row int, p *paragraph) {
@@ -321,8 +322,8 @@ func (v *SourceView) paintLineCollapseBadge(draw gui.Painter, row int, p *paragr
 			background = v.colors.SelectionBackground
 		}
 		draw.FillRect(r, graphics.ColorOf(background))
-	} else if v.projection == nil && v.pointer != nil && v.pointer.Hover() && containsPoint(r, v.pointerPoint) {
-		draw.FillRoundRect(r, 3, graphics.ColorOf(tint(v.colors.Foreground, 16)))
+	} else if v.projection == nil && v.pointer != nil && v.pointer.Hover() && view.ContainsPoint(r, v.pointerPoint) {
+		draw.FillRoundRect(r, 3, graphics.ColorOf(view.Tint(v.colors.Foreground, 16)))
 	}
 	c := graphics.ColorOf(v.partColor("fold-placeholder", v.colors.GutterForeground))
 	for n := range 3 {

@@ -2,7 +2,6 @@ package sourceview
 
 import (
 	"fmt"
-	"image/color"
 	"slices"
 	"strings"
 	"time"
@@ -247,10 +246,8 @@ func (v *SourceView) occurrenceWord() string {
 	return text
 }
 
-func tint(c color.NRGBA, alpha uint8) color.NRGBA { c.A = alpha; return c }
-
 func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *paragraph, origin geometry.Point, word string) {
-	ruler := graphics.ColorOf(v.partColor("ruler", tint(v.colors.GutterForeground, 45)))
+	ruler := graphics.ColorOf(v.partColor("ruler", view.Tint(v.colors.GutterForeground, 45)))
 	lineY := v.geometryOrigin(row, 0, 0).Y
 	top, bottom := max(0, lineY), min(v.viewport.Height, lineY+p.height)
 	for _, col := range v.rulers {
@@ -262,7 +259,7 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 	}
 	if v.indentGuides && p.textStart == 0 {
 		bytes, columns := editor.LeadingColumns(p.text, v.indent.TabWidth)
-		guide := graphics.ColorOf(v.partColor("indent-guide", tint(v.colors.GutterForeground, 65)))
+		guide := graphics.ColorOf(v.partColor("indent-guide", view.Tint(v.colors.GutterForeground, 65)))
 		col, target := 0, v.indent.IndentWidth
 		for at := 0; at < bytes && target < columns; at++ {
 			next := col + 1
@@ -310,7 +307,7 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 		if r == v.Selection().Range() {
 			continue
 		}
-		v.paintRange(draw, p, line, origin, r, v.partColor("occurrence", tint(v.colors.SearchBackground, 55)))
+		v.paintRange(draw, p, line, origin, r, v.partColor("occurrence", view.Tint(v.colors.SearchBackground, 55)))
 	}
 }
 
@@ -362,7 +359,7 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 	line, _ := v.document.model.LineRange(sourceRow)
 	selection := v.Selection().Range()
 	clip := geometry.Rect(v.gutter-origin.X, -origin.Y, max(0, v.textRight()-v.gutter), v.viewport.Height)
-	fallback := whitespaceColor(v.colors.Background)
+	fallback := view.WhitespaceColor(v.colors.Background)
 	normal := v.partColor("whitespace", fallback)
 	selectedColor := v.partColor("selected-whitespace", fallback)
 	if v.whitespace != WhitespaceNone {
@@ -390,7 +387,7 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 			if selected {
 				color = selectedColor
 			}
-			v.paintWhitespaceCell(draw, rect.Translate(origin), kind, c.Direction == typography.TextRightToLeft, color)
+			view.PaintWhitespaceCell(draw, rect.Translate(origin), kind, c.Direction == typography.TextRightToLeft, color, v.spaceWidth)
 		})
 	}
 	if v.showLineEndings && sourceRow+1 < v.document.model.LineCount() && w.TextStart+len(w.Text) == w.Length && w.EndReady {
@@ -412,49 +409,6 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 		draw.DrawLine(geometry.Point{X: x + 4, Y: y}, geometry.Point{X: x, Y: y}, 1, brush)
 		draw.DrawLine(geometry.Point{X: x + 2, Y: y - 2}, geometry.Point{X: x, Y: y}, 1, brush)
 		draw.DrawLine(geometry.Point{X: x + 2, Y: y + 2}, geometry.Point{X: x, Y: y}, 1, brush)
-	}
-}
-
-func (v *SourceView) paintWhitespaceCell(draw gui.Painter, r geometry.Rectangle, kind int, rtl bool, color color.NRGBA) {
-	brush := graphics.ColorOf(color)
-	unit := min(v.spaceWidth, r.Width, r.Height)
-	if unit <= 0 {
-		return
-	}
-	x, y := r.X+r.Width/2, r.Y+r.Height/2
-	stroke := unit / 7
-	switch kind {
-	case 1:
-		// Rectangle edge snapping can flatten a tiny rounded square. An
-		// ellipse keeps equal radii under fractional translations and DPI.
-		draw.FillEllipse(geometry.Point{X: x, Y: y}, unit/7, unit/7, brush)
-	case 2:
-		// Draw one short silhouette at the logical leading edge. Separate
-		// translucent strokes would darken their shared arrowhead joins.
-		point := func(dx, dy float32) geometry.Point {
-			px := r.X + unit*.05 + dx
-			if rtl {
-				px = r.X + r.Width - unit*.05 - dx
-			}
-			return geometry.Point{X: px, Y: y + dy}
-		}
-		half, head, end := stroke/2, unit*.25, unit*.85
-		points := [...]geometry.Point{
-			point(0, -half), point(end-head+half, -half),
-			point(end-head-half, -head+half), point(end-head+half, -head-half),
-			point(end+half, 0), point(end-head+half, head+half),
-			point(end-head-half, head-half), point(end-head+half, half), point(0, half),
-		}
-		path := graphics.MoveTo(points[0].X, points[0].Y)
-		for _, p := range points[1:] {
-			path = path.LineTo(p.X, p.Y)
-		}
-		draw.FillPath(path.Close(), brush)
-	case 3:
-		draw.DrawEllipse(geometry.Point{X: x, Y: y}, unit/4, unit/4, stroke, brush)
-	case 4:
-		size := unit * .75
-		draw.DrawRect(geometry.Rect(x-size/2, y-size/2, size, size), stroke, brush)
 	}
 }
 

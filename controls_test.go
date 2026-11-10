@@ -3,10 +3,11 @@ package sourceview
 import (
 	"errors"
 	"fmt"
-	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"image/color"
 	"testing"
 
+	"github.com/golang-gui/goui-sourceview/internal/editor"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
@@ -186,7 +187,7 @@ func TestFindBarTranslatedStatus(t *testing.T) {
 func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		v := NewSourceView()
-		sheet := modern.Sheet(modern.Options{Dark: dark, FontFamily: "ui-font", FontSize: 19, AccentColor: rgb(0x357f40)})
+		sheet := modern.Sheet(modern.Options{Dark: dark, FontFamily: "ui-font", FontSize: 19, AccentColor: view.RGB(0x357f40)})
 		themedScope(v, sheet)
 		l := newCompletionList(v, &completionSession{})
 		b := newFindBar()
@@ -203,11 +204,11 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 		if l.Appearance().Font.Family != "ui-font" || l.Appearance().Font.Size != 19 || l.Appearance().DetailFont.Size != 19*.9 || b.Appearance.Surface.Radius != geometry.UniformCornerRadius(8) || b.Appearance.Focused.Width != 2 {
 			t.Fatal("Modern font, radius or focus metrics were not used")
 		}
-		if got := foreground(gui.ResolveWidgetStyle(b.Find, "sourceview.find.input", "", style.Normal)); got.A != 255 || background(gui.ResolveWidgetStyle(b.Find, "sourceview.find.input", "frame", style.Normal)).A != 255 {
+		if got := view.Foreground(gui.ResolveWidgetStyle(b.Find, "sourceview.find.input", "", style.Normal)); got.A != 255 || view.Background(gui.ResolveWidgetStyle(b.Find, "sourceview.find.input", "frame", style.Normal)).A != 255 {
 			t.Fatal("unreadable built-in find surface/text")
 		}
 		d := scheme.Dark().Definition()
-		d.SelectionBackground, d.SelectionForeground = rgb(0xff0000), rgb(0x00ff00)
+		d.SelectionBackground, d.SelectionForeground = view.RGB(0xff0000), view.RGB(0x00ff00)
 		s, err := scheme.New(d)
 		if err != nil {
 			t.Fatal(err)
@@ -219,7 +220,7 @@ func TestControlPalettesAreIndependentOfCodeSchemes(t *testing.T) {
 		if l.Appearance().Colors != before || b.Appearance != find {
 			t.Fatal("code selection changed UI palettes")
 		}
-		if got := foreground(sheet.Resolve(style.Sel{Name: "icon"})); got != foreground(modern.Sheet(modern.Options{Dark: dark}).Resolve(style.Sel{Name: "icon"})) {
+		if got := view.Foreground(sheet.Resolve(style.Sel{Name: "icon"})); got != view.Foreground(modern.Sheet(modern.Options{Dark: dark}).Resolve(style.Sel{Name: "icon"})) {
 			t.Fatal("SourceView registration modified the global icon style")
 		}
 	}
@@ -247,7 +248,7 @@ func TestApplicationOverridesAndPopupOwnerScope(t *testing.T) {
 	themedScope(b, owner.StyleSheet())
 	b.StyleChanged()
 	border, _ := gui.ResolveWidgetStyle(b.MatchCase, "sourceview.find.option", "button-checked", style.Normal).BorderColor()
-	if b.Appearance.Surface.Shadow.Color.A != 0 || nrgba(border).A != 80 || b.Inset != 2 {
+	if b.Appearance.Surface.Shadow.Color.A != 0 || view.NRGBA(border).A != 80 || b.Inset != 2 {
 		t.Fatal("find overrides lost explicit alpha or retained shadow space")
 	}
 }
