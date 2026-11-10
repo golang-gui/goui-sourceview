@@ -11,7 +11,10 @@ import (
 	"github.com/golang-gui/goui/platform/graphics"
 )
 
-const lineCollapseBadgeWidth float32 = 22
+const (
+	lineCollapseBadgeWidth float32 = 22
+	lineCollapseMinLines           = 3
+)
 
 // ParagraphLayout sets explicit page clips; Painter.SetClipRect replaces its
 // caller's explicit clip. Keep those page clips inside the preview using only
@@ -105,13 +108,26 @@ func (v *SourceView) longLineCandidate(row int) bool {
 		return false
 	}
 	p := v.cachedParagraph(row)
-	return p != nil && p.height >= 8*v.lineHeight && v.textRight()-v.gutter-2*padding >= 64
+	if p == nil || v.textRight()-v.gutter-2*padding < 64 {
+		return false
+	}
+	// Measured local geometry is sufficient evidence, including a paged
+	// paragraph's active window. Never infer row count from estimated height.
+	if p.geometry.LineCount() >= lineCollapseMinLines {
+		return true
+	}
+	if p.paged != nil {
+		if first := p.paged.CachedGeometryAt(0); first != nil {
+			return first.LineCount() >= lineCollapseMinLines
+		}
+	}
+	return false
 }
 
 // CollapseLine shows only the first wrapped display line and an expand badge.
 // The source, revision and undo history are unchanged. Only already measured
-// lines at least eight base line heights tall are eligible; no language rule
-// or scan of the remainder of a paged paragraph is required.
+// lines with at least three measured wrapped display lines are eligible; no
+// language rule or scan of the remainder of a paged paragraph is required.
 func (v *SourceView) CollapseLine(line int) bool {
 	if !v.canCollapseLine(line) {
 		return false
