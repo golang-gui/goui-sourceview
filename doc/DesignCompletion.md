@@ -2,7 +2,7 @@
 
 本专题主体描述根包 `completion.go`、`internal/controls`、`internal/editor` 与 `ui` 的当前实现。
 末尾的 P1 补全呈现为尚未实现的提案，不属于当前 API 契约。
-会话、提供器队列及单次输入保留权限位于根包 `completion.go` 和 `completion_input.go`；列表、面板及
+会话、提供器队列及单次输入保留权限集中在根包 `completion.go`；列表、面板及
 ScrollView 组合集中在 `internal/controls/completion.go`。候选规范化、去重、排序、
 附近词扫描和最终编辑列表规划位于 `internal/editor/completion.go`。
 Completion、CompletionContext 和 CompletionProvider 仍是真实的根包类型。

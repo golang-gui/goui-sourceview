@@ -55,11 +55,11 @@ GOUI 不反向依赖本模块。
 | 根包 `sourceview` | Document、SourceView、公共 API、状态、生命周期和跨功能协调 |
 | `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
-| `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
+| `internal/editor` | 编辑计划、缩进粘贴、选区及锚点映射、括号与结构扫描、补全值规范化、定位解析和搜索；不依赖 Widget |
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠范围校验、隐藏区间合并与可见行索引；不导入 gui |
-| `internal/controls` | 私有补全列表、查找／定位栏呈现与配套样式；不导入根包 |
-| `internal/view` | 视图私有的排版资源、预览几何与裁剪、多行建议排版、空白符索引及缩略图计算；不导入根包 |
+| `internal/controls` | 补全列表、查找／定位栏呈现、菜单命令资源、快捷键校验与配套样式；不导入根包 |
+| `internal/view` | 排版资源、预览与装饰几何、主题规则、标记绘制与标签、多行建议排版、空白符索引及缩略图计算；不导入根包 |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
@@ -77,14 +77,19 @@ FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 | `sourceview.go` | 控件状态、配置、选区、语义快照、挂载、卸载及模型变化 |
 | `document.go` | 文档、语言定义及共享分析状态 |
 | `commands.go`、`search.go` | 编辑命令、历史、剪贴板与注释切换；查找替换、范围与高亮显隐 |
+| `editing.go`、`selection_structure.go`、`pairs.go`、`tags.go` | 编辑作业与语言回调协调、结构选区历史和配对所有权；纯计划和扫描委托内部包 |
 | `input.go`、`key_bindings.go` | 指针与键盘输入；快捷键配置、匹配及命令分发 |
-| `layout.go`、`layout_cache.go`、`paint.go` | 视口布局、可见行映射、命中及滚动定位；段落缓存与着色；正文和装饰绘制 |
+| `layout.go`、`layout_cache.go`、`paint.go` | 视口布局、可见行映射、命中及滚动定位；普通／分页段落缓存与着色；绘制协调 |
+| `completion.go`、`inline_suggestion.go` | 补全会话、队列及输入保留；单行／多行建议的有效性、发布和文档区协调 |
 | `companions.go` | 内置查找／替换／定位的公开操作、互斥、视口布局和指针规则 |
 | `scheduler.go` | 帧回调、分析计时器及可见区域排版工作 |
-| `styles.go` | Basic/Modern 注册、有效样式、控件配色及样式变化处理 |
+| `styles.go` | Basic/Modern 注册、有效样式的读取、缓存和失效；规则构建由内部包负责 |
 
 补全、折叠、语言编辑辅助及 FindBar/GoToBar 仍按已有领域组织。
 同一领域的队列、绘制辅助或小控件合入所属功能文件；独立类型不要求独立文件。
+根目录保留必须访问真实 Document／SourceView 状态的协调逻辑，纯算法和图元不以
+仅改名的根包转发函数继续堆积。补全的少量值适配保留在根包，以保持公开结构体
+真实定义和现有入口；内部算法通过结构约束转换值，避免额外复制整批候选。
 补全会话、FindBar／GoToBar 行为保留在根包；列表、面板、栏内控件、
 布局及外观放在 internal/controls，控件动作通过窄回调交回根包。
 折叠及普通编辑辅助按领域维护。

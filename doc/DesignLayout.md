@@ -4,7 +4,7 @@
 > 不使用 TextView 的布局或私有缓存。原生 Tab 配置依赖 [G2](DesignGOUIIntegration.md)。
 
 实现入口：`layout.go` 管理测量、估计、可见行映射、命中、光标和滚动定位；
-`layout_cache.go` 管理段落身份、缓存成员、着色和淘汰；
+`layout_cache.go` 管理普通／分页段落身份、缓存成员、着色和淘汰；
 `paint.go` 消费布局结果绘制正文和装饰。帧间工作集中在 `scheduler.go`，
 语义快照在 `sourceview.go`。
 

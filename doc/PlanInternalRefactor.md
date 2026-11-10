@@ -92,3 +92,38 @@
   分类和查找输入框刷新移入 internal/controls。命令号由类型参数沿用根包类型；
   输入控制器和真实命令执行仍由根包拥有。旧菜单释放、快捷键逆向关联清理、
   视图隔离与重配集成断言保留。
+- 批次 10：将补全输入保留协调合入 completion.go、多行建议协调合入
+  inline_suggestion.go、分页段落协调合入 layout_cache.go，移除三个单独的私有实现
+  文件。相较本轮起点，根目录非测试 Go 实现从 32 文件／12,281 行变为
+  29 文件／11,247 行，减少 1,034 行；测试文件保留原位置和既有断言。
+  根包公开声明对比一致；外部消费者的导入、真实命名类型身份、枚举值及快照 API
+  检查通过。没有修改依赖版本、GOUI、doc/Doing.md 或 example/temp/。
+  批次 6—10 按排版资源、编辑算法、主题绘制、快捷键菜单及协调代码整理分组提交。
+
+### 批次 7—10 验证（2026-11-10）
+
+- Linux amd64 / Go 1.25.8 / GOUI v0.7.0：go test ./...、
+  GOWORK=off go test ./...、go test -race ./...、go vet ./...、git diff --check
+  通过；Windows amd64、macOS arm64 的 CGO_ENABLED=0 go build ./... 通过。
+- 独立 X11 :190 / Xvnc + Xfwm4 / Pango / 独立 D-Bus 和配置目录，关闭本地
+  工作区，使用仓库外独立 GOCACHE 构建，未再出现上一轮异常构建产物。
+  11 组原生场景通过：resize_cache 软件 1×；structural 的 Basic 软件 1×和
+  Modern 暗色 OpenGL 1.5×；keybindings 软件 1×；extensions 暗色 OpenGL 1×；
+  line_marks 的亮色软件 1×和暗色带 minimap 的 OpenGL 1.5×；assistance 的
+  Modern 软件 1×及 Basic OpenGL 1.5×；find_appearance 和 inline_multiline
+  的 OpenGL 1×。检查真实事件、撤销／重做、结构选择、异步补全、重入、
+  快捷键、标记和空白符像素、查找几何／焦点及多行建议绘制。
+- 最后的样式读取时机调整后，重跑两种全量测试、全量 race、vet 和两目标
+  交叉构建，并重建、通过 resize_cache、find_appearance、暗色 assistance
+  软件 1.5×、暗色带 minimap 的 line_marks OpenGL 1.5×。
+- 所属桌面进程已退出；测试剪贴板只用于独立显示连接，没有更改用户文档、
+  桌面设置或现有桌面会话。日志与原生产物保留在
+  /tmp/sourceview-private-split-7q7jvne1。Windows/macOS 仅编译，物理 IME、
+  混合 DPI 和性能对照未执行，不从本次功能场景推导性能结论。
+
+### 拆分提交验证
+
+每个职责组从暂存区导出独立源码目录，执行 GOWORK=off go test ./...，通过后再提交。
+主题／绘制组初次导出发现菜单尚引用迁出后的 containsPoint；补齐同组的内部几何
+调用后重新导出并通过，未留下依赖后续提交才能构建的中间提交。完整日志位于
+/tmp/sourceview-refactor-commits-0ff2u997，不包含 doc/Doing.md 或 example/temp/。
