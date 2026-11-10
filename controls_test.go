@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"testing"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/scheme"
@@ -134,7 +135,7 @@ func TestFindBarTranslatedInputsAndHints(t *testing.T) {
 		if bar.Find.Name() != tc.find || bar.ReplacementInput.Name() != tc.replacement || bar.Find.Placeholder() != tc.find || bar.ReplacementInput.Placeholder() != tc.replace {
 			t.Errorf("%s: names=%q/%q hints=%q/%q", tc.tag, bar.Find.Name(), bar.ReplacementInput.Name(), bar.Find.Placeholder(), bar.ReplacementInput.Placeholder())
 		}
-		setFindText(bar.Find, "query")
+		controls.SetFindText(bar.Find, "query")
 		bar.SetReplacement("replacement")
 		bar.updateLabels()
 		if bar.Find.Model().Text() != "query" || bar.Replacement() != "replacement" {

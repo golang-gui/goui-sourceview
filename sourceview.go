@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"time"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
@@ -137,7 +138,7 @@ type SourceView struct {
 	// Keyboard, pointer and caret state.
 	pendingInput     *inputBatch
 	keyBindings      KeyBindings
-	boundKeys        []boundKey
+	boundKeys        []controls.BoundKey[Command]
 	keyBindingsEpoch uint64
 	pointer          *gui.MotionEventController
 	pointerPoint     geometry.Point

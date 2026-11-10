@@ -146,7 +146,7 @@ func (b *findBar) Replacement() string { return b.ReplacementInput.Model().Text(
 
 func (b *findBar) SetReplacement(text string) {
 	if !b.Destroyed() {
-		setFindText(b.ReplacementInput, text)
+		controls.SetFindText(b.ReplacementInput, text)
 		b.RequestLayout()
 	}
 }
@@ -357,7 +357,7 @@ func (b *findBar) refresh() {
 	scope, limited := v.SearchRange()
 	b.SelectionOnly.SetChecked(limited)
 	// The multiline field preserves programmatic and pasted line breaks.
-	setFindText(b.Find, q.Text)
+	controls.SetFindText(b.Find, q.Text)
 	if !valid() {
 		return
 	}
@@ -528,14 +528,6 @@ func (b *findBar) Snapshot() gui.WidgetInfo {
 }
 
 var _ gui.Widget = (*findBar)(nil)
-
-// setFindText preserves field history/selection on ordinary refreshes.
-func setFindText(field *gui.TextView, text string) {
-	text = textedit.Normalize(text)
-	if !field.Model().EqualText(text) {
-		field.Model().SetText(text)
-	}
-}
 
 // Capture the range before navigating. A result selection never becomes the
 // next search scope, and an empty selection is not an interactive scope.

@@ -1,10 +1,10 @@
 package sourceview
 
 import (
-	"fmt"
 	"runtime"
 	"slices"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
@@ -165,11 +165,6 @@ func (v *SourceView) KeyBindings() KeyBindings {
 	return copy
 }
 
-type boundKey struct {
-	command Command
-	gesture gui.KeyGesture
-}
-
 // SetKeyBindings validates and copies a complete replacement table. nil/empty
 // removes all command shortcuts; absent commands have no fallback binding.
 // Gestures require a non-Shift modifier or a function key. Unmodified/Shift-only
@@ -182,42 +177,9 @@ func (v *SourceView) SetKeyBindings(bindings KeyBindings) error {
 	if v.Destroyed() {
 		return nil
 	}
-	table := make(KeyBindings, len(bindings))
-	type resolvedKey struct {
-		key  events.Key
-		mods events.Modifiers
-	}
-	seen := make(map[resolvedKey]Command)
-	// Stable command order makes errors and dispatch deterministic.
-	commands := make([]int, 0, len(bindings))
-	for command := range bindings {
-		commands = append(commands, int(command))
-	}
-	slices.Sort(commands)
-	var keys []boundKey
-	for _, value := range commands {
-		command := Command(value)
-		if command == 0 || command >= commandLimit {
-			return fmt.Errorf("sourceview: key bindings: unknown command %d", command)
-		}
-		for _, gesture := range bindings[command] {
-			key, keyOK := gesture.Key.Resolve()
-			mods, modsOK := gesture.Modifiers.Resolve()
-			function := key >= events.KeyF1 && key <= events.KeyF24
-			if !keyOK || !modsOK || modifierKey(key) || mods&^events.ModifierShift == 0 && !function {
-				return fmt.Errorf("sourceview: key bindings: invalid gesture %+v for command %d", gesture, command)
-			}
-			resolved := resolvedKey{key, mods}
-			if previous, exists := seen[resolved]; exists {
-				if previous != command {
-					return fmt.Errorf("sourceview: key bindings: gesture %+v conflicts between commands %d and %d", gesture, previous, command)
-				}
-				continue
-			}
-			seen[resolved] = command
-			table[command] = append(table[command], gesture)
-			keys = append(keys, boundKey{command, gesture})
-		}
+	table, keys, err := controls.ValidateBindings[Command](bindings, commandLimit)
+	if err != nil {
+		return err
 	}
 	unchanged := len(v.keyBindings) == len(table)
 	if unchanged {
@@ -231,25 +193,16 @@ func (v *SourceView) SetKeyBindings(bindings KeyBindings) error {
 	if unchanged {
 		return nil
 	}
-	v.keyBindings, v.boundKeys = table, keys
+	v.keyBindings, v.boundKeys = KeyBindings(table), keys
 	v.keyBindingsEpoch++
 	v.updateMenuBindings()
 	return nil
 }
 
-func modifierKey(key events.Key) bool {
-	switch key {
-	case events.KeyShift, events.KeyControl, events.KeyAlt, events.KeyOption,
-		events.KeyCommand, events.KeySuper, events.KeyWin, events.KeyAltGraph:
-		return true
-	}
-	return false
-}
-
 func (v *SourceView) keyCommand(event events.KeyEvent) (Command, bool) {
 	for _, binding := range v.boundKeys {
-		if binding.gesture.Matches(event) {
-			return binding.command, true
+		if binding.Gesture.Matches(event) {
+			return binding.Command, true
 		}
 	}
 	return 0, false

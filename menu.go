@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui-sourceview/internal/view"
@@ -35,54 +36,15 @@ var commandLabels = [...]mlang.Getter{
 type editMenu struct {
 	popup    *gui.PopoverMenu
 	items    map[Command]*gui.MenuItem
-	commands map[Command]*menuCommand
+	commands map[Command]*controls.MenuCommand
 	language signal.Handle
-}
-
-// These shortcuts describe the editor's existing bindings for menu hints.
-// They are never registered with a controller: input still follows applyKey.
-type menuCommand struct {
-	command  *gui.Command
-	activate signal.Handle
-	keys     []*gui.Shortcut
-}
-
-func newMenuCommand(gestures []gui.KeyGesture, run func()) *menuCommand {
-	b := &menuCommand{command: gui.NewCommand()}
-	b.activate = b.command.ConnectActivate(run)
-	b.setGestures(gestures)
-	return b
-}
-
-func (b *menuCommand) setGestures(gestures []gui.KeyGesture) {
-	for i, gesture := range gestures {
-		if i < len(b.keys) {
-			b.keys[i].SetGesture(gesture)
-		} else {
-			key := gui.NewShortcut(gesture)
-			key.SetCommand(b.command)
-			b.keys = append(b.keys, key)
-		}
-	}
-	for _, key := range b.keys[len(gestures):] {
-		key.SetCommand(nil)
-	}
-	clear(b.keys[len(gestures):])
-	b.keys = b.keys[:len(gestures)]
-}
-
-func (b *menuCommand) release() {
-	b.activate.Disconnect()
-	b.command.SetEnabled(false)
-	b.setGestures(nil)
-	b.keys = nil
 }
 
 func (m *editMenu) releaseCommands() {
 	commands := m.commands
 	m.commands, m.items = nil, nil
 	for _, command := range commands {
-		command.release()
+		command.Release()
 	}
 }
 
@@ -230,7 +192,7 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	items := gui.NewMenu()
 	m.releaseCommands()
 	m.items = make(map[Command]*gui.MenuItem)
-	m.commands = make(map[Command]*menuCommand)
+	m.commands = make(map[Command]*controls.MenuCommand)
 	lineAction := Command(0)
 	if v.canCommand(CommandCollapseLine) {
 		lineAction = CommandCollapseLine
@@ -248,14 +210,14 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 		if c == CommandCut || c == CommandMoveLinesUp || c == CommandSelectAll || c == CommandFold || c == CommandCollapseLine || c == CommandExpandLine {
 			items.AppendSeparator()
 		}
-		binding := newMenuCommand(v.keyBindings[c], func() {
+		binding := controls.NewMenuCommand(v.keyBindings[c], func() {
 			if v.document == state.document && v.mountEpoch == state.mount && m.popup.Menu() == items {
 				v.runCommand(c)
 			}
 		})
-		binding.command.SetEnabled(v.canCommand(c))
+		binding.Command.SetEnabled(v.canCommand(c))
 		item := items.Append(commandLabels[c](), nil)
-		item.SetCommand(binding.command)
+		item.SetCommand(binding.Command)
 		m.items[c] = item
 		m.commands[c] = binding
 	}
@@ -276,7 +238,7 @@ func (v *SourceView) updateMenu() {
 func (v *SourceView) updateMenuBindings() {
 	if v.menu != nil {
 		for c, binding := range v.menu.commands {
-			binding.setGestures(v.keyBindings[c])
+			binding.SetGestures(v.keyBindings[c])
 		}
 	}
 }

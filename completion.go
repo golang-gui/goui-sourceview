@@ -494,7 +494,7 @@ func (v *SourceView) completionKey(event events.KeyEvent) bool {
 		v.closeCompletion()
 		return false
 	}
-	if completionTextKey(event) {
+	if controls.CompletionTextKey(event) {
 		return false
 	}
 	if event.Modifiers != 0 {

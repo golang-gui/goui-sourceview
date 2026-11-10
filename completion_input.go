@@ -2,7 +2,6 @@ package sourceview
 
 import (
 	"github.com/golang-gui/goui/gui/textedit"
-	"github.com/golang-gui/goui/platform/events"
 )
 
 // A one-change permission, consumed before model/selection callbacks can edit
@@ -108,13 +107,4 @@ func (v *SourceView) retainCompletionChange(c textedit.Change) bool {
 		s.state = v.operationState()
 	}
 	return true
-}
-
-// Text arrives separately via IMClient/CommitText. Do not dismiss on its
-// preceding printable key, including Shift and layout-specific unknown keys.
-func completionTextKey(e events.KeyEvent) bool {
-	if e.Modifiers&^(events.ModifierShift|events.ModifierAltGraph) != 0 {
-		return false
-	}
-	return e.Key == events.KeyUnknown || e.Key == events.KeyShift || e.Key == events.KeyAltGraph || e.Key == events.KeySpace || e.Key >= events.KeyA && e.Key <= events.KeyNumpadDecimal
 }

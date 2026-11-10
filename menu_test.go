@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui/gui"
 )
 
@@ -11,10 +12,10 @@ func TestMenuBindingsFollowValidatedEditorConfiguration(t *testing.T) {
 	v, other := NewSourceView(), NewSourceView()
 	controllers := len(v.EventControllers())
 	calls := 0
-	b := newMenuCommand(v.KeyBindings()[CommandUndo], func() { calls++ })
-	v.menu = &editMenu{commands: map[Command]*menuCommand{CommandUndo: b}}
+	b := controls.NewMenuCommand(v.KeyBindings()[CommandUndo], func() { calls++ })
+	v.menu = &editMenu{commands: map[Command]*controls.MenuCommand{CommandUndo: b}}
 	t.Cleanup(v.menu.releaseCommands)
-	first := b.command.Shortcuts()[0]
+	first := b.Command.Shortcuts()[0]
 	old := first.Gesture()
 	if err := v.SetKeyBindings(KeyBindings{CommandUndo: {{Key: gui.KeyF6}}, CommandRedo: {{Key: gui.KeyF6}}}); err == nil || first.Gesture() != old {
 		t.Fatal("invalid configuration changed menu hints", err)
@@ -23,7 +24,7 @@ func TestMenuBindingsFollowValidatedEditorConfiguration(t *testing.T) {
 	if err := v.SetKeyBindings(KeyBindings{CommandUndo: keys}); err != nil {
 		t.Fatal(err)
 	}
-	shortcuts := b.command.Shortcuts()
+	shortcuts := b.Command.Shortcuts()
 	if len(shortcuts) != 2 || shortcuts[0] != first || shortcuts[0].Gesture() != keys[0] || shortcuts[1].Gesture() != keys[1] {
 		t.Fatal("menu did not preserve shortcut association order", shortcuts)
 	}
@@ -33,10 +34,10 @@ func TestMenuBindingsFollowValidatedEditorConfiguration(t *testing.T) {
 	if err := v.SetKeyBindings(nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(b.command.Shortcuts()) != 0 || shortcuts[0].Command() != nil || shortcuts[1].Command() != nil {
+	if len(b.Command.Shortcuts()) != 0 || shortcuts[0].Command() != nil || shortcuts[1].Command() != nil {
 		t.Fatal("clearing bindings retained shortcut hints or reverse references")
 	}
-	b.command.Activate()
+	b.Command.Activate()
 	if calls != 1 {
 		t.Fatal("removing shortcuts disabled the independent menu operation")
 	}
@@ -44,13 +45,13 @@ func TestMenuBindingsFollowValidatedEditorConfiguration(t *testing.T) {
 
 func TestMenuReleaseCancelsOldActionsAndDetachesShortcuts(t *testing.T) {
 	calls := 0
-	b := newMenuCommand([]gui.KeyGesture{{Key: gui.KeyF6}}, func() { calls++ })
-	key := b.command.Shortcuts()[0]
-	m := &editMenu{commands: map[Command]*menuCommand{CommandUndo: b}}
+	b := controls.NewMenuCommand([]gui.KeyGesture{{Key: gui.KeyF6}}, func() { calls++ })
+	key := b.Command.Shortcuts()[0]
+	m := &editMenu{commands: map[Command]*controls.MenuCommand{CommandUndo: b}}
 	m.releaseCommands()
-	b.command.SetEnabled(true) // A retained old entry must have no action.
-	b.command.Activate()
-	if calls != 0 || key.Command() != nil || len(b.command.Shortcuts()) != 0 || m.commands != nil {
+	b.Command.SetEnabled(true) // A retained old entry must have no action.
+	b.Command.Activate()
+	if calls != 0 || key.Command() != nil || len(b.Command.Shortcuts()) != 0 || m.commands != nil {
 		t.Fatal("released menu retained an action or shortcut association")
 	}
 	m.releaseCommands()

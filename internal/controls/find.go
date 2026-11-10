@@ -6,6 +6,7 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/icon/svg"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
@@ -367,5 +368,13 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 			place(9, right+4, controlY(22), 22, 22)
 			place(10, right+28, controlY(22), 22, 22)
 		}
+	}
+}
+
+// SetFindText preserves field history/selection on ordinary refreshes.
+func SetFindText(field *gui.TextView, text string) {
+	text = textedit.Normalize(text)
+	if !field.Model().EqualText(text) {
+		field.Model().SetText(text)
 	}
 }
