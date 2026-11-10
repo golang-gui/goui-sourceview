@@ -46,7 +46,7 @@ type Document struct {
 	externalFolds                bool
 	foldDue                      time.Time
 
-	highlightRoot                     *highlightNode
+	highlightRoot                     *highlight.SpanNode
 	highlightRevision, highlightEpoch uint64
 }
 

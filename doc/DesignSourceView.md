@@ -56,7 +56,7 @@ GOUI 不反向依赖本模块。
 | `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
 | `internal/editor` | 命令计划、缩进、位置映射、字面量搜索；不导入 gui |
-| `internal/highlight` | 行元数据、增量调度与高亮缓存；不导入 gui |
+| `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 

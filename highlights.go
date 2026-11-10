@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -24,7 +25,7 @@ type HighlightSpan struct {
 // worker and share between documents. It retains no source text or native objects.
 // Its zero value is an empty snapshot for an empty document.
 type Highlights struct {
-	root   *highlightNode
+	root   *highlight.SpanNode
 	length int
 }
 
@@ -37,31 +38,17 @@ func NewHighlights(text string, spans []HighlightSpan) (*Highlights, error) {
 	}
 	h := &Highlights{length: len(text)}
 	end := 0
-	var stack []*highlightNode
+	var builder highlight.SpanBuilder
 	for i, s := range spans {
 		r := s.Range
 		boundary := func(at int) bool { return at == len(text) || utf8.RuneStart(text[at]) }
 		if r.Start < end || r.End <= r.Start || r.End > len(text) || !boundary(r.Start) || !boundary(r.End) || !s.Kind.Valid() {
 			return nil, fmt.Errorf("sourceview: invalid highlight span %d", i)
 		}
-		// SplitMix64 supplies reproducible, well-distributed treap priorities.
-		p := uint64(i+1) + 0x9e3779b97f4a7c15
-		p = (p ^ (p >> 30)) * 0xbf58476d1ce4e5b9
-		p = (p ^ (p >> 27)) * 0x94d049bb133111eb
-		p ^= p >> 31
-		n := &highlightNode{span: s, priority: p}
-		for len(stack) > 0 && stack[len(stack)-1].priority < p {
-			n.left = stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-		}
-		if len(stack) == 0 {
-			h.root = n
-		} else {
-			stack[len(stack)-1].right = n
-		}
-		stack = append(stack, n)
+		builder.Append(highlight.Span{Range: s.Range, Kind: s.Kind})
 		end = r.End
 	}
+	h.root = builder.Root()
 	return h, nil
 }
 
@@ -93,69 +80,6 @@ func (d *Document) SetHighlights(revision uint64, h *Highlights) (bool, error) {
 	return true, nil
 }
 
-// Persistent treap: publication shares immutable nodes; edits clone only search
-// paths, discard intersecting spans, and lazily translate a surviving suffix.
-// No edit walks the complete semantic result, and queries never mutate a snapshot.
-type highlightNode struct {
-	span        HighlightSpan
-	left, right *highlightNode
-	priority    uint64
-	shift       int
-}
-
-func shiftHighlights(n *highlightNode, delta int) *highlightNode {
-	if n == nil || delta == 0 {
-		return n
-	}
-	c := *n
-	c.span.Range.Start += delta
-	c.span.Range.End += delta
-	c.shift += delta
-	return &c
-}
-func copyHighlight(n *highlightNode) *highlightNode {
-	c := *n
-	c.left = shiftHighlights(c.left, c.shift)
-	c.right = shiftHighlights(c.right, c.shift)
-	c.shift = 0
-	return &c
-}
-func mergeHighlights(a, b *highlightNode) *highlightNode {
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-	if a.priority > b.priority {
-		c := copyHighlight(a)
-		c.right = mergeHighlights(c.right, b)
-		return c
-	}
-	c := copyHighlight(b)
-	c.left = mergeHighlights(a, c.left)
-	return c
-}
-
-// Split before spans whose start is >= at, or whose end is > at.
-func splitHighlights(n *highlightNode, at int, byEnd bool) (*highlightNode, *highlightNode) {
-	if n == nil {
-		return nil, nil
-	}
-	c := copyHighlight(n)
-	left := c.span.Range.Start < at
-	if byEnd {
-		left = c.span.Range.End <= at
-	}
-	if left {
-		a, b := splitHighlights(c.right, at, byEnd)
-		c.right = a
-		return c, b
-	}
-	a, b := splitHighlights(c.left, at, byEnd)
-	c.left = b
-	return a, c
-}
 func (d *Document) changeHighlights(c textedit.Change) {
 	// A callback may have already published for this or a later committed revision.
 	if c.Revision <= d.highlightRevision {
@@ -165,11 +89,7 @@ func (d *Document) changeHighlights(c textedit.Change) {
 	if c.Reset || c.Revision != d.highlightRevision+1 {
 		d.highlightRoot = nil
 	}
-	for _, e := range c.Edits {
-		left, rest := splitHighlights(d.highlightRoot, e.Range.Start, true)
-		_, right := splitHighlights(rest, e.Range.End, false)
-		d.highlightRoot = mergeHighlights(left, shiftHighlights(right, len(e.Text)-(e.Range.End-e.Range.Start)))
-	}
+	d.highlightRoot = highlight.MapSpans(d.highlightRoot, c.Edits)
 	d.highlightRevision = c.Revision
 	if changed {
 		d.highlightEpoch++
@@ -180,32 +100,12 @@ func (d *Document) highlightSpans(r textedit.Range) []HighlightSpan {
 		return nil
 	}
 	var out []HighlightSpan
-	var visit func(*highlightNode, int)
-	visit = func(n *highlightNode, delta int) {
-		if n == nil {
-			return
-		}
-		span := n.span
-		span.Range.Start += delta
-		span.Range.End += delta
-		if span.Range.Start >= r.End {
-			visit(n.left, delta+n.shift)
-			return
-		}
-		if span.Range.End <= r.Start {
-			visit(n.right, delta+n.shift)
-			return
-		}
-		visit(n.left, delta+n.shift)
-		span.Range.Start = max(span.Range.Start, r.Start)
-		span.Range.End = min(span.Range.End, r.End)
+	highlight.VisitSpans(d.highlightRoot, r, func(span highlight.Span) {
 		// Defend native renderers even if a caller supplied the wrong same-length text.
 		if d.model.IsRuneBoundary(span.Range.Start) && d.model.IsRuneBoundary(span.Range.End) {
-			out = append(out, span)
+			out = append(out, HighlightSpan{Range: span.Range, Kind: span.Kind})
 		}
-		visit(n.right, delta+n.shift)
-	}
-	visit(d.highlightRoot, 0)
+	})
 	return out
 }
 
