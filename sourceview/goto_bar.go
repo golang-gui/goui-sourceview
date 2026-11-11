@@ -194,7 +194,9 @@ func (b *goToBar) refresh() {
 	}
 	b.Input.SetName(resource.GoTo())
 	b.Input.SetPlaceholder(resource.GoToPlaceholder())
-	b.CloseButton.SetName(resource.Close())
+	closeText := resource.Close()
+	b.CloseButton.SetName(closeText)
+	b.CloseButton.SetTooltip(closeText)
 	message := resource.GoToPlaceholder()
 	name := "sourceview.find.status"
 	if v := b.liveTarget(); v != nil && b.Input.Text() != "" {

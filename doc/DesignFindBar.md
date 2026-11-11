@@ -70,6 +70,17 @@ ToggleButton，选中状态通过 GOUI CheckInfo 暴露，保留 Space/Tab/焦�
 使用同一按钮样式的选中、悬停、禁用状态，不依赖单独颜色表达功能。
 提示、输入/按钮名称和计数状态支持 GOUI 的八种界面语言，见 [界面语言](DesignLocalization.md)。
 
+十个图标按钮/选项（展开替换、大小写、全词、正则、选区、前后匹配、关闭、替换、
+全部替换）同时提供 Name 和 Tooltip，复用同一包级翻译 Getter；定位栏关闭按钮采用相同规则。
+创建及既有语言变化回调同步设置普通字符串，输入框继续使用占位提示，不重复添加悬停文案。
+Name 承担语义名称，Tooltip 是独立的补充说明，不能以 Name 已设置为由省略 Tooltip。
+不硬编码快捷键说明，以免与应用改绑后的实际操作不符。
+
+悬停计时、图标子控件向按钮祖先查找、禁用控件提示、非模态原生提示窗及关闭/卸载清理
+均使用 GOUI v0.7.0 Widget.SetTooltip 的既有设施；外观跟随 GOUI tooltip 主题，
+SourceView 不增加提示弹窗、定时器、公共属性或语言连接。语义快照同步发布 Tooltip。
+语言变化导致按钮移位时，旧位置上的提示正常关闭；移动到按钮的新位置重新显示当前译文。
+
 查询和替换的占位提示使用 GOUI TextView.SetPlaceholder，由输入框统一管理字体、基线、
 裁剪、空内容/IME 显隐及语义快照；FindBar 在创建和语言变化时设置翻译后的普通字符串。
 提示使用 sourceview.find.input 的 placeholder part。FindBar 不创建提示 Label，

@@ -144,6 +144,49 @@ func TestFindBarTranslatedInputsAndHints(t *testing.T) {
 	}
 }
 
+// 同一组按钮在语言变化后更新提示与语义，输入框继续使用占位文字而不重复悬停提示。
+func TestCompanionButtonTooltipsFollowLanguage(t *testing.T) {
+	preserveUILanguage(t)
+	if err := mlang.SetLanguage("en"); err != nil {
+		t.Fatal(err)
+	}
+	find, goTo := newFindBar(), newGoToBar()
+	buttons := []gui.Widget{find.Toggle, find.MatchCase, find.WholeWord, find.Regex, find.SelectionOnly,
+		find.Previous, find.Next, find.Replace, find.ReplaceAll, find.CloseButton}
+	assertTooltips := func(close string) {
+		t.Helper()
+		for _, button := range buttons {
+			if tip := button.Tooltip(); tip == "" || tip != button.Name() || button.Snapshot().Tooltip != tip {
+				t.Errorf("按钮 %q 的提示或语义未更新：%q", button.Name(), tip)
+			}
+		}
+		if find.CloseButton.Tooltip() != close || goTo.CloseButton.Tooltip() != close || goTo.CloseButton.Snapshot().Tooltip != close {
+			t.Errorf("关闭提示未翻译：查找=%q，定位=%q，期望=%q", find.CloseButton.Tooltip(), goTo.CloseButton.Tooltip(), close)
+		}
+		if find.Find.Tooltip() != "" || find.ReplacementInput.Tooltip() != "" || goTo.Input.Tooltip() != "" {
+			t.Error("输入框出现了重复的悬停提示")
+		}
+	}
+	assertTooltips("Close") // 未挂载时也应带有构造时语言的提示。
+	controls.SetFindText(find.Find, "query")
+	find.SetReplacement("replacement")
+	goTo.SetQuery("2:3")
+	for _, tc := range []struct{ tag, close string }{
+		{"zh-CN", "关闭"}, {"ja-JP", "閉じる"}, {"ko-KR", "닫기"}, {"de-DE", "Schließen"},
+		{"fr-FR", "Fermer"}, {"ru-RU", "Закрыть"}, {"ar-SA", "إغلاق"}, {"en-US", "Close"},
+	} {
+		if err := mlang.SetLanguage(tc.tag); err != nil {
+			t.Fatal(err)
+		}
+		find.updateLabels()
+		goTo.refresh()
+		assertTooltips(tc.close)
+		if find.Find.Model().Text() != "query" || find.Replacement() != "replacement" || goTo.Query() != "2:3" {
+			t.Fatal("更新按钮提示修改了输入值")
+		}
+	}
+}
+
 func TestFindBarTranslatedStatus(t *testing.T) {
 	preserveUILanguage(t)
 	bar := newFindBar()

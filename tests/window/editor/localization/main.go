@@ -9,10 +9,13 @@
 // long menu labels, narrow/restored FindBar and detach/reattach. Menu navigation
 // and execution use normal keys. No clipboard or system settings changes.
 // Captures are observational, not pixel goldens. Native IME, physical keys,
-// fractional/mixed DPI, RTL mirroring and mother-tongue review remain manual.
+// mixed DPI, RTL mirroring and mother-tongue review remain manual.
 // Restart to reset; closes on success, exits nonzero on failure or early close.
 // Open-menu locale changes wait for completed frames with stable allocations;
 // adding/removing the shortcut column may resize the native popup asynchronously.
+// 另检查十个查找/替换按钮的八语言 Tooltip 及语义；用正常指针事件悬停图标子控件，
+// 等待真实提示弹出，检查语言切换、关闭清理及定位栏关闭按钮，不抢编辑焦点。
+// -basic/-dark 选择悬停提示场景的主题；另以 GOUI_PLAT_SCALE=1/1.5 运行。
 package main
 
 import (
@@ -35,6 +38,7 @@ import (
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
 
@@ -70,24 +74,35 @@ var fixture []byte
 type translation struct {
 	Tag, Find, Replacement, Replace, Count string
 	Menu                                   []string
+	Buttons                                []string
 }
 
 func main() {
 	runtime.LockOSThread()
 	out := flag.String("capture-dir", "", "existing temporary directory for PNGs")
+	basicTheme := flag.Bool("basic", false, "Basic appearance for tooltip checks")
+	darkTheme := flag.Bool("dark", false, "Modern dark appearance for tooltip checks")
 	flag.Parse()
 	var languages []translation
 	must(json.Unmarshal(fixture, &languages))
 	check(len(languages) == 8, "missing language fixtures")
 	for _, entry := range languages {
 		check(len(entry.Menu) == 16, "missing menu fixtures")
+		check(len(entry.Buttons) == 10, "missing button tooltip fixtures")
 	}
 	previous := mlang.Language()
 	defer func() { must(mlang.SetLanguage(previous)) }()
 	must(mlang.SetLanguage("en"))
 	app, err := gui.NewApplication("org.golang-gui.SourceViewLocalization")
 	must(err)
-	app.SetStyleSheet(modern.Sheet(modern.Options{}))
+	setTheme := func() {
+		if *basicTheme {
+			app.SetStyleSheet(basic.Sheet())
+		} else {
+			app.SetStyleSheet(modern.Sheet(modern.Options{Dark: *darkTheme}))
+		}
+	}
+	setTheme()
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 850, Height: 540}})
 	must(err)
 	defer win.Destroy()
@@ -140,6 +155,10 @@ func main() {
 		check(find.Placeholder() == entry.Find && replacement.Placeholder() == entry.Replace && count, fmt.Sprintf("%s placeholders/count mismatch: %q/%q", entry.Tag, find.Placeholder(), replacement.Placeholder()))
 		check(find.Snapshot().TextEditing.Placeholder == entry.Find && replacement.Snapshot().TextEditing.Placeholder == entry.Replace, "placeholder semantics were not translated")
 		check(find.Rect().Width > 0 && replacement.Rect().Width > 0, "translated status displaced input")
+		for _, text := range entry.Buttons {
+			w := named(bar, text)
+			check(w != nil && w.Tooltip() == text && w.Snapshot().Tooltip == text, fmt.Sprintf("%s 按钮 %q 的提示或语义不正确", entry.Tag, text))
+		}
 		state := bar.Snapshot().Attributes["sourceview.find"].(map[string]any)
 		check(state["count"] == 3 && state["countComplete"] == true, "language change invalidated count")
 	}
@@ -160,6 +179,50 @@ func main() {
 	var enabled []bool
 	menuFrames, previousMenuFrame := 0, 0
 	var menuAllocation []geometry.Rectangle
+	var tooltipFocus gui.Widget
+	var tooltipStarted time.Time
+	var tooltipTarget gui.Widget
+	var tooltipBounds geometry.Rectangle
+	hover := func(w gui.Widget) {
+		check(w != nil && w.Visible(), "缺少悬停目标")
+		// 按钮中心可以命中 Icon/Label；GOUI 必须向祖先查找提示。
+		tooltipTarget, tooltipBounds = w, w.Snapshot().Bounds
+		must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: tooltipBounds.Center()}))
+		tooltipFocus = win.FocusedWidget()
+		tooltipStarted = time.Now()
+	}
+	tooltipReady := func() bool {
+		if bounds := tooltipTarget.Snapshot().Bounds; bounds != tooltipBounds {
+			// 译文改变计数宽度时按钮会移位；重新悬停同一按钮，而非等待旧坐标上的提示。
+			check(win.FocusedWidget() == tooltipFocus, "提示重定位前输入焦点已改变")
+			log.Printf("tooltip target moved: %q %v -> %v", tooltipTarget.Name(), tooltipBounds, bounds)
+			hover(tooltipTarget)
+			return false
+		}
+		return time.Since(tooltipStarted) >= time.Second
+	}
+	tooltip := func() (string, int) {
+		var text string
+		count := 0
+		for _, p := range win.Popovers() {
+			walk(p.Widget(), func(w gui.Widget) {
+				if info := w.Snapshot(); info.Role == gui.RoleTooltip {
+					text, count = info.Text, count+1
+					check(!p.Modal() && !w.Focusable(), "提示取得了交互焦点")
+				}
+			})
+		}
+		return text, count
+	}
+	assertTooltip := func(want string) {
+		text, count := tooltip()
+		if want == "" {
+			check(count == 0, "旧提示没有关闭")
+		} else {
+			check(count == 1 && text == want, fmt.Sprintf("提示=%q，数量=%d，期望=%q", text, count, want))
+			check(win.FocusedWidget() == tooltipFocus, "提示抢走输入焦点")
+		}
+	}
 	complete := false
 	deadline := time.Now().Add(45 * time.Second)
 	timer := app.NewTimer()
@@ -296,8 +359,62 @@ func main() {
 			phase++
 		case 10:
 			assertBar(languages[4])
+			must(mlang.SetLanguage("en"))
+			setTheme()
+			phase++
+		case 11:
+			hover(named(bar, "Match case"))
+			phase++
+		case 12:
+			if !tooltipReady() {
+				return
+			}
+			assertTooltip("Match case")
+			capture(win.Popovers()[0].Widget(), "tooltip-en")
+			must(mlang.SetLanguage("zh-CN"))
+			assertTooltip("")
+			tooltipStarted = time.Now()
+			phase++
+		case 13:
+			if !tooltipReady() {
+				return
+			}
+			assertTooltip("区分大小写")
+			capture(win.Popovers()[0].Widget(), "tooltip-zh")
+			v.HidePanel()
+			phase++
+		case 14:
+			assertTooltip("")
+			must(v.ShowGoTo())
+			phase++
+		case 15:
+			goTo := panel(v, "sourceview-goto-bar")
+			check(goTo != nil, "定位栏未创建")
+			hover(named(goTo, "关闭"))
+			phase++
+		case 16:
+			if !tooltipReady() {
+				return
+			}
+			assertTooltip("关闭")
+			must(mlang.SetLanguage("de"))
+			tooltipStarted = time.Now()
+			phase++
+		case 17:
+			if !tooltipReady() {
+				return
+			}
+			assertTooltip("Schließen")
+			position := tooltipTarget.Snapshot().Bounds.Center()
+			for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
+				must(win.DispatchEvent(events.PointerEvent{EventType: kind, Position: position, Button: events.PointerButtonLeft}))
+			}
+			check(!panelVisible(v, "sourceview-goto-bar"), "提示拦截了关闭按钮点击")
+			phase++
+		case 18:
+			assertTooltip("")
 			complete = true
-			log.Printf("PASS localization history/focus/menu bounds/reattach/narrow/theme; typography=%s", app.Typography().Name())
+			log.Printf("PASS localization history/focus/menu bounds/reattach/narrow/theme/tooltips; typography=%s", app.Typography().Name())
 			win.Destroy()
 		}
 	})

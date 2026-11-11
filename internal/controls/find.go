@@ -86,6 +86,7 @@ func (b *FindUI) buildSurface() {
 		i.SetStyleName("sourceview.find.icon")
 		w.SetChild(i)
 		name(w, getter)
+		w.SetTooltip(getter())
 		w.ConnectClicked(fn)
 		add(w)
 		return w
@@ -97,6 +98,7 @@ func (b *FindUI) buildSurface() {
 		w.SetStyleName("sourceview.find.option")
 		w.SetChild(child)
 		name(w, getter)
+		w.SetTooltip(getter())
 		w.ConnectChange(func(state widgets.CheckState) { fn(state == widgets.CheckChecked) })
 		add(w)
 		return w

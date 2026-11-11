@@ -90,3 +90,41 @@ SourceView 使用本任务源文件归档，GOUI 使用上述 HEAD 的干净归�
 
 翻译未经过母语人工校对；不承诺阿拉伯语布局镜像。Windows/macOS 桌面、真实键盘/IME、
 分数/混合 DPI、全部字体和 Linux 桌面合成器未验收。
+
+## 2026-11-11 配套按钮 Tooltip
+
+依赖为已发布 GOUI v0.7.0。本轮为查找/替换的十个按钮及定位栏关闭按钮设置 Tooltip，
+复用既有 Name 的翻译 Getter 和挂载期语言连接。输入框继续使用 Placeholder，
+未新增公共 API、主题规则、定时器、Popover 或语言订阅。具体契约见
+[查找浮层](DesignFindBar.md) 和 [界面语言](DesignLocalization.md)。
+
+新增 TestCompanionButtonTooltipsFollowLanguage 先在旧实现上执行，复现所有按钮 Tooltip
+为空；修正后通过。覆盖构造时提示、同一批控件八语言切换、WidgetInfo.Tooltip、
+定位关闭提示的独立字面预期，以及查询/替换/定位输入值保持。
+窗口 testdata/languages.json 增加独立编写的十个按钮译文，不从生产 Getter 导出。
+
+通过：
+
+- `go test ./...`、`GOWORK=off go test ./...`。
+- `go test -race ./sourceview ./internal/controls -run 'CompanionButtonTooltips|FindBarTranslated|GoTo' -count=1`。
+  sourceview 执行相关测试通过；internal/controls 没有匹配该筛选的测试，不将其记作新增覆盖。
+- Linux amd64 / Go 1.25.8 / Pango / Software / 私有 Xvnc :190 / Xfwm4 合成，
+  Basic、Modern light/dark × 100%/150% 六组 localization 全流程通过。
+  每组保留原有菜单、计数、历史、焦点、缩窄及重挂载断言；另核对八语言按钮 Tooltip，
+  经正常 PointerMove 在 Icon/Label 中心悬停，等待真实 RoleTooltip 原生浮窗，检查
+  英文/中文提示、关闭查找栏后的清理、定位关闭按钮中文/德文提示，以及提示显示时
+  PointerDown/Up 正常关闭定位栏并释放提示。提示不取得模态或键盘焦点。
+
+首轮 Modern 的中文悬停检查失败：翻译后的计数改变布局，按钮右移 16 DIP，原指针
+已落到按钮之外。用例现在比较实际 Bounds，仅在目标移动时通过正常事件重新悬停该按钮，
+不靠延长等待掩盖命中变化；原位置上的提示关闭符合框架契约。
+另一次定位运行在既有菜单选中态断言失败，日志保留，未删除或弱化断言；最终运行将
+私有桌面的原生指针放在测试窗口外，避免混入程序分发的输入，六组保留全流程均通过。
+未对此单次菜单现象作独立产品缺陷结论。
+
+首轮日志在 `/tmp/sourceview-tooltip-P2s7Nu`，定位日志在
+`/tmp/sourceview-tooltip-final-hH3cZN`、`/tmp/sourceview-tooltip-pointer-wAdKei`；
+最终六组及观察用 PNG 在 `/tmp/sourceview-tooltip-verified-xSMPLc`。
+RenderWidget 图片只观察控件内容，不替代原生 Popover 状态与交互断言，也不作为桌面合成金图。
+测试桌面及所属进程已回收，未操作用户桌面、文件、剪贴板或系统语言。
+Windows/macOS 原生窗口、物理输入法、混合 DPI 和其他绘制后端本轮未运行。

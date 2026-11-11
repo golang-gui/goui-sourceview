@@ -429,7 +429,12 @@ func (b *findBar) updateLabels() {
 	b.Find.SetPlaceholder(resource.Find())
 	b.ReplacementInput.SetPlaceholder(resource.Replace())
 	for widget, getter := range b.Names {
-		widget.SetName(getter())
+		text := getter()
+		widget.SetName(text)
+		// Inputs use placeholders; the other named controls are icon buttons.
+		if widget != b.Find && widget != b.ReplacementInput {
+			widget.SetTooltip(text)
+		}
 	}
 	b.refresh()
 }
