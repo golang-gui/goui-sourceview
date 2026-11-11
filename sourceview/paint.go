@@ -29,7 +29,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 	p.Save()
 	p.SetClipRect(geometry.Rect(v.gutter, 0, max(0, v.textRight()-v.gutter), bounds.Height))
 	caretRow := v.displayLine(v.displayCaret())
-	selection := v.Selection().Range()
+	selections := v.selectionRanges()
 	occurrence := v.occurrenceWord()
 	var brackets []TextRange
 	if activeFocus(v) && (v.colors.BracketMatchBackground.A != 0 || v.colors.BracketMatchBorder.A != 0) {
@@ -86,7 +86,9 @@ func (v *SourceView) Paint(p gui.Painter) {
 			if activeFocus(v) {
 				c = v.colors.SelectionBackground
 			}
-			v.paintRange(p, item, r, origin, selection, c)
+			for _, selection := range selectionIntersections(selections, r) {
+				v.paintRange(p, item, r, origin, selection, c)
+			}
 			if c := v.colors.BracketMatchBorder; c.A != 0 {
 				for _, rect := range bracketRects {
 					// Strokes are centered on the path. Keep the 1-DIP border
@@ -94,9 +96,11 @@ func (v *SourceView) Paint(p gui.Painter) {
 					p.DrawRect(geometry.Rect(rect.X+.5, rect.Y+.5, rect.Width-1, rect.Height-1), 1, graphics.ColorOf(c))
 				}
 			}
-			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 && (item.Paged == nil || item.Paged.CachedOffset(r.End-r.Start)) {
-				edge := item.Geometry.Caret(textcore.Position{Offset: r.End - r.Start, Upstream: true})
-				p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))
+			for _, selection := range selectionIntersections(selections, r) {
+				if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 && (item.Paged == nil || item.Paged.CachedOffset(r.End-r.Start)) {
+					edge := item.Geometry.Caret(textcore.Position{Offset: r.End - r.Start, Upstream: true})
+					p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))
+				}
 			}
 		}
 		if item.Paged != nil {
@@ -128,6 +132,20 @@ func (v *SourceView) Paint(p gui.Painter) {
 	}
 	v.paintInlineSuggestion(p)
 	if activeFocus(v) && v.caretOn && gui.IsEnabled(v) {
+		if v.projection == nil {
+			for _, c := range v.additional {
+				row := v.document.model.LineAt(c.selection.Caret)
+				paragraph := v.cachedParagraph(row)
+				if paragraph == nil || v.collapsedOffsetHidden(row, paragraph, c.selection.Caret, c.upstream) {
+					continue
+				}
+				line := v.displayRange(row)
+				rect, ok := v.paragraphCaret(row, paragraph, textcore.Position{Offset: c.selection.Caret - line.Start, Upstream: c.upstream}, true)
+				if ok {
+					p.FillRect(rect, graphics.ColorOf(v.colors.Caret))
+				}
+			}
+		}
 		if r, ok := v.cachedCaretRect(); ok && !v.collapsedOffsetHidden(caretRow, v.cachedParagraph(caretRow), v.Selection().Caret, v.upstream) {
 			p.FillRect(r, graphics.ColorOf(v.colors.Caret))
 			v.im.SetCaretRect(r)

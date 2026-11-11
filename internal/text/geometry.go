@@ -17,7 +17,8 @@ import (
 // A byte boundary can have two visual positions, at a soft wrap or a bidi
 // transition. Upstream chooses the trailing edge of the preceding cluster;
 // downstream chooses the leading edge of the following cluster. Neither the
-// affinity nor native layout coordinates belong in the shared Model.
+// active affinity nor native layout coordinates belong in the shared Model;
+// history may retain a value copy of affinity for its initiating view.
 type Position struct {
 	Offset   int
 	Upstream bool

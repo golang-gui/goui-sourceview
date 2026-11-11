@@ -25,6 +25,7 @@ var (
 	ErrClipboardUnavailable = errors.New("sourceview: clipboard unavailable")
 	ErrUnknownLanguage      = errors.New("sourceview: unknown language")
 	ErrOperationLimit       = editor.ErrOperationLimit
+	ErrMultipleSelections   = errors.New("sourceview: operation requires one selection")
 	ErrOperationChanged     = errors.New("sourceview: operation context changed")
 )
 
@@ -63,20 +64,24 @@ type SourceView struct {
 	windowFocus            signal.Handle
 
 	// Selection and editing options.
-	selectionTrail                    selectionTrail
-	selection                         TextSelection
-	selectionRevision, selectionEpoch uint64
-	upstream                          bool
-	preferredX                        float32
-	preferredSet                      bool
-	readOnly, acceptsTab, escapeTab   bool
-	indent                            IndentOptions
-	wrap                              WrapMode
-	showLineNumbers                   bool
-	showLineMarks                     bool
-	markColumn                        float32
-	execution                         *trackedLineMark
-	lineMarkSignal                    signal.Signal1[LineMarkEvent]
+	selectionTrail                                selectionTrail
+	selection                                     TextSelection
+	additional                                    []cursorState
+	selectionRangesCache                          []TextRange
+	selectionRangesEpoch, selectionRangesRevision uint64
+	selectionCommit                               *selectionCommit
+	selectionRevision, selectionEpoch             uint64
+	upstream                                      bool
+	preferredX                                    float32
+	preferredSet                                  bool
+	readOnly, acceptsTab, escapeTab               bool
+	indent                                        IndentOptions
+	wrap                                          WrapMode
+	showLineNumbers                               bool
+	showLineMarks                                 bool
+	markColumn                                    float32
+	execution                                     *trackedLineMark
+	lineMarkSignal                                signal.Signal1[LineMarkEvent]
 
 	// Native text and input-method resources belong to this view.
 	context                      typography.Context
@@ -180,12 +185,13 @@ type SourceView struct {
 	completionEpoch                        uint64
 	closingCompletion, automaticCompletion bool
 
-	selectionSignal signal.Signal1[TextSelection]
-	errorSignal     signal.Signal1[error]
-	scrollSignal    signal.Signal1[geometry.Rectangle]
-	changeSignal    signal.Signal1[TextChange]
-	foldingSignal   signal.Signal0
-	searchState     signal.Signal0
+	selectionSignal  signal.Signal1[TextSelection]
+	selectionsSignal signal.Signal1[[]TextSelection]
+	errorSignal      signal.Signal1[error]
+	scrollSignal     signal.Signal1[geometry.Rectangle]
+	changeSignal     signal.Signal1[TextChange]
+	foldingSignal    signal.Signal0
+	searchState      signal.Signal0
 }
 
 func NewSourceView() *SourceView {
@@ -269,6 +275,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.brackets = bracketState{}
 	v.tagMatches = tagMatchState{}
 	v.selection = TextSelection{}
+	v.additional = nil
 	v.upstream = false
 	v.selectionEpoch++
 	v.selectionRevision = d.model.Revision()
@@ -295,6 +302,9 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.scrollSignal.Emit(geometry.Rect(0, 0, v.viewport.Width, v.viewport.Height))
 	if state.valid(v) {
 		v.selectionSignal.Emit(v.selection)
+		if state.valid(v) {
+			v.selectionsSignal.Emit(v.Selections())
+		}
 	}
 }
 
@@ -333,67 +343,7 @@ func (v *SourceView) setSelection(s TextSelection, upstream, reveal bool) {
 // Only owned input or keyboard movement inside a completion word retains its UI.
 // Explicit setters, pointer input and reentrant callbacks use setSelection.
 func (v *SourceView) setSelectionKeepingCompletion(s TextSelection, upstream, reveal bool, keep *completionSession) {
-	v.cancelViewRestore()
-	v.ClearInlineSuggestion()
-	defer v.searchState.Emit()
-	state := v.operationState()
-	s = v.clampSelection(s)
-	foldingChanged := false
-	if reveal {
-		foldingChanged = v.unfoldSelection(s)
-		if !state.valid(v) || v.Destroyed() {
-			return
-		}
-	}
-	if v.context != nil && v.projection == nil {
-		if s.Anchor == s.Caret {
-			s.Caret = v.snapOffset(s.Caret, true)
-			s.Anchor = s.Caret
-		} else {
-			forward := s.Caret >= s.Anchor
-			s.Anchor = v.snapOffset(s.Anchor, !forward)
-			s.Caret = v.snapOffset(s.Caret, forward)
-		}
-	}
-	if !state.valid(v) {
-		return
-	}
-	old := v.selection
-	v.reveal = nil
-	if reveal {
-		v.pendingAnchor = false
-		v.anchor.valid = false
-	}
-	v.selection = s
-	v.upstream = upstream
-	v.selectionRevision = v.document.model.Revision()
-	v.selectionEpoch++
-	v.cancelPaste()
-	v.cancelEdit()
-	if keep != nil && v.completion == keep && !foldingChanged && s.Anchor == s.Caret && s.Caret >= keep.range_.Start && s.Caret <= keep.range_.End {
-		keep.state = v.operationState()
-		keep.pending = true // Old candidates cannot be committed from selection callbacks.
-	} else {
-		v.closeCompletion()
-	}
-	if v.document != state.document || v.mountEpoch != state.mount || v.document.model.Revision() != state.revision || v.selectionEpoch != state.selection+1 {
-		return
-	}
-	v.currentMatch = nil
-	v.preferredSet = false
-	v.resetBlink()
-	v.RequestPaint()
-	selectionEpoch := v.selectionEpoch
-	v.updateMenu()
-	if reveal {
-		v.RevealSelection()
-	}
-	if old != s && v.selectionEpoch == selectionEpoch {
-		v.selectionSignal.Emit(s)
-	}
-	if foldingChanged && !v.Destroyed() && v.document == state.document && v.mountEpoch == state.mount {
-		v.foldingSignal.Emit()
-	}
+	v.setCursorStatesKeepingCompletion([]cursorState{{selection: s, upstream: upstream}}, reveal, keep)
 }
 
 func (v *SourceView) ReadOnly() bool { return v.readOnly }
@@ -570,6 +520,8 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 		r.End--
 	}
 	text, _ := m.Slice(r)
+	info.Attributes["goui.sourceview"].(map[string]any)["selections"] = v.snapshotSelections()
+	info.Attributes["goui.sourceview"].(map[string]any)["inputPending"] = v.pendingInput != nil
 	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: gui.TextSelection(v.Selection()), Length: m.Len(), VisibleRange: gui.TextRange(r), VisibleText: text}
 	v.snapshotFolding(&info, first, last)
 	v.snapshotCollapsedLines(&info, first, last)
@@ -630,18 +582,29 @@ func (v *SourceView) changed(c TextChange, splices []highlight.Splice, reset boo
 	v.cancelEdit()
 	v.currentMatch = nil
 	v.updateMenu()
-	old := v.selection
+	old := v.Selections()
 	if v.selectionRevision < c.Revision {
-		if c.Reset {
-			v.selection = TextSelection{}
+		if commit := v.selectionCommit; commit != nil && !commit.applied && commit.state.document == v.document && commit.state.mount == v.mountEpoch && commit.state.revision+1 == c.Revision && commit.state.selection == v.selectionEpoch {
+			v.assignCursors(commit.after)
+			v.selectionEpoch++
+			commit.applied = true
+		} else if c.Reset {
+			v.assignCursors(nil)
 		} else {
-			for _, e := range c.Edits {
-				v.selection.Anchor = textcore.MapOffset(v.selection.Anchor, e)
-				v.selection.Caret = textcore.MapOffset(v.selection.Caret, e)
+			cursors := v.cursors()
+			offsets := make([]int, 0, len(cursors)*2)
+			for _, s := range cursors {
+				offsets = append(offsets, s.selection.Anchor, s.selection.Caret)
 			}
+			mapped := textcore.MapOffsets(offsets, c.Edits)
+			for i := range cursors {
+				cursors[i].selection = TextSelection{Anchor: mapped[i*2], Caret: mapped[i*2+1]}
+			}
+			v.assignCursors(normalizeCursors(cursors))
 		}
 		v.selectionRevision = c.Revision
 	}
+
 	if reset || c.Reset || hadHiddenRows {
 		if c.Reset {
 			v.invalidateTextLayout()
@@ -679,9 +642,7 @@ func (v *SourceView) changed(c TextChange, splices []highlight.Splice, reset boo
 	if v.mountEpoch != epoch || v.document != d || !v.mounted {
 		return
 	}
-	if old != v.selection {
-		v.selectionSignal.Emit(v.Selection())
-	}
+	v.emitSelections(old)
 	if v.mounted && v.mountEpoch == epoch && v.document == d {
 		v.changeSignal.Emit(c)
 		if lineCollapseChanged && v.mounted && v.mountEpoch == epoch && v.document == d && !v.Destroyed() {

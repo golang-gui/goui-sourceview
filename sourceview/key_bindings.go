@@ -210,6 +210,9 @@ func (v *SourceView) keyCommand(event events.KeyEvent) (Command, bool) {
 // runBoundCommand executes core commands after transient completion handling.
 // Internal companion commands remain available without a key binding.
 func (v *SourceView) runBoundCommand(command Command) bool {
+	if len(v.additional) > 0 && !multipleCommandReady(command) {
+		return true
+	}
 	run := func(fn func() error) {
 		if v.editable() == nil {
 			v.report(fn())
@@ -258,7 +261,12 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 	case CommandPaste:
 		run(v.Paste)
 	case CommandDeleteSelection:
-		run(func() error { return v.replace(v.Selection().Range(), "", true) })
+		run(func() error {
+			if len(v.additional) > 0 {
+				return v.replaceMultiple([]string{""})
+			}
+			return v.replace(v.Selection().Range(), "", true)
+		})
 	case CommandSelectAll:
 		state := v.operationState()
 		v.cancelPreedit()

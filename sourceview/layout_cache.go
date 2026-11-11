@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"encoding/binary"
 	"image/color"
 	"slices"
 	"strings"
@@ -67,6 +68,7 @@ type paragraphStyle struct {
 	languageEpoch                       uint64
 	tokenValid                          bool
 	selection                           TextRange
+	selections                          string
 	focused                             bool
 }
 
@@ -179,6 +181,15 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	// Selection geometry is painted independently. Only an actual foreground
 	// override makes selection/focus part of the native text's color identity.
 	style := paragraphStyle{highlightEpoch: v.document.highlightEpoch, highlightStyleEpoch: v.highlightStyleEpoch, scheme: v.appliedScheme, language: v.document.language, languageEpoch: v.document.languageEpoch, tokenVersion: version, tokenValid: valid, selection: sel, focused: sel.End > sel.Start}
+	if len(v.additional) > 0 && v.colors.SelectionForeground.A == 255 && focus && v.projection == nil {
+		var encoded []byte
+		for _, s := range selectionIntersections(v.selectionRanges(), r) {
+			encoded = binary.AppendVarint(encoded, int64(max(r.Start, s.Start)-r.Start))
+			encoded = binary.AppendVarint(encoded, int64(min(r.End, s.End)-r.Start))
+		}
+		style.selections = string(encoded)
+		style.focused = len(encoded) > 0
+	}
 	state, epoch := v.operationState(), v.layoutEpoch
 	p := v.layouts[key]
 	adopted := false
@@ -394,15 +405,32 @@ func (v *SourceView) paragraphColors(length int, style paragraphStyle, tokens []
 	if v.colors.SelectionForeground.A == 255 && style.focused {
 		sel = style.selection
 	}
-	appendSelected := func(start, end int, c color.NRGBA) {
-		if sel.Start < end && sel.End > start {
-			appendRange(start, min(end, sel.Start), c)
-			appendRange(max(start, sel.Start), min(end, sel.End), v.colors.SelectionForeground)
-			appendRange(max(start, sel.End), end, c)
-		} else {
-			appendRange(start, end, c)
+	selected := []TextRange{sel}
+	if style.selections != "" {
+		selected = nil
+		data := []byte(style.selections)
+		for len(data) > 0 {
+			start, n := binary.Varint(data)
+			data = data[n:]
+			end, n := binary.Varint(data)
+			data = data[n:]
+			selected = append(selected, TextRange{Start: int(start), End: int(end)})
 		}
 	}
+	appendSelected := func(start, end int, c color.NRGBA) {
+		for _, s := range selectionIntersections(selected, TextRange{Start: start, End: end}) {
+			if s.Start > start {
+				appendRange(start, min(end, s.Start), c)
+			}
+			lo, hi := max(start, s.Start), min(end, s.End)
+			if hi > lo {
+				appendRange(lo, hi, v.colors.SelectionForeground)
+				start = hi
+			}
+		}
+		appendRange(start, end, c)
+	}
+
 	si := 0
 	appendHighlighted := func(start, end int, c color.NRGBA) {
 		for start < end {

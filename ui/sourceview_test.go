@@ -247,3 +247,31 @@ func TestInlineSuggestionsConfiguration(t *testing.T) {
 	}
 	initial.Unmount(ctx, widget)
 }
+
+func TestCompleteSelectionDeclarationCopiesAndUnsubscribes(t *testing.T) {
+	ctx := &context{}
+	d := NewDocument("abcdef")
+	input := []TextSelection{{Anchor: 0, Caret: 1}, {Anchor: 4, Caret: 5}}
+	events := 0
+	view := SourceView().Document(d).Selections(input).OnSelections(func([]TextSelection) { events++ })
+	input[0].Caret = 3
+	widget := view.Mount(ctx).(*source.SourceView)
+	view.Update(ctx, widget)
+	if got := widget.Selections(); len(got) != 2 || got[0].Caret != 1 || events != 0 {
+		t.Fatal(got, events)
+	}
+	if err := widget.SetSelections([]TextSelection{{Anchor: 2, Caret: 2}, {Anchor: 5, Caret: 5}}); err != nil || events != 1 {
+		t.Fatal(err, events)
+	}
+	SourceView().Document(d).Selection(TextSelection{Caret: 2}).Update(ctx, widget)
+	// An explicit scalar declaration is a complete one-element selection set,
+	// even when the old primary's coordinates already match.
+	if len(widget.Selections()) != 1 {
+		t.Fatal("scalar declaration retained extra cursors")
+	}
+	view.Unmount(ctx, widget)
+	widget.SetSelection(TextSelection{})
+	if events != 1 {
+		t.Fatal("unmount leaked collection callback", events)
+	}
+}

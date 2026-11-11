@@ -8,6 +8,7 @@ import (
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
 	base "github.com/golang-gui/goui/ui"
+	"slices"
 )
 
 type SourceViewView struct {
@@ -21,6 +22,11 @@ type SourceViewView struct {
 	readOnly, acceptsTab                                                 bool
 	selection                                                            *TextSelection
 	selectionSource                                                      base.BindState[TextSelection]
+	selections                                                           []TextSelection
+	selectionsSet                                                        bool
+	selectionsSource                                                     base.BindState[[]TextSelection]
+	onSelections                                                         func([]TextSelection)
+	selectionsWrite                                                      bool
 	fields                                                               bits.Bitmap[uint8]
 	indent                                                               *IndentOptions
 	wrap                                                                 *WrapMode
@@ -54,6 +60,11 @@ func (v *SourceViewView) AcceptsTab(b bool) *SourceViewView    { v.acceptsTab = 
 // Selection declares UTF-8 byte endpoints. It removes a prior read binding and
 // its generated writeback, while preserving an explicit OnSelection callback.
 func (v *SourceViewView) Selection(s TextSelection) *SourceViewView {
+	v.selections, v.selectionsSource, v.selectionsSet = nil, nil, false
+	if v.selectionsWrite {
+		v.onSelections = nil
+		v.selectionsWrite = false
+	}
 	v.selection = &s
 	v.selectionSource = nil
 	if v.fields.Check(writeSelection) {
@@ -114,6 +125,11 @@ func (v *SourceViewView) OnError(fn func(error)) *SourceViewView { v.onError = f
 // removes the binding. nil is a no-op. The source must be a stable pointer.
 func (v *SourceViewView) BindSelection(s base.BindState[TextSelection]) *SourceViewView {
 	if s != nil {
+		v.selections, v.selectionsSource, v.selectionsSet = nil, nil, false
+		if v.selectionsWrite {
+			v.onSelections = nil
+			v.selectionsWrite = false
+		}
 		v.selectionSource = s
 		v.onSelection = s.Set
 		v.fields.Set(writeSelection, true)
@@ -181,6 +197,7 @@ func boolOption(value *bool, fallback bool) bool {
 }
 
 type state struct {
+	onSelections     func([]TextSelection)
 	document         *Document
 	indent           IndentOptions
 	wrap             WrapMode
@@ -200,6 +217,11 @@ func (v *SourceViewView) Mount(ctx base.BuildContext) gui.Widget {
 	s := &state{document: w.Document(), indent: w.IndentOptions(), wrap: w.WrapMode(), lineNumbers: w.ShowLineNumbers()}
 
 	s.handles = signal.Handles{
+		w.ConnectSelections(func(value []TextSelection) {
+			if s.onSelections != nil {
+				s.onSelections(value)
+			}
+		}),
 		w.ConnectLineMarkAction(func(event LineMarkEvent) {
 			if s.onLineMarkAction != nil {
 				s.onLineMarkAction(event)
@@ -322,7 +344,23 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 			panic(err)
 		}
 	}
-	if v.selectionSource != nil {
+	if v.selectionsSource != nil {
+		base.BindValue(ctx, "selections", v.selectionsSource, func(values []TextSelection) {
+			s.handles.Block()
+			defer s.handles.Unblock()
+			if !slices.Equal(w.Selections(), values) {
+				if err := w.SetSelections(values); err != nil {
+					panic(err)
+				}
+			}
+		})
+	} else if v.selectionsSet {
+		if !slices.Equal(w.Selections(), v.selections) {
+			if err := w.SetSelections(v.selections); err != nil {
+				panic(err)
+			}
+		}
+	} else if v.selectionSource != nil {
 		base.BindValue(ctx, "selection", v.selectionSource, func(selection TextSelection) {
 			s.handles.Block()
 			defer s.handles.Unblock()
@@ -330,9 +368,10 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 				w.SetSelection(selection)
 			}
 		})
-	} else if v.selection != nil && w.Selection() != *v.selection {
+	} else if v.selection != nil && (w.Selection() != *v.selection || len(w.Selections()) != 1) {
 		w.SetSelection(*v.selection)
 	}
+	s.onSelections = v.onSelections
 	s.onChange = v.onChange
 	s.onSelection = v.onSelection
 	s.onError = v.onError

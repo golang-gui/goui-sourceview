@@ -255,9 +255,20 @@ func (v *SourceView) refreshCompletions(state operationState, c CompletionContex
 	return v.presentCompletions(state, v.completionEpoch, c, DefaultCompletions(c))
 }
 
-func (v *SourceView) complete(explicit bool) error { return v.completeTriggered(explicit, "") }
+func (v *SourceView) complete(explicit bool) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
+	return v.completeTriggered(explicit, "")
+}
 
 func (v *SourceView) completeTriggered(explicit bool, trigger string) error {
+	if len(v.additional) > 0 {
+		if explicit {
+			return ErrMultipleSelections
+		}
+		return nil
+	}
 	v.ClearInlineSuggestion()
 	if v.closingCompletion {
 		return ErrOperationChanged

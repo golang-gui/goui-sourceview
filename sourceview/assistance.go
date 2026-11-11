@@ -203,6 +203,9 @@ func (v *SourceView) smartEdge(p *paragraph, pos textcore.Position, key events.K
 }
 
 func (v *SourceView) occurrenceWord() string {
+	if len(v.additional) > 0 {
+		return ""
+	}
 	if !v.highlightOccurrences || v.projection != nil {
 		return ""
 	}

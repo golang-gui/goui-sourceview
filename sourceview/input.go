@@ -347,7 +347,9 @@ func (v *SourceView) inputKey(event events.KeyEvent) bool {
 			known, mutates = (v.acceptsTab || inlineVisible) && !v.escapeTab, true
 		}
 	}
-	if known && v.delayInput(deferredInput{apply: func() { v.applyKey(event) }, geometry: geometry, mutates: mutates}) {
+	action := deferredInput{apply: func() { v.applyKey(event) }, geometry: geometry, mutates: mutates}
+	v.configureMultipleKey(&action, event)
+	if known && v.delayInput(action) {
 		return true
 	}
 	return v.applyKey(event)
@@ -383,6 +385,11 @@ func (v *SourceView) applyKey(event events.KeyEvent) bool {
 	if base == 0 {
 		switch event.Key {
 		case events.KeyEscape:
+			if len(v.additional) > 0 {
+				v.SetSelection(v.Selection())
+				handled = true
+				break
+			}
 			v.cancelPreedit()
 			v.escapeTab = true
 			handled = true
@@ -397,6 +404,10 @@ func (v *SourceView) applyKey(event events.KeyEvent) bool {
 		case events.KeyEnter:
 			run(v.newline)
 		case events.KeyBackspace, events.KeyDelete:
+			if len(v.additional) > 0 {
+				run(func() error { return v.multipleDelete(event.Key == events.KeyDelete) })
+				break
+			}
 			wasCompleting := v.completion != nil || v.completionQueue != nil && v.completionQueue.pending()
 			continued := false
 			run(func() error {
@@ -486,6 +497,10 @@ func (v *SourceView) navigate(key events.Key, extend bool) {
 }
 
 func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep *completionSession) {
+	if len(v.additional) > 0 {
+		v.multipleNavigate(key, extend)
+		return
+	}
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -637,10 +652,13 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 // It retains operations after normal input dispatch, never an EventContext or
 // native Handled pointer. Existing frame work prepares their measured stops.
 type deferredInput struct {
+	plan              func(cursorState) (editor.Plan, error)
+	navigate          func(cursorState) (cursorState, error)
 	apply             func()
 	geometry, mutates bool
 }
 type inputBatch struct {
+	multiple *multipleInput
 	state    operationState
 	bindings uint64
 	readOnly bool
@@ -706,6 +724,11 @@ func (v *SourceView) delayInput(action deferredInput) bool {
 		v.pendingInput = nil
 	}
 	if v.pendingInput == nil {
+		if len(v.additional) > 0 && (action.plan != nil || action.navigate != nil) {
+			v.pendingInput = &inputBatch{state: v.operationState(), bindings: v.keyBindingsEpoch, readOnly: v.readOnly}
+		}
+	}
+	if v.pendingInput == nil {
 		if !action.geometry {
 			return false
 		}
@@ -743,6 +766,34 @@ func (v *SourceView) inputStep(deadline time.Time) {
 			return
 		}
 		action := q.actions[0]
+		if len(v.additional) > 0 && (action.plan != nil || action.navigate != nil) {
+			before := v.operationState()
+			done, err := v.advanceMultipleInput(q, action, deadline)
+			if err != nil && err != errSelectionGeometry {
+				v.pendingInput = nil
+				if err != errSelectionLayoutFailed {
+					v.report(err)
+				}
+				return
+			}
+			if !done {
+				v.RequestPaint()
+				return
+			}
+			if v.pendingInput != q || !q.advance(v, before, action.mutates) {
+				if v.pendingInput == q {
+					v.pendingInput = nil
+				}
+				return
+			}
+			q.actions[0] = deferredInput{}
+			q.actions = q.actions[1:]
+			if len(q.actions) == 0 {
+				v.pendingInput = nil
+				return
+			}
+			continue
+		}
 		if action.geometry && !v.inputGeometryReady() {
 			row := v.document.model.LineAt(v.Selection().Caret)
 			if _, failed := v.layoutFailures[v.paragraphKey(row)]; failed {

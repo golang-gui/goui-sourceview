@@ -54,6 +54,9 @@ func (v *SourceView) SetInlineSuggestionsEnabled(enabled bool) {
 // return false, nil. Invalid text/ranges return an error without replacing the
 // existing suggestion. The host owns requests, cancellation and generation order.
 func (v *SourceView) SetInlineSuggestion(document *Document, revision uint64, suggestion InlineSuggestion) (bool, error) {
+	if len(v.additional) > 0 {
+		return false, ErrMultipleSelections
+	}
 	if document != v.document || revision != v.document.model.Revision() {
 		return false, nil
 	}

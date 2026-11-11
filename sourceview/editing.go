@@ -144,6 +144,9 @@ func (v *SourceView) editStep() {
 // or the current line. Nil means accepted (or no provider); delayed errors use
 // ConnectError. Any change of revision, selection, options or mount cancels it.
 func (v *SourceView) ReindentSelection() error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -168,6 +171,9 @@ func (v *SourceView) ReindentSelection() error {
 // JoinLines joins selected logical lines, or the current and following line.
 // It is an explicit text operation; it does not preserve language semantics.
 func (v *SourceView) JoinLines() error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	s := v.Selection()
 	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) {
 		return editor.CleanupPlan(ctx, text, s, "join")
@@ -177,6 +183,9 @@ func (v *SourceView) JoinLines() error {
 // TrimTrailingWhitespace removes ASCII space/tab suffixes from selected logical
 // lines, or the whole document for an empty selection. LF and NBSP are retained.
 func (v *SourceView) TrimTrailingWhitespace() error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	s := v.Selection()
 	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) {
 		return editor.CleanupPlan(ctx, text, s, "trim")
@@ -186,6 +195,9 @@ func (v *SourceView) TrimTrailingWhitespace() error {
 // TransformCase converts the selection, or the language word at the caret.
 // Unicode conversion may change byte length; the result is one undo item.
 func (v *SourceView) TransformCase(mode CaseMode) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if mode != CaseUpper && mode != CaseLower {
 		return fmt.Errorf("sourceview: invalid case mode")
 	}

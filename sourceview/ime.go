@@ -1,6 +1,7 @@
 package sourceview
 
 import (
+	"github.com/golang-gui/goui-sourceview/internal/editor"
 	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/gui"
 )
@@ -71,7 +72,9 @@ func (v *SourceView) commit(c gui.IMCommit) {
 		return
 	}
 	v.cancelViewRestore()
-	if v.delayInput(deferredInput{apply: func() { v.applyCommit(c) }, geometry: true, mutates: true}) {
+	action := deferredInput{apply: func() { v.applyCommit(c) }, geometry: true, mutates: true}
+	action.plan = func(s cursorState) (editor.Plan, error) { return replacementPlan(s, c.Text), nil }
+	if v.delayInput(action) {
 		return
 	}
 	v.applyCommit(c)
@@ -96,6 +99,10 @@ func (v *SourceView) applyCommit(c gui.IMCommit) {
 		v.projection = nil
 		v.invalidateLayout()
 		atomic = true
+	}
+	if len(v.additional) > 0 {
+		v.report(v.replaceMultiple([]string{c.Text}))
+		return
 	}
 	if !atomic {
 		if handled, err := v.linkedTag(r, c.Text); handled {

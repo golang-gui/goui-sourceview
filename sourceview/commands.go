@@ -10,6 +10,10 @@ import (
 )
 
 func (v *SourceView) ReplaceSelection(text string) error {
+	if len(v.additional) > 0 {
+		v.pendingInput = nil
+		return v.replaceMultiple([]string{text})
+	}
 	v.pendingInput = nil
 	return v.replace(v.Selection().Range(), text, true)
 }
@@ -91,11 +95,33 @@ func (v *SourceView) history(undo bool) bool {
 	}
 	d := v.document
 	epoch := v.mountEpoch
+	var commit *selectionCommit
+	if selections := d.model.HistorySelections(undo); len(selections) > 0 {
+		commit = &selectionCommit{state: state, after: cursorsFromHistory(selections)}
+		previous := v.selectionCommit
+		v.selectionCommit = commit
+		defer func() {
+			if v.selectionCommit == commit {
+				v.selectionCommit = previous
+			}
+		}()
+	}
 	var result textcore.HistoryResult
 	if undo {
 		result = d.model.UndoWithSelection()
 	} else {
 		result = d.model.RedoWithSelection()
+	}
+	if commit != nil && commit.applied {
+		if v.document == d && v.mountEpoch == epoch && v.selectionEpoch == state.selection+1 {
+			v.resetBlink()
+			v.RevealSelection()
+		}
+		return result.Applied
+	}
+	if result.Applied && len(result.Selections) > 0 && v.document == d && v.mountEpoch == epoch && d.model.Revision() == result.Revision && v.selectionEpoch == state.selection {
+		v.setCursorStatesKeepingCompletion(cursorsFromHistory(result.Selections), true, nil)
+		return true
 	}
 	if result.Applied && result.Selection != nil && v.document == d && v.mountEpoch == epoch && d.model.Revision() == result.Revision && v.selectionEpoch == state.selection {
 		v.setSelection(*result.Selection, false, true)
@@ -126,6 +152,11 @@ func (v *SourceView) applyPlan(p editor.Plan) error {
 }
 
 func (v *SourceView) Indent(outdent bool) error {
+	if len(v.additional) > 0 {
+		return v.multiplePlans(func(c cursorState) (editor.Plan, error) {
+			return editor.Indent(v.document.model, c.selection, editor.IndentOptions(v.indent), outdent)
+		})
+	}
 	p, err := editor.Indent(v.document.model, v.Selection(), editor.IndentOptions{TabWidth: v.indent.TabWidth, IndentWidth: v.indent.IndentWidth, InsertSpaces: v.indent.InsertSpaces}, outdent)
 	if err != nil {
 		return err
@@ -134,6 +165,12 @@ func (v *SourceView) Indent(outdent bool) error {
 }
 
 func (v *SourceView) tab(outdent bool) error {
+	if len(v.additional) > 0 {
+		if outdent {
+			return v.Indent(true)
+		}
+		return v.replaceMultiple([]string{v.indentUnit()})
+	}
 	s := v.Selection()
 	if outdent || s.Anchor != s.Caret {
 		return v.Indent(outdent)
@@ -163,12 +200,18 @@ func (v *SourceView) ApplyEdits(document *Document, revision uint64, edits []Tex
 	if document != v.document || revision != v.document.model.Revision() {
 		return ErrOperationChanged
 	}
+	if len(v.additional) > 0 {
+		return v.applyMultiple(edits, []cursorState{{selection: after}})
+	}
 	return v.applyPlan(editor.Plan{Edits: edits, Before: v.Selection(), After: after})
 }
 
 // InsertLine inserts an indented blank line above/below the caret's logical line.
 // Existing text is preserved, including when there is a selection.
 func (v *SourceView) InsertLine(below bool) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -181,6 +224,9 @@ func (v *SourceView) InsertLine(below bool) error {
 
 // MoveWord moves to the previous code-word start or next code-word end.
 func (v *SourceView) MoveWord(forward, extend bool) {
+	if len(v.additional) > 0 {
+		return
+	}
 	if v.Destroyed() || !gui.IsEnabled(v) {
 		return
 	}
@@ -191,6 +237,9 @@ func (v *SourceView) MoveWord(forward, extend bool) {
 // DeleteWord deletes the selection, a whitespace run or one code word.
 // Each invocation has its own undo item. At a document edge it is a no-op.
 func (v *SourceView) DeleteWord(forward bool) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -225,6 +274,9 @@ func (v *SourceView) DeleteWord(forward bool) error {
 // SelectLine expands to whole logical lines, including the following LF.
 // Repeating the command extends the selection one more line downward.
 func (v *SourceView) SelectLine() {
+	if len(v.additional) > 0 {
+		return
+	}
 	v.pendingInput = nil
 	v.selectLine()
 }
@@ -248,6 +300,9 @@ func (v *SourceView) selectLine() {
 // JumpToBracket jumps between a confirmed pair adjacent to the caret. Unknown,
 // unmatched or out-of-budget pairs leave the selection unchanged.
 func (v *SourceView) JumpToBracket() bool {
+	if len(v.additional) > 0 {
+		return false
+	}
 	if v.Destroyed() || !gui.IsEnabled(v) {
 		return false
 	}
@@ -262,6 +317,9 @@ func (v *SourceView) JumpToBracket() bool {
 // MoveLines moves the current logical line or selected lines one row up/down.
 // It preserves indentation and selection direction. A document edge is a no-op.
 func (v *SourceView) MoveLines(down bool) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -275,6 +333,9 @@ func (v *SourceView) MoveLines(down bool) error {
 // DuplicateLines copies the current logical line or selected lines above/below,
 // retaining the selection in the new copy. The clipboard is not involved.
 func (v *SourceView) DuplicateLines(down bool) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -288,6 +349,9 @@ func (v *SourceView) DuplicateLines(down bool) error {
 // DeleteLines deletes the current logical line or selected lines, placing the
 // caret at the deletion boundary. Deleting an empty document is a no-op.
 func (v *SourceView) DeleteLines() error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -299,6 +363,9 @@ func (v *SourceView) DeleteLines() error {
 }
 
 func (v *SourceView) Copy() error {
+	if len(v.additional) > 0 {
+		return v.copyMultiple()
+	}
 	if v.Selection().Anchor == v.Selection().Caret {
 		return nil
 	}
@@ -317,6 +384,9 @@ func (v *SourceView) Copy() error {
 }
 
 func (v *SourceView) Cut() error {
+	if len(v.additional) > 0 {
+		return v.cutMultiple()
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -337,6 +407,9 @@ func (v *SourceView) Cut() error {
 // ConnectError. A changed document, selection or mount cancels the request.
 func (v *SourceView) Paste() error { return v.paste(false) }
 func (v *SourceView) paste(reindent bool) error {
+	if reindent && len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	v.cancelEdit()
 	if err := v.editable(); err != nil {
 		return err
@@ -418,6 +491,10 @@ func (r *pasteRequest) complete(text string, err error) {
 		}
 	}
 
+	if len(v.additional) > 0 {
+		v.report(v.multiplePaste(text))
+		return
+	}
 	q, before := v.pendingInput, v.operationState()
 	err = v.replace(v.Selection().Range(), text, true)
 	v.report(err)
@@ -431,6 +508,9 @@ func (r *pasteRequest) complete(text string, err error) {
 // ToggleLineComment uses the language's line marker. Empty configuration is a
 // normal no-op. A selection ending at the next line start excludes that line.
 func (v *SourceView) ToggleLineComment() error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	marker := v.definitionAt(v.Selection().Caret).Editing().Comments.Line
 	if marker == "" {
 		return nil
@@ -480,6 +560,9 @@ func (v *SourceView) ToggleLineComment() error {
 // ToggleBlockComment wraps the selection or removes its exact configured
 // wrapper. Content is literal; this does not parse or nest block comments.
 func (v *SourceView) ToggleBlockComment() error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	p := v.definitionAt(v.Selection().Caret).Editing().Comments.Block
 	if p.Open == "" || p.Close == "" {
 		return nil

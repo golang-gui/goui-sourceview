@@ -8,6 +8,9 @@ import (
 // MoveWordPart moves across camel-case, acronym, digit and underscore boundaries.
 // Without extension, a nonempty selection collapses towards the requested side.
 func (v *SourceView) MoveWordPart(forward, extend bool) {
+	if len(v.additional) > 0 {
+		return
+	}
 	if v.Destroyed() || !gui.IsEnabled(v) {
 		return
 	}
@@ -26,6 +29,9 @@ func (v *SourceView) MoveWordPart(forward, extend bool) {
 
 // DeleteWordPart deletes one component or the selection as one undo item.
 func (v *SourceView) DeleteWordPart(forward bool) error {
+	if len(v.additional) > 0 {
+		return ErrMultipleSelections
+	}
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -60,6 +66,9 @@ type selectionTrail struct {
 // ExpandSelection selects the smallest confirmed enclosing word, literal,
 // bracket/tag region, logical line or document. Analysis never changes a later selection.
 func (v *SourceView) ExpandSelection() bool {
+	if len(v.additional) > 0 {
+		return false
+	}
 	if v.Destroyed() || !gui.IsEnabled(v) || v.projection != nil {
 		return false
 	}
@@ -107,6 +116,9 @@ func (v *SourceView) ExpandSelection() bool {
 
 // ShrinkSelection restores the preceding actual selection, including direction.
 func (v *SourceView) ShrinkSelection() bool {
+	if len(v.additional) > 0 {
+		return false
+	}
 	t := v.selectionTrail
 	if v.Destroyed() || !gui.IsEnabled(v) || v.projection != nil || !t.state.valid(v) || len(t.steps) == 0 {
 		v.selectionTrail.steps = nil

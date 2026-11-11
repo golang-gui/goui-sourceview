@@ -21,6 +21,7 @@ type ViewState struct {
 	document, revision uint64
 	language           uint64
 	selection          TextSelection
+	additional         []textcore.SelectionState
 	upstream           bool
 	anchor             viewportAnchor
 	folds, lines       []TextRange
@@ -48,7 +49,7 @@ func (v *SourceView) SaveState() (*ViewState, error) {
 		return nil, ErrOperationChanged
 	}
 	s := &ViewState{document: v.document.ID(), revision: v.observed, language: v.document.languageEpoch,
-		selection: v.Selection(), upstream: v.upstream, anchor: v.savedViewportAnchor()}
+		selection: v.Selection(), upstream: v.upstream, anchor: v.savedViewportAnchor(), additional: cursorHistory(v.additional)}
 	if q := v.viewRestore; q != nil && q.foldsPending && q.snapshot.language == s.language {
 		s.folds = slices.Clone(q.snapshot.folds)
 	} else if v.foldingEnabled {
@@ -88,6 +89,7 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 	// Copy the opaque value as well as its private slice headers. Callers can
 	// reuse or replace their ViewState variable after submitting the request.
 	snapshot := *s
+	snapshot.additional = slices.Clone(s.additional)
 	s = &snapshot
 	q := &viewRestore{snapshot: s}
 	v.viewRestore = q
@@ -111,8 +113,9 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 		return ErrOperationChanged
 	}
 	v.document.model.BreakUndoGroup()
-	old := v.selection
+	old := v.Selections()
 	v.selection, v.upstream = s.selection, s.upstream
+	v.additional = cursorsFromHistory(s.additional)
 	v.selectionRevision = s.revision
 	v.selectionEpoch++
 	v.selectionTrail.steps = nil
@@ -150,9 +153,7 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 	v.RequestLayout()
 	v.RequestPaint()
 	state = v.operationState()
-	if old != v.selection {
-		v.selectionSignal.Emit(v.selection)
-	}
+	v.emitSelections(old)
 	if v.viewRestore != q || !state.valid(v) || v.Destroyed() {
 		return ErrOperationChanged
 	}
@@ -262,7 +263,11 @@ func (v *SourceView) protectRestoredSelection(prepare func(int) bool) bool {
 	}
 	q := v.viewRestore
 	changed, pending := false, false
-	for _, at := range []int{v.selection.Anchor, v.selection.Caret} {
+	endpoints := make([]int, 0, (len(v.additional)+1)*2)
+	for _, s := range v.Selections() {
+		endpoints = append(endpoints, s.Anchor, s.Caret)
+	}
+	for _, at := range endpoints {
 		row := v.document.model.LineAt(at)
 		r, _ := v.document.model.LineRange(row)
 		if !v.lineCollapsed(row) || at == r.Start {

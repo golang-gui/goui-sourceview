@@ -49,10 +49,19 @@ func (m *editMenu) releaseCommands() {
 }
 
 func (v *SourceView) canCommand(c Command) bool {
+	if len(v.additional) > 0 && !multipleCommandReady(c) {
+		return false
+	}
 	if v.Destroyed() || !v.mounted || !gui.IsEnabled(v) {
 		return false
 	}
-	selected := v.Selection().Anchor != v.Selection().Caret
+	selected := false
+	for _, s := range v.Selections() {
+		if s.Anchor != s.Caret {
+			selected = true
+			break
+		}
+	}
 	clipboard := gui.App != nil && gui.App.Clipboard() != nil
 	switch c {
 	case CommandCollapseLine:

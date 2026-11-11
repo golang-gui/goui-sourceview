@@ -7,6 +7,8 @@ package text
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"unicode/utf8"
 )
 
@@ -14,9 +16,10 @@ import (
 // the original document; AfterSelection uses the normalized resulting document.
 // Selections are optional and copied. A batch never merges with typing history.
 type BatchOptions struct {
-	Source          *EditSource
-	BeforeSelection *Selection
-	AfterSelection  *Selection
+	Source                            *EditSource
+	BeforeSelection                   *Selection
+	AfterSelection                    *Selection
+	BeforeSelections, AfterSelections []SelectionState
 }
 
 // ApplyBatch applies sorted, non-overlapping edits in original-document byte
@@ -59,13 +62,33 @@ func (m *Model) ApplyBatch(edits []Edit, options BatchOptions) error {
 			}
 		}
 	}
+	before, after := slices.Clone(options.BeforeSelections), slices.Clone(options.AfterSelections)
+	if len(before) == 0 && options.BeforeSelection != nil {
+		before = []SelectionState{{Selection: *options.BeforeSelection}}
+	}
+	if len(after) == 0 && options.AfterSelection != nil {
+		after = []SelectionState{{Selection: *options.AfterSelection}}
+	}
+	for _, s := range before {
+		if err := m.validateRange(s.Range()); err != nil {
+			return fmt.Errorf("text model: batch before selections: %w", err)
+		}
+	}
+	boundary := m.batchBoundaries(work)
+	for _, s := range after {
+		for _, pos := range []int{s.Anchor, s.Caret} {
+			if pos < 0 || pos > resultLength || !boundary(pos) {
+				return fmt.Errorf("text model: invalid batch after selections")
+			}
+		}
+	}
 	if len(work) == 0 {
 		return nil
 	}
 	step := textStep{
-		batch:       make([]textStep, 0, len(work)),
-		batchBefore: copySelection(options.BeforeSelection),
-		batchAfter:  copySelection(options.AfterSelection),
+		batch:            make([]textStep, 0, len(work)),
+		beforeSelections: before,
+		afterSelections:  after,
 	}
 	changes := make([]Edit, 0, len(work))
 	for i := len(work) - 1; i >= 0; i-- {
@@ -137,15 +160,57 @@ func (m *Model) applyBatchHistory(step textStep, undo bool) HistoryResult {
 		changes = append(changes, Edit{Range: Range{part.start, end}, Text: m.tree.textOfRefs(insert)})
 	}
 	var selection *Selection
+	var selections []SelectionState
 	if undo {
 		m.redoSteps = append(m.redoSteps, step)
-		selection = step.batchBefore
+		selections = step.beforeSelections
 	} else {
 		m.undoSteps = append(m.undoSteps, step)
-		selection = step.batchAfter
+		selections = step.afterSelections
+	}
+	if len(selections) > 0 {
+		primary := selections[0].Selection
+		selection = &primary
 	}
 	m.revision++
-	result := HistoryResult{Applied: true, Revision: m.revision, Selection: copySelection(selection)}
+	result := HistoryResult{Applied: true, Revision: m.revision, Selection: copySelection(selection), Selections: slices.Clone(selections)}
 	m.notify(Change{Revision: m.revision, Edits: changes})
 	return result
+}
+
+// Map final positions to original gaps or inserted strings in O(log edits),
+// without materializing the result or re-scanning the batch for each cursor.
+func (m *Model) batchBoundaries(edits []Edit) func(int) bool {
+	type segment struct {
+		start, end, old int
+		text            string
+		inserted        bool
+	}
+	segments := make([]segment, 0, len(edits)*2+1)
+	old, at := 0, 0
+	for _, e := range edits {
+		n := e.Range.Start - old
+		if n > 0 {
+			segments = append(segments, segment{start: at, end: at + n, old: old})
+			at += n
+		}
+		if len(e.Text) > 0 {
+			segments = append(segments, segment{start: at, end: at + len(e.Text), text: e.Text, inserted: true})
+			at += len(e.Text)
+		}
+		old = e.Range.End
+	}
+	segments = append(segments, segment{start: at, end: at + m.Len() - old, old: old})
+	return func(pos int) bool {
+		i := sort.Search(len(segments), func(i int) bool { return segments[i].end >= pos })
+		if i == len(segments) || pos < segments[i].start {
+			return false
+		}
+		s := segments[i]
+		off := pos - s.start
+		if s.inserted {
+			return off == len(s.text) || utf8.RuneStart(s.text[off])
+		}
+		return m.IsRuneBoundary(s.old + off)
+	}
 }

@@ -212,6 +212,9 @@ func (m *Model) UndoWithSelection() HistoryResult {
 		selection := step.selection.before
 		result.Selection = &selection
 	}
+	if result.Selection != nil {
+		result.Selections = []SelectionState{{Selection: *result.Selection}}
+	}
 	m.notify(Change{
 		Revision: m.revision,
 		Edits:    []Edit{{Range: Range{Start: step.start, End: step.start + insLen}, Text: m.tree.textOfRefs(step.removed)}},
@@ -253,6 +256,9 @@ func (m *Model) RedoWithSelection() HistoryResult {
 	if step.selection != nil {
 		selection := step.selection.after
 		result.Selection = &selection
+	}
+	if result.Selection != nil {
+		result.Selections = []SelectionState{{Selection: *result.Selection}}
 	}
 	m.notify(Change{
 		Revision: m.revision,
@@ -296,9 +302,10 @@ type EditOptions struct {
 // had no selection metadata; a non-nil selection is an independent copy.
 // Revision identifies this operation, not any reentrant edit made by a listener.
 type HistoryResult struct {
-	Applied   bool
-	Revision  uint64
-	Selection *Selection
+	Applied    bool
+	Revision   uint64
+	Selection  *Selection
+	Selections []SelectionState
 }
 
 // Apply performs an edit with explicit source and history metadata. Like
@@ -474,16 +481,15 @@ type textStepSelection struct{ before, after Selection }
 // [start, start+len(inserted)) afterwards. Piece references keep the content
 // alive in the immutable buffers; no document snapshot is stored.
 type textStep struct {
-	batch       []textStep
-	batchBefore *Selection
-	batchAfter  *Selection
-	start       int
-	oldEnd      int
-	removed     []pieceRef
-	inserted    []pieceRef
-	kind        textStepKind
-	side        textStepSide
-	selection   *textStepSelection
+	beforeSelections, afterSelections []SelectionState
+	batch                             []textStep
+	start                             int
+	oldEnd                            int
+	removed                           []pieceRef
+	inserted                          []pieceRef
+	kind                              textStepKind
+	side                              textStepSide
+	selection                         *textStepSelection
 }
 
 type textStepKind uint8

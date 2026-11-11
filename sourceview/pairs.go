@@ -164,6 +164,9 @@ func (v *SourceView) quoteEscaped(at int) bool {
 }
 
 func (v *SourceView) newline() error {
+	if len(v.additional) > 0 {
+		return v.multiplePlans(func(c cursorState) (editor.Plan, error) { return v.multipleNewlinePlan(c) })
+	}
 	m := v.document.model
 	s := v.Selection()
 	r := s.Range()
