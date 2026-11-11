@@ -12,7 +12,7 @@
 依赖方向为：
 
 ```text
-goui-sourceview/ui -> goui-sourceview -> goui/gui
+goui-sourceview/ui -> goui-sourceview/sourceview -> goui/gui
 goui-sourceview/ui -> goui/ui -> goui/gui
 ```
 

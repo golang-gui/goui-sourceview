@@ -11,11 +11,15 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
 
 ## 先确认实际依赖
 
+当前检出的命令式入口为 `github.com/golang-gui/goui-sourceview/sourceview`；
+该目录迁移尚未发布，使用本地工作区接入。已发布 v0.5.0 及更早版本沿用旧根路径；
+先按实际版本核对，不能混用两个入口。模块路径以及 `ui`、`language`、`scheme` 路径保持不变。
+
 - 检查应用的 go.mod、go.work 和现有代码，用下列命令找到实际选中的版本和源码：
 
   ```sh
   go list -m -json github.com/golang-gui/goui-sourceview github.com/golang-gui/goui
-  go doc github.com/golang-gui/goui-sourceview
+  go doc github.com/golang-gui/goui-sourceview/sourceview
   go doc github.com/golang-gui/goui-sourceview/ui
   go doc github.com/golang-gui/goui-sourceview/language
   ```
@@ -34,7 +38,7 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
 
 ## 会影响应用正确性的约定
 
-- SourceView 是独立编辑控件。`gui` 接入用根包，声明式接入用本模块的 `ui`；滚动仍由
+- SourceView 是独立编辑控件。`gui` 接入用 `sourceview` 核心包，声明式接入用本模块的 `ui`；滚动仍由
   GOUI ScrollView 提供，查找、替换、定位由 SourceView 内置管理。不要嵌套 TextView 或复制编辑状态机。
 - Document 保存文本、历史和语言，可由多个视图共享；选区、滚动、折叠、配对与补全会话属于视图。
   Document 不需要 Destroy。把文档、语言定义和补全提供者放在 build 之外或明确的持久状态中，
@@ -45,7 +49,7 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
   文件读取、保存、编码和项目索引属于应用。组件不会因为创建文档或技能安装而自动读写文件。
 - 语言定义直接绑定到 Document，没有全局语言注册。内置 language.Markdown 提供源码编辑
   profile，example/markdown 从其副本定制规则和应用补全；它不是完整 CommonMark 渲染器。
-- 根包已登记 Basic / Modern 外观，应用按 GOUI 普通方式启用 Modern 即可。
+- 核心包已登记 Basic / Modern 外观，应用按 GOUI 普通方式启用 Modern 即可。
   Scheme 只覆盖代码区域；FindBar 等界面跟随所属 stylesheet。选择前景的默认行为是保留语法色。
 
 ## 验证与交付

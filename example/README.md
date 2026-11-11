@@ -15,6 +15,13 @@ checkout or local workspace is not required to build or run these examples.
 需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块依赖 GOUI v0.7.0，由 Go
 自动下载；构建和运行示例无需另行检出 GOUI 或创建本地工作区。
 
+Core imports in this checkout use `github.com/golang-gui/goui-sourceview/sourceview`.
+The `ui`, `language` and `scheme` paths are unchanged. This package layout is not
+released yet; applications integrating this checkout use a local Go workspace.
+
+当前检出的命令式入口为 `github.com/golang-gui/goui-sourceview/sourceview`，
+`ui`、`language` 和 `scheme` 路径保持不变。新布局尚未发布，应用联调使用本地工作区。
+
 ## Run / 启动
 
 ```sh
@@ -117,7 +124,7 @@ GOUI key constants use `base`. This example explicitly inserts real Tabs and sho
 Boundary whitespace markers. Existing sample indentation remains spaces.
 
 配置类型、文档构造和快捷键统一使用 `sourceui`，GOUI 按键常量使用 `base`，
-无需导入命令式根包或 gui。此例显式配置真实 Tab 输入并显示 Boundary 空白标记；
+无需导入命令式核心包或 gui。此例显式配置真实 Tab 输入并显示 Boundary 空白标记；
 初始样本中的缩进仍是普通空格。
 
 

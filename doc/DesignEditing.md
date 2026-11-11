@@ -3,10 +3,10 @@
 > 状态：已实现的基础行为与后续约束。实施和验证边界见 [实施记录](Implementation.md)。
 > 公共入口见 [总设计](DesignSourceView.md)，GOUI 所需提交见 [接入设计](DesignGOUIIntegration.md)。
 
-实现边界：根包持有编辑作业、文档身份、修订、选区和语言回调后的有效性检查；
+实现边界：核心包持有编辑作业、文档身份、修订、选区和语言回调后的有效性检查；
 `internal/editor` 根据已捕获的文本生成重新缩进、合并行、尾空白和大小写计划，
 处理相对缩进粘贴、逻辑行／Unicode 列定位和锚点映射，不拥有 Widget 或历史。
-最终事务仍由根包在原有检查和撤销边界内提交。
+最终事务仍由核心包在原有检查和撤销边界内提交。
 
 ## 1. 命令流水线
 
@@ -236,7 +236,7 @@ GOUI v0.7.0 的 MenuItem 通过私有 `gui.Command` 适配现有编辑操作，
 
 ## 12. 逻辑行编辑
 
-`MoveLines(down bool)`、`DuplicateLines(down bool)`、`DeleteLines()` 是根包的公开命令。
+`MoveLines(down bool)`、`DuplicateLines(down bool)`、`DeleteLines()` 是核心包的公开命令。
 前两者的 down=true 表示向下，false 表示向上；复制行不读写剪贴板。
 算法位于 `internal/editor/lines.go`，只生成已有 Plan，控件经 ApplyBatch 提交，
 不引入新的文本模型、撤销栈或原生资源。未挂载对象也可使用这些纯编辑方法；

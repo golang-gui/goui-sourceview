@@ -34,9 +34,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"

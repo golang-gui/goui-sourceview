@@ -22,9 +22,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/example/semantic/analysis"
 	"github.com/golang-gui/goui-sourceview/language"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"

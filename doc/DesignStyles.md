@@ -3,13 +3,13 @@
 ## 职责与使用
 
 `internal/view/styles.go` 构建代码／侧栏／token 规则、宿主外框规则和配色值；
-`internal/controls` 提供配套控件规则。根包组合并注册主题、读取真实控件样式、
+`internal/controls` 提供配套控件规则。核心包组合并注册主题、读取真实控件样式、
 保存有效配色，以及按原有生命周期使布局和弹层失效。
 StyleSheet.Resolve 可由应用实现；内部配色构建通过借用的读取函数，在普通样式
 解析后读取当前语言的 token 种类，在 token 解析后读取配色缓存，保留回调发生时
 原有的查询时机，不在拆分边界提前保存可能过期的语言或缓存。
 
-SourceView 根包在 init 中分别调用 `basic.Register`、`modern.Register`，登记名为
+SourceView 核心包在 init 中分别调用 `basic.Register`、`modern.Register`，登记名为
 `github.com/golang-gui/goui-sourceview`。应用只需正常导入 SourceView 并启用 Modern：
 
 ```go

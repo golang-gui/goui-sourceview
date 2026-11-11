@@ -48,29 +48,35 @@ GOUI 不反向依赖本模块。
 
 ## 3. 包与依赖
 
-以下是开发落位，不要求立即创建全部空目录：
+核心公开入口为 `github.com/golang-gui/goui-sourceview/sourceview`，包名仍为
+`sourceview`。模块根目录不提供 Go 包；实现、同包测试和三个平台的原生测试辅助
+一起迁入 `sourceview/`，其余包路径保持不变。此次导入路径及类型完整包身份的
+变化尚未发布，应用使用当前检出时需通过本地 Go 工作区接入；已发布版本仍按
+对应版本的布局使用。迁移记录见 [公开核心包迁移](PlanPackageMigration.md)。
+
+当前落位：
 
 | 包或目录 | 首版职责 |
 | --- | --- |
-| 根包 `sourceview` | Document、SourceView、公共 API、状态、生命周期和跨功能协调 |
+| 公开核心包 `sourceview/` | Document、SourceView、公共 API、状态、生命周期和跨功能协调 |
 | `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
 | `internal/editor` | 编辑计划、缩进粘贴、选区及锚点映射、括号与结构扫描、补全值规范化、定位解析和搜索；不依赖 Widget |
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠快照构建、候选重建、编辑映射、隐藏区间与可见行索引；不依赖 Widget |
-| `internal/controls` | 补全列表、查找／定位栏呈现、菜单命令资源、快捷键校验与配套样式；不导入根包 |
-| `internal/view` | 排版资源、预览与装饰几何、主题规则、标记绘制与标签、多行建议排版、空白符索引及缩略图计算；不导入根包 |
+| `internal/controls` | 补全列表、查找／定位栏呈现、菜单命令资源、快捷键校验与配套样式；不导入核心包 |
+| `internal/view` | 排版资源、预览与装饰几何、主题规则、标记绘制与标签、多行建议排版、空白符索引及缩略图计算；不导入核心包 |
 | `ui` | GOUI WidgetView 绑定，不直接导入 platform |
 | `example/`、`tests/window/`、`testdata/` | 使用示例、显式窗口验证及固定样本 |
 
 `sourceview` 可以使用 GOUI 的 gui、core、layout、typography、graphics 公开能力；
 FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 纯算法包可消费 typography 度量类型，不创建原生 Context 或 TextLayout。
-`internal/view` 的资源辅助借用根包提供的 Context，不创建窗口或另一套编辑状态；
-根包仍管理缓存键、修订、失效、淘汰、视口和生命周期。
+`internal/view` 的资源辅助借用核心包提供的 Context，不创建窗口或另一套编辑状态；
+核心包仍管理缓存键、修订、失效、淘汰、视口和生命周期。
 不将每个内部结构都提升为独立包，不导出行缓存、布局缓存或调度器。
 
-根包内按职责组织文件，不以文件拆分新增包或公共接口：
+核心包 `sourceview/` 内按职责组织文件；下表文件名均相对此目录，不以文件拆分新增包或公共接口：
 
 | 文件 | 职责 |
 | --- | --- |
@@ -87,11 +93,11 @@ FindBar 还复用 GOUI widgets.CheckButton，不反向引入框架依赖。
 
 补全、折叠、语言编辑辅助及 FindBar/GoToBar 仍按已有领域组织。
 同一领域的队列、绘制辅助或小控件合入所属功能文件；独立类型不要求独立文件。
-根目录保留必须访问真实 Document／SourceView 状态的协调逻辑，纯算法和图元不以
-仅改名的根包转发函数继续堆积。补全的少量值适配保留在根包，以保持公开结构体
+`sourceview/` 保留必须访问真实 Document／SourceView 状态的协调逻辑，纯算法和图元不以
+仅改名的核心包转发函数继续堆积。补全的少量值适配保留在核心包，以保持公开结构体
 真实定义和现有入口；内部算法通过结构约束转换值，避免额外复制整批候选。
-补全会话、FindBar／GoToBar 行为保留在根包；列表、面板、栏内控件、
-布局及外观放在 internal/controls，控件动作通过窄回调交回根包。
+补全会话、FindBar／GoToBar 行为保留在核心包；列表、面板、栏内控件、
+布局及外观放在 internal/controls，控件动作通过窄回调交回核心包。
 折叠及普通编辑辅助按领域维护。
 声明式层只绑定 SourceView，不单独声明查找或定位栏。
 SourceViewView 实现 GOUI WidgetView 的 Mount／Update／Unmount，不再提供
@@ -100,7 +106,7 @@ SourceViewView 实现 GOUI WidgetView 的 Mount／Update／Unmount，不再提�
 该契约由 GOUI `d65dc95` 引入，已随 v0.4.0 发布。现有查找窗口用例
 通过真实 ComposeView 包装 SourceView，验证组合 State、无包装 Widget、重建、
 空内容与重新挂载。编辑器的 Document 和信号仍由原有 WidgetView 绑定管理；
-不增加对象声明或祖先关联机制。go.mod 直接依赖已发布的 GOUI v0.4.0，
+不增加对象声明或祖先关联机制。go.mod 直接依赖已发布的 GOUI v0.7.0，
 独立构建使用 GOWORK=off；本地 go.work 只用于按需双仓开发。
 SourceView 的字段按文档与挂载、选区、原生资源、外观、布局、编辑辅助、
 输入、搜索和补全分组；分组不引入额外状态对象，也不改变资源所有者。
@@ -142,7 +148,7 @@ Document 时发生，不建设全局 Model 注册表。
 
 ## 5. 公共 API 草案
 
-以下声明位于根包；省略实现和普通配置 getter，不省略语义约束。
+以下声明位于核心包；省略实现和普通配置 getter，不省略语义约束。
 这里的类型和方法是本项目计划 API；GOUI 扩展另外列在对应专题。
 
 ```go
@@ -259,16 +265,16 @@ type SearchQuery struct {
 | 快捷键 | `Command`、全部 44 个命令常量、`KeyBindings`、`KeyGesture` |
 | 通用文本 | `TextModel`、`TextRange`、`TextEdit`、`TextChange`、`TextSelection`，与 GOUI ui 共用类型 |
 
-声明式方法签名使用这些本包名称。别名与根包/GOUI 类型身份相同，能直接传递已有文档、
+声明式方法签名使用这些本包名称。别名与核心包/GOUI 类型身份相同，能直接传递已有文档、
 选项、选区、回调、补全提供者及快捷键表；不复制模型、包装资源或另建状态。
 `BindSelection` 继续使用 GOUI 的 `BindState[TextSelection]`，协调与生命周期机制不变。
 
 `NewDocument`、`NewDocumentWithModel`、`DetectLineEnding`、`DefaultKeyBindings` 及
-三种内置补全函数只转发到根包原实现。函数使用普通声明而非可变函数变量；默认快捷键
+三种内置补全函数只转发到核心包原实现。函数使用普通声明而非可变函数变量；默认快捷键
 仍每次返回独立表，补全仍遵守原有有界快照与取消契约。
 
 普通声明式应用可只导入 SourceView 的 ui 和 GOUI 的 ui，按键/修饰键常量使用后者。
-语言定义和配色的创建继续使用 `language`、`scheme` 资源包；命令式控件由根包拥有。
+语言定义和配色的创建继续使用 `language`、`scheme` 资源包；命令式控件由核心包拥有。
 例如：
 
 ```go
@@ -279,7 +285,7 @@ view := sourceui.SourceView().Document(document).AcceptsTab(true).
     OnSelection(func(selection sourceui.TextSelection) { /* 更新应用状态 */ })
 ```
 
-使用示例见 `example/declarative`。已有调用方继续传入根包和 GOUI 值，无需转换。
+使用示例见 `example/declarative`。已有调用方继续传入核心包和 GOUI 值，无需转换。
 
 ## 6. 默认值与配置作用域
 

@@ -12,12 +12,18 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer. SourceView v0.5.0 depends on GOUI v0.7.0,
-which Go downloads automatically.
+Requires Go 1.24 or newer and GOUI v0.7.0, which Go downloads automatically.
 
-```sh
-go get github.com/golang-gui/goui-sourceview@v0.5.0
+This checkout uses a new, **unreleased** package layout. The imperative entry is:
+
+```go
+import source "github.com/golang-gui/goui-sourceview/sourceview"
 ```
+
+To integrate this checkout into another application, include both modules in a
+local Go workspace. Published v0.5.0 uses the previous root import path and does
+not contain the new subpackage. The `ui`, `language` and `scheme` paths are unchanged.
+See the [package migration notes](doc/PlanPackageMigration.md) for the layout and validation scope.
 
 ## Features
 

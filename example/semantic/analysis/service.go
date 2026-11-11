@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	source "github.com/golang-gui/goui-sourceview"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 )
 
 // Service owns one analysis worker and at most one queued full-file snapshot.

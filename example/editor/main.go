@@ -15,8 +15,8 @@ import (
 	"runtime"
 	"unicode/utf8"
 
-	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"

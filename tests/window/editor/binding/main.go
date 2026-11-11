@@ -16,7 +16,7 @@ import (
 	"log"
 	"time"
 
-	source "github.com/golang-gui/goui-sourceview"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"

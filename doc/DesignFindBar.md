@@ -180,7 +180,7 @@ base.ScrollView(
 ```
 
 不声明配套控件或显示状态；重建不会因默认值恢复而关闭、打开或重新初始化内部栏。
-已有 ui.FindBar、ui.GoToBar 及根包对应公开类型删除，调用方迁移为 SourceView 上的操作。
+已有 ui.FindBar、ui.GoToBar 及核心包对应公开类型删除，调用方迁移为 SourceView 上的操作。
 
 ```go
 bindings := sourceview.DefaultKeyBindings()

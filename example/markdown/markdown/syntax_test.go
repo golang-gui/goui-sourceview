@@ -7,8 +7,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/gui/textedit"
 )
 

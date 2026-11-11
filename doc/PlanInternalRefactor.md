@@ -1,5 +1,9 @@
 # 内部实现拆分
 
+> 后续决策：用户已允许调整 API，核心真实类型及其同包测试整体迁入公开
+> `sourceview/`。下文的“根包／根目录”是各批实施时的历史布局；现行布局及
+> 迁移验证见 [公开核心包迁移](PlanPackageMigration.md)。内部职责拆分继续保留。
+
 保留根包中真实定义的 SourceView、Document 和现有公开 API；不改变导入路径，
 不以类型别名重新导出整套实现。内部包不能反向导入根包，不复制编辑器状态或 WidgetBase。
 未跟踪的 doc/Doing.md 和 example/temp/ 不属于本次变更。

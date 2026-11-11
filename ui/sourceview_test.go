@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	source "github.com/golang-gui/goui-sourceview"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/gui"
 	base "github.com/golang-gui/goui/ui"
 )

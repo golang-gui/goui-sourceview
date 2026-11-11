@@ -7,12 +7,15 @@
 
 | 需求 | 公开入口与同版本示例 |
 | --- | --- |
-| 命令式控件、属性和信号 | 根包 SourceView、Document；example/editor |
+| 命令式控件、属性和信号 | `sourceview` 核心包（`…/sourceview`）的 SourceView、Document；example/editor |
 | 声明式接入 | ui.SourceView；example/declarative |
-| 文档修改及选区事务 | Document.Model、SourceView.ApplyEdits；commands.go |
+| 文档修改及选区事务 | Document.Model、SourceView.ApplyEdits；sourceview/commands.go |
 | 查找、替换和浮层 | SourceView.SetSearch、FindNext、ReplaceCurrent、ReplaceAll；ShowFind、ShowReplace、ShowGoTo、HidePanel |
-| 代码配色 | scheme、SourceView.SetScheme，以及 styles.go 的公开样式部件 |
+| 代码配色 | scheme、SourceView.SetScheme，以及 sourceview/styles.go 的公开样式部件 |
 | 应用定义语言和补全 | language、CompletionProvider；example/markdown |
+
+当前检出的核心包导入 `github.com/golang-gui/goui-sourceview/sourceview`。
+目录迁移尚未发布，应用联调使用本地工作区；下列已发布版本说明对应当时的旧包布局。
 
 普通界面由 GOUI gui / ui 提供。SourceView 只为需要源码编辑能力的区域增加依赖。
 

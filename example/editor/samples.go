@@ -4,8 +4,8 @@ import (
 	"embed"
 	"strings"
 
-	source "github.com/golang-gui/goui-sourceview"
 	"github.com/golang-gui/goui-sourceview/language"
+	source "github.com/golang-gui/goui-sourceview/sourceview"
 )
 
 // Original samples are embedded so the binary can run from any directory.
