@@ -10,6 +10,7 @@ import (
 	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/platform/events"
 )
 
 func drainSelections(t *testing.T, v *SourceView) {
@@ -220,5 +221,29 @@ func TestSelectAllOccurrencesKeepsOverlappingPrimaryMatch(t *testing.T) {
 	drainSelections(t, v)
 	if !slices.Equal(v.Selections(), []TextSelection{{Anchor: 3, Caret: 1}, {Anchor: 3, Caret: 5}}) {
 		t.Fatal(v.Selections())
+	}
+}
+
+func TestDefaultAltSelectionGesturesAndOverride(t *testing.T) {
+	v := NewSourceView()
+	if got := v.SelectionModifiers(); got != (SelectionModifiers{Add: gui.ModAlt, Column: gui.ModAlt | gui.ModShift}) {
+		t.Fatalf("default mouse gestures: got %v, want Alt / Alt+Shift", got)
+	}
+	for _, tc := range []struct {
+		mods events.Modifiers
+		want int
+	}{
+		{events.ModifierAlt, 1}, {events.ModifierAlt | events.ModifierShift, 2},
+		{events.ModifierControl, 0}, {events.ModifierShift, 0}, {events.ModifierAlt | events.ModifierControl, 0},
+	} {
+		if got := v.selectionGesture(tc.mods); got != tc.want {
+			t.Fatalf("modifiers %v: got %d, want %d", tc.mods, got, tc.want)
+		}
+	}
+	if err := v.SetSelectionModifiers(SelectionModifiers{Add: gui.ModControl, Column: gui.ModControl | gui.ModShift}); err != nil {
+		t.Fatal(err)
+	}
+	if v.selectionGesture(events.ModifierAlt) != 0 || v.selectionGesture(events.ModifierControl) != 1 || v.selectionGesture(events.ModifierControl|events.ModifierShift) != 2 {
+		t.Fatal("custom pointer gestures did not replace defaults")
 	}
 }

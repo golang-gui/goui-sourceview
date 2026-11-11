@@ -141,3 +141,48 @@ XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/mult
 
 专用窗口、桌面与后台进程均已退出。没有写回样本、使用用户已有桌面或覆盖其剪贴板。
 未执行其他平台原生窗口、真实 IME 或物理键盘；本轮不作性能结论。
+
+## 后续修正：统一 Alt 鼠标手势
+
+按用户澄清，所有平台默认 Alt+左键点击添加光标、Alt+左键拖动追加选区、
+Alt+Shift+左键拖动矩形选择，移除 Linux 默认 Ctrl / Ctrl+Shift 的例外。
+保留 SelectionModifiers 的精确匹配、覆盖和禁用契约；示例提示随配置自动同步。
+专题设计补充 VS Code 官方鼠标手势与 Scintilla 修饰键配置/窗口管理器边界的取舍，
+README 同步操作说明。
+
+新增 TestDefaultAltSelectionGesturesAndOverride：修改默认值前在 Linux 复现
+`default mouse gestures: got {2 3}, want Alt / Alt+Shift`，修改后通过；另断言不匹配
+Ctrl、仅 Shift、Alt+Ctrl，以及自定义 Ctrl / Ctrl+Shift 可覆盖默认值。
+窗口场景改用字面 Alt / Alt+Shift 构造正常 DispatchEvent 输入，不再从被测配置推导输入；
+独立断言默认值，并增加保留已有两个光标、Alt 拖动追加第三个范围的完整集合断言。
+
+通过：go test ./...、GOWORK=off go test ./...、GOWORK=off go vet ./...。
+GOWORK=off、CGO_ENABLED=0 下，Windows amd64 和 macOS arm64 的 go build ./... 均通过；
+交叉构建不计为原生运行。核心日志 /tmp/sourceview-alt-tests.log、
+/tmp/sourceview-alt-independent.log、/tmp/sourceview-alt-vet.log。
+Ubuntu 22.04.5 amd64 / Go 1.25.8 / GOUI v0.7.0，无 go.work；
+独立 TigerVNC / Xfwm4 compositor on / Pango / Software：
+Basic、Modern Light/Dark ×100%/150% ×默认/`-clipboard` 共十二组全部通过，
+命令同上一节，新增默认值、Alt 添加/拖选和 Alt+Shift 矩形场景均通过。
+日志 /tmp/sourceview-alt-gestures-5604758f/。
+
+示例使用真实 XTest 键鼠输入并人工查看截图（Modern Light、100%）：
+
+- Xfwm4 的 easy_click=Alt 时，Alt+点击和 Alt+拖动均未追加选区，计数仍为 1，窗口位置未变；
+  同一设置下 Alt+Shift 拖动已选中三行数字，计数为 3。不能将正常 DispatchEvent 的通过
+  等同于桌面一定会把 Alt 事件交给控件。
+- 仅将该临时桌面的 easy_click 改为 Super 后，Alt+点击产生两个光标；输入 x 在两处插入，
+  774 字节变为 776，一次撤销恢复正文及两个光标。
+- 保留上述两个光标，Alt+拖动追加第三行的 300 范围，计数为 3；输入 x 后两处插入、
+  一处替换，一次撤销恢复正文和完整三个选区。
+- Alt+Shift 拖动选中 100/200/300 三行数字，输入 9 全部替换，774 字节变为 768；
+  一次撤销恢复正文及三行列选。
+
+这部分为真实事件与截图人工核验，不计作程序断言或像素金图；截图/应用日志在
+/tmp/sourceview-alt-interaction-_ose3se7/。临时 Xfwm4 的会话总线和配置目录经进程环境确认，
+未连接或修改用户桌面配置。首次外部交互脚本在构建完成前启动，因二进制尚不存在而报
+FileNotFoundError；等待构建成功后重启并完成上述验证，该次编排失败不计作应用验收。
+
+专用窗口、桌面、会话总线与后台进程均已退出，剪贴板只在矩阵的独立显示内覆盖，
+未写回样本或操作用户已有桌面。未执行 Windows/macOS 原生交互、真实 IME 或物理键鼠；
+本轮不作性能结论。

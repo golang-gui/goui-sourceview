@@ -4,6 +4,7 @@
 // setter 仅准备场景；中文输入、删除、导航、剪切/粘贴、撤销重做经 Window 的正常事件路径。
 // 第三批额外检查连续输入合并、配对/跳过/删除和后台大小写/清理/重缩进。
 // 断言完整正文、主/附加选区、视图隔离、历史、快照恢复和超过缓存页数的分散输入。
+// 鼠标用字面 Alt / Alt+Shift 经正常事件分发，检查默认值及追加拖选/矩形选择。
 // 默认与 -clipboard 是两条独立验收路径，临时快捷键不依赖此前场景。
 // -clipboard 额外覆盖该显示的临时剪贴板，只在独立桌面启用。默认不访问剪贴板。
 // 每步有明确条件与超时，成功自动关闭；提前退出或失败返回非零。不写文件或系统设置。
@@ -178,6 +179,7 @@ func main() {
 	}
 	steps = append(steps,
 		step{"prepare rectangle", func() {
+			check(a.SelectionModifiers() == (source.SelectionModifiers{Add: gui.ModAlt, Column: gui.ModAlt | gui.ModShift}), "default Alt mouse gestures")
 			a.SetWrapMode(source.WrapNone)
 			a.SetFoldingEnabled(false)
 			a.SetShowLineNumbers(false)
@@ -185,7 +187,7 @@ func main() {
 			a.SetSelection(source.TextSelection{})
 		}, func() bool { return !pending(a) }},
 		step{"pointer rectangle", func() {
-			mods, _ := a.SelectionModifiers().Column.Resolve()
+			mods := events.ModifierAlt | events.ModifierShift
 			pointer(events.PointerDown, 1, 0, mods)
 			pointer(events.PointerMove, 3, 2, mods)
 			pointer(events.PointerUp, 3, 2, mods)
@@ -195,10 +197,17 @@ func main() {
 		step{"rectangle input", func() { must(win.CommitText("Z")) }, func() bool { return d.Text() == "aZdef\naZdef\naZdef" && !pending(a) }},
 		step{"add pointer", func() {
 			a.SetSelection(source.TextSelection{})
-			mods, _ := a.SelectionModifiers().Add.Resolve()
+			mods := events.ModifierAlt
 			pointer(events.PointerDown, 2, 1, mods)
 			pointer(events.PointerUp, 2, 1, mods)
 		}, func() bool { return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 8, Caret: 8}, {}}) }},
+		step{"add pointer range", func() {
+			pointer(events.PointerDown, 1, 2, events.ModifierAlt)
+			pointer(events.PointerMove, 3, 2, events.ModifierAlt)
+			pointer(events.PointerUp, 3, 2, events.ModifierAlt)
+		}, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}, {Anchor: 8, Caret: 8}})
+		}},
 		step{"keyboard column", func() {
 			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
 			key(events.KeyArrowRight, primary|events.ModifierAlt|events.ModifierShift)

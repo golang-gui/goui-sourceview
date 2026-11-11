@@ -100,14 +100,19 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
   选择 `Go — multicursor.go`，点击 `product` 并选中全部匹配，输入 `x` 后一次撤销。
   底部显示完整选区数量；只增减附加选区时也会更新。
 - The hint below the toolbar shows the configured mouse modifiers and next/all shortcuts.
-  Linux defaults to Ctrl+click to add a cursor and Ctrl+Shift+drag for columns;
-  Windows/macOS use Alt+click and Alt+Shift+drag. Hover Selection or the hint for keyboard
+  All platforms default to Alt+click to add a cursor, Alt+drag to add a range,
+  and Alt+Shift+drag for columns. Hover Selection or the hint for keyboard
   column-selection and line-splitting shortcuts. Short rows clamp; Tabs and combining clusters
   remain whole. Completion and inline suggestions currently require one selection.
-  工具栏下方提示对应配置的鼠标修饰键及匹配快捷键；Linux 默认为 Ctrl+点击添加光标、
-  Ctrl+Shift+拖动列选，Windows/macOS 为 Alt+点击、Alt+Shift+拖动。
+  工具栏下方提示对应配置的鼠标修饰键及匹配快捷键；所有平台默认 Alt+点击添加光标、
+  Alt+拖动追加选区、Alt+Shift+拖动列选。
   悬停 Selection 或提示可查看键盘列扩展与按行拆分快捷键。短行钳制行尾，不拆 Tab 或组合字符。
   当前补全与影子建议限单选区使用；Esc 先关闭临时界面，再清除附加选区。
+- If the desktop reserves Alt mouse gestures (for example, Xfwm4 window dragging), release
+  that desktop shortcut to use the defaults. Embedded views can instead use
+  `SetSelectionModifiers` to choose other modifiers; the editor does not change desktop settings.
+  若桌面占用了 Alt 鼠标手势（例如 Xfwm4 的拖动窗口），需先释放相应桌面快捷操作；
+  嵌入控件时也可用 `SetSelectionModifiers` 配置其他组合。编辑器不修改桌面设置。
 - The header button switches light/dark. `-theme system` follows system appearance
   until you choose a theme; settings connections end with the application.
   标题栏按钮切换亮暗；`-theme system` 在手动切换前跟随系统外观，订阅随应用结束释放。

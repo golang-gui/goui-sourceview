@@ -54,7 +54,9 @@ SetSelections 严格校验 UTF-8 范围及数量，错误不修改旧状态；Se
 短行钳制行尾，不补空格或拆 Tab，跳过折叠隐藏行。不能用每行单逻辑范围表达的双向矩形整次拒绝。
 矩形拖动/键盘扩展保留起点与 X 意图；完成后选区固定到文本，不因改宽重新选中文字。
 鼠标修饰键通过 SelectionModifiers 单独配置（零禁用；普通和仅 Shift 手势保留）。
-Linux 默认 Ctrl 添加、Ctrl+Shift 矩形；其他系统默认 Alt、Alt+Shift。键盘命令接入 KeyBindings，
+所有平台默认 Alt+左键点击添加光标、Alt+左键拖动追加选区、Alt+Shift+左键拖动矩形选择。
+桌面可能抢占 Alt 鼠标手势；此时须释放窗口管理器的对应快捷操作，或由宿主通过 SetSelectionModifiers
+配置其他组合。控件不抢占系统全局手势，不修改桌面配置。键盘命令接入 KeyBindings，
 AddCursor/SelectNextOccurrence/SelectAllOccurrences/SplitSelectionLines 接受挂载视图的分帧请求；
 匹配按字面、区分大小写，最多 64 KiB 查询和 4096 项，超限保持原集合；全部匹配保留原主范围，排除与它重叠的候选。
 拆分保持方向，以原主活动端所在的有效行为主。普通点击单选区，Escape 取消临时界面后清除附加选区。
@@ -74,6 +76,7 @@ SetSelection。示例不保存另一份光标集合；状态栏监听 ConnectSel
 
 窗口多选区验收须分别运行默认和 `-clipboard` 两条路径。各场景独立构建临时快捷键表，不依赖可选场景
 清除上一场景的绑定。`go test ./...` 负责包测试和程序编译，不能替代这两条真实窗口入口的运行验收。
+指针场景使用字面 Alt / Alt+Shift 输入，并独立断言默认配置，避免按被测配置构造输入而漏掉默认值错误。
 
 ## 参考与取舍
 
@@ -82,5 +85,7 @@ SetSelection。示例不保存另一份光标集合；状态栏监听 ConnectSel
 - [Monaco/VS Code 1.104.3 CursorCollection](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/common/cursor/cursorCollection.ts#L148)：主选区与重叠规范化；采用值集合，不复制对象体系。
 - [同版 editStack](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/common/model/editStack.ts#L21)：前后完整选区；在本仓历史维护。
 - [同版列选择](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/common/cursor/cursorColumnSelection.ts)：保留矩形意图；本项目按原生几何，不使用字符平均宽度。
+- [VS Code 多光标](https://code.visualstudio.com/docs/editing/codebasics#multiple-selections-multi-cursor)及[矩形选择](https://code.visualstudio.com/docs/editing/codebasics#column-box-selection)（动态官方文档，2026-11-11 查阅）：文档默认 Alt+点击添加光标、Shift+Alt+拖动矩形，支持配置多光标修饰键。本项目按用户要求统一采用这组鼠标默认值，保留修饰键配置；不改变已有键盘列扩展绑定。
 - [Scintilla 多选区](https://scintilla.org/ScintillaDoc.html#MultipleSelection)（页面 2026-10-01）：矩形和虚拟空间分离；不承诺跨应用矩形格式。
+- [Scintilla 矩形修饰键](https://scintilla.org/ScintillaDoc.html#SCI_SETRECTANGULARSELECTIONMODIFIER)（同一页面）：GTK/Qt 默认 Alt，官方说明可能与窗口管理器冲突；多选区使用 Ctrl 拖动。本项目采用可配置原则，按已确认需求使用 Alt 添加、Alt+Shift 矩形，不声称各编辑器默认完全一致。Xfwm4 下实际抢占范围见实施记录。
 - [GtkSourceView 5 View](https://gnome.pages.gitlab.gnome.org/gtksourceview/gtksourceview5/class.View.html)（查阅 5.23.0）和 [GTK4 用户动作](https://docs.gtk.org/gtk4/method.TextBuffer.begin_user_action.html)（4.24.1）：采用一次用户动作统一分组，不依赖 GTK。

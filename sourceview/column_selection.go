@@ -2,7 +2,6 @@ package sourceview
 
 import (
 	"fmt"
-	"runtime"
 	"slices"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 
 // SelectionModifiers configures exact pointer gestures. Zero disables a
 // gesture; plain/Shift-only gestures are reserved for ordinary selection.
+// Defaults are Alt for adding selections and Alt+Shift for column selection.
 type SelectionModifiers struct{ Add, Column gui.KeyModifiers }
 
 func (v *SourceView) SelectionModifiers() SelectionModifiers { return v.selectionModifiers }
@@ -34,9 +34,6 @@ func (v *SourceView) SetSelectionModifiers(value SelectionModifiers) error {
 	return nil
 }
 func defaultSelectionModifiers() SelectionModifiers {
-	if runtime.GOOS == "linux" {
-		return SelectionModifiers{Add: gui.ModControl, Column: gui.ModControl | gui.ModShift}
-	}
 	return SelectionModifiers{Add: gui.ModAlt, Column: gui.ModAlt | gui.ModShift}
 }
 func (v *SourceView) selectionGesture(mods events.Modifiers) int {
