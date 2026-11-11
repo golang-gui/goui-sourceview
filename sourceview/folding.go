@@ -35,6 +35,7 @@ func (v *SourceView) SetFoldingEnabled(enabled bool) {
 	if v.Destroyed() || v.foldingEnabled == enabled {
 		return
 	}
+	v.cancelViewRestore()
 	v.foldingEnabled = enabled
 	if !enabled {
 		for i := range v.folds {
@@ -93,7 +94,11 @@ func (v *SourceView) canFold() bool {
 
 func (v *SourceView) setFolded(line int, collapsed bool) bool {
 	i := v.foldHeader(line)
-	if !v.canFold() || i < 0 || v.folds[i].Collapsed == collapsed {
+	if !v.canFold() || i < 0 {
+		return false
+	}
+	v.cancelViewRestore()
+	if v.folds[i].Collapsed == collapsed {
 		return false
 	}
 	v.folds[i].Collapsed = collapsed
@@ -108,6 +113,7 @@ func (v *SourceView) setAllFolded(collapsed bool) {
 	if !v.canFold() {
 		return
 	}
+	v.cancelViewRestore()
 	changed := false
 	for i := range v.folds {
 		if v.folds[i].Collapsed != collapsed {
@@ -176,16 +182,30 @@ func (v *SourceView) foldedLines() []folding.Interval {
 }
 
 func (v *SourceView) refreshFoldGeometry() {
+	v.indexCollapsedFolds()
+	v.refreshFoldVisibility(v.foldedLines())
+}
+
+func (v *SourceView) indexCollapsedFolds() {
+	v.collapsedFolds = make(map[int]textedit.Range)
+	for _, r := range v.folds {
+		if r.Collapsed {
+			v.collapsedFolds[r.StartLine] = textedit.Range{Start: r.Start, End: r.End}
+		}
+	}
+}
+
+// Intake builds visibility and the collapsed index incrementally. Publishing
+// them must not rescan every candidate on the UI sequence.
+func (v *SourceView) refreshFoldVisibility(hidden []folding.Interval) {
 	v.foldState++
-	v.hiddenLines = v.foldedLines()
+	v.hiddenLines = hidden
 	if v.anchor.valid {
 		row := v.document.model.LineAt(v.anchor.offset)
-		for _, r := range v.folds {
-			if r.Collapsed && row > r.StartLine && row <= r.EndLine {
-				h, _ := v.document.model.LineRange(r.StartLine)
-				v.anchor.offset = h.Start
-				break
-			}
+		i := sort.Search(len(hidden), func(i int) bool { return hidden[i].End > row })
+		if i < len(hidden) && hidden[i].Start <= row {
+			h, _ := v.document.model.LineRange(hidden[i].Start - 1)
+			v.anchor.offset, v.anchor.inset = h.Start, 0
 		}
 		v.pendingAnchor = true
 	}
@@ -203,6 +223,7 @@ func (v *SourceView) acceptFolds(ranges []language.FoldRange) {
 		return
 	}
 	v.folds = folding.Reconcile(v.folds, ranges, v.document.model.LineRange)
+	v.indexCollapsedFolds()
 	v.foldRevision = v.document.model.Revision()
 	v.foldDefinition = v.document.definition
 	// Candidate analysis changes controls, not paragraph visibility, when no
@@ -394,16 +415,29 @@ func (d *Document) hasFolding() bool { return d.externalFolds || d.definition.Fo
 type foldIntake struct {
 	snapshot                    *Folds
 	generation, revision, state uint64
-	old                         map[[2]int]bool
+	old                         map[textedit.Range]bool
 	entries                     []folding.Entry
-	oldAt, at                   int
+	collapsed                   map[int]textedit.Range
+	hidden                      []folding.Interval
+	selection                   uint64
+	restore                     *viewRestore
+	at                          int
 }
 
 func (v *SourceView) queueFolds(f *Folds) {
 	if f == nil {
 		return
 	}
-	v.foldIntake = &foldIntake{snapshot: f, generation: v.document.foldGeneration, revision: v.document.model.Revision(), state: v.foldState, old: make(map[[2]int]bool)}
+	q := &foldIntake{snapshot: f, generation: v.document.foldGeneration, revision: v.document.model.Revision(), state: v.foldState,
+		selection: v.selectionEpoch, old: make(map[textedit.Range]bool), collapsed: make(map[int]textedit.Range)}
+	if r := v.viewRestore; r != nil && r.foldsPending && r.snapshot.language == v.document.languageEpoch && v.foldingEnabled {
+		q.restore, q.old = r, r.wanted
+	} else {
+		for _, r := range v.collapsedFolds {
+			q.old[r] = true
+		}
+	}
+	v.foldIntake = q
 	v.document.requestWork()
 }
 func (v *SourceView) foldingIntakeStep() {
@@ -415,46 +449,44 @@ func (v *SourceView) foldingIntakeStep() {
 		v.foldIntake = nil
 		return
 	}
-	if q.state != v.foldState {
+	if q.state != v.foldState || q.selection != v.selectionEpoch {
 		v.queueFolds(q.snapshot)
 		return
 	}
 	deadline := time.Now().Add(2 * time.Millisecond)
+	a, b := d.model.LineAt(v.Selection().Anchor), d.model.LineAt(v.Selection().Caret)
 	for n := 0; n < 256 && time.Now().Before(deadline); n++ {
-		if q.oldAt < len(v.folds) {
-			r := v.folds[q.oldAt]
-			q.old[[2]int{r.Start, r.End}] = r.Collapsed
-			q.oldAt++
-			continue
-		}
 		if q.at == len(q.snapshot.entries) {
 			break
 		}
 		r := q.snapshot.entries[q.at]
-		r.Collapsed = q.old[[2]int{r.Start, r.End}]
+		key := textedit.Range{Start: r.Start, End: r.End}
+		r.Collapsed = v.foldingEnabled && q.old[key] && !(a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine)
+		if r.Collapsed {
+			q.collapsed[r.StartLine] = key
+			q.hidden = folding.AppendHidden(q.hidden, r.StartLine+1, r.EndLine+1)
+		}
 		q.entries = append(q.entries, r)
 		q.at++
 	}
-	if q.oldAt < len(v.folds) || q.at < len(q.snapshot.entries) {
+	if q.at < len(q.snapshot.entries) {
 		return
-	}
-	// Selection may have moved during intake. Never hide either endpoint.
-	a, b := d.model.LineAt(v.Selection().Anchor), d.model.LineAt(v.Selection().Caret)
-	for i := range q.entries {
-		r := &q.entries[i]
-		if a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine {
-			r.Collapsed = false
-		}
 	}
 	v.foldIntake = nil
 	v.folds = q.entries
+	v.collapsedFolds = q.collapsed
 	v.foldRevision = q.revision
 	v.foldDefinition = d.definition
-	if slices.Equal(v.hiddenLines, v.foldedLines()) && v.visibleLines.Total() == v.displayCount() && v.heights.Count() == v.visibleLines.Count() {
+	if slices.Equal(v.hiddenLines, q.hidden) && v.visibleLines.Total() == v.displayCount() && v.heights.Count() == v.visibleLines.Count() {
 		v.RequestLayout()
 		v.RequestPaint()
 	} else {
-		v.refreshFoldGeometry()
+		v.refreshFoldVisibility(q.hidden)
+	}
+	if r := q.restore; r != nil && v.viewRestore == r {
+		r.foldsPending = false
+		v.initialLayout = nil
+		v.requestLayoutWork()
 	}
 	v.foldingSignal.Emit()
 }
@@ -720,7 +752,7 @@ func (v *SourceView) foldAtCaret(collapsed bool) bool {
 func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 	meta := info.Attributes["goui.sourceview"].(map[string]any)
 	meta["foldingEnabled"] = v.foldingEnabled
-	meta["foldingPending"] = v.foldIntake != nil || !v.document.externalFolds && v.document.definition.Folding() != nil && (!v.document.foldReady || v.document.folding != nil && v.document.folding.busy)
+	meta["foldingPending"] = v.foldIntake != nil || v.viewRestore != nil && v.viewRestore.foldsPending && v.viewRestore.snapshot.language == v.document.languageEpoch || !v.document.externalFolds && v.document.definition.Folding() != nil && (!v.document.foldReady || v.document.folding != nil && v.document.folding.busy)
 	meta["foldRegionCount"] = len(v.folds)
 	if v.projection != nil {
 		if len(v.hiddenLines) > 0 {

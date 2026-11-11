@@ -123,6 +123,7 @@ type SourceView struct {
 	foldColumn                                                                        float32
 	foldingEnabled                                                                    bool
 	folds                                                                             []folding.Entry
+	collapsedFolds                                                                    map[int]textedit.Range
 	collapsedLines                                                                    map[int]textedit.Range
 	collapsedRevision                                                                 uint64
 	foldRevision                                                                      uint64
@@ -259,6 +260,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.foldIntake = nil
 	v.foldClear = false
 	v.folds = nil
+	v.collapsedFolds = nil
 	v.collapsedLines = nil
 	v.hiddenLines = nil
 	v.foldRevision = d.model.Revision()

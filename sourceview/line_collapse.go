@@ -73,6 +73,7 @@ func (v *SourceView) expandLinePreview(row int) bool {
 	if !manual && !structure {
 		return false
 	}
+	v.cancelViewRestore()
 	delete(v.collapsedLines, row)
 	if structure {
 		v.folds[i].Collapsed = false
@@ -121,6 +122,7 @@ func (v *SourceView) CollapseLine(line int) bool {
 	if !v.canCollapseLine(line) {
 		return false
 	}
+	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	state := v.operationState()
 	v.closeCompletion()
@@ -177,6 +179,7 @@ func (v *SourceView) ExpandLine(line int) bool {
 	if _, ok := v.collapsedLines[line]; !ok {
 		return false
 	}
+	v.cancelViewRestore()
 	delete(v.collapsedLines, line)
 	v.refreshCollapsedLine(line)
 	v.updateMenu()

@@ -348,6 +348,9 @@ func (v *SourceView) layoutStep(deadline time.Time) {
 			v.updateMenu()
 		}
 	}()
+	if v.viewRestore != nil && !v.restoreFoldsPending() && !v.protectRestoredSelection(prepare) {
+		return
+	}
 	// First refine the text position retained across a width change. Other
 	// viewport work uses the latest demand rather than a queue of old widths.
 	if v.pendingAnchor && v.anchor.valid && v.projection == nil && v.anchorRevision == v.document.model.Revision() {

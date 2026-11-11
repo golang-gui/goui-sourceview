@@ -2,8 +2,12 @@ package sourceview
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
+	"sort"
 
+	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/gui/textedit"
@@ -15,21 +19,27 @@ import (
 // reused by multiple views. It is not a file or undo-history snapshot.
 type ViewState struct {
 	document, revision uint64
+	language           uint64
 	selection          textedit.Selection
 	upstream           bool
 	anchor             viewportAnchor
+	folds, lines       []textedit.Range
 }
+
+const maxSavedFolds = 4096
 
 type viewRestore struct {
-	snapshot *ViewState
-	mount    uint64
-	host     gui.Widget
-	input    *restoreInput
+	snapshot     *ViewState
+	host         gui.Widget
+	input        *restoreInput
+	wanted       map[textedit.Range]bool
+	foldsPending bool
 }
 
-// SaveState captures committed selection and viewport coordinates without
+// SaveState captures committed selection, viewport and collapse intent without
 // measuring text. The view must be mounted and have observed the current model
 // revision. An unmeasured viewport uses its last text anchor or a logical line.
+// Saving more than 4096 structural and manual line collapses returns ErrOperationLimit.
 func (v *SourceView) SaveState() (*ViewState, error) {
 	if !v.mounted || v.Destroyed() {
 		return nil, ErrNotMounted
@@ -37,14 +47,33 @@ func (v *SourceView) SaveState() (*ViewState, error) {
 	if v.observed != v.document.model.Revision() {
 		return nil, ErrOperationChanged
 	}
-	return &ViewState{document: v.document.ID(), revision: v.observed,
-		selection: v.Selection(), upstream: v.upstream, anchor: v.savedViewportAnchor()}, nil
+	s := &ViewState{document: v.document.ID(), revision: v.observed, language: v.document.languageEpoch,
+		selection: v.Selection(), upstream: v.upstream, anchor: v.savedViewportAnchor()}
+	if q := v.viewRestore; q != nil && q.foldsPending && q.snapshot.language == s.language {
+		s.folds = slices.Clone(q.snapshot.folds)
+	} else if v.foldingEnabled {
+		if len(v.collapsedFolds) > maxSavedFolds {
+			return nil, ErrOperationLimit
+		}
+		for _, r := range v.collapsedFolds {
+			s.folds = append(s.folds, r)
+		}
+	}
+	if len(s.folds)+len(v.collapsedLines) > maxSavedFolds {
+		return nil, ErrOperationLimit
+	}
+	for _, r := range v.collapsedLines {
+		s.lines = append(s.lines, r)
+	}
+	return s, nil
 }
 
 // RestoreState restores a snapshot from this Document's current revision.
 // It accepts read-only views, does not acquire focus or edit text, and returns
 // after accepting the request; geometry is resolved by the normal event loop.
 // Input, explicit navigation, document changes and unmount cancel pending work.
+// A changed language definition discards structural fold intent. Configuration,
+// including language, wrapping and whether folding is enabled, is unchanged.
 func (v *SourceView) RestoreState(s *ViewState) error {
 	if s == nil || s.document == 0 {
 		return fmt.Errorf("sourceview: invalid view state")
@@ -56,7 +85,11 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 		return ErrOperationChanged
 	}
 	v.cancelViewRestore()
-	q := &viewRestore{snapshot: s, mount: v.mountEpoch}
+	// Copy the opaque value as well as its private slice headers. Callers can
+	// reuse or replace their ViewState variable after submitting the request.
+	snapshot := *s
+	s = &snapshot
+	q := &viewRestore{snapshot: s}
 	v.viewRestore = q
 	accepted := false
 	defer func() {
@@ -79,7 +112,6 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 	}
 	v.document.model.BreakUndoGroup()
 	old := v.selection
-	foldingChanged := v.unfoldSelection(s.selection)
 	v.selection, v.upstream = s.selection, s.upstream
 	v.selectionRevision = s.revision
 	v.selectionEpoch++
@@ -88,6 +120,19 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 	v.preferredSet = false
 	v.reveal = nil
 	v.anchor, v.anchorRevision, v.pendingAnchor = s.anchor, s.revision, true
+	lines := make(map[int]textedit.Range, len(s.lines))
+	v.collapsedRevision = s.revision
+	for _, r := range s.lines {
+		lines[v.document.model.LineAt(r.Start)] = r
+	}
+	manualChanged := !maps.Equal(v.collapsedLines, lines)
+	v.collapsedLines = lines
+	v.startFoldRestore(q)
+	if manualChanged {
+		v.layoutEpoch++
+		v.resetHeights()
+		v.contentWidth = 0
+	}
 	// Restoring a distant viewport must not turn the old visible rows into a
 	// synchronous first-allocation job. layoutStep prioritizes the text anchor.
 	v.initialLayout = nil
@@ -111,13 +156,16 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 	if v.viewRestore != q || !state.valid(v) || v.Destroyed() {
 		return ErrOperationChanged
 	}
-	if foldingChanged {
+	if manualChanged {
 		v.foldingSignal.Emit()
 	}
 	if v.viewRestore != q || !state.valid(v) || v.Destroyed() {
 		return ErrOperationChanged
 	}
 	v.searchState.Emit()
+	if v.viewRestore != q || !state.valid(v) || v.Destroyed() {
+		return ErrOperationChanged
+	}
 	accepted = true
 	return nil
 }
@@ -152,9 +200,114 @@ func (v *SourceView) savedViewportAnchor() viewportAnchor {
 
 func (v *SourceView) cancelViewRestore() {
 	if v.viewRestore != nil {
-		v.releaseViewRestore()
+		if v.foldIntake != nil && v.foldIntake.restore == v.viewRestore {
+			intake := v.foldIntake
+			v.foldIntake = nil
+			v.releaseViewRestore()
+			if intake.revision == v.document.model.Revision() && intake.generation == v.document.foldGeneration {
+				v.queueFolds(intake.snapshot)
+			}
+		} else {
+			v.releaseViewRestore()
+		}
 		v.pendingAnchor, v.anchor.valid = false, false
 	}
+}
+
+// Candidate matching stays in the existing budgeted intake. A view-owned
+// candidate slice is borrowed read-only until publication or cancellation.
+func (v *SourceView) startFoldRestore(q *viewRestore) {
+	d := v.document
+	if !v.foldingEnabled || q.snapshot.language != d.languageEpoch {
+		return
+	}
+	q.wanted = make(map[textedit.Range]bool, len(q.snapshot.folds))
+	for _, r := range q.snapshot.folds {
+		q.wanted[r] = true
+	}
+	var f *Folds
+	if d.foldReady && d.foldRevision == d.model.Revision() && d.foldSnapshot != nil {
+		f = d.foldSnapshot
+	} else if v.foldIntake != nil && v.foldIntake.generation == d.foldGeneration {
+		f = v.foldIntake.snapshot
+	} else if len(v.folds) > 0 && v.foldDefinition == d.definition {
+		f = &Folds{entries: v.folds, length: d.model.Len(), lines: d.model.LineCount()}
+	}
+	q.foldsPending = f != nil || len(q.wanted) > 0 && d.hasFolding()
+	if f != nil {
+		v.queueFolds(f)
+	} else if q.foldsPending {
+		d.requestWork()
+	}
+}
+
+func (v *SourceView) restoreFoldsPending() bool {
+	q := v.viewRestore
+	if q == nil {
+		return false
+	}
+	if q.snapshot.language != v.document.languageEpoch {
+		q.foldsPending = false
+		q.wanted = nil
+	}
+	return q.foldsPending
+}
+
+// Resolve only the two selection endpoints, using cached first-line geometry.
+// A narrower destination may need to expand a saved one-line preview to keep
+// the selection accessible. Missing geometry is prepared by layoutStep.
+func (v *SourceView) protectRestoredSelection(prepare func(int) bool) bool {
+	if v.viewRestore == nil || v.restoreFoldsPending() {
+		return v.viewRestore == nil
+	}
+	q := v.viewRestore
+	changed, pending := false, false
+	for _, at := range []int{v.selection.Anchor, v.selection.Caret} {
+		row := v.document.model.LineAt(at)
+		r, _ := v.document.model.LineRange(row)
+		if !v.lineCollapsed(row) || at == r.Start {
+			continue
+		}
+		if prepare != nil && !prepare(row) {
+			if v.viewRestore != q {
+				return false
+			}
+			pending = true
+			break
+		}
+		p := v.cachedParagraph(row)
+		g, _ := v.linePreview(p)
+		if g == nil {
+			v.requestLayoutWork()
+			pending = true
+			break
+		}
+		if v.collapsedOffsetHidden(row, p, at, v.upstream && at == v.selection.Caret) {
+			delete(v.collapsedLines, row)
+			if i := v.foldHeader(row); i >= 0 && v.folds[i].Collapsed {
+				v.folds[i].Collapsed = false
+				delete(v.collapsedFolds, row)
+			}
+			changed = true
+		}
+	}
+	if changed {
+		var hidden []folding.Interval
+		rows := make([]int, 0, len(v.collapsedFolds))
+		for row := range v.collapsedFolds {
+			rows = append(rows, row)
+		}
+		sort.Ints(rows)
+		for _, row := range rows {
+			r := v.collapsedFolds[row]
+			hidden = folding.AppendHidden(hidden, row+1, v.document.model.LineAt(r.End)+1)
+		}
+		v.refreshFoldVisibility(hidden)
+		v.initialLayout = nil
+		v.foldingSignal.Emit()
+		return false
+	}
+	return !pending
 }
 
 func (v *SourceView) releaseViewRestore() {
@@ -187,6 +340,9 @@ func (c *restoreInput) HandleEvent(ctx gui.EventContext) {
 }
 
 func (v *SourceView) resolveViewportAnchor() {
+	if v.restoreFoldsPending() || !v.protectRestoredSelection(nil) {
+		return
+	}
 	a := v.anchor
 	state, epoch := v.operationState(), v.layoutEpoch
 	at := v.clampOffset(a.offset)
