@@ -1,5 +1,7 @@
 // Unified gutter folding. Requires a native desktop, WM and fonts. Run:
 // XMODIFIERS=@im=none go run ./tests/window/editor/fold_preview [-basic] [-dark]
+// 独立 X11 桌面在 100%/150% 下使用至少 1920x1440 物理像素；1000 DIP 客户区
+// 加窗口装饰必须能完整放入工作区。用例先检查实际窗口及样本宽度，尺寸不足明确失败。
 // Optionally add -file /path/to/single-line.json to reproduce real input. The
 // file must contain a quoted iVBOR PNG payload; it is read and never saved.
 // Initially an expanded minified JSON has one logical line and a long-line
@@ -23,6 +25,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -178,7 +181,9 @@ func main() {
 	if *basicTheme {
 		app.SetStyleSheet(basic.Sheet())
 	}
-	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 1000, Height: 560}})
+	const windowWidth float32 = 1000
+	const narrowPaneWidth float32 = 350
+	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: windowWidth, Height: 560}})
 	must(err)
 	defer win.Destroy()
 	must(win.SetTitle("SourceView unified folding"))
@@ -268,6 +273,8 @@ func main() {
 	}
 	revision, undo := doc.Model().Revision(), doc.Model().CanUndo()
 	settle(func() {
+		check(math.Abs(float64(box.Rect().Width-windowWidth)) < .5,
+			fmt.Sprintf("测试布局前置条件不满足：窗口客户区宽 %.2f DIP，要求 %.2f DIP；请扩大桌面工作区（150%% 时建议 1920x1440）", box.Rect().Width, windowWidth))
 		check(doc.Model().LineCount() == 1 && len(v.FoldingRegions()) == 0, "single-line JSON should have no cross-line fold")
 		check(gutter(v).Attributes["goui.sourceview.fold"].(map[string]any)["kind"] == "line", "single-line JSON missing long-line gutter entry")
 		click(gutter(v).Bounds.Center())
@@ -365,13 +372,32 @@ func main() {
 		}
 		return gui.WidgetInfo{}, false
 	}
-	// These digit runs lie well inside native wrap intervals in the recorded
-	// Linux/Pango/default-font matrix. Actual line metrics are asserted below.
+	// 先确认 1000 DIP 客户区及宿主宽度，再记录当前主题的宽版编辑区；Modern 圆角
+	// 留白不能套用 Basic 边框宽度。缩窄/恢复后验证差值，再独立断言原生行数。
+	var wideSampleWidth float32
+	checkSampleWidth := func(narrow bool) {
+		wantHost := windowWidth
+		if narrow {
+			wantHost -= narrowPaneWidth
+		}
+		check(math.Abs(float64(box.Rect().Width-windowWidth)) < .5 && math.Abs(float64(host.Rect().Width-wantHost)) < .5,
+			fmt.Sprintf("测试布局前置条件不满足：客户区宽 %.2f DIP，编辑宿主宽 %.2f DIP，分别要求 %.2f / %.2f DIP；请检查桌面工作区及窗口布局", box.Rect().Width, host.Rect().Width, windowWidth, wantHost))
+		if wideSampleWidth == 0 {
+			check(!narrow && v.Rect().Width > 0, "尚未记录当前主题的宽版编辑区")
+			wideSampleWidth = v.Rect().Width
+		}
+		want := wideSampleWidth
+		if narrow {
+			want -= narrowPaneWidth
+		}
+		check(math.Abs(float64(v.Rect().Width-want)) < .5,
+			fmt.Sprintf("测试布局前置条件不满足：JSON 编辑区宽 %.2f DIP，要求 %.2f DIP；请检查桌面工作区、窗口大小及样本布局", v.Rect().Width, want))
+	}
 	for _, sample := range []struct{ lines, digits int }{{1, 24}, {2, 120}, {3, 160}} {
 		settle(func() {
 			setPane(0)
 			if sample.lines == 3 {
-				setPane(350)
+				setPane(narrowPaneWidth)
 			}
 			observed.sampleText = `"` + strings.Repeat("1", sample.digits) + `" }`
 			observed.sampleLines = 0
@@ -382,6 +408,7 @@ func main() {
 			phase = fmt.Sprintf("threshold-%d", sample.lines)
 		})
 		settle(func() {
+			checkSampleWidth(sample.lines == 3)
 			check(observed.sampleLines == sample.lines, fmt.Sprintf("short JSON has %d native rows, expected %d", observed.sampleLines, sample.lines))
 			root := gutter(v)
 			check(root.Attributes["goui.sourceview.fold"].(map[string]any)["kind"] == "structure", "root structure arrow is missing")
@@ -401,6 +428,7 @@ func main() {
 		phase = "threshold-wide-collapsed"
 	})
 	settle(func() {
+		checkSampleWidth(false)
 		check(observed.sampleLines == 2, "wider string did not fall below the collapse threshold")
 		entry, ok := stringArrow()
 		check(ok && entry.Attributes["goui.sourceview.fold"].(map[string]any)["collapsed"] == true, "widening removed the expansion entry")
