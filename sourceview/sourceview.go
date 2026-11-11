@@ -113,6 +113,7 @@ type SourceView struct {
 	anchor                     viewportAnchor
 	anchorRevision             uint64
 	pendingAnchor              bool
+	viewRestore                *viewRestore
 	reveal                     *operationState
 
 	// Folding and editing assistance.
@@ -230,6 +231,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	if v.document == d {
 		return
 	}
+	v.cancelViewRestore()
 	defer v.searchState.Emit()
 	v.ClearInlineSuggestion()
 	state := v.operationState()
@@ -329,6 +331,7 @@ func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
 // Only owned input or keyboard movement inside a completion word retains its UI.
 // Explicit setters, pointer input and reentrant callbacks use setSelection.
 func (v *SourceView) setSelectionKeepingCompletion(s textedit.Selection, upstream, reveal bool, keep *completionSession) {
+	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	defer v.searchState.Emit()
 	state := v.operationState()
@@ -580,6 +583,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 }
 
 func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
+	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	v.initialLayout = nil
 	if e := v.execution; e != nil && e.revision < c.Revision {
@@ -743,6 +747,7 @@ func (v *SourceView) mount() {
 }
 
 func (v *SourceView) unmount() {
+	v.cancelViewRestore()
 	if v.editQueue != nil {
 		v.cancelEdit()
 		v.editQueue.owner = nil

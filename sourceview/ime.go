@@ -23,6 +23,7 @@ func (v *SourceView) preedit(text string, caret int) {
 	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
 		return
 	}
+	v.cancelViewRestore()
 	if v.delayInput(deferredInput{apply: func() { v.applyPreedit(text, caret) }, geometry: true}) {
 		return
 	}
@@ -69,6 +70,7 @@ func (v *SourceView) commit(c gui.IMCommit) {
 	if v.resettingIM || !v.mounted || !v.Focused() || v.editable() != nil {
 		return
 	}
+	v.cancelViewRestore()
 	if v.delayInput(deferredInput{apply: func() { v.applyCommit(c) }, geometry: true, mutates: true}) {
 		return
 	}

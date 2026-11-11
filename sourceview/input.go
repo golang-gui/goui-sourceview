@@ -315,6 +315,7 @@ func (v *SourceView) keyDown(ctx gui.EventContext, event events.KeyEvent) {
 }
 
 func (v *SourceView) inputKey(event events.KeyEvent) bool {
+	v.cancelViewRestore()
 	if event.Key == events.KeyEscape && event.Modifiers == 0 {
 		v.pendingInput = nil
 	}

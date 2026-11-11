@@ -1,6 +1,7 @@
 # 视图状态恢复设计
 
-状态：2026-11-10 复核提案，尚未实现。近期在补全呈现之后推进，不等待保存点依赖。
+状态：2026-11-11 在 feature/view-state 实施。选区和视口快照已接入，折叠恢复继续实施；
+完整验收前不作为已发布能力。实施和验证见 [视图状态验收](PlanViewState.md)。
 不依赖保存点新增 API，不修改 typography，不保存原生布局。
 
 ## 范围与接口
@@ -12,8 +13,8 @@
 回退到其真实插入点，并去掉虚拟区域的垂直 inset，避免恢复时产生没有建议的空白。
 
 ```go
-func (v *SourceView) CaptureViewState() (*ViewState, error)
-func (v *SourceView) RestoreViewState(state *ViewState) error
+func (v *SourceView) SaveState() (*ViewState, error)
+func (v *SourceView) RestoreState(state *ViewState) error
 ```
 
 ViewState 字段私有且不可变，复制折叠数据，不持有 Widget/Document/Model 引用，无需 Destroy。
@@ -21,11 +22,11 @@ ViewState 字段私有且不可变，复制折叠数据，不持有 Widget/Docum
 需要跨后台编辑保留位置时，应用可保留活视图使用既有映射。跨修订和跨进程恢复后续单独设计，
 不提供 JSON 序列化承诺。ui 增加别名，通过正常控件引用调用，不增加每次协调重置滚动的属性。
 
-Capture 要求挂载且视图已观察到当前模型修订，否则 ErrNotMounted/ErrOperationChanged。
+SaveState 要求挂载且视图已观察到当前模型修订，否则 ErrNotMounted/ErrOperationChanged。
 不改变选区、焦点、历史或折叠，不强制排版。IME 期间只捕获提交文本的选区和锚点，
 不提交/取消输入法，不保存投影内容。
 
-Restore 校验 nil/无效状态、挂载、Document 身份和 Revision；失败不改变视图或旧恢复任务。
+RestoreState 校验 nil/无效状态、挂载、Document 身份和 Revision；失败不改变视图或旧恢复任务。
 接受后取消补全、影子建议、待执行编辑/粘贴与预编辑，回调后重新核验；不强行提交预编辑或自动获取焦点。
 只读视图可以恢复。nil 返回表示接收意图，不表示测量已完成；每视图至多一个恢复意图。
 不产生正文修订、撤销项或 modified 变化，保留反向选区，不逐次调用带 reveal 的 API 来回滚动。
@@ -33,7 +34,7 @@ Restore 校验 nil/无效状态、挂载、Document 身份和 Revision；失败�
 ## 锚点与延迟几何
 
 现有 layout.go 的 viewportAnchor 已保存 offset/inset/x，pendingAnchor 在后续布局解析位置。
-Capture 复用已测量的可见几何，Restore 复用该调度通路，并补齐折行边界的亲和性。
+SaveState 复用已测量的可见几何，RestoreState 复用该调度通路，并补齐折行边界的亲和性。
 快照内部保存：
 
 - 顶部视觉行的提交文本 UTF-8 位置及前/后行亲和性。
@@ -59,7 +60,7 @@ Capture 复用已测量的可见几何，Restore 复用该调度通路，并补�
 
 分析未完成时保留有界集合，沿用 foldIntake 分批匹配；完整结果到达后应用一次并清理，
 不在后续分析中反复覆盖用户操作。候选长期未返回时数据仍有界，可被用户操作或卸载取消。
-首批上限为 4096 个已折叠区域，超限 Capture 返回 ErrOperationLimit，不静默截断。
+首批上限为 4096 个已折叠区域，超限 SaveState 返回 ErrOperationLimit，不静默截断。
 捕获应按已折叠集合枚举，不为少量折叠扫描全部候选；在既有 fold 状态维护一致索引，
 覆盖编辑映射、禁用、结果替换等路径，不维护第二套分析结果。
 匹配分批执行，不能同步 FoldAll 再逐一折叠来掩盖 O(F) 工作。
@@ -87,7 +88,7 @@ Capture 复用已测量的可见几何，Restore 复用该调度通路，并补�
 - 改宽高/字体、100%/150%，超长单行自动换行中段、部分视觉行与双向文本。
 - 慢折叠/无几何时恢复后立即滚动或输入，迟到结果不抢回位置。
 - 10 万候选但少量折叠、4096 折叠及超限，约 10 MiB 文本。
-  测量实际切换到首屏及事件循环间隔，不只测 Restore 返回。
+  测量实际切换到首屏及事件循环间隔，不只测 RestoreState 返回。
 - 两视图的滚动/折叠互不污染；另一视图编辑后旧快照明确失败。
 
 执行 go test ./...、GOWORK=off go test ./...，按风险补 race 和 Windows/macOS 编译；

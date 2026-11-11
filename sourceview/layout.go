@@ -276,29 +276,9 @@ func (v *SourceView) layoutVisible(viewport geometry.Size, offset geometry.Point
 			return
 		}
 	} else if v.pendingAnchor && v.projection == nil && v.anchor.valid {
-		at := v.clampOffset(v.anchor.offset)
-		row := v.document.model.LineAt(at)
-		r, _ := v.document.model.LineRange(row)
-		if p := v.viewportParagraph(row); p != nil {
-			g := &p.Geometry
-			baseY := p.GeometryY
-			if p.Paged != nil {
-				frame := p.Paged.CachedGeometryAt(at - r.Start)
-				if frame == nil {
-					v.requestLayoutWork()
-					return
-				}
-				g, baseY = &frame.Geometry, frame.Y
-			}
-			if g == nil {
-				v.requestLayoutWork()
-				return
-			}
-			v.pendingAnchor = false
-			rect := g.Caret(textedit.Position{Offset: at - r.Start})
-			y := max(0, min(float32(float64(padding)+v.paragraphTop64(row)+baseY+float64(rect.Y)+float64(v.anchor.inset)), max(0, v.ContentSize().Height-viewport.Height)))
-			v.offset = geometry.Point{X: v.anchor.x, Y: y}
-			v.scrollSignal.Emit(geometry.Rect(v.anchor.x, y, viewport.Width, viewport.Height))
+		v.resolveViewportAnchor()
+		if !state.valid(v) || epoch != v.layoutEpoch || v.Destroyed() {
+			return
 		}
 	} else {
 		v.captureAnchor()
@@ -379,9 +359,9 @@ func (v *SourceView) neighboringRow(row, delta int) int {
 }
 
 type viewportAnchor struct {
-	offset   int
-	inset, x float32
-	valid    bool
+	offset          int
+	inset, x        float32
+	valid, upstream bool
 }
 
 func (v *SourceView) snapOffset(offset int, forward bool) int {
@@ -434,6 +414,7 @@ func (v *SourceView) RevealSelection() {
 	if v.Destroyed() {
 		return
 	}
+	v.cancelViewRestore()
 	request := v.operationState()
 	v.reveal = &request
 	v.pendingAnchor = false
@@ -567,6 +548,6 @@ func (v *SourceView) captureAnchor() {
 	pos := p.Geometry.Hit(geometry.Point{X: v.gutter + padding - origin.X, Y: y})
 	index := p.Geometry.LineIndex(pos)
 	edge := p.Geometry.LineEdge(index, false)
-	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: -origin.Y - p.Geometry.LineMetrics(index).Y, x: v.offset.X, valid: true}
+	v.anchor = viewportAnchor{offset: r.Start + edge.Offset, inset: -origin.Y - p.Geometry.LineMetrics(index).Y, x: v.offset.X, valid: true, upstream: edge.Upstream}
 	v.anchorRevision = v.document.model.Revision()
 }
