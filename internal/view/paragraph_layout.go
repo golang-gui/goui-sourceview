@@ -1,0 +1,934 @@
+// Copyright (c) 2026 xuges@qq.com
+// SPDX-License-Identifier: MIT
+//
+// Adapted from GOUI v0.7.0 public text facilities; maintained by SourceView.
+
+package view
+
+import (
+	"fmt"
+	"image/color"
+	"math"
+	"slices"
+	"sort"
+	"time"
+	"unicode/utf8"
+
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
+	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/platform/typography"
+	"github.com/rivo/uniseg"
+	"golang.org/x/text/unicode/bidi"
+)
+
+const paragraphBlockBytes = 4096
+const paragraphPageLimit = 12
+
+// ParagraphLayout retains a bounded native working set for a long logical
+// paragraph. It belongs to one GUI-thread consumer and must be destroyed by that
+// consumer. read uses paragraph-local UTF-8 coordinates and must remain valid
+// until Destroy; update the length with Change after editing its source.
+//
+// Global extents are estimates until the corresponding blocks are measured.
+// Geometry and painting always use the same measured local windows. A block
+// boundary is not a document newline. Native calls never receive the paragraph
+// as a whole. This is GUI layout policy, independent of typography backends.
+type ParagraphLayout struct {
+	context                             typography.Context
+	format                              typography.TextFormat
+	width                               float32
+	length                              int
+	read                                func(textcore.Range) (string, error)
+	pages                               map[int]*paragraphPage
+	starts                              map[int]int
+	heights                             textcore.HeightIndex
+	lineHeight, blockHeight, blockWidth float32
+	runeAdvance                         float32
+	widthTree                           []float64
+	widthValues                         map[int]float64
+	viewport                            geometry.Rectangle
+	active                              []int
+	geometry                            ParagraphGeometry
+	geometryVersion                     uint64
+	geometryIndices                     []int
+	editGeometry                        *ParagraphGeometry
+	editVersion                         uint64
+	editIndices                         []int
+	clock, version                      uint64
+	checkpoints                         []paragraphContext
+	scanned                             int
+	state                               paragraphContext
+	err                                 error
+	destroyed                           bool
+}
+
+type paragraphPage struct {
+	index         int
+	runesBefore   int
+	range_        textcore.Range
+	layout        typography.TextLayout
+	prefix        int
+	lines         []typography.TextLine
+	clusters      []typography.TextCluster
+	height, width float32
+	used          uint64
+	geometry      *ParagraphGeometry
+}
+
+// ParagraphGeometry pairs measured local coordinates with their paragraph
+// origin. Byte offsets remain paragraph-relative. Convert the origin relative
+// to the viewport before adding any local coordinate; converting a large
+// absolute character position to float32 would lose hit and selection precision.
+// Geometry is borrowed from its owning ParagraphLayout until its next update.
+type ParagraphGeometry struct {
+	textcore.Geometry
+	X, Y float64
+}
+
+// RelativeTo returns this geometry's origin relative to another paragraph
+// point. The subtraction takes place before converting to local DIP values.
+func (g *ParagraphGeometry) RelativeTo(x, y float64) geometry.Point {
+	return geometry.Point{X: float32(g.X - x), Y: float32(g.Y - y)}
+}
+
+type paragraphContext struct {
+	runes        int
+	at           int
+	base, strong rune
+	stack        []rune
+}
+
+// NewParagraphLayout creates an empty per-view cache. No text is read or native
+// resource allocated until Prepare or GeometryAt requests a bounded window.
+func NewParagraphLayout(context typography.Context, format typography.TextFormat, width float32, length int, read func(textcore.Range) (string, error)) *ParagraphLayout {
+	p := &ParagraphLayout{context: context, format: format, width: max(1, width), length: length, read: read, pages: make(map[int]*paragraphPage), starts: map[int]int{0: 0}, lineHeight: 20}
+	p.blockHeight = 20 * float32(math.Ceil(float64(paragraphBlockBytes)*8/float64(p.width)))
+	if format.WrapMode == typography.WrapNone {
+		p.blockHeight = 20
+	}
+	p.blockWidth = paragraphBlockBytes * 8
+	p.heights.Reset(p.blockCount(), p.blockHeight)
+	p.resetWidths()
+	p.checkpoints = []paragraphContext{{}}
+	return p
+}
+
+func (p *ParagraphLayout) blockCount() int {
+	return max(1, (p.length+paragraphBlockBytes-1)/paragraphBlockBytes)
+}
+
+// Destroy releases all native windows. It is safe to call more than once.
+func (p *ParagraphLayout) Destroy() {
+	p.destroyed = true
+	p.version++
+	p.clearPages()
+}
+
+func (p *ParagraphLayout) clearPages() {
+	old := p.pages
+	p.pages = make(map[int]*paragraphPage)
+	p.active = nil
+	p.geometryIndices = nil
+	p.editGeometry = nil
+	for _, page := range old {
+		page.layout.Destroy()
+	}
+}
+
+// Version changes when cached native windows or their coordinates change.
+func (p *ParagraphLayout) Version() uint64 { return p.version }
+
+// Err returns the first failure for the current input. Change permits a retry.
+func (p *ParagraphLayout) Err() error { return p.err }
+
+// Size returns the currently known extent, including estimates for unseen text.
+func (p *ParagraphLayout) Size() geometry.Size {
+	if p.format.WrapMode == typography.WrapNone {
+		width := p.widthTop(p.blockCount())
+		for _, page := range p.pages {
+			x, _ := p.origin(page)
+			width = max(width, x+float64(page.width))
+		}
+		return geometry.Size{Width: float32(width), Height: p.lineHeight}
+	}
+	return geometry.Size{Width: p.width, Height: p.heights.Total()}
+}
+
+// SetWidth invalidates wrapping windows while preserving the text context index.
+func (p *ParagraphLayout) SetWidth(width float32) {
+	width = max(1, width)
+	if p.width == width {
+		return
+	}
+	if p.format.WrapMode == typography.WrapNone {
+		p.width = width
+		return
+	}
+	ratio := p.width / width
+	p.clearPages()
+	p.width = width
+	p.starts = map[int]int{0: 0}
+	p.blockHeight = max(p.lineHeight, p.blockHeight*ratio)
+	p.heights.Reset(p.blockCount(), p.blockHeight)
+	p.version++
+}
+
+// Change invalidates the edited window and its contextual suffix. Earlier
+// native windows stay reusable. Edits use actual execution order and paragraph
+// coordinates; callers must notify every source change before requesting layout.
+func (p *ParagraphLayout) Change(length int, edits []textcore.Edit) {
+	for _, edit := range edits {
+		for index, page := range p.pages {
+			if page.range_.End >= edit.Range.Start {
+				delete(p.pages, index)
+				page.layout.Destroy()
+			}
+		}
+		// Context before an edit remains confirmed; later context is rescanned
+		// in bounded turns. No edit scans the suffix or copies the paragraph.
+		keep := sort.Search(len(p.checkpoints), func(i int) bool { return p.checkpoints[i].at > edit.Range.Start })
+		p.checkpoints = p.checkpoints[:max(1, keep)]
+		p.state = p.checkpoints[len(p.checkpoints)-1]
+		p.state.stack = append([]rune(nil), p.state.stack...)
+		p.scanned = p.state.at
+	}
+	p.length = length
+	p.starts = map[int]int{0: 0}
+	p.active = nil
+	p.heights.Reset(p.blockCount(), p.blockHeight)
+	p.resetWidths()
+	for index, page := range p.pages {
+		p.setWidth(index, float64(page.width))
+		p.starts[index] = page.range_.Start
+		p.starts[index+1] = page.range_.End
+		p.heights.Set(index, page.height)
+	}
+	p.version++
+	p.err = nil
+}
+
+func (p *ParagraphLayout) readRange(start, end int) (textcore.Range, string, error) {
+	start = max(0, min(start, p.length))
+	end = max(start, min(end, p.length))
+	// Model readers reject UTF-8 interior byte positions. At most three bytes
+	// on either edge are needed to align a requested range.
+	var last error
+	for a := 0; a < 4 && start-a >= 0; a++ {
+		for b := 0; b < 4 && end-b >= start-a; b++ {
+			r := textcore.Range{Start: start - a, End: end - b}
+			s, err := p.read(r)
+			if err == nil && utf8.ValidString(s) {
+				return r, s, nil
+			}
+			last = err
+		}
+	}
+	if last == nil {
+		last = fmt.Errorf("paragraph reader returned invalid UTF-8")
+	}
+	return textcore.Range{}, "", last
+}
+
+func (s *paragraphContext) consume(text string) {
+	// Long ASCII payloads need no Unicode state-machine steps. Checking eight
+	// bytes at a time keeps prefix indexing cheap without shaping unseen text.
+	if paragraphASCII(text) {
+		s.runes += len(text)
+		if s.base == 0 || s.strong != '\u200e' {
+			for i := 0; i < len(text); i++ {
+				c := text[i]
+				if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
+					if s.base == 0 {
+						s.base = '\u200e'
+					}
+					s.strong = '\u200e'
+					break
+				}
+			}
+		}
+		return
+	}
+	for _, r := range text {
+		s.runes++
+		switch r {
+		case '\u202a', '\u202b', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068':
+			if len(s.stack) < 125 {
+				s.stack = append(s.stack, r)
+			}
+		case '\u202c':
+			if n := len(s.stack); n > 0 && s.stack[n-1] < 0x2066 {
+				s.stack = s.stack[:n-1]
+			}
+		case '\u2069':
+			for len(s.stack) > 0 {
+				n := len(s.stack) - 1
+				r := s.stack[n]
+				s.stack = s.stack[:n]
+				if r >= 0x2066 {
+					break
+				}
+			}
+		default:
+			if r < 128 {
+				if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+					if s.base == 0 {
+						s.base = '\u200e'
+					}
+					s.strong = '\u200e'
+				}
+				continue
+			}
+			props, _ := bidi.LookupRune(r)
+			switch props.Class() {
+			case bidi.L:
+				if s.base == 0 {
+					s.base = '\u200e'
+				}
+				s.strong = '\u200e'
+			case bidi.R, bidi.AL:
+				if s.base == 0 {
+					s.base = '\u200f'
+				}
+				s.strong = '\u200f'
+			}
+		}
+	}
+}
+
+func paragraphASCII(text string) bool {
+	i := 0
+	for ; i+8 <= len(text); i += 8 {
+		if (text[i]|text[i+1]|text[i+2]|text[i+3]|text[i+4]|text[i+5]|text[i+6]|text[i+7])&0x80 != 0 {
+			return false
+		}
+	}
+	for ; i < len(text); i++ {
+		if text[i] >= 128 {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *ParagraphLayout) contextAt(at int, deadline time.Time) (paragraphContext, bool) {
+	advanced := false
+	for p.scanned < at {
+		if advanced && !time.Now().Before(deadline) {
+			return paragraphContext{}, false
+		}
+		r, text, err := p.readRange(p.scanned, min(at, p.scanned+64*1024))
+		if err != nil {
+			p.err = err
+			return paragraphContext{}, false
+		}
+		if r.End <= p.scanned {
+			return paragraphContext{}, false
+		}
+		p.state.consume(text)
+		advanced = true
+		p.scanned = r.End
+		p.state.at = p.scanned
+		copy := p.state
+		copy.stack = append([]rune(nil), copy.stack...)
+		p.checkpoints = append(p.checkpoints, copy)
+	}
+	i := sort.Search(len(p.checkpoints), func(i int) bool { return p.checkpoints[i].at > at }) - 1
+	s := p.checkpoints[max(0, i)]
+	s.stack = append([]rune(nil), s.stack...)
+	if s.at < at {
+		_, text, err := p.readRange(s.at, at)
+		if err != nil {
+			p.err = err
+			return s, false
+		}
+		s.consume(text)
+	}
+	return s, true
+}
+
+func (p *ParagraphLayout) page(index int, deadline time.Time) *paragraphPage {
+	if p.destroyed || p.err != nil {
+		return nil
+	}
+	index = max(0, min(index, p.blockCount()-1))
+	p.clock++
+	if page := p.pages[index]; page != nil {
+		page.used = p.clock
+		return page
+	}
+	start := index * paragraphBlockBytes
+	if at, ok := p.starts[index]; ok {
+		start = at
+	} else {
+		// A random window needs a confirmed grapheme boundary. ASCII/ASCII
+		// and ASCII/CJK transitions provide independent safe scan anchors.
+		// Otherwise advance the nearest confirmed predecessor on later turns.
+		if at, ok := p.alignStart(start); ok {
+			start = at
+		} else {
+			next := 0
+			for i := range p.starts {
+				if i <= index && i > next {
+					next = i
+				}
+			}
+			if next < index {
+				p.page(next, deadline)
+			}
+			return nil
+		}
+	}
+	r, text, err := p.readRange(start, min(p.length, (index+1)*paragraphBlockBytes))
+	if err != nil {
+		p.err = err
+		return nil
+	}
+	state, ready := p.contextAt(r.Start, deadline)
+	if !ready {
+		return nil
+	}
+	var prefix string
+	if r.Start > 0 && (len(state.stack) > 0 || state.base == '\u200f') {
+		base := state.base
+		if base == 0 {
+			base = '\u200e'
+		}
+		prefix = string(base) + string(state.stack)
+		if state.strong != 0 {
+			prefix += string(state.strong)
+		}
+	}
+	version := p.version
+	native, err := p.context.NewTextLayout(prefix+text, p.format, p.width, 1<<20)
+	if err != nil {
+		p.err = err
+		return nil
+	}
+	if p.destroyed || p.version != version {
+		native.Destroy()
+		return nil
+	}
+	w, h := native.MeasureSize()
+	lines, clusters := native.MeasureMetrics()
+	if p.destroyed || p.version != version {
+		native.Destroy()
+		return nil
+	}
+	if len(lines) == 0 {
+		native.Destroy()
+		return nil
+	}
+	validLines := len(lines)
+	end := r.End
+	if p.format.WrapMode != typography.WrapNone && end < p.length && len(lines) > 1 {
+		validLines--
+		end = r.Start + lines[validLines].Start - len(prefix)
+		h = lines[validLines].Y
+	}
+	if end <= r.Start {
+		native.Destroy()
+		return nil
+	}
+	page := &paragraphPage{index: index, range_: textcore.Range{Start: r.Start, End: end}, layout: native, prefix: len(prefix), height: h, width: w, used: p.clock, runesBefore: state.runes}
+	for _, line := range lines[:validLines] {
+		line.Start += r.Start - len(prefix)
+		line.Clusters = nil
+		if line.Start < r.Start {
+			line.Length -= r.Start - line.Start
+			line.Start = r.Start
+		}
+		line.Length = max(0, min(line.Length, end-line.Start))
+		page.lines = append(page.lines, line)
+	}
+	for _, c := range clusters {
+		c.Start += r.Start - len(prefix)
+		if c.Start < r.Start || c.Start >= end || c.LineIndex >= validLines {
+			continue
+		}
+		page.clusters = append(page.clusters, c)
+	}
+	if page.height <= 0 {
+		page.height = max(1, lines[0].Height)
+	}
+	p.lineHeight = max(1, lines[0].Height)
+	if index == 0 && len(p.pages) == 0 {
+		p.runeAdvance = 0
+		if len(page.clusters) > 0 {
+			advance := page.clusters[0].Width
+			uniform := advance > 0
+			for _, c := range page.clusters {
+				a := c.Start - r.Start
+				b := a + c.Length
+				if c.Width != advance || a < 0 || b > len(text) || utf8.RuneCountInString(text[a:b]) != 1 {
+					uniform = false
+					break
+				}
+			}
+			if uniform {
+				p.runeAdvance = advance
+			}
+		}
+		p.blockHeight = max(p.lineHeight, page.height*float32(paragraphBlockBytes)/float32(max(1, end-r.Start)))
+		p.blockWidth = max(1, w*float32(paragraphBlockBytes)/float32(max(1, end-r.Start)))
+		p.heights.Reset(p.blockCount(), p.blockHeight)
+		p.resetWidths()
+	}
+	p.setWidth(index, float64(page.width))
+	if p.runeAdvance > 0 {
+		for _, c := range page.clusters {
+			if c.Width != p.runeAdvance {
+				p.runeAdvance = 0
+				break
+			}
+		}
+	}
+	if next := p.pages[index+1]; next != nil && next.range_.Start != end {
+		delete(p.pages, index+1)
+		next.layout.Destroy()
+	}
+	if p.format.WrapMode != typography.WrapNone {
+		if previous := p.pages[index-1]; previous != nil && previous.range_.End == r.Start {
+			advance, err := p.joinAdvance(previous, page)
+			if err != nil || p.destroyed || p.version != version {
+				native.Destroy()
+				p.err = err
+				return nil
+			}
+			previous.height = advance
+			p.heights.Set(index-1, previous.height)
+		}
+		if next := p.pages[index+1]; next != nil {
+			advance, err := p.joinAdvance(page, next)
+			if err != nil || p.destroyed || p.version != version {
+				native.Destroy()
+				p.err = err
+				return nil
+			}
+			page.height = advance
+		}
+	}
+	p.starts[index+1] = end
+	p.pages[index] = page
+	p.heights.Set(index, page.height)
+	p.version++
+	p.trim(index)
+	return page
+}
+
+// A final partial line can have different fallback fonts from the complete
+// next line. Measure their shared seam in one bounded native layout instead
+// of inferring native line spacing from either line's ink box or baseline.
+func (p *ParagraphLayout) joinAdvance(previous, next *paragraphPage) (float32, error) {
+	last := previous.lines[len(previous.lines)-1]
+	r, text, err := p.readRange(last.Start, next.range_.End)
+	if err != nil {
+		return 0, err
+	}
+	state, ready := p.contextAt(r.Start, time.Now().Add(2*time.Millisecond))
+	if !ready {
+		return 0, fmt.Errorf("paragraph seam context unavailable")
+	}
+	var prefix string
+	if r.Start > 0 && (len(state.stack) > 0 || state.base == '\u200f') {
+		base := state.base
+		if base == 0 {
+			base = '\u200e'
+		}
+		prefix = string(base) + string(state.stack)
+		if state.strong != 0 {
+			prefix += string(state.strong)
+		}
+	}
+	layout, err := p.context.NewTextLayout(prefix+text, p.format, p.width, 1<<20)
+	if err != nil {
+		return 0, err
+	}
+	defer layout.Destroy()
+	lines, _ := layout.MeasureMetrics()
+	want := next.lines[0].Start - r.Start + len(prefix)
+	for _, line := range lines {
+		if line.Start == want {
+			return last.Baseline + line.Baseline - lines[0].Baseline - next.lines[0].Baseline, nil
+		}
+	}
+	return 0, fmt.Errorf("paragraph seam has no line at byte %d", next.range_.Start)
+}
+
+func (p *ParagraphLayout) alignStart(at int) (int, bool) {
+	r, text, err := p.readRange(max(0, at-paragraphBlockBytes), min(p.length, at+utf8.UTFMax))
+	if err != nil {
+		p.err = err
+		return 0, false
+	}
+	anchor := -1
+	previous := rune(-1)
+	if r.Start == 0 {
+		anchor = 0
+	}
+	for i, current := range text {
+		if r.Start+i > at {
+			break
+		}
+		if previous >= 0 && previous < 128 && (current < 128 && !(previous == '\r' && current == '\n') || current >= 0x4e00 && current <= 0x9fff) {
+			anchor = i
+		}
+		previous = current
+	}
+	if anchor < 0 {
+		return 0, false
+	}
+	g := uniseg.NewGraphemes(text[anchor:])
+	for g.Next() {
+		a, b := g.Positions()
+		if r.Start+anchor+b > at {
+			return r.Start + anchor + a, true
+		}
+	}
+	return at, true
+}
+
+func (p *ParagraphLayout) trim(keep int) {
+	for len(p.pages) > paragraphPageLimit {
+		oldest := -1
+		clock := ^uint64(0)
+		for index, page := range p.pages {
+			if index != keep && !containsParagraphIndex(p.active, index) && page.used < clock {
+				oldest = index
+				clock = page.used
+			}
+		}
+		if oldest < 0 {
+			break
+		}
+		page := p.pages[oldest]
+		delete(p.pages, oldest)
+		page.layout.Destroy()
+	}
+}
+
+func containsParagraphIndex(indices []int, index int) bool {
+	for _, n := range indices {
+		if n == index {
+			return true
+		}
+	}
+	return false
+}
+
+// The initial mean estimates unseen blocks; a Fenwick index retains measured
+// width corrections without scanning all preceding blocks on a viewport query.
+func (p *ParagraphLayout) resetWidths() {
+	if p.format.WrapMode != typography.WrapNone {
+		return
+	}
+	count := p.blockCount() + 1
+	if cap(p.widthTree) < count {
+		p.widthTree = make([]float64, count)
+	} else {
+		p.widthTree = p.widthTree[:count]
+		clear(p.widthTree)
+	}
+	p.widthValues = make(map[int]float64)
+}
+
+func (p *ParagraphLayout) setWidth(index int, width float64) {
+	if p.format.WrapMode != typography.WrapNone {
+		return
+	}
+	old, ok := p.widthValues[index]
+	if !ok {
+		old = p.estimatedWidth(index)
+	}
+	p.widthValues[index] = width
+	for i := index + 1; i < len(p.widthTree); i += i & -i {
+		p.widthTree[i] += width - old
+	}
+}
+
+func (p *ParagraphLayout) estimatedWidth(index int) float64 {
+	bytes := min(paragraphBlockBytes, max(0, p.length-index*paragraphBlockBytes))
+	return float64(p.blockWidth) * float64(bytes) / paragraphBlockBytes
+}
+
+func (p *ParagraphLayout) widthTop(index int) float64 {
+	bytes := min(float64(p.length), float64(index)*paragraphBlockBytes)
+	x := bytes * float64(p.blockWidth) / paragraphBlockBytes
+	for i := min(index, len(p.widthTree)-1); i > 0; i -= i & -i {
+		x += p.widthTree[i]
+	}
+	return x
+}
+
+func (p *ParagraphLayout) widthAt(x float64) int {
+	return max(0, sort.Search(p.blockCount(), func(i int) bool { return p.widthTop(i+1) > x }))
+}
+
+func (p *ParagraphLayout) origin(page *paragraphPage) (float64, float64) {
+	if p.format.WrapMode == typography.WrapNone {
+		if p.runeAdvance > 0 {
+			return float64(page.runesBefore) * float64(p.runeAdvance), 0
+		}
+		return p.widthTop(page.index), 0
+	}
+	return 0, p.heights.Top64(page.index)
+}
+
+func (p *ParagraphLayout) snapshot(indices []int) ParagraphGeometry {
+	var lines []typography.TextLine
+	var clusters []typography.TextCluster
+	var baseX, baseY float64
+	sort.Ints(indices)
+	for n, index := range indices {
+		page := p.pages[index]
+		if page == nil {
+			continue
+		}
+		x, y := p.origin(page)
+		if n == 0 {
+			baseX, baseY = x, y
+		}
+		dx, dy := float32(x-baseX), float32(y-baseY)
+		first := len(lines)
+		join := p.format.WrapMode == typography.WrapNone && len(lines) > 0
+		if join {
+			first = 0
+		}
+		for _, line := range page.lines {
+			line.X += dx
+			line.Y += dy
+			line.Baseline += dy
+			if join {
+				lineEnd := line.Start + line.Length
+				lines[0].Length = max(lines[0].Start+lines[0].Length, lineEnd) - lines[0].Start
+				lines[0].Width = max(lines[0].X+lines[0].Width, line.X+line.Width) - lines[0].X
+			} else {
+				lines = append(lines, line)
+			}
+		}
+		for _, c := range page.clusters {
+			c.X += dx
+			c.Y += dy
+			c.LineIndex += first
+			clusters = append(clusters, c)
+		}
+	}
+	return ParagraphGeometry{Geometry: textcore.NewGeometry(lines, clusters, p.length, p.lineHeight), X: baseX, Y: baseY}
+}
+
+// Prepare prepares at most one new cached native window for the latest viewport.
+// Joining measured neighbors may also create a temporary bounded layout. It
+// returns false while context or additional viewport windows remain pending.
+// Call again on a later event-loop turn. Cached work never shapes text.
+func (p *ParagraphLayout) Prepare(viewport geometry.Rectangle, measure bool) bool {
+	p.viewport = viewport
+	if len(p.pages) == 0 && measure {
+		if p.page(0, time.Now().Add(2*time.Millisecond)) == nil {
+			return false
+		}
+		measure = false
+	}
+	first, last := p.heights.At(max(0, viewport.Y-p.lineHeight)), p.heights.At(max(0, viewport.Y+viewport.Height+p.lineHeight))
+	if p.format.WrapMode == typography.WrapNone {
+		first = p.widthAt(float64(max(0, viewport.X)))
+		last = p.widthAt(float64(viewport.X) + float64(viewport.Width))
+	}
+	first = max(0, min(first, p.blockCount()-1))
+	last = max(first, min(last, p.blockCount()-1))
+	p.active = p.active[:0]
+	ready := true
+	deadline := time.Now().Add(2 * time.Millisecond)
+	for i := first; i <= last; i++ {
+		page := p.pages[i]
+		if page == nil && measure {
+			page = p.page(i, deadline)
+			measure = false
+		}
+		if page == nil {
+			ready = false
+			continue
+		}
+		p.clock++
+		page.used = p.clock
+		p.active = append(p.active, i)
+	}
+	if p.geometryVersion != p.version || !slices.Equal(p.geometryIndices, p.active) {
+		p.geometry = p.snapshot(append([]int(nil), p.active...))
+		p.geometryIndices = append(p.geometryIndices[:0], p.active...)
+		p.geometryVersion = p.version
+	}
+	return ready
+}
+
+// Geometry returns local measured coordinates paired with their origin. Preparing a different
+// viewport replaces it; callers must not retain its pointer across Prepare.
+func (p *ParagraphLayout) Geometry() *ParagraphGeometry { return &p.geometry }
+
+// VisibleRange returns the measured viewport's paragraph-local byte interval.
+func (p *ParagraphLayout) VisibleRange() textcore.Range {
+	r := textcore.Range{Start: p.length}
+	for _, i := range p.active {
+		page := p.pages[i]
+		r.Start = min(r.Start, page.range_.Start)
+		r.End = max(r.End, page.range_.End)
+	}
+	if r.End < r.Start {
+		return textcore.Range{}
+	}
+	return r
+}
+
+// GeometryAt prepares a bounded input window for explicit editing. A nil result
+// means the preceding text context still needs event-loop turns; it never
+// falls back to whole-paragraph measurement. It does not change the viewport.
+func (p *ParagraphLayout) GeometryAt(offset int) *ParagraphGeometry {
+	offset = max(0, min(offset, p.length))
+	deadline := time.Now().Add(2 * time.Millisecond)
+	index := min(p.blockCount()-1, offset/paragraphBlockBytes)
+	page := p.page(index, deadline)
+	if page == nil {
+		return nil
+	}
+	if offset > page.range_.End || offset == page.range_.End && offset < p.length {
+		index++
+		page = p.page(index, deadline)
+		if page == nil {
+			return nil
+		}
+	}
+	if offset < page.range_.Start || offset > page.range_.End {
+		return nil
+	}
+	indices := []int{page.index}
+	if offset-page.range_.Start < 64 && page.index > 0 {
+		if prev := p.page(page.index-1, deadline); prev != nil {
+			indices = append(indices, prev.index)
+		}
+	}
+	if page.range_.End-offset < 64 && page.index+1 < p.blockCount() {
+		if next := p.page(page.index+1, deadline); next != nil {
+			indices = append(indices, next.index)
+		}
+	}
+	if len(indices) == 1 {
+		return p.pageGeometry(page)
+	}
+	sort.Ints(indices)
+	if p.editGeometry == nil || p.editVersion != p.version || !slices.Equal(p.editIndices, indices) {
+		g := p.snapshot(indices)
+		p.editGeometry = &g
+		p.editVersion = p.version
+		p.editIndices = append(p.editIndices[:0], indices...)
+	}
+	return p.editGeometry
+}
+
+// CachedOffset reports whether geometry for offset is already available.
+func (p *ParagraphLayout) CachedOffset(offset int) bool {
+	for _, i := range p.active {
+		r := p.pages[i].range_
+		if offset >= r.Start && offset <= r.End {
+			return true
+		}
+	}
+	return false
+}
+
+// CachedGeometryAt reads an existing editing window without allocating native
+// resources. It may be outside the prepared painting viewport.
+func (p *ParagraphLayout) CachedGeometryAt(offset int) *ParagraphGeometry {
+	var page *paragraphPage
+	for _, candidate := range p.pages {
+		r := candidate.range_
+		if offset >= r.Start && (offset < r.End || offset == r.End && offset == p.length) {
+			page = candidate
+			break
+		}
+	}
+	if page == nil {
+		for _, candidate := range p.pages {
+			if offset == candidate.range_.End {
+				page = candidate
+				break
+			}
+		}
+	}
+	if page == nil {
+		return nil
+	}
+	indices := []int{page.index}
+	if offset-page.range_.Start < 64 {
+		if prev := p.pages[page.index-1]; prev != nil {
+			indices = append(indices, prev.index)
+		}
+	}
+	if page.range_.End-offset < 64 {
+		if next := p.pages[page.index+1]; next != nil {
+			indices = append(indices, next.index)
+		}
+	}
+	if len(indices) == 1 {
+		return p.pageGeometry(page)
+	}
+	sort.Ints(indices)
+	if p.editGeometry == nil || p.editVersion != p.version || !slices.Equal(p.editIndices, indices) {
+		g := p.snapshot(indices)
+		p.editGeometry = &g
+		p.editVersion = p.version
+		p.editIndices = append(p.editIndices[:0], indices...)
+	}
+	return p.editGeometry
+}
+
+func (p *ParagraphLayout) pageGeometry(page *paragraphPage) *ParagraphGeometry {
+	x, y := p.origin(page)
+	if page.geometry == nil || page.geometry.X != x || page.geometry.Y != y {
+		g := p.snapshot([]int{page.index})
+		page.geometry = &g
+	}
+	return page.geometry
+}
+
+// SetTextColor applies a paragraph-local color range to retained native windows.
+// Coloring does not read or materialize the source paragraph.
+func (p *ParagraphLayout) SetTextColor(r textcore.Range, c color.Color) {
+	for _, page := range p.pages {
+		a, b := max(r.Start, page.range_.Start), min(r.End, page.range_.End)
+		if a < b {
+			version := p.version
+			page.layout.SetTextColor(page.prefix+a-page.range_.Start, b-a, c)
+			if p.destroyed || version != p.version {
+				return
+			}
+		}
+	}
+}
+
+// Paint draws prepared windows at the supplied widget-local geometry origin,
+// using the same relative coordinates as Geometry. Uncommitted tails are clipped.
+func (p *ParagraphLayout) Paint(draw gui.Painter, origin geometry.Point) {
+	for _, index := range p.active {
+		page := p.pages[index]
+		x, y := p.origin(page)
+		at := geometry.Point{X: origin.X + float32(x-p.geometry.X), Y: origin.Y + float32(y-p.geometry.Y)}
+		draw.Save()
+		draw.SetClipRect(geometry.Rect(at.X, at.Y, max(p.width, page.width), page.height))
+		draw.DrawTextLayout(at, page.layout)
+		draw.Restore()
+	}
+}
+
+// SetColor changes the base foreground without invalidating measured windows.
+func (p *ParagraphLayout) SetColor(c color.Color) {
+	p.format.TextColor = c
+	p.SetTextColor(textcore.Range{End: p.length}, c)
+}
+
+// Text reads only the requested paragraph-local source range.
+func (p *ParagraphLayout) Text(r textcore.Range) string {
+	_, text, err := p.readRange(r.Start, r.End)
+	if err != nil {
+		p.err = err
+	}
+	return text
+}

@@ -4,6 +4,7 @@ go 1.24
 
 require (
 	github.com/golang-gui/goui v0.7.0
+	github.com/rivo/uniseg v0.4.7
 	golang.org/x/text v0.22.0
 )
 
@@ -16,7 +17,6 @@ require (
 	github.com/golang-gui/oksvg v0.1.0 // indirect
 	github.com/golang-gui/rasterx v0.1.0 // indirect
 	github.com/golang-gui/scanFT v0.1.0 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xuges/gothread v0.0.1 // indirect
 	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
