@@ -131,34 +131,39 @@ func (v *SourceView) setAllFolded(collapsed bool) {
 
 func (v *SourceView) finishFoldCommand() {
 	v.ClearInlineSuggestion()
-	s := v.Selection()
-	upstream := v.upstream
-	for _, r := range v.folds {
-		if !r.Collapsed {
-			continue
-		}
-		a, b := v.document.model.LineAt(s.Anchor), v.document.model.LineAt(s.Caret)
-		if a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine {
-			header, _ := v.document.model.LineRange(r.StartLine)
-			s = TextSelection{Anchor: header.End, Caret: header.End}
-			break
-		}
-	}
-	// A wrapped header is itself a one-row preview. Do not leave either
-	// endpoint in its hidden suffix (including the endpoint moved above).
-	for _, at := range []int{s.Anchor, s.Caret} {
-		row := v.document.model.LineAt(at)
-		p := v.cachedParagraph(row)
-		if v.collapsedOffsetHidden(row, p, at, false) {
-			header, _ := v.document.model.LineRange(row)
-			pos := textcore.Position{}
-			if g, _ := v.linePreview(p); g != nil {
-				pos = g.HitLine(0, 0)
+	before := v.cursors()
+	after := slices.Clone(before)
+	for i, c := range before {
+		s := c.selection
+		upstream := c.upstream
+		for _, r := range v.folds {
+			if !r.Collapsed {
+				continue
 			}
-			s = TextSelection{Anchor: header.Start + pos.Offset, Caret: header.Start + pos.Offset}
-			upstream = pos.Upstream
-			break
+			a, b := v.document.model.LineAt(s.Anchor), v.document.model.LineAt(s.Caret)
+			if a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine {
+				header, _ := v.document.model.LineRange(r.StartLine)
+				s = TextSelection{Anchor: header.End, Caret: header.End}
+				break
+			}
 		}
+		// A wrapped header is itself a one-row preview. Do not leave either
+		// endpoint in its hidden suffix (including the endpoint moved above).
+		for _, at := range []int{s.Anchor, s.Caret} {
+			row := v.document.model.LineAt(at)
+			p := v.cachedParagraph(row)
+			if v.collapsedOffsetHidden(row, p, at, false) {
+				header, _ := v.document.model.LineRange(row)
+				pos := textcore.Position{}
+				if g, _ := v.linePreview(p); g != nil {
+					pos = g.HitLine(0, 0)
+				}
+				s = TextSelection{Anchor: header.Start + pos.Offset, Caret: header.Start + pos.Offset}
+				upstream = pos.Upstream
+				break
+			}
+		}
+		after[i].selection, after[i].upstream = s, upstream
 	}
 	state := v.operationState()
 	v.closeCompletion()
@@ -166,8 +171,8 @@ func (v *SourceView) finishFoldCommand() {
 		return
 	}
 	v.refreshFoldGeometry()
-	if s != v.Selection() {
-		v.setSelection(s, upstream, true)
+	if !slices.Equal(before, after) {
+		v.setCursorStatesKeepingCompletion(normalizeCursors(after), false, nil)
 	}
 	if !v.Destroyed() && v.document == state.document && v.mountEpoch == state.mount {
 		v.foldingSignal.Emit()
@@ -684,7 +689,7 @@ func (v *SourceView) paintFoldBadge(p gui.Painter, row int, item *paragraph) {
 	if r.Width == 0 {
 		return
 	}
-	if s := v.Selection().Range(); s.Start <= v.folds[v.foldHeader(row)].Start && s.End > v.folds[v.foldHeader(row)].End {
+	if f := v.folds[v.foldHeader(row)]; v.rangeSelected(TextRange{Start: f.Start, End: f.End + 1}) {
 		p.FillRect(r, graphics.ColorOf(v.colors.SelectionBackground))
 	}
 	c := graphics.ColorOf(v.partColor("fold-placeholder", v.colors.GutterForeground))

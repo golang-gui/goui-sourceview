@@ -90,8 +90,13 @@ func (v *SourceView) canCommand(c Command) bool {
 		if v.readOnly {
 			return false
 		}
-		first, last, err := editor.SelectedLines(v.document.model, v.Selection())
-		return err == nil && (c == CommandMoveLinesUp && first > 0 || c == CommandMoveLinesDown && last+1 < v.document.model.LineCount())
+		for _, cursor := range v.cursors() {
+			first, last, err := editor.SelectedLines(v.document.model, cursor.selection)
+			if err == nil && (c == CommandMoveLinesUp && first > 0 || c == CommandMoveLinesDown && last+1 < v.document.model.LineCount()) {
+				return true
+			}
+		}
+		return false
 	case CommandDuplicateLinesUp, CommandDuplicateLinesDown:
 		return !v.readOnly
 	case CommandDeleteLines:
@@ -265,24 +270,27 @@ func (v *SourceView) selectionContains(point geometry.Point) bool {
 	}
 	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	r, _ := v.document.model.LineRange(row)
-	s := v.Selection().Range()
-	if s.End <= r.Start || s.Start > r.End {
-		return false
-	}
 	p := v.paragraph(row)
 	if p == nil {
 		return false
 	}
-	local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
-	for _, rect := range p.Geometry.Selection(TextRange{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
-		if view.ContainsPoint(rect, local) {
-			return true
+	for _, s := range v.selectionRanges() {
+		if s.End <= r.Start || s.Start > r.End {
+			continue
 		}
-	}
-	if s.End > r.End && row+1 < v.document.model.LineCount() {
-		rect := p.Geometry.Caret(textcore.Position{Offset: r.End - r.Start, Upstream: true})
-		rect.Width = v.spaceWidth
-		return view.ContainsPoint(rect, local)
+		origin := v.geometryOrigin(row, p.GeometryX, p.GeometryY)
+		for _, rect := range v.visibleSelection(p, TextRange{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}, origin) {
+			if view.ContainsPoint(rect.Translate(origin), point) {
+				return true
+			}
+		}
+		if s.End > r.End && row+1 < v.document.model.LineCount() {
+			rect, ok := v.paragraphCaret(row, p, textcore.Position{Offset: r.End - r.Start, Upstream: true}, true)
+			rect.Width = v.spaceWidth
+			if ok && view.ContainsPoint(rect, point) {
+				return true
+			}
+		}
 	}
 	return false
 }

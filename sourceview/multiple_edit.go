@@ -30,6 +30,9 @@ func (v *SourceView) ApplyEditsWithSelections(document *Document, revision uint6
 }
 
 func (v *SourceView) applyMultiple(edits []TextEdit, after []cursorState) error {
+	return v.applyMultipleInput(edits, after, textcore.MergeNone)
+}
+func (v *SourceView) applyMultipleInput(edits []TextEdit, after []cursorState, merge textcore.BatchMerge) error {
 	v.columnSelection = nil
 	if err := v.editable(); err != nil {
 		return err
@@ -37,9 +40,16 @@ func (v *SourceView) applyMultiple(edits []TextEdit, after []cursorState) error 
 	if len(edits) > maxPlannedEdits || len(after) > maxSelections {
 		return ErrOperationLimit
 	}
+	generated := 0
+	for _, e := range edits {
+		if len(e.Text) > (64<<20)-generated {
+			return ErrOperationLimit
+		}
+		generated += len(e.Text)
+	}
 	state := v.operationState()
 	v.cancelPreedit()
-	if !state.valid(v) || v.Destroyed() {
+	if !state.editingValid(v) || v.Destroyed() {
 		return ErrOperationChanged
 	}
 	commit := &selectionCommit{state: state, after: normalizeCursors(after)}
@@ -50,7 +60,7 @@ func (v *SourceView) applyMultiple(edits []TextEdit, after []cursorState) error 
 			v.selectionCommit = previous
 		}
 	}()
-	err := v.document.model.ApplyBatch(edits, textcore.BatchOptions{Source: &v.source, BeforeSelections: v.historySelections(), AfterSelections: cursorHistory(commit.after)})
+	err := v.document.model.ApplyBatch(edits, textcore.BatchOptions{Merge: merge, Source: &v.source, BeforeSelections: v.historySelections(), AfterSelections: cursorHistory(commit.after)})
 	if err != nil {
 		return err
 	}
@@ -82,11 +92,10 @@ func combinePlans(plans []editor.Plan) ([]TextEdit, []cursorState, error) {
 	total := 0
 	for i, p := range plans {
 		for _, e := range p.Edits {
-			e.Text = textcore.Normalize(e.Text)
-			total += len(e.Text)
-			if total > 64<<20 {
-				return nil, nil, ErrOperationLimit
+			if e.Range.Start == e.Range.End && e.Text == "" {
+				continue
 			}
+			e.Text = textcore.Normalize(e.Text)
 			all = append(all, owned{e, i})
 		}
 	}
@@ -114,6 +123,12 @@ func combinePlans(plans []editor.Plan) ([]TextEdit, []cursorState, error) {
 			}
 		}
 		edits = append(edits, e)
+	}
+	for _, e := range edits {
+		if len(e.Text) > (64<<20)-total {
+			return nil, nil, ErrOperationLimit
+		}
+		total += len(e.Text)
 	}
 	if len(edits) > maxPlannedEdits {
 		return nil, nil, ErrOperationLimit
@@ -161,9 +176,12 @@ func combinePlans(plans []editor.Plan) ([]TextEdit, []cursorState, error) {
 		after[i].selection = TextSelection{Anchor: mapEnd(p.After.Anchor), Caret: mapEnd(p.After.Caret)}
 	}
 
-	return edits, normalizeCursors(after), nil
+	return edits, after, nil
 }
 func (v *SourceView) multiplePlans(plan func(cursorState) (editor.Plan, error)) error {
+	if err := v.editable(); err != nil {
+		return err
+	}
 	state := v.operationState()
 	plans := make([]editor.Plan, 0, len(v.additional)+1)
 	for _, s := range v.cursors() {
@@ -171,7 +189,7 @@ func (v *SourceView) multiplePlans(plan func(cursorState) (editor.Plan, error)) 
 		if err != nil {
 			return err
 		}
-		if !state.valid(v) || v.Destroyed() {
+		if !state.editingValid(v) || v.Destroyed() {
 			return ErrOperationChanged
 		}
 		plans = append(plans, p)
@@ -204,32 +222,13 @@ func (v *SourceView) multiplePaste(text string) error {
 	}
 	return v.replaceMultiple(parts)
 }
-func (v *SourceView) multipleDelete(forward bool) error {
-	return v.multiplePlans(func(c cursorState) (editor.Plan, error) {
-		r := c.selection.Range()
-		if r.Start == r.End {
-			if forward {
-				r.End = v.adjacent(r.End, true)
-			} else {
-				r.Start = v.adjacent(r.Start, false)
-			}
-		}
-		s := TextSelection{Anchor: r.Start, Caret: r.Start}
-		return editor.Plan{Before: c.selection, After: s, Edits: []TextEdit{{Range: r}}}, nil
-	})
-}
+func (v *SourceView) multipleDelete(forward bool) error { return v.multipleDeleteKind(forward, 0) }
 
 func (v *SourceView) indentUnit() string {
 	if v.indent.InsertSpaces {
 		return strings.Repeat(" ", v.indent.IndentWidth)
 	}
 	return "\t"
-}
-func (v *SourceView) multipleNewlinePlan(c cursorState) (editor.Plan, error) {
-	r := c.selection.Range()
-	text := "\n" + editor.LeadingIndent(v.document.model, c.selection.Caret)
-	at := r.Start + len(text)
-	return editor.Plan{Before: c.selection, After: TextSelection{Anchor: at, Caret: at}, Edits: []TextEdit{{Range: r, Text: text}}}, nil
 }
 func (v *SourceView) copyMultiple() error {
 	selected := false
@@ -246,13 +245,13 @@ func (v *SourceView) copyMultiple() error {
 	}
 	state := v.operationState()
 	parts := make([]string, 0, len(v.additional)+1)
-	total := 0
+	total := len(v.additional)
 	for _, s := range v.orderedSelections() {
 		r := s.Range()
-		total += r.End - r.Start
-		if total > 64<<20 {
+		if r.End-r.Start > (64<<20)-total {
 			return ErrOperationLimit
 		}
+		total += r.End - r.Start
 		text, err := v.document.Slice(r)
 		if err != nil {
 			return err
@@ -263,7 +262,7 @@ func (v *SourceView) copyMultiple() error {
 	if clipboard == nil {
 		return ErrClipboardUnavailable
 	}
-	if !state.valid(v) {
+	if !state.editingValid(v) {
 		return ErrOperationChanged
 	}
 	return clipboard.SetText(strings.Join(parts, "\n"))
@@ -285,18 +284,12 @@ func (v *SourceView) cutMultiple() error {
 	if err := v.copyMultiple(); err != nil {
 		return err
 	}
-	if !state.valid(v) || !v.mounted || v.Destroyed() {
+	if !state.editingValid(v) || !v.mounted || v.Destroyed() {
 		return ErrOperationChanged
 	}
 	return v.replaceMultiple([]string{""})
 }
 
 func multipleCommandReady(c Command) bool {
-	switch c {
-	case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
-		return true
-	case CommandUndo, CommandRedo, CommandCopy, CommandCut, CommandPaste, CommandDeleteSelection, CommandSelectAll, CommandIndent, CommandOutdent, CommandFind, CommandReplace, CommandGoTo, CommandFindNext, CommandFindPrevious, CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll, CommandCollapseLine, CommandExpandLine, CommandMoveLineStart, CommandMoveLineEnd, CommandSelectLineStart, CommandSelectLineEnd, CommandMoveDocumentStart, CommandMoveDocumentEnd, CommandSelectDocumentStart, CommandSelectDocumentEnd:
-		return true
-	}
-	return false
+	return c != CommandComplete
 }

@@ -521,7 +521,9 @@ func (v *SourceView) adjacent(at int, forward bool) int {
 		return max(0, r.Start-1)
 	}
 	if p := v.paragraph(row); p != nil {
-		return r.Start + p.GeometryAt(at-r.Start).Adjacent(at-r.Start, forward)
+		if g := p.GeometryAt(at - r.Start); g != nil {
+			return r.Start + g.Adjacent(at-r.Start, forward)
+		}
 	}
 	if forward {
 		at++
@@ -696,6 +698,9 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 // It retains operations after normal input dispatch, never an EventContext or
 // native Handled pointer. Existing frame work prepares their measured stops.
 type deferredInput struct {
+	deletion          bool
+	typed             *gui.IMCommit
+	merge             textcore.BatchMerge
 	selectionCommand  Command
 	finishColumn      bool
 	plan              func(cursorState) (editor.Plan, error)
@@ -714,7 +719,7 @@ type inputBatch struct {
 }
 
 func (q *inputBatch) valid(v *SourceView) bool {
-	return q.state.valid(v) && q.bindings == v.keyBindingsEpoch && q.readOnly == v.readOnly && v.mounted && (q.direct || v.Focused()) && gui.IsEnabled(v) && visible(v) && !v.Destroyed()
+	return q.state.editingValid(v) && q.bindings == v.keyBindingsEpoch && q.readOnly == v.readOnly && v.mounted && (q.direct || v.Focused()) && gui.IsEnabled(v) && visible(v) && !v.Destroyed()
 }
 
 func (v *SourceView) inputGeometryReady() bool {
@@ -822,6 +827,7 @@ func (v *SourceView) inputStep(deadline time.Time) {
 		action := q.actions[0]
 		if action.selectionCommand != 0 || action.finishColumn {
 			before := v.operationState()
+			oldColumn := v.columnSelection
 			done := false
 			var err error
 			if action.finishColumn {
@@ -834,7 +840,17 @@ func (v *SourceView) inputStep(deadline time.Time) {
 				done, err = v.advanceSelectionCommand(q, action.selectionCommand, deadline)
 			}
 			if err != nil && err != errSelectionGeometry {
-				v.pendingInput = nil
+				if action.finishColumn {
+					if column := v.columnSelection; column != nil && column == oldColumn {
+						v.columnSelection = nil
+						if (err == ErrOperationLimit || err == view.ErrColumnDirection) && column.state.valid(v) {
+							v.setCursorStatesKeepingCompletion(column.before, false, nil)
+						}
+					}
+				}
+				if v.pendingInput == q {
+					v.pendingInput = nil
+				}
 				if err != ErrOperationChanged && err != errSelectionLayoutFailed {
 					v.report(err)
 				}
@@ -854,7 +870,9 @@ func (v *SourceView) inputStep(deadline time.Time) {
 			q.actions[0] = deferredInput{}
 			q.actions = q.actions[1:]
 			if len(q.actions) == 0 {
-				v.pendingInput = nil
+				if v.pendingInput == q {
+					v.pendingInput = nil
+				}
 				return
 			}
 			continue
@@ -863,8 +881,10 @@ func (v *SourceView) inputStep(deadline time.Time) {
 			before := v.operationState()
 			done, err := v.advanceMultipleInput(q, action, deadline)
 			if err != nil && err != errSelectionGeometry {
-				v.pendingInput = nil
-				if err != errSelectionLayoutFailed {
+				if v.pendingInput == q {
+					v.pendingInput = nil
+				}
+				if err != errSelectionLayoutFailed && err != ErrOperationChanged {
 					v.report(err)
 				}
 				return
@@ -882,7 +902,9 @@ func (v *SourceView) inputStep(deadline time.Time) {
 			q.actions[0] = deferredInput{}
 			q.actions = q.actions[1:]
 			if len(q.actions) == 0 {
-				v.pendingInput = nil
+				if v.pendingInput == q {
+					v.pendingInput = nil
+				}
 				return
 			}
 			continue
@@ -943,7 +965,7 @@ func (q *inputBatch) advance(v *SourceView, before operationState, mutates bool)
 	if mutates {
 		allowedRevision++
 	}
-	if after.document != before.document || after.mount != before.mount || after.language != before.language ||
+	if after.document != before.document || after.mount != before.mount || after.language != before.language || after.settings != before.settings ||
 		after.revision > allowedRevision || after.selection > before.selection+1 {
 		return false
 	}

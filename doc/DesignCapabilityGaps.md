@@ -32,7 +32,7 @@ SourceView 是供应用嵌入的基础代码编辑器。优先完整、稳定的
 | 视图状态 | Monaco 有 saveViewState/restoreViewState，快照区分光标、视口与贡献状态 | 缺统一捕获/恢复接口；不据此声称 Scintilla/GTK 也提供同等的一体化快照 |
 | 补全呈现 | Monaco 区分 kind/detail/documentation/deprecated；GtkSourceView 有图标、正文、注释、详情列；Scintilla 可显示候选类型图像 | 当前只有 Label/Text/Detail 等编辑信息；先补类型、完整说明、弃用状态，不照搬全部 Provider 字段 |
 | 代码片段 | Monaco 支持 snippet 插入规则；GtkSourceView 有默认值、编号焦点、Tab/Shift+Tab 和引用 | 缺占位符会话；这是编辑能力，不要求语义解析，但此前已决定暂缓 |
-| 多选区/列编辑 | Monaco 有多选区接口；Scintilla 有多选区、矩形选择与多点输入 | 当前只有单选区；属于明确的控件缺口，但需要独立处理 IME、剪贴板和撤销。不将其归为三者共同具备的能力 |
+| 多选区/列编辑 | Monaco 有多选区接口；Scintilla 有多选区、矩形选择与多点输入 | 已实现完整集合、矩形生成、多点输入与历史；[设计与边界](DesignMultiSelection.md)、[验收](PlanMultiSelection.md)。不将其归为三者共同具备的能力 |
 | 范围装饰 | Monaco 有 decorations；Scintilla 的 indicators 可独立覆盖正文范围 | 当前 Highlights 只改前景色，缺宿主可用的背景/边框/下划线；从实际标注需求设计最小范围，不预建任意装饰平台 |
 | 不可见字符 | Monaco 有 invisible/ambiguous Unicode 高亮选项；Scintilla 可为字符配置可见表示 | 当前已有空白/行尾标记；零宽、双向控制和其他控制字符仍缺表示，不能把所有非 ASCII 字符当异常 |
 | Hover/参数提示 | GtkSourceView 有外部内容提供器；Scintilla 的 CallTip 接收宿主文字并可强调参数范围 | 呈现不依赖控件内置语义分析；诊断、Hover、参数提示可按宿主接入需要推进 |
@@ -76,10 +76,10 @@ SourceView 自有 Model 尚无可随历史恢复的状态标识；已记录 [保
 | AI 建议交互 | 按词/按行接受 → 输入匹配时保留余文 → 单行范围替换；先明确撤销边界、余文坐标、过期结果及布局，不要求宿主改变 AI 服务架构 |
 | 范围装饰 | 从真实的范围背景或下划线需求开始，明确修订校验、编辑失效/映射、叠加顺序与命中；不把 Highlights 扩成混杂的诊断/装饰协议 |
 | 诊断、Hover、参数提示 | 应用提供范围、消息和签名；控件负责可见呈现、导航、输入与生命周期，不负责 LSP 会话或语言解析 |
-| 多光标/矩形选择 | 先确认重叠/主选区、批量编辑、列复制粘贴、IME 与历史语义；不能仅增加多根光标绘制 |
+| 多光标/矩形选择 | 三批已实现，见 [契约](DesignMultiSelection.md)；补全与影子建议维持单点边界 |
 | 代码片段 | 保留 [暂缓设计](DesignSnippets.md)，不恢复实施；恢复时核对新增影子建议的互斥和 Tab 优先级 |
 
-上述顺序是设计建议，不是这些功能已经具备；多光标和片段属于成本较大的独立专项。
+上述顺序是设计建议，不是这些功能已经具备；多光标的已实现范围以专题验收为准，片段仍为独立专项。
 外部分析应用有明确需求时，可以上调诊断/范围装饰，不要求先完成所有前置方向。
 
 ## 横向质量检查：大文件查询响应性

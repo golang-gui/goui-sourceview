@@ -41,6 +41,14 @@ func (v *SourceView) navigateCursor(c cursorState, key events.Key, extend bool) 
 	if err != nil {
 		return c, err
 	}
+	state := v.operationState()
+	row := v.document.model.LineAt(c.selection.Caret)
+	if v.lineCollapsed(row) && (key == events.KeyArrowDown || key == events.KeyPageDown || key == events.KeyEnd) {
+		v.expandLinePreview(row)
+		if !state.valid(v) {
+			return c, ErrOperationChanged
+		}
+	}
 	old := c.selection
 	at := old.Caret
 	pos := textcore.Position{Offset: at - r.Start, Upstream: c.upstream}
@@ -133,23 +141,29 @@ func (v *SourceView) multipleNavigate(key events.Key, extend bool) {
 }
 
 type multipleInput struct {
-	cursors []cursorState
-	plans   []editor.Plan
-	after   []cursorState
-	next    int
-	layout  uint64
+	cursors   []cursorState
+	plans     []editor.Plan
+	pairs     []plannedPair
+	after     []cursorState
+	next      int
+	layout    uint64
+	generated int
+	merge     textcore.BatchMerge
 }
 
 // advanceMultipleInput shares the caller's deadline across all cursor work;
 // it never restarts a 2ms preparation budget for every cursor in one turn.
 func (v *SourceView) advanceMultipleInput(q *inputBatch, a deferredInput, deadline time.Time) (bool, error) {
 	if q.multiple == nil {
-		q.multiple = &multipleInput{cursors: v.cursors(), layout: v.layoutEpoch}
+		q.multiple = &multipleInput{cursors: v.cursors(), layout: v.layoutEpoch, merge: a.merge}
 	}
 	work := q.multiple
 	if work.layout != v.layoutEpoch {
 		work.next = 0
+		work.generated = 0
+		work.merge = a.merge
 		work.plans = nil
+		work.pairs = nil
 		work.after = nil
 		work.layout = v.layoutEpoch
 	}
@@ -160,18 +174,33 @@ func (v *SourceView) advanceMultipleInput(q *inputBatch, a deferredInput, deadli
 		c := work.cursors[work.next]
 		// All measured edits snap their own endpoints before computing a plan.
 		if a.geometry && v.projection == nil {
-			_, g, r, err := v.cursorGeometry(c)
+			snap := func(at int, forward bool) (int, error) {
+				_, g, r, err := v.cursorGeometry(cursorState{selection: TextSelection{Anchor: at, Caret: at}})
+				if err != nil {
+					return at, err
+				}
+				if g == nil {
+					return at, nil
+				}
+				return r.Start + g.Snap(at-r.Start, forward), nil
+			}
+			s := c.selection
+			forward := s.Anchor <= s.Caret
+			var err error
+			c.selection.Caret, err = snap(s.Caret, forward)
 			if err != nil {
 				return false, err
 			}
-			if g != nil {
-				forward := c.selection.Anchor <= c.selection.Caret
-				c.selection.Caret = r.Start + g.Snap(c.selection.Caret-r.Start, forward)
-				if c.selection.Anchor == work.cursors[work.next].selection.Caret {
-					c.selection.Anchor = c.selection.Caret
+			if s.Anchor == s.Caret {
+				c.selection.Anchor = c.selection.Caret
+			} else {
+				c.selection.Anchor, err = snap(s.Anchor, !forward)
+				if err != nil {
+					return false, err
 				}
 			}
 		}
+
 		if !q.valid(v) {
 			return false, ErrOperationChanged
 		}
@@ -182,11 +211,34 @@ func (v *SourceView) advanceMultipleInput(q *inputBatch, a deferredInput, deadli
 			}
 			work.after = append(work.after, next)
 		} else {
-			plan, err := a.plan(c)
+			var plan editor.Plan
+			var pair plannedPair
+			var err error
+			if a.typed != nil {
+				pair, err = v.typingPlan(c, *a.typed)
+				plan = pair.plan
+			} else {
+				plan, err = a.plan(c)
+			}
 			if err != nil {
 				return false, err
 			}
+			for _, e := range plan.Edits {
+				if len(e.Text) > (64<<20)-work.generated {
+					return false, ErrOperationLimit
+				}
+				work.generated += len(e.Text)
+			}
+			if a.deletion && work.merge != textcore.MergeNone {
+				forward := a.merge == textcore.MergeForwardDelete
+				at := v.adjacent(c.selection.Caret, forward)
+				want := TextRange{Start: min(at, c.selection.Caret), End: max(at, c.selection.Caret)}
+				if len(plan.Edits) != 1 || plan.Edits[0].Range != want || plan.Edits[0].Text != "" {
+					work.merge = textcore.MergeNone
+				}
+			}
 			work.plans = append(work.plans, plan)
+			work.pairs = append(work.pairs, pair)
 		}
 		if !q.valid(v) {
 			return false, ErrOperationChanged
@@ -202,11 +254,26 @@ func (v *SourceView) advanceMultipleInput(q *inputBatch, a deferredInput, deadli
 		v.setCursorStatesKeepingCompletion(normalizeCursors(work.after), true, nil)
 		return true, nil
 	}
+	if a.typed != nil {
+		merge := work.merge
+		if a.typed.Composed || v.compositionSeen || v.projection != nil {
+			merge = textcore.MergeNone
+		}
+		if v.projection != nil {
+			v.projection = nil
+			v.invalidateLayout()
+		}
+		v.compositionSeen = false
+		return true, v.applyPairPlans(work.pairs, merge)
+	}
+	if a.deletion && v.unfoldMultipleDeletion(work.cursors, work.plans) {
+		return true, nil
+	}
 	edits, after, err := combinePlans(work.plans)
 	if err != nil {
 		return false, err
 	}
-	return true, v.applyMultiple(edits, after)
+	return true, v.applyMultipleInput(edits, after, work.merge)
 }
 
 func replacementPlan(c cursorState, text string) editor.Plan {
@@ -221,6 +288,21 @@ func (v *SourceView) configureMultipleKey(a *deferredInput, event events.KeyEven
 		case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
 			a.selectionCommand = command
 			a.geometry = false
+			return
+		case CommandMoveWordLeft, CommandMoveWordRight, CommandSelectWordLeft, CommandSelectWordRight, CommandMoveWordPartLeft, CommandMoveWordPartRight, CommandSelectWordPartLeft, CommandSelectWordPartRight:
+			forward := command == CommandMoveWordRight || command == CommandSelectWordRight || command == CommandMoveWordPartRight || command == CommandSelectWordPartRight
+			extend := command == CommandSelectWordLeft || command == CommandSelectWordRight || command == CommandSelectWordPartLeft || command == CommandSelectWordPartRight
+			part := command == CommandMoveWordPartLeft || command == CommandMoveWordPartRight || command == CommandSelectWordPartLeft || command == CommandSelectWordPartRight
+			a.navigate = func(c cursorState) (cursorState, error) { return v.navigateWordCursor(c, forward, extend, part) }
+			return
+		case CommandDeleteWordLeft, CommandDeleteWordRight, CommandDeleteWordPartLeft, CommandDeleteWordPartRight:
+			forward := command == CommandDeleteWordRight || command == CommandDeleteWordPartRight
+			word := 1
+			if command == CommandDeleteWordPartLeft || command == CommandDeleteWordPartRight {
+				word = 2
+			}
+			a.deletion = true
+			a.plan = func(c cursorState) (editor.Plan, error) { return v.deleteCursorPlan(c, forward, word) }
 			return
 		case CommandMoveLineStart, CommandMoveLineEnd, CommandSelectLineStart, CommandSelectLineEnd:
 			key := events.KeyHome
@@ -260,25 +342,46 @@ func (v *SourceView) configureMultipleKey(a *deferredInput, event events.KeyEven
 		a.plan = v.multipleNewlinePlan
 	case events.KeyTab:
 		if v.acceptsTab && !v.escapeTab {
-			a.plan = func(c cursorState) (editor.Plan, error) {
-				if shift {
-					return editor.Indent(v.document.model, c.selection, editor.IndentOptions(v.indent), true)
-				}
-				return replacementPlan(c, v.indentUnit()), nil
-			}
+			a.plan = func(c cursorState) (editor.Plan, error) { return v.tabCursorPlan(c, shift) }
 		}
 	case events.KeyBackspace, events.KeyDelete:
+		a.deletion = true
+		a.merge = textcore.MergeBackwardDelete
+		if event.Key == events.KeyDelete {
+			a.merge = textcore.MergeForwardDelete
+		}
 		a.plan = func(c cursorState) (editor.Plan, error) {
-			r := c.selection.Range()
-			if r.Start == r.End {
-				if event.Key == events.KeyDelete {
-					r.End = v.adjacent(r.End, true)
-				} else {
-					r.Start = v.adjacent(r.Start, false)
-				}
-			}
-			s := TextSelection{Anchor: r.Start, Caret: r.Start}
-			return editor.Plan{Before: c.selection, After: s, Edits: []TextEdit{{Range: r}}}, nil
+			return v.deleteCursorPlan(c, event.Key == events.KeyDelete, 0)
 		}
 	}
+}
+
+func (v *SourceView) navigateWordCursor(c cursorState, forward, extend, part bool) (cursorState, error) {
+	s := c.selection
+	at := s.Caret
+	if part && !extend && s.Anchor != s.Caret {
+		at = s.Range().Start
+		if forward {
+			at = s.Range().End
+		}
+	} else if part {
+		at = editor.WordPartBoundary(v.document.model, at, forward, false, v.definitionAt(at).IsWord)
+	} else {
+		at = editor.WordBoundaryWith(v.document.model, at, forward, false, v.definitionAt(at).IsWord)
+	}
+	at = v.foldNavigationTarget(at, forward)
+	_, g, r, err := v.cursorGeometry(cursorState{selection: TextSelection{Anchor: at, Caret: at}})
+	if err != nil {
+		return c, err
+	}
+	if g != nil {
+		at = r.Start + g.Snap(at-r.Start, forward)
+	}
+	c.selection.Caret = at
+	if !extend {
+		c.selection.Anchor = at
+	}
+	c.upstream = false
+	c.preferredSet = false
+	return c, nil
 }

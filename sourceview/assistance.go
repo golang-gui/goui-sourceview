@@ -63,7 +63,8 @@ func (v *SourceView) SetShowIndentGuides(b bool) {
 func (v *SourceView) SmartHomeEnd() bool { return v.smartHomeEnd }
 
 func (v *SourceView) SetSmartHomeEnd(b bool) {
-	if !v.Destroyed() {
+	if !v.Destroyed() && v.smartHomeEnd != b {
+		v.editOptionsChanged()
 		v.smartHomeEnd = b
 	}
 }
@@ -71,7 +72,8 @@ func (v *SourceView) SetSmartHomeEnd(b bool) {
 func (v *SourceView) SmartBackspace() bool { return v.smartBackspace }
 
 func (v *SourceView) SetSmartBackspace(b bool) {
-	if !v.Destroyed() {
+	if !v.Destroyed() && v.smartBackspace != b {
+		v.editOptionsChanged()
 		v.smartBackspace = b
 	}
 }
@@ -104,21 +106,27 @@ func (v *SourceView) SetRulers(columns []int) error {
 }
 
 func (v *SourceView) deleteIndent() (bool, error) {
-	if !v.smartBackspace || v.projection != nil {
+	p, ok := v.deleteIndentPlan(v.Selection())
+	if !ok {
 		return false, nil
 	}
-	s := v.Selection()
+	return true, v.applyPlan(p)
+}
+func (v *SourceView) deleteIndentPlan(s TextSelection) (editor.Plan, bool) {
+	if !v.smartBackspace || v.projection != nil {
+		return editor.Plan{}, false
+	}
 	if s.Anchor != s.Caret {
-		return false, nil
+		return editor.Plan{}, false
 	}
 	r, _ := v.document.model.LineRange(v.document.model.LineAt(s.Caret))
 	before := editor.LeadingIndent(v.document.model, s.Caret)
 	if len(before) != s.Caret-r.Start {
-		return false, nil
+		return editor.Plan{}, false
 	}
 	n, col := editor.LeadingColumns(before, v.indent.TabWidth)
 	if n != len(before) || col == 0 {
-		return false, nil
+		return editor.Plan{}, false
 	}
 	target := (col - 1) / v.indent.IndentWidth * v.indent.IndentWidth
 	at, current := 0, 0
@@ -135,7 +143,7 @@ func (v *SourceView) deleteIndent() (bool, error) {
 	}
 	insert := strings.Repeat(" ", target-current)
 	end := r.Start + at + len(insert)
-	return true, v.applyPlan(editor.Plan{Before: s, After: TextSelection{Anchor: end, Caret: end}, Edits: []TextEdit{{Range: TextRange{Start: r.Start + at, End: s.Caret}, Text: insert}}})
+	return editor.Plan{Before: s, After: TextSelection{Anchor: end, Caret: end}, Edits: []TextEdit{{Range: TextRange{Start: r.Start + at, End: s.Caret}, Text: insert}}}, true
 }
 
 func (v *SourceView) smartEdge(p *paragraph, pos textcore.Position, key events.Key) textcore.Position {
@@ -360,7 +368,6 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 		v.RequestPaint()
 	}
 	line, _ := v.document.model.LineRange(sourceRow)
-	selection := v.Selection().Range()
 	clip := geometry.Rect(v.gutter-origin.X, -origin.Y, max(0, v.textRight()-v.gutter), v.viewport.Height)
 	fallback := view.WhitespaceColor(v.colors.Background)
 	normal := v.partColor("whitespace", fallback)
@@ -382,7 +389,7 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 				}
 				at += n
 			}
-			selected := selection.Start <= line.Start+w.TextStart+start && selection.End >= line.Start+w.TextStart+end
+			selected := v.rangeSelected(TextRange{Start: line.Start + w.TextStart + start, End: line.Start + w.TextStart + end})
 			if !w.Show(view.WhitespaceMode(v.whitespace), start, end, kind, selected) {
 				return
 			}
@@ -404,7 +411,7 @@ func (v *SourceView) paintWhitespace(draw gui.Painter, row int, p *paragraph, or
 			return
 		}
 		color := normal
-		if selection.Start <= line.End && selection.End > line.End {
+		if v.rangeSelected(TextRange{Start: line.End, End: line.End + 1}) {
 			color = selectedColor
 		}
 		brush := graphics.ColorOf(color)

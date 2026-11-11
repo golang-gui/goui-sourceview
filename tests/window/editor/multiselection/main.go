@@ -2,6 +2,7 @@
 // XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/multiselection
 // -basic/-dark 切换外观；GOUI_PLAT_SCALE=1/1.5。初态为共享文档的两个独立视图。
 // setter 仅准备场景；中文输入、删除、导航、剪切/粘贴、撤销重做经 Window 的正常事件路径。
+// 第三批额外检查连续输入合并、配对/跳过/删除和后台大小写/清理/重缩进。
 // 断言完整正文、主/附加选区、视图隔离、历史、快照恢复和超过缓存页数的分散输入。
 // -clipboard 额外覆盖该显示的临时剪贴板，只在独立桌面启用。默认不访问剪贴板。
 // 每步有明确条件与超时，成功自动关闭；提前退出或失败返回非零。不写文件或系统设置。
@@ -9,13 +10,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"github.com/golang-gui/goui-sourceview/language"
 	"log"
 	"os"
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	source "github.com/golang-gui/goui-sourceview/sourceview"
@@ -28,6 +32,21 @@ import (
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
+
+// Observe the public tokenizer's normal final-line analysis without changing
+// its results or driving the editor's private scheduler from the test.
+type observedTokenizer struct {
+	language.Tokenizer
+	ready *atomic.Bool
+}
+
+func (t observedTokenizer) Scan(in language.Input, state language.State) (language.Result, error) {
+	result, err := t.Tokenizer.Scan(in, state)
+	if err == nil && in.LineEnd && in.DocumentEnd && in.Text == "    " && in.Offset+result.Consumed == len(in.Text) {
+		t.ready.Store(true)
+	}
+	return result, err
+}
 
 func must(err error) {
 	if err != nil {
@@ -110,6 +129,8 @@ func main() {
 	var saved *source.ViewState
 	var longOriginal, longWant string
 	var longSet []source.TextSelection
+	var cancellationAt time.Time
+	var pasteAnalyzed atomic.Bool
 	type step struct {
 		name  string
 		start func()
@@ -186,6 +207,113 @@ func main() {
 		}, func() bool {
 			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 7, Caret: 7}, {Anchor: 1, Caret: 1}}) && !pending(a)
 		}},
+
+		step{"continuous typing", func() {
+			d.SetLanguage(language.Plain)
+			d.SetText("\n")
+			set(a, []source.TextSelection{{}, {Anchor: 1, Caret: 1}})
+			must(win.CommitText("a"))
+			must(win.CommitText("中"))
+			must(win.CommitText("b"))
+		}, func() bool { return d.Text() == "a中b\na中b" && !pending(a) }},
+		step{"continuous undo", func() { key(events.KeyZ, primary) }, func() bool { return d.Text() == "\n" && len(a.Selections()) == 2 }},
+		step{"paired typing", func() {
+			definition, err := language.New(language.Definition{Info: language.Info{ID: "window-test", Name: "Window test"}, Editing: language.EditingRules{AutoClosingPairs: []language.Pair{{Open: "(", Close: ")"}}, Brackets: []language.Pair{{Open: "(", Close: ")"}}}})
+			must(err)
+			d.SetLanguageDefinition(definition)
+			must(win.CommitText("("))
+		}, func() bool { return d.Text() == "()\n()" && !pending(a) }},
+		step{"paired skip", func() { must(win.CommitText(")")) }, func() bool {
+			return d.Text() == "()\n()" && slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 2, Caret: 2}, {Anchor: 5, Caret: 5}}) && !pending(a)
+		}},
+		step{"pair reset", func() { key(events.KeyZ, primary) }, func() bool { return d.Text() == "\n" }},
+		step{"paired deletion", func() { must(win.CommitText("(")); key(events.KeyBackspace, 0) }, func() bool { return d.Text() == "\n" && !pending(a) }},
+		step{"multiple case", func() {
+			d.SetText("ab\ncd")
+			set(a, []source.TextSelection{{Anchor: 2, Caret: 0}, {Anchor: 3, Caret: 5}})
+			bindings := a.KeyBindings()
+			bindings[source.CommandUpperCase] = []gui.KeyGesture{{Key: gui.KeyF8}}
+			must(a.SetKeyBindings(bindings))
+			key(events.KeyF8, 0)
+		}, func() bool {
+			return d.Text() == "AB\nCD" && slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 2, Caret: 0}, {Anchor: 3, Caret: 5}})
+		}},
+		step{"multiple cleanup", func() {
+			d.SetText("a \nb \nc ")
+			set(a, []source.TextSelection{{}, {Anchor: 3, Caret: 3}})
+			bindings := a.KeyBindings()
+			delete(bindings, source.CommandUpperCase)
+			bindings[source.CommandTrimTrailingWhitespace] = []gui.KeyGesture{{Key: gui.KeyF8}}
+			must(a.SetKeyBindings(bindings))
+			key(events.KeyF8, 0)
+		}, func() bool { return d.Text() == "a\nb\nc" && len(a.Selections()) == 2 }},
+		step{"multiple join", func() {
+			d.SetText("one\n two\nthree\n four")
+			set(a, []source.TextSelection{{}, {Anchor: 9, Caret: 9}})
+			bindings := a.KeyBindings()
+			delete(bindings, source.CommandTrimTrailingWhitespace)
+			bindings[source.CommandJoinLines] = []gui.KeyGesture{{Key: gui.KeyF8}}
+			must(a.SetKeyBindings(bindings))
+			key(events.KeyF8, 0)
+		}, func() bool { return d.Text() == "one two\nthree four" && len(a.Selections()) == 2 }},
+		step{"multiple reindent", func() {
+			definition, err := language.New(language.Definition{Info: language.Info{ID: "indent-test", Name: "Indent test"}, Editing: language.EditingRules{Reindent: func(ctx context.Context, c language.ReindentContext) ([]language.LineIndent, error) {
+				var result []language.LineIndent
+				for row := c.StartLine; row <= c.EndLine; row++ {
+					result = append(result, language.LineIndent{Line: row, Text: "  "})
+				}
+				return result, ctx.Err()
+			}}})
+			must(err)
+			d.SetLanguageDefinition(definition)
+			d.SetText("aa\nbb\ncc")
+			set(a, []source.TextSelection{{}, {Anchor: 6, Caret: 6}})
+			bindings := a.KeyBindings()
+			delete(bindings, source.CommandJoinLines)
+			bindings[source.CommandReindentSelection] = []gui.KeyGesture{{Key: gui.KeyF8}}
+			must(a.SetKeyBindings(bindings))
+			key(events.KeyF8, 0)
+		}, func() bool { return d.Text() == "  aa\nbb\n  cc" && len(a.Selections()) == 2 }},
+		step{"prepare reindented paste", func() {
+			if !*clipboard {
+				return
+			}
+			// Wait for the public tokenizer to analyze the complete fixture.
+			jsonLanguage, ok := language.Builtin(language.JSON)
+			check(ok, "JSON definition missing")
+			definition := jsonLanguage.Definition()
+			definition.Tokenizer = observedTokenizer{definition.Tokenizer, &pasteAnalyzed}
+			tracked, err := language.New(definition)
+			must(err)
+			pasteAnalyzed.Store(false)
+			d.SetLanguageDefinition(tracked)
+			d.SetText("  \n    ")
+			set(a, []source.TextSelection{{Anchor: 2, Caret: 2}, {Anchor: 7, Caret: 7}})
+		}, func() bool { return !*clipboard || pasteAnalyzed.Load() }},
+		step{"multiple reindented paste", func() {
+			if !*clipboard {
+				return
+			}
+			must(app.Clipboard().SetText("{\n  \"a\":1\n}"))
+			bindings := a.KeyBindings()
+			delete(bindings, source.CommandReindentSelection)
+			bindings[source.CommandPasteReindented] = []gui.KeyGesture{{Key: gui.KeyF8}}
+			must(a.SetKeyBindings(bindings))
+			key(events.KeyF8, 0)
+		}, func() bool { return !*clipboard || d.Text() == "  {\n    \"a\":1\n  }\n    {\n      \"a\":1\n    }" }},
+		step{"cancel background set", func() {
+			d.SetText("one\n two")
+			set(a, []source.TextSelection{{Anchor: 0, Caret: 3}, {Anchor: 5, Caret: 8}})
+			bindings := a.KeyBindings()
+			delete(bindings, source.CommandPasteReindented)
+			bindings[source.CommandUpperCase] = []gui.KeyGesture{{Key: gui.KeyF8}}
+			must(a.SetKeyBindings(bindings))
+			key(events.KeyF8, 0)
+			a.SetSelection(source.TextSelection{})
+			cancellationAt = time.Now()
+		}, func() bool {
+			return time.Since(cancellationAt) > 200*time.Millisecond && d.Text() == "one\n two" && len(a.Selections()) == 1
+		}},
 		step{"dispersed long input", func() {
 			a.SetWrapMode(source.WrapNone)
 			a.SetFoldingEnabled(false)
@@ -220,7 +348,7 @@ func main() {
 			return
 		}
 		if time.Since(started) > 25*time.Second {
-			panic(fmt.Sprintf("timeout %s: bytes=%d selections=%v pending=%t", steps[stage].name, d.Len(), a.Selections(), pending(a)))
+			panic(fmt.Sprintf("timeout %s: bytes=%d prefix=%q selections=%v pending=%t", steps[stage].name, d.Len(), d.Text()[:min(128, d.Len())], a.Selections(), pending(a)))
 		}
 		if !steps[stage].ready() {
 			return

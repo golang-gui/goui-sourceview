@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/language"
@@ -17,6 +18,22 @@ import (
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/platform/events"
 )
+
+// Observe the real final-line Scan; the fixture requires known lexical context
+// before its single explicit completion request. A timer tick alone does not
+// guarantee an analysis turn, especially after changing language and document.
+type observedCompletionTokenizer struct {
+	language.Tokenizer
+	ready *atomic.Bool
+}
+
+func (t observedCompletionTokenizer) Scan(in language.Input, state language.State) (language.Result, error) {
+	result, err := t.Tokenizer.Scan(in, state)
+	if err == nil && in.LineEnd && in.DocumentEnd && in.Offset+result.Consumed == len(in.Text) {
+		t.ready.Store(true)
+	}
+	return result, err
+}
 
 func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc *source.Document, key func(events.Key, events.Modifiers), probe *scaleProbe, dark bool) {
 	original := doc.Text()
@@ -218,12 +235,20 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 		{"go", language.Go, "package main\nfu", len("package main\nfu"), events.KeyN, "n", "func"},
 		{"embedded", language.Markdown, "```json\ntr\n```", len("```json\ntr"), events.KeyU, "u", "true"},
 	} {
+		analyzed := new(atomic.Bool)
 		next(func() {
 			reset()
-			must(doc.SetLanguage(sample.id))
+			builtin, ok := language.Builtin(sample.id)
+			check(ok, "sample language missing")
+			definition := builtin.Definition()
+			definition.Tokenizer = observedCompletionTokenizer{definition.Tokenizer, analyzed}
+			tracked, err := language.New(definition)
+			must(err)
+			doc.SetLanguageDefinition(tracked)
 			doc.SetText(sample.text)
 			v.SetSelection(source.TextSelection{Anchor: sample.caret, Caret: sample.caret})
 		})
+		steps = append(steps, func() bool { return analyzed.Load() })
 		next(func() { key(events.KeyF2, 0) })
 		steps = append(steps, ready)
 		next(func() {

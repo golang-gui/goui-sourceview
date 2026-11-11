@@ -75,6 +75,7 @@ type SourceView struct {
 	selectionRangesEpoch, selectionRangesRevision uint64
 	selectionCommit                               *selectionCommit
 	selectionRevision, selectionEpoch             uint64
+	editOptionsEpoch                              uint64
 	upstream                                      bool
 	preferredX                                    float64
 	preferredSet                                  bool
@@ -397,7 +398,7 @@ func (v *SourceView) SetIndentOptions(o IndentOptions) error {
 	}
 	value := IndentOptions{normalized.TabWidth, normalized.IndentWidth, normalized.InsertSpaces}
 	if value != v.indent {
-		v.cancelEdit()
+		v.editOptionsChanged()
 		v.indent = value
 		v.invalidateLayout()
 	}
@@ -453,16 +454,20 @@ func (v *SourceView) IMContext() gui.IMContext {
 
 // Capture before operations that can synchronously call application code.
 type operationState struct {
-	document                             *Document
-	revision, mount, selection, language uint64
+	document                                       *Document
+	revision, mount, selection, language, settings uint64
 }
 
 func (v *SourceView) operationState() operationState {
-	return operationState{v.document, v.document.model.Revision(), v.mountEpoch, v.selectionEpoch, v.document.languageEpoch}
+	return operationState{v.document, v.document.model.Revision(), v.mountEpoch, v.selectionEpoch, v.document.languageEpoch, v.editOptionsEpoch}
 }
 
 func (s operationState) valid(v *SourceView) bool {
 	return v.document == s.document && v.document.model.Revision() == s.revision && v.mountEpoch == s.mount && v.selectionEpoch == s.selection && v.document.languageEpoch == s.language
+}
+
+func (s operationState) editingValid(v *SourceView) bool {
+	return s.valid(v) && v.editOptionsEpoch == s.settings
 }
 
 func (v *SourceView) report(err error) {

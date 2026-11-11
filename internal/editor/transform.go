@@ -13,23 +13,34 @@ import (
 func ReindentPlan(ctx context.Context, text string, s textcore.Selection, first, last int, results []language.LineIndent) (Plan, error) {
 	p := Plan{Before: s, After: s}
 	m := textcore.NewModel(text)
+	var err error
+	p.Edits, err = ReindentEdits(ctx, text, m, first, last, results)
+	if err != nil {
+		return p, err
+	}
+	p.After = textcore.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
+	return p, nil
+}
+
+// ReindentEdits validates provider output against one caller-owned snapshot model.
+func ReindentEdits(ctx context.Context, text string, m *textcore.Model, first, last int, results []language.LineIndent) ([]textcore.Edit, error) {
+	var edits []textcore.Edit
 	previous := first - 1
 	for _, r := range results {
 		if err := ctx.Err(); err != nil {
-			return p, err
+			return nil, err
 		}
 		if r.Line <= previous || r.Line < first || r.Line > last || len(r.Text) > 64*1024 || strings.Trim(r.Text, " \t") != "" {
-			return p, fmt.Errorf("sourceview: invalid line indentation")
+			return nil, fmt.Errorf("sourceview: invalid line indentation")
 		}
 		previous = r.Line
 		line, _ := m.LineRange(r.Line)
 		n := len(text[line.Start:line.End]) - len(strings.TrimLeft(text[line.Start:line.End], " \t"))
 		if text[line.Start:line.Start+n] != r.Text {
-			p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: line.Start, End: line.Start + n}, Text: r.Text})
+			edits = append(edits, textcore.Edit{Range: textcore.Range{Start: line.Start, End: line.Start + n}, Text: r.Text})
 		}
 	}
-	p.After = textcore.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
-	return p, nil
+	return edits, nil
 }
 
 func CleanupPlan(ctx context.Context, text string, s textcore.Selection, kind string) (Plan, error) {
@@ -46,15 +57,26 @@ func CleanupPlan(ctx context.Context, text string, s textcore.Selection, kind st
 			last = min(first+1, m.LineCount()-1)
 		}
 	}
+	p.Edits, err = CleanupEdits(ctx, text, m, first, last, kind)
+	if err != nil {
+		return p, err
+	}
+	p.After = textcore.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
+	return p, nil
+}
+
+// CleanupEdits plans an already resolved logical row interval on a shared snapshot.
+func CleanupEdits(ctx context.Context, text string, m *textcore.Model, first, last int, kind string) ([]textcore.Edit, error) {
+	var edits []textcore.Edit
 	for row := first; row <= last; row++ {
 		if err := ctx.Err(); err != nil {
-			return p, err
+			return nil, err
 		}
 		line, _ := m.LineRange(row)
 		if kind == "trim" {
 			n := len(strings.TrimRight(text[line.Start:line.End], " \t"))
 			if line.Start+n < line.End {
-				p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: line.Start + n, End: line.End}})
+				edits = append(edits, textcore.Edit{Range: textcore.Range{Start: line.Start + n, End: line.End}})
 			}
 		} else if row < last {
 			next, _ := m.LineRange(row + 1)
@@ -63,11 +85,10 @@ func CleanupPlan(ctx context.Context, text string, s textcore.Selection, kind st
 			if line.End > line.Start && next.Start+n < next.End && text[line.End-1] != ' ' && text[line.End-1] != '\t' {
 				sep = " "
 			}
-			p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: line.End, End: next.Start + n}, Text: sep})
+			edits = append(edits, textcore.Edit{Range: textcore.Range{Start: line.End, End: next.Start + n}, Text: sep})
 		}
 	}
-	p.After = textcore.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
-	return p, nil
+	return edits, nil
 }
 
 func ShiftedPaste(text, prefix string, o IndentOptions) string {

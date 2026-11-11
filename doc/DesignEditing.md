@@ -310,7 +310,7 @@ IM Reset、模型通知和选区回调仍可能重入，沿用 applyPlan 的身�
 下列按键表为默认配置；每视图可通过 KeyBindings 修改、删除或全部清空，
 具体契约见 [命令快捷键](DesignKeyBindings.md)。方法、菜单和普通文字输入独立于该配置。
 
-本节补充单选区编辑命令。Primary 在 Windows/Linux 为 Control，在 macOS 为 Command。
+本节记录原单选区命令语义；完整集合适配与历史分组见 [多选区设计](DesignMultiSelection.md)。Primary 在 Windows/Linux 为 Control，在 macOS 为 Command。
 沿用真实事件路径、独立修改计划和模型历史，不建立字符串命令注册器或另一套快捷键系统。
 所有几何导航在统一入口先取消预编辑，再验证文档、修订和选区代次；不能用临时段落几何
 计算正式文本的行首尾，也不能在 Reset 回调切换文档后继续对新文档执行旧按键。

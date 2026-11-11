@@ -483,6 +483,7 @@ type textStepSelection struct{ before, after Selection }
 type textStep struct {
 	beforeSelections, afterSelections []SelectionState
 	batch                             []textStep
+	merge                             BatchMerge
 	start                             int
 	oldEnd                            int
 	removed                           []pieceRef

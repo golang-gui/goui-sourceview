@@ -3,12 +3,14 @@ package sourceview
 import (
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/gui"
+	"slices"
 )
 
 // MoveWordPart moves across camel-case, acronym, digit and underscore boundaries.
 // Without extension, a nonempty selection collapses towards the requested side.
 func (v *SourceView) MoveWordPart(forward, extend bool) {
 	if len(v.additional) > 0 {
+		v.moveMultipleWord(forward, extend, true)
 		return
 	}
 	if v.Destroyed() || !gui.IsEnabled(v) {
@@ -30,7 +32,7 @@ func (v *SourceView) MoveWordPart(forward, extend bool) {
 // DeleteWordPart deletes one component or the selection as one undo item.
 func (v *SourceView) DeleteWordPart(forward bool) error {
 	if len(v.additional) > 0 {
-		return ErrMultipleSelections
+		return v.multipleDeleteKind(forward, 2)
 	}
 	if err := v.editable(); err != nil {
 		return err
@@ -60,76 +62,83 @@ func (v *SourceView) DeleteWordPart(forward bool) error {
 
 type selectionTrail struct {
 	state operationState
-	steps []TextSelection
+	steps [][]cursorState
 }
 
 // ExpandSelection selects the smallest confirmed enclosing word, literal,
 // bracket/tag region, logical line or document. Analysis never changes a later selection.
 func (v *SourceView) ExpandSelection() bool {
-	if len(v.additional) > 0 {
-		return false
-	}
 	if v.Destroyed() || !gui.IsEnabled(v) || v.projection != nil {
 		return false
 	}
 	state := v.operationState()
-	s := v.Selection()
-	r := s.Range()
-	m := v.document.model
 	if !v.selectionTrail.state.valid(v) {
 		v.selectionTrail.steps = nil
 	}
-	best := TextRange{Start: 0, End: m.Len()}
-	found := best != r
-	add := func(q TextRange) {
-		if q.Start <= r.Start && q.End >= r.End && q != r && (!found || q.End-q.Start < best.End-best.Start) {
-			best = q
-			found = true
+	before := v.cursors()
+	after := slices.Clone(before)
+	changed := false
+	for i, c := range before {
+		s := c.selection
+		r := s.Range()
+		m := v.document.model
+		best := TextRange{End: m.Len()}
+		found := best != r
+		add := func(q TextRange) {
+			if q.Start <= r.Start && q.End >= r.End && q != r && (!found || q.End-q.Start < best.End-best.Start) {
+				best = q
+				found = true
+			}
+		}
+		add(editor.WordRange(m, r.Start, v.definitionAt(s.Caret).IsWord))
+		a, _ := m.LineRange(m.LineAt(r.Start))
+		b, _ := m.LineRange(m.LineAt(r.End))
+		add(TextRange{Start: a.Start, End: b.End})
+		add(TextRange{Start: a.Start, End: min(m.Len(), b.End+1)})
+		v.structureCandidates(r, add)
+		if !state.valid(v) || v.Destroyed() {
+			return false
+		}
+		if found {
+			next := TextSelection{Anchor: best.Start, Caret: best.End}
+			if s.Anchor > s.Caret {
+				next.Anchor, next.Caret = next.Caret, next.Anchor
+			}
+			after[i] = cursorState{selection: next}
+			changed = true
 		}
 	}
-	add(editor.WordRange(m, r.Start, v.definitionAt(s.Caret).IsWord))
-	a, _ := m.LineRange(m.LineAt(r.Start))
-	b, _ := m.LineRange(m.LineAt(r.End))
-	add(TextRange{Start: a.Start, End: b.End})
-	add(TextRange{Start: a.Start, End: min(m.Len(), b.End+1)})
-	v.structureCandidates(r, add)
-	if !found || !state.valid(v) {
+	if !changed {
 		return false
 	}
-	steps := append([]TextSelection(nil), v.selectionTrail.steps...)
+	steps := slices.Clone(v.selectionTrail.steps)
 	if len(steps) == 64 {
 		steps = steps[1:]
 	}
-	steps = append(steps, s)
-	next := TextSelection{Anchor: best.Start, Caret: best.End}
-	if s.Anchor > s.Caret {
-		next.Anchor, next.Caret = next.Caret, next.Anchor
-	}
+	steps = append(steps, before)
 	v.document.model.BreakUndoGroup()
-	v.setSelection(next, false, true)
-	if v.document != state.document || v.mountEpoch != state.mount || v.document.model.Revision() != state.revision || v.selectionEpoch != state.selection+1 {
+	v.setCursorStatesKeepingCompletion(normalizeCursors(after), true, nil)
+	if v.Destroyed() || v.document != state.document || v.mountEpoch != state.mount || v.document.Revision() != state.revision || v.selectionEpoch != state.selection+1 {
 		return false
 	}
 	v.selectionTrail = selectionTrail{v.operationState(), steps}
 	return true
 }
 
-// ShrinkSelection restores the preceding actual selection, including direction.
+// ShrinkSelection restores the preceding complete set, including direction,
+// identity and affinity even if expansion merged intersecting ranges.
 func (v *SourceView) ShrinkSelection() bool {
-	if len(v.additional) > 0 {
-		return false
-	}
-	t := v.selectionTrail
-	if v.Destroyed() || !gui.IsEnabled(v) || v.projection != nil || !t.state.valid(v) || len(t.steps) == 0 {
+	trail := v.selectionTrail
+	if v.Destroyed() || !gui.IsEnabled(v) || v.projection != nil || !trail.state.valid(v) || len(trail.steps) == 0 {
 		v.selectionTrail.steps = nil
 		return false
 	}
-	s := t.steps[len(t.steps)-1]
-	v.setSelection(s, false, true)
-	if v.document != t.state.document || v.mountEpoch != t.state.mount || v.document.model.Revision() != t.state.revision || v.selectionEpoch != t.state.selection+1 {
+	v.document.model.BreakUndoGroup()
+	v.setCursorStatesKeepingCompletion(slices.Clone(trail.steps[len(trail.steps)-1]), true, nil)
+	if v.Destroyed() || v.document != trail.state.document || v.mountEpoch != trail.state.mount || v.document.Revision() != trail.state.revision || v.selectionEpoch != trail.state.selection+1 {
 		return false
 	}
-	v.selectionTrail = selectionTrail{v.operationState(), t.steps[:len(t.steps)-1]}
+	v.selectionTrail = selectionTrail{v.operationState(), trail.steps[:len(trail.steps)-1]}
 	return true
 }
 

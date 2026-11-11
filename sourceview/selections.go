@@ -251,3 +251,11 @@ func selectionIntersections(ranges []TextRange, r TextRange) []TextRange {
 	}
 	return ranges[start:end]
 }
+
+// rangeSelected is shared by decorations and pointer hit testing. Empty
+// cursors never select a cell; normalized nonempty ranges are sorted/cached.
+func (v *SourceView) rangeSelected(r TextRange) bool {
+	ranges := v.selectionRanges()
+	i := sort.Search(len(ranges), func(i int) bool { return ranges[i].End >= r.End })
+	return i < len(ranges) && ranges[i].Start <= r.Start && ranges[i].End >= r.End && ranges[i].Start < ranges[i].End
+}

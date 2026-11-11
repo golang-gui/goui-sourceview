@@ -9,13 +9,26 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"unicode/utf8"
 )
 
 // BatchOptions records view-independent history metadata. BeforeSelection uses
 // the original document; AfterSelection uses the normalized resulting document.
-// Selections are optional and copied. A batch never merges with typing history.
+// Selections are optional and copied. Merge is opt-in for continuous input.
+// BatchMerge classifies input that may extend the current complete cursor group.
+// Non-input edits must use MergeNone.
+type BatchMerge uint8
+
+const (
+	MergeNone BatchMerge = iota
+	MergeTyping
+	MergeBackwardDelete
+	MergeForwardDelete
+)
+
 type BatchOptions struct {
+	Merge                             BatchMerge
 	Source                            *EditSource
 	BeforeSelection                   *Selection
 	AfterSelection                    *Selection
@@ -88,6 +101,7 @@ func (m *Model) ApplyBatch(edits []Edit, options BatchOptions) error {
 	step := textStep{
 		batch:            make([]textStep, 0, len(work)),
 		beforeSelections: before,
+		merge:            m.batchMergeKind(work, before, after, options.Merge),
 		afterSelections:  after,
 	}
 	changes := make([]Edit, 0, len(work))
@@ -103,9 +117,20 @@ func (m *Model) ApplyBatch(edits []Edit, options BatchOptions) error {
 		step.batch = append(step.batch, part)
 		changes = append(changes, edit)
 	}
-	m.groupOpen = false
+	merged := false
+	if m.groupOpen && m.lastEditor == options.Source && step.merge != MergeNone && len(m.undoSteps) > 0 {
+		top := &m.undoSteps[len(m.undoSteps)-1]
+		if top.batch != nil && top.merge == step.merge && slices.Equal(top.afterSelections, step.beforeSelections) {
+			top.batch = append(top.batch, step.batch...)
+			top.afterSelections = step.afterSelections
+			merged = true
+		}
+	}
+	m.groupOpen = step.merge != MergeNone
 	m.lastEditor = options.Source
-	m.undoSteps = append(m.undoSteps, step)
+	if !merged {
+		m.undoSteps = append(m.undoSteps, step)
+	}
 	m.redoSteps = nil
 	m.revision++
 	m.notify(Change{Revision: m.revision, Edits: changes})
@@ -213,4 +238,40 @@ func (m *Model) batchBoundaries(edits []Edit) func(int) bool {
 		}
 		return m.IsRuneBoundary(s.old + off)
 	}
+}
+
+// Require one directional edit for each unchanged cursor identity. This proof
+// excludes replacements, collisions, no-op cursors and generated paired edits.
+func (m *Model) batchMergeKind(edits []Edit, before, after []SelectionState, kind BatchMerge) BatchMerge {
+	if kind == MergeNone || kind > MergeForwardDelete || len(before) == 0 || len(before) != len(after) || len(edits) != len(before) {
+		return MergeNone
+	}
+	for _, s := range after {
+		if s.Anchor != s.Caret {
+			return MergeNone
+		}
+	}
+	ordered := slices.Clone(before)
+	slices.SortFunc(ordered, func(a, b SelectionState) int { return a.Caret - b.Caret })
+	for i, e := range edits {
+		s := ordered[i]
+		if s.Anchor != s.Caret {
+			return MergeNone
+		}
+		switch kind {
+		case MergeTyping:
+			if e.Range.Start != s.Caret || e.Range.End != s.Caret || e.Text == "" || strings.ContainsRune(e.Text, '\n') {
+				return MergeNone
+			}
+		case MergeBackwardDelete:
+			if e.Text != "" || e.Range.End != s.Caret || e.Range.Start >= e.Range.End {
+				return MergeNone
+			}
+		case MergeForwardDelete:
+			if e.Text != "" || e.Range.Start != s.Caret || e.Range.End <= e.Range.Start {
+				return MergeNone
+			}
+		}
+	}
+	return kind
 }

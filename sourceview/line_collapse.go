@@ -149,20 +149,21 @@ func (v *SourceView) CollapseLine(line int) bool {
 	}
 	v.collapsedRevision = v.document.model.Revision()
 	v.collapsedLines[line] = r
-	selection := v.Selection()
-	upstream := v.upstream
+	before := v.cursors()
+	after := slices.Clone(before)
 	hidden := func(at int) bool { return at >= r.Start && at <= r.End && v.collapsedOffsetHidden(line, p, at, false) }
-	if hidden(selection.Anchor) || hidden(selection.Caret) {
-		pos := g.HitLine(0, 0)
-		selection = TextSelection{Anchor: r.Start + pos.Offset, Caret: r.Start + pos.Offset}
-		upstream = pos.Upstream
+	for i, c := range before {
+		if hidden(c.selection.Anchor) || hidden(c.selection.Caret) {
+			pos := g.HitLine(0, 0)
+			after[i] = cursorState{selection: TextSelection{Anchor: r.Start + pos.Offset, Caret: r.Start + pos.Offset}, upstream: pos.Upstream}
+		}
 	}
 	v.refreshCollapsedLine(line)
 	if v.anchor.valid && v.anchor.offset >= r.Start && v.anchor.offset <= r.End {
 		v.anchor.offset, v.anchor.inset = r.Start, 0
 	}
-	if selection != v.Selection() {
-		v.setSelection(selection, upstream, false)
+	if !slices.Equal(before, after) {
+		v.setCursorStatesKeepingCompletion(normalizeCursors(after), false, nil)
 	}
 	if v.document == state.document && v.document.model.Revision() == state.revision && v.mountEpoch == state.mount && !v.Destroyed() {
 		v.updateMenu()
@@ -318,8 +319,7 @@ func (v *SourceView) paintLineCollapseBadge(draw gui.Painter, row int, p *paragr
 		return
 	}
 	line, _ := v.collapsedLineRange(row)
-	selection := v.Selection().Range()
-	if selection.Start <= line.Start && selection.End >= line.End {
+	if v.rangeSelected(line) {
 		background := v.colors.InactiveSelectionBackground
 		if activeFocus(v) {
 			background = v.colors.SelectionBackground

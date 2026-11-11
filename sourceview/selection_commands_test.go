@@ -147,3 +147,78 @@ func TestColumnLongUnwrappedRowsAndKeyboardContinuation(t *testing.T) {
 		t.Fatal(v.Selections(), c.pending)
 	}
 }
+
+func TestColumnSkipsFoldedRowsAndFailureDoesNotEdit(t *testing.T) {
+	v, _ := colorFixture(t)
+	focusBracketFixture(t, v)
+	v.Document().SetText("abcdef\nabcdef\nabcdef\nabcdef\nabcdef")
+	folds, err := NewFolds(v.Document().Text(), []FoldRange{{StartLine: 0, EndLine: 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.Document().SetFolds(v.Document().Revision(), folds)
+	finishFoldIntake(t, v)
+	if !v.Fold(0) {
+		t.Fatal("fold")
+	}
+	c := &columnSelection{state: v.operationState(), layout: v.layoutEpoch, anchor: textcore.Position{Offset: 1}, target: textcore.Position{Offset: 29}, left: 10, right: 30, before: v.cursors(), pending: true}
+	v.columnSelection = c
+	for i := 0; i < 100 && c.pending; i++ {
+		_, err = v.advanceColumn(c, time.Time{})
+		if err != nil && err != errSelectionGeometry {
+			t.Fatal(err)
+		}
+	}
+	if c.pending || !slices.Equal(v.Selections(), []TextSelection{{Anchor: 29, Caret: 31}, {Anchor: 1, Caret: 3}, {Anchor: 22, Caret: 24}}) {
+		t.Fatal(v.Selections())
+	}
+	old := v.Selections()
+	c.pending = true
+	v.invalidateLayout()
+	if _, err = v.advanceColumn(c, time.Time{}); err != ErrOperationChanged || !slices.Equal(v.Selections(), old) {
+		t.Fatal("layout invalidation", err, v.Selections())
+	}
+}
+
+func TestKeyboardColumnCrossesLongParagraphPages(t *testing.T) {
+	v := pendingInputFixture(t, "abc")
+	v.Document().SetText(strings.Repeat("a", 100000))
+	c := &columnSelection{state: v.operationState(), layout: v.layoutEpoch, anchor: textcore.Position{}, target: textcore.Position{Offset: 8190}, left: 0, right: 81900, before: v.cursors()}
+	v.columnSelection = c
+	for _, command := range []Command{CommandColumnSelectRight, CommandColumnSelectRight, CommandColumnSelectRight, CommandColumnSelectRight, CommandColumnSelectRight, CommandColumnSelectLeft} {
+		var err error
+		for retry := 0; retry < 1000; retry++ {
+			err = v.beginKeyboardColumn(command)
+			if err != errSelectionGeometry {
+				break
+			}
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		c = v.columnSelection
+		for retry := 0; retry < 1000 && c.pending; retry++ {
+			_, err = v.advanceColumn(c, time.Time{})
+			if err != nil && err != errSelectionGeometry {
+				t.Fatal(err)
+			}
+		}
+		if c.pending {
+			t.Fatal("keyboard rectangle did not converge")
+		}
+	}
+	if v.Selection() != (TextSelection{Anchor: 0, Caret: 8194}) {
+		t.Fatal("stuck on anchor's native page", v.Selection())
+	}
+}
+
+func TestSelectAllOccurrencesKeepsOverlappingPrimaryMatch(t *testing.T) {
+	v, _ := colorFixture(t)
+	v.Document().SetText("aaaaa")
+	v.SetSelection(TextSelection{Anchor: 3, Caret: 1})
+	v.SelectAllOccurrences()
+	drainSelections(t, v)
+	if !slices.Equal(v.Selections(), []TextSelection{{Anchor: 3, Caret: 1}, {Anchor: 3, Caret: 5}}) {
+		t.Fatal(v.Selections())
+	}
+}

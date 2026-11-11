@@ -59,14 +59,17 @@ func (v *SourceView) embeddedSpan(at int) (TextRange, bool) {
 	return TextRange{Start: a.Start, End: b.End}, true
 }
 func (v *SourceView) tagText() (string, *language.TagRules, int) {
-	rules := v.definitionAt(v.Selection().Caret).Editing().Tags
+	return v.tagTextAt(v.Selection().Caret)
+}
+func (v *SourceView) tagTextAt(at int) (string, *language.TagRules, int) {
+	rules := v.definitionAt(at).Editing().Tags
 	if rules == nil {
 		return "", nil, 0
 	}
 	r := TextRange{End: v.document.model.Len()}
-	if ctx, ok := v.lexicalContext(v.Selection().Caret); ok && ctx.Embedded != nil {
+	if ctx, ok := v.lexicalContext(at); ok && ctx.Embedded != nil {
 		var valid bool
-		r, valid = v.embeddedSpan(v.Selection().Caret)
+		r, valid = v.embeddedSpan(at)
 		if !valid {
 			return "", nil, 0
 		}
@@ -74,19 +77,20 @@ func (v *SourceView) tagText() (string, *language.TagRules, int) {
 	text, _ := v.document.model.Slice(r)
 	return text, rules, r.Start
 }
-func (v *SourceView) matchingTags() []TextRange {
-	definition := v.definitionAt(v.Selection().Caret)
+func (v *SourceView) matchingTags() []TextRange { return v.matchingTagsAt(v.Selection().Caret) }
+func (v *SourceView) matchingTagsAt(at int) []TextRange {
+	definition := v.definitionAt(at)
 	cache := v.tagMatches
 	m := v.document.model
-	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == v.Selection().Caret && cache.language == v.document.languageEpoch && cache.definition == definition {
+	if cache.valid && cache.document == v.document && cache.revision == m.Revision() && cache.caret == at && cache.language == v.document.languageEpoch && cache.definition == definition {
 		return cache.ranges
 	}
-	text, rules, base := v.tagText()
+	text, rules, base := v.tagTextAt(at)
 	if rules == nil {
 		return nil
 	}
-	result := tagMatchState{bracketState: bracketState{document: v.document, revision: m.Revision(), caret: v.Selection().Caret, language: v.document.languageEpoch, valid: true}, definition: definition}
-	match, ok := rules.Match(text, v.Selection().Caret-base)
+	result := tagMatchState{bracketState: bracketState{document: v.document, revision: m.Revision(), caret: at, language: v.document.languageEpoch, valid: true}, definition: definition}
+	match, ok := rules.Match(text, at-base)
 	if ok {
 		result.ranges = []TextRange{{Start: base + match.Opening.Start, End: base + match.Opening.End}, {Start: base + match.Closing.Start, End: base + match.Closing.End}}
 	}
@@ -97,16 +101,23 @@ func (v *SourceView) matchingTags() []TextRange {
 	return result.ranges
 }
 func (v *SourceView) closeTag(r TextRange, typed string) (bool, error) {
+	p, ok, err := v.closeTagPlan(cursorState{selection: v.Selection()}, r, typed)
+	if !ok || err != nil {
+		return ok, err
+	}
+	return true, v.applyPlan(p)
+}
+func (v *SourceView) closeTagPlan(c cursorState, r TextRange, typed string) (editor.Plan, bool, error) {
 	if !v.autoPairs || typed != ">" || r.Start != r.End {
-		return false, nil
+		return editor.Plan{}, false, nil
 	}
-	text, rules, base := v.tagText()
+	text, rules, base := v.tagTextAt(c.selection.Caret)
 	if rules == nil {
-		return false, nil
+		return editor.Plan{}, false, nil
 	}
-	close := rules.ClosingTag(text[:r.Start] + ">")
+	close := rules.ClosingTag(text[:r.Start-base] + ">")
 	if close == "" || strings.HasPrefix(text[r.Start-base:], close) {
-		return false, nil
+		return editor.Plan{}, false, nil
 	}
 	// Consume a generated angle closer only when its exact ownership is valid.
 	for _, p := range v.pairs {
@@ -116,22 +127,29 @@ func (v *SourceView) closeTag(r TextRange, typed string) (bool, error) {
 		}
 	}
 	at := r.Start + 1
-	return true, v.applyPlan(editor.Plan{Before: v.Selection(), After: TextSelection{Anchor: at, Caret: at}, Edits: []TextEdit{{Range: r, Text: ">" + close}}})
+	return editor.Plan{Before: c.selection, After: TextSelection{Anchor: at, Caret: at}, Edits: []TextEdit{{Range: r, Text: ">" + close}}}, true, nil
 }
 
 // Linked name edits revalidate both ranges against the original revision and
 // make one ApplyBatch. External edits, paste and IME never trigger a mirror edit.
 func (v *SourceView) linkedTag(r TextRange, insert string) (bool, error) {
-	if !v.linkedTags {
-		return false, nil
+	p, ok, err := v.linkedTagPlan(cursorState{selection: v.Selection()}, r, insert)
+	if !ok || err != nil {
+		return ok, err
 	}
-	text, rules, base := v.tagText()
+	return true, v.applyPlan(p)
+}
+func (v *SourceView) linkedTagPlan(c cursorState, r TextRange, insert string) (editor.Plan, bool, error) {
+	if !v.linkedTags {
+		return editor.Plan{}, false, nil
+	}
+	text, rules, base := v.tagTextAt(c.selection.Caret)
 	if rules == nil {
-		return false, nil
+		return editor.Plan{}, false, nil
 	}
 	match, ok := rules.Match(text, r.Start-base)
 	if !ok {
-		return false, nil
+		return editor.Plan{}, false, nil
 	}
 	a, b := match.Opening, match.Closing
 	a.Start += base
@@ -142,11 +160,21 @@ func (v *SourceView) linkedTag(r TextRange, insert string) (bool, error) {
 		a, b = b, a
 	}
 	if r.Start < a.Start || r.End > a.End {
-		return false, nil
+		return editor.Plan{}, false, nil
+	}
+	// Explicit cursors in both names own their edits. Mirroring again would
+	// duplicate boundary insertions that are otherwise non-overlapping batches.
+	if len(v.additional) > 0 {
+		for _, other := range v.cursors() {
+			q := other.selection.Range()
+			if q.Start == q.End && q.Start >= b.Start && q.Start <= b.End || q.Start < b.End && q.End > b.Start {
+				return editor.Plan{}, false, nil
+			}
+		}
 	}
 	name := text[a.Start-base:r.Start-base] + insert + text[r.End-base:a.End-base]
 	if !rules.ValidName(name) {
-		return false, nil
+		return editor.Plan{}, false, nil
 	}
 	mirror := TextEdit{Range: TextRange{Start: b.Start, End: b.End}, Text: name}
 	edits := []TextEdit{{Range: r, Text: insert}, mirror}
@@ -155,13 +183,14 @@ func (v *SourceView) linkedTag(r TextRange, insert string) (bool, error) {
 	if b.End <= r.Start {
 		caret += len(name) - (b.End - b.Start)
 	}
-	return true, v.applyPlan(editor.Plan{Before: v.Selection(), After: TextSelection{Anchor: caret, Caret: caret}, Edits: edits})
+	return editor.Plan{Before: c.selection, After: TextSelection{Anchor: caret, Caret: caret}, Edits: edits}, true, nil
 }
 
 // LinkedTags controls typed/deleted name mirroring on confirmed markup pairs.
 func (v *SourceView) LinkedTags() bool { return v.linkedTags }
 func (v *SourceView) SetLinkedTags(b bool) {
-	if !v.Destroyed() {
+	if !v.Destroyed() && v.linkedTags != b {
+		v.editOptionsChanged()
 		v.linkedTags = b
 	}
 }

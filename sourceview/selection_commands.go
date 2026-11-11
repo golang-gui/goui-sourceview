@@ -167,6 +167,10 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 		if c == CommandSelectNextOccurrence {
 			job.at = s.Range().End
 			job.results = job.original
+		} else {
+			// An explicit primary match can overlap the global scan's first
+			// occurrence. Keep it intact and scan either side of its range.
+			job.results = []cursorState{{selection: s}}
 		}
 	}
 	for count := 0; count < 4; count++ {
@@ -220,6 +224,11 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 			}
 			match := TextSelection{Anchor: start, Caret: start + len(job.pattern)}
 			if c == CommandSelectAllOccurrences {
+				primary := job.original[0].selection.Range()
+				if match.Anchor < primary.End && match.Caret > primary.Start {
+					from = primary.End - base
+					continue
+				}
 				if len(job.results) >= maxSelections {
 					return false, ErrOperationLimit
 				}
@@ -245,6 +254,9 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 }
 func (v *SourceView) beginKeyboardColumn(command Command) error {
 	c := v.columnSelection
+	if c != nil && c.layout != v.layoutEpoch {
+		c = nil
+	}
 	if c != nil {
 		copy := *c
 		c = &copy // Do not partially advance an intent if destination geometry is pending.
@@ -285,9 +297,26 @@ func (v *SourceView) beginKeyboardColumn(command Command) error {
 		}
 		c.target = textcore.Position{Offset: next.selection.Caret, Upstream: next.upstream}
 	} else {
-		_, g, x, r, err := v.columnFrame(c.anchor.Offset)
+		p, g, x, r, err := v.columnFrame(c.anchor.Offset)
 		if err != nil {
 			return err
+		}
+		if v.wrap == WrapNone && p.Paged != nil {
+			frame, ready, err := p.Paged.ColumnGeometry(c.right, c.right)
+			if err != nil {
+				return err
+			}
+			if !ready {
+				return errSelectionGeometry
+			}
+			from := frame.Geometry.HitLine(0, float32(c.right-frame.X))
+			// Prepare the active edge and its actual neighboring stops. The anchor
+			// can remain many native pages away while the rectangle grows or shrinks.
+			detail := p.Paged.GeometryAt(from.Offset)
+			if detail == nil {
+				return errSelectionGeometry
+			}
+			g, x = &detail.Geometry, detail.X
 		}
 		index := g.LineIndex(textcore.Position{Offset: c.anchor.Offset - r.Start, Upstream: c.anchor.Upstream})
 		from := g.HitLine(index, float32(c.right-x))

@@ -25,7 +25,9 @@ const (
 const maxPlannedEdits = 4096
 
 type editPlanner func(context.Context, string) (editor.Plan, error)
+type vectorEditPlanner func(context.Context, string) ([]TextEdit, []cursorState, error)
 type editingJob struct {
+	vector vectorEditPlanner
 	state  operationState
 	indent IndentOptions
 	plan   editPlanner
@@ -108,7 +110,14 @@ func (v *SourceView) editStep() {
 	go func() {
 		text := strings.Join(job.chunks, "")
 		job.chunks = nil
-		p, err := job.plan(job.ctx, text)
+		var p editor.Plan
+		var after []cursorState
+		var err error
+		if job.vector != nil {
+			p.Edits, after, err = job.vector(job.ctx, text)
+		} else {
+			p, err = job.plan(job.ctx, text)
+		}
 		if err == nil && len(p.Edits) > maxPlannedEdits {
 			err = ErrOperationLimit
 		}
@@ -126,7 +135,11 @@ func (v *SourceView) editStep() {
 				job.cancel()
 				if job.state.valid(v) && job.indent == v.indent && v.editable() == nil {
 					if err == nil {
-						err = v.applyPlan(p)
+						if job.vector != nil {
+							err = v.applyMultiple(p.Edits, after)
+						} else {
+							err = v.applyPlan(p)
+						}
 					}
 					if !errors.Is(err, context.Canceled) {
 						v.report(err)
@@ -145,7 +158,7 @@ func (v *SourceView) editStep() {
 // ConnectError. Any change of revision, selection, options or mount cancels it.
 func (v *SourceView) ReindentSelection() error {
 	if len(v.additional) > 0 {
-		return ErrMultipleSelections
+		return v.startMultipleReindent()
 	}
 	if err := v.editable(); err != nil {
 		return err
@@ -172,7 +185,7 @@ func (v *SourceView) ReindentSelection() error {
 // It is an explicit text operation; it does not preserve language semantics.
 func (v *SourceView) JoinLines() error {
 	if len(v.additional) > 0 {
-		return ErrMultipleSelections
+		return v.startMultipleCleanup("join")
 	}
 	s := v.Selection()
 	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) {
@@ -184,7 +197,7 @@ func (v *SourceView) JoinLines() error {
 // lines, or the whole document for an empty selection. LF and NBSP are retained.
 func (v *SourceView) TrimTrailingWhitespace() error {
 	if len(v.additional) > 0 {
-		return ErrMultipleSelections
+		return v.startMultipleCleanup("trim")
 	}
 	s := v.Selection()
 	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) {
@@ -196,7 +209,7 @@ func (v *SourceView) TrimTrailingWhitespace() error {
 // Unicode conversion may change byte length; the result is one undo item.
 func (v *SourceView) TransformCase(mode CaseMode) error {
 	if len(v.additional) > 0 {
-		return ErrMultipleSelections
+		return v.startMultipleCase(mode)
 	}
 	if mode != CaseUpper && mode != CaseLower {
 		return fmt.Errorf("sourceview: invalid case mode")

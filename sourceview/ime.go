@@ -73,7 +73,11 @@ func (v *SourceView) commit(c gui.IMCommit) {
 	}
 	v.cancelViewRestore()
 	action := deferredInput{apply: func() { v.applyCommit(c) }, geometry: true, mutates: true}
-	action.plan = func(s cursorState) (editor.Plan, error) { return replacementPlan(s, c.Text), nil }
+	action.typed = &c
+	action.plan = func(s cursorState) (editor.Plan, error) { p, err := v.typingPlan(s, c); return p.plan, err }
+	if !c.Composed && !v.compositionSeen && v.projection == nil {
+		action.merge = textcore.MergeTyping
+	}
 	if v.delayInput(action) {
 		return
 	}
@@ -101,7 +105,25 @@ func (v *SourceView) applyCommit(c gui.IMCommit) {
 		atomic = true
 	}
 	if len(v.additional) > 0 {
-		v.report(v.replaceMultiple([]string{c.Text}))
+		c.Composed = atomic
+		state := v.operationState()
+		results := make([]plannedPair, 0, len(v.additional)+1)
+		for _, cursor := range v.cursors() {
+			p, err := v.typingPlan(cursor, c)
+			if err == nil && !state.editingValid(v) {
+				err = ErrOperationChanged
+			}
+			if err != nil {
+				v.report(err)
+				return
+			}
+			results = append(results, p)
+		}
+		merge := textcore.MergeNone
+		if !atomic {
+			merge = textcore.MergeTyping
+		}
+		v.report(v.applyPairPlans(results, merge))
 		return
 	}
 	if !atomic {
