@@ -57,6 +57,11 @@ Basic 和 Modern 使用 minimap-background、minimap-viewport、minimap-border �
 正文令牌颜色来自同一 Scheme。执行位置用细色条标示；普通行标记仍在左侧标记栏。
 首版不增加诊断/搜索/断点专用概览模型，后续可复用公开行标记和实际诊断接口。
 
+三个部件与其他代码装饰统一通过 ForegroundColor 提供绘制颜色，名称区分大小写。
+minimap-background 默认取正文背景，不得因部件缺失而继承正文前景。
+未显式设置代码 Scheme 时，应用可覆盖该部件而不改变正文背景；显式 Scheme 沿既有
+partColor 契约使用该 Scheme 的背景。主题变化立即重绘，不能依赖采样完成才更新底色。
+
 ## 验证范围
 
 逻辑验证配置、采样预算、UTF-8/Tab、颜色与片段复用、折叠映射、长折行、独立视图、
@@ -84,3 +89,34 @@ revision/配色/卸载失效。独立 X11 窗口验证点击拖动、滚轮、�
 阶段耗时还包含定时器等待、正文排版、高亮和地图工作，不等同于地图自身耗时或上屏时间。
 本机长行输入仍观察到数十毫秒的同步处理；本批没有据此宣称解决全部正文编辑延迟，
 也没有把单次数字作为跨平台性能保证。地图自身不新增全文排版和同步全文扫描。
+
+## 2026-11-11 背景色回归修复
+
+CodeRules 将部件误写为 minimap-Background，paintMinimap 查询 minimap-background，
+GOUI 解析不到该部件后继承正文前景，导致亮暗主题的底色表现相反。修正注册名称，
+保持现有主题、Scheme、自定义覆盖和缓存契约，不修改 GOUI。
+
+新增 TestMinimapBackgroundFollowsThemeAndOverrides：修正前在 Basic、Modern 亮色、暗色
+及切回亮色四个阶段均复现背景断言失败；修正后检查实际 FillRect 的区域与颜色，
+并验证局部覆盖、显式 Scheme 及清除 Scheme 后恢复局部样式。
+窗口用例保留所有导航/编辑断言，增加正文背景独立预期及同窗口主题往返检查；
+原先只判断“地图有内容像素”的断言不足以发现此问题。
+
+同类检查覆盖 sourceview、internal/view、internal/controls 的部件注册、partColor、
+样式读取及配套控件名称：未发现其他大小写或名称不一致。token- 动态部件、行标记
+动态选择和框架继承部件另行核对，不把动态字符串误报成遗漏注册。
+
+验证结果（Linux amd64、Go 1.25.8、GOUI v0.7.0）：
+
+- `go test ./...`、`GOWORK=off go test ./...`：通过。
+- `go test -race ./sourceview ./internal/view ./ui -run 'Minimap|Style|Theme' -count=1`：通过。
+- 独立 Xvnc :190 / Xfwm4 合成 / 软件绘制 / Pango，Basic、Modern light/dark ×
+  100%/150% 共六组窗口场景通过。每组包含三次背景采样（初始、切换、切回），
+  并保留导航、拖动、滚轮、选区、调整尺寸和长单行编辑的原有断言。
+- RenderWidget 在右侧位图留白、避开边框及视口覆盖层采样不透明 sRGB NRGBA，
+  与正文背景精确比较；Modern 亮色为 #FFFFFF，暗色为 #28282D。
+  另检查 150% 亮暗桌面截图，地图与正文底色一致；像素断言与桌面观察分别记录。
+- Windows/macOS 原生窗口和其他绘制后端未运行，本次不据 Linux 结果推断已验证。
+  独立显示服务、D-Bus 及窗口管理器均已回收，未操作用户桌面、文档或剪贴板。
+
+日志与本机截图保留在 `/tmp/sourceview-minimap-color-u1ui0K`；截图及二进制不入库。

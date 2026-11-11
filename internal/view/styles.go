@@ -93,7 +93,7 @@ func CodeRules(d scheme.Definition) []style.Rule {
 		style.Name("source-view").Part("line-mark-muted").ForegroundColor(d.GutterForeground),
 		style.Name("source-view").Part("bookmark").ForegroundColor(RGB(0x3579c8)),
 		style.Name("source-view").Part("execution-arrow").ForegroundColor(RGB(0xc39400)),
-		style.Name("source-view").Part("minimap-Background").ForegroundColor(d.Background),
+		style.Name("source-view").Part("minimap-background").ForegroundColor(d.Background),
 		style.Name("source-view").Part("minimap-viewport").ForegroundColor(Tint(d.GutterForeground, 35)),
 		style.Name("source-view").Part("minimap-border").ForegroundColor(Tint(d.GutterForeground, 90)),
 		style.Name("source-view").Part("execution-line").ForegroundColor(Tint(RGB(0xe6b422), 35)),

@@ -3,7 +3,9 @@
 // 初始为 Integrated 窗口及 2000 行 JSON。自动经 Window.DispatchEvent 点击、
 // 拖动、滚轮、按键和调整布局的按钮，断言选区/焦点保持、滚动方向、地图边界、
 // 正文宽度变化、关闭恢复和单行长文本编辑后任务收敛。RenderWidget 检查地图中
-// 与背景不同的内容像素，取内部 NRGBA，不要求字体抗锯齿或跨平台精确金图。
+// 与背景不同的内容像素，并断言地图背景等于主题的正文背景；同窗口切换主题后再切回。
+// 背景采样在地图右侧 3 DIP 的位图留白内，避开边界及视口覆盖层；不透明 sRGB NRGBA
+// 精确匹配（零误差），不涉及字体抗锯齿，也不是跨平台字体金图。
 // 日志记录事件分发同步耗时及阶段等待时间；这些不等于首帧上屏延迟。
 // 完成自动关闭，失败/提前关闭/30 秒未收敛返回非零；重启复位。
 // 不写用户文件、剪贴板或系统设置。其他平台和真实 IME 需另行验收。
@@ -25,6 +27,7 @@ import (
 	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
 )
@@ -45,11 +48,16 @@ func main() {
 	flag.Parse()
 	app, err := gui.NewApplication("org.golanggui.SourceViewMinimap")
 	must(err)
-	if *theme == "basic" {
-		app.SetStyleSheet(basic.Sheet())
-	} else {
-		app.SetStyleSheet(modern.Sheet(modern.Options{Dark: *theme == "dark"}))
+	var sheet style.StyleSheet
+	setTheme := func(name string) {
+		if name == "basic" {
+			sheet = basic.Sheet()
+		} else {
+			sheet = modern.Sheet(modern.Options{Dark: name == "dark"})
+		}
+		app.SetStyleSheet(sheet)
 	}
+	setTheme(*theme)
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 900, Height: 520}, Chrome: gui.WindowChromeIntegrated})
 	must(err)
 	defer win.Destroy()
@@ -95,6 +103,24 @@ func main() {
 		info, ok := mapInfo()
 		return ok && !info.Attributes["goui.sourceview.minimap"].(map[string]any)["pending"].(bool)
 	}
+	checkBackground := func(info gui.WidgetInfo) {
+		img, err := gui.RenderWidget(v, 1.5)
+		must(err)
+		local := info.Bounds.Translate(geometry.Point{X: -v.Snapshot().Bounds.X, Y: -v.Snapshot().Bounds.Y})
+		thumb := info.Attributes["goui.sourceview.minimap"].(map[string]any)["viewport"].(geometry.Rectangle)
+		y := float32(6)
+		for y < local.Height-6 && y >= thumb.Y-2 && y <= thumb.Y+thumb.Height+2 {
+			y++
+		}
+		check(y < local.Height-6, "地图没有可采样的背景区域")
+		x := local.X + local.Width - 2
+		background, ok := sheet.Resolve(style.Sel{Name: "source-view"}).BackgroundColor()
+		check(ok, "主题缺少正文背景")
+		want := color.NRGBAModel.Convert(background).(color.NRGBA)
+		got := color.NRGBAModel.Convert(img.At(int(x*1.5), int(y*1.5))).(color.NRGBA)
+		check(got == want, fmt.Sprintf("地图背景=%v，期望正文背景 %v", got, want))
+		log.Printf("background verified: %v, window sample=(%.1f,%.1f)", got, info.Bounds.X+local.Width-2, info.Bounds.Y+y)
+	}
 	dispatch := func(e events.Event) {
 		start := time.Now()
 		must(win.DispatchEvent(e))
@@ -127,6 +153,7 @@ func main() {
 		}
 		switch stage {
 		case 0:
+			checkBackground(info)
 			v.SetSelection(selected)
 			image, err := gui.RenderWidget(v, 1.5)
 			must(err)
@@ -185,6 +212,16 @@ func main() {
 			click(geometry.Point{X: info.Bounds.X + 30, Y: info.Bounds.Y + info.Bounds.Height*.8})
 		case 8:
 			check(scroll.Snapshot().ScrollY > 0 && v.Selection() == selected, "长折行地图导航改变了选区")
+			next := "dark"
+			if *theme == "dark" {
+				next = "light"
+			}
+			setTheme(next)
+		case 9:
+			checkBackground(info)
+			setTheme(*theme)
+		case 10:
+			checkBackground(info)
 			log.Printf("PASS minimap theme=%s total=%s", *theme, time.Since(started))
 			done = true
 			win.Destroy()

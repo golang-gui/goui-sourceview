@@ -9,11 +9,67 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui/textedit"
+	"github.com/golang-gui/goui/platform/graphics"
+	"github.com/golang-gui/goui/style"
+	"github.com/golang-gui/goui/theme/basic"
+	"github.com/golang-gui/goui/theme/modern"
 )
+
+// 地图背景必须读取专用部件，不能继承正文前景；同一视图切换主题也要立即生效。
+func TestMinimapBackgroundFollowsThemeAndOverrides(t *testing.T) {
+	v := NewSourceView()
+	v.viewport = geometry.Size{Width: 800, Height: 400}
+	v.SetShowMinimap(true)
+	scope := themedScope(v, basic.Sheet())
+	t.Cleanup(func() { scope.SetChild(nil) })
+	checkBackground := func(t *testing.T, want color.NRGBA) {
+		t.Helper()
+		p := &recordingPainter{}
+		v.paintMinimap(p)
+		if len(p.fills) != 1 || p.fills[0].rect != v.minimapRect() || p.fills[0].color != graphics.ColorOf(want) {
+			t.Fatalf("地图背景绘制=%v，期望完整区域使用 %v", p.fills, want)
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		sheet style.StyleSheet
+		want  color.NRGBA
+	}{
+		{"Basic", basic.Sheet(), view.RGB(0xffffff)},
+		{"Modern light", modern.Sheet(modern.Options{}), view.RGB(0xffffff)},
+		{"Modern dark", modern.Sheet(modern.Options{Dark: true}), view.RGB(0x28282d)},
+		{"Modern light again", modern.Sheet(modern.Options{}), view.RGB(0xffffff)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scope.SetStyleSheet(tc.sheet)
+			v.StyleChanged()
+			if v.colors.Background != tc.want {
+				t.Fatalf("正文背景=%v，期望 %v", v.colors.Background, tc.want)
+			}
+			checkBackground(t, tc.want)
+		})
+	}
+	custom := view.RGB(0x123456)
+	rules := append(modern.Rules(modern.Options{}), style.Name("source-view").Part("minimap-background").ForegroundColor(custom))
+	scope.SetStyleSheet(style.Sheet(rules...))
+	v.StyleChanged()
+	checkBackground(t, custom)
+	if v.colors.Background != view.RGB(0xffffff) {
+		t.Fatal("地图部件覆盖改变了正文背景")
+	}
+	// 显式 Scheme 按既有契约覆盖主题装饰；清除后恢复局部样式。
+	v.SetScheme(scheme.Dark())
+	checkBackground(t, view.RGB(0x1e1e1e))
+	v.SetScheme(scheme.Light())
+	checkBackground(t, view.RGB(0xffffff))
+	v.SetScheme(nil)
+	checkBackground(t, custom)
+}
 
 func mapView(text string) *SourceView {
 	v := NewSourceView()
