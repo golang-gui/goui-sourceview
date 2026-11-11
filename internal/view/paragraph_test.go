@@ -4,8 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/platform/typography"
 )
 
@@ -50,13 +49,13 @@ func TestPreviewBorrowsMeasuredGeometry(t *testing.T) {
 	if g, h := p.PreviewGeometry(20); g != nil || h != 20 {
 		t.Fatal("unmeasured paragraph exposed geometry", g, h)
 	}
-	p.Geometry = textedit.NewGeometry([]typography.TextLine{{Length: 1, Width: 10, Height: 18}}, nil, 1, 20)
+	p.Geometry = textcore.NewGeometry([]typography.TextLine{{Length: 1, Width: 10, Height: 18}}, nil, 1, 20)
 	if g, h := p.PreviewGeometry(20); g != &p.Geometry || h != 18 || p.GeometryAt(0) != g {
 		t.Fatal("preview and caret must share measured geometry", g, h)
 	}
 	// A visible page elsewhere in a long paragraph cannot substitute for its
 	// missing first page, nor cause the source reader or native layout to run.
-	p.Paged = gui.NewParagraphLayout(&previewContext{t: t}, typography.TextFormat{}, 200, 100000, func(textedit.Range) (string, error) {
+	p.Paged = NewParagraphLayout(&previewContext{t: t}, typography.TextFormat{}, 200, 100000, func(textcore.Range) (string, error) {
 		t.Fatal("preview read unmeasured source")
 		return "", nil
 	})

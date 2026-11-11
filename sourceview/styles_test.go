@@ -12,7 +12,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
@@ -231,7 +230,7 @@ func TestWhitespaceStyleParts(t *testing.T) {
 		}
 	}
 	v := NewSourceView()
-	v.Document().Model().SetText(" ")
+	v.Document().SetText(" ")
 	observe(t, v)
 	v.context = &shapedContext{}
 	t.Cleanup(v.dropLayouts)
@@ -245,7 +244,7 @@ func TestWhitespaceStyleParts(t *testing.T) {
 	if len(out.fills) != 1 || out.fills[0].color != graphics.ColorOf(normal) {
 		t.Fatal("normal marker style", out.fills)
 	}
-	v.SetSelection(textedit.Selection{Caret: 1})
+	v.SetSelection(TextSelection{Caret: 1})
 	out = &recordingPainter{}
 	v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
 	if len(out.fills) != 1 || out.fills[0].color != graphics.ColorOf(selected) || p != v.paragraph(0) {
@@ -263,7 +262,7 @@ func TestWhitespaceExplicitSchemeDefaults(t *testing.T) {
 		{scheme.Dark(), color.NRGBA{0xe3, 0xe4, 0xe2, 0x29}},
 	} {
 		v := NewSourceView()
-		v.Document().Model().SetText(" ")
+		v.Document().SetText(" ")
 		observe(t, v)
 		v.SetScheme(tc.scheme)
 		ctx := &shapedContext{}
@@ -273,7 +272,7 @@ func TestWhitespaceExplicitSchemeDefaults(t *testing.T) {
 		p := v.paragraph(0)
 		created := ctx.created
 		_ = v.SetWhitespaceMode(WhitespaceAll)
-		for _, selection := range []textedit.Selection{{}, {Caret: 1}} {
+		for _, selection := range []TextSelection{{}, {Caret: 1}} {
 			v.SetSelection(selection)
 			out := &recordingPainter{}
 			v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})

@@ -28,7 +28,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 )
 
@@ -72,7 +71,7 @@ func main() {
 		v.SetWrapMode(source.WrapChar)
 	}
 	at := strings.Index(text, "[")
-	selection := textedit.Selection{Anchor: at, Caret: at}
+	selection := source.TextSelection{Anchor: at, Caret: at}
 	if *scenario == "selected" {
 		selection.Caret = strings.Index(text, "]") + 1
 	}
@@ -117,7 +116,7 @@ func main() {
 		ready := app.NewTimer()
 		ready.ConnectTimeout(func() {
 			info := v.Snapshot()
-			if !win.Focused() || info.TextEditing == nil || info.TextEditing.Selection != selection || info.Bounds.Width <= 0 || probe.scale <= 0 {
+			if !win.Focused() || info.TextEditing == nil || info.TextEditing.Selection != gui.TextSelection(selection) || info.Bounds.Width <= 0 || probe.scale <= 0 {
 				log.Fatal("native focus, layout or selection was not ready")
 			}
 			log.Printf("READY case=%s dark=%t typography=%s painter=%s scale=%g", *scenario, *dark, app.Typography().Name(), probe.painter, probe.scale)

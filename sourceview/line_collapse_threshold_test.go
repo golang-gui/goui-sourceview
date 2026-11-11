@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // The digit run has no whitespace/ligatures. Sum native line advances to choose
@@ -78,7 +78,7 @@ func TestLongLineCollapseIgnoresHeightEstimate(t *testing.T) {
 
 func TestLongLineCollapseThresholdResizeKeepsExpandEntry(t *testing.T) {
 	v, _, advance := thresholdFixture(t, 3)
-	original, revision, undo := v.Document().Model().Text(), v.Document().Model().Revision(), v.Document().Model().CanUndo()
+	original, revision, undo := v.Document().Text(), v.Document().Revision(), v.Document().CanUndo()
 	if !v.toggleGutterFold(0) {
 		t.Fatal("three-row line has no collapse action")
 	}
@@ -98,7 +98,7 @@ func TestLongLineCollapseThresholdResizeKeepsExpandEntry(t *testing.T) {
 	if _, ok := v.gutterFold(0); ok {
 		t.Fatal("one-row expanded line still has a collapse entry")
 	}
-	if v.Document().Model().Text() != original || v.Document().Model().Revision() != revision || v.Document().Model().CanUndo() != undo {
+	if v.Document().Text() != original || v.Document().Revision() != revision || v.Document().CanUndo() != undo {
 		t.Fatal("threshold/resize changed source or history")
 	}
 }
@@ -116,7 +116,7 @@ func TestLongLineCollapseThresholdPagedGeometry(t *testing.T) {
 	}
 	// The painting window may have moved to a small final page while page zero
 	// is still cached. Existing first-page geometry remains valid evidence.
-	p.Geometry = textedit.NewGeometry(nil, nil, len(v.Document().Model().Text()), v.lineHeight)
+	p.Geometry = textcore.NewGeometry(nil, nil, len(v.Document().Text()), v.lineHeight)
 	if !v.canCollapseLine(0) || ctx.created != created {
 		t.Fatal("eligibility lost a cached first page or shaped text")
 	}
@@ -125,7 +125,7 @@ func TestLongLineCollapseThresholdPagedGeometry(t *testing.T) {
 func TestLongLineCollapseThresholdJSONArrowsStayOnTheirRows(t *testing.T) {
 	v, _, advance := thresholdFixture(t, 3)
 	text := "{ \"test\":\n\"" + strings.Repeat("1", 120) + "\" }"
-	v.Document().Model().SetText(text)
+	v.Document().SetText(text)
 	if err := v.Document().SetLanguage(language.JSON); err != nil {
 		t.Fatal(err)
 	}

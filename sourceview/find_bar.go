@@ -8,7 +8,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
@@ -31,7 +30,7 @@ type findBar struct {
 		document              *Document
 		revision              uint64
 		query                 SearchQuery
-		scope                 textedit.Range
+		scope                 TextRange
 		limited               bool
 		at, total, matchedEnd int
 		done, available       bool
@@ -76,7 +75,7 @@ func newFindBar() *findBar {
 		},
 	})
 	b.WidgetBase.AddChild(b, b.Content)
-	b.Find.ConnectChange(func(textedit.Change) {
+	b.Find.ConnectChange(func(gui.TextChange) {
 		text := b.Find.Model().Text()
 		if !b.syncing {
 			if v := b.liveTarget(); v != nil {
@@ -212,7 +211,7 @@ func (b *findBar) Open(replace bool) error {
 	if b.Destroyed() || b.epoch != epoch || !b.open {
 		return nil
 	}
-	b.Find.SetSelection(textedit.Selection{Caret: len(b.Find.Model().Text())})
+	b.Find.SetSelection(gui.TextSelection{Caret: len(b.Find.Model().Text())})
 	if changed && !b.Destroyed() && b.epoch == epoch && b.open {
 		b.openSignal.Emit(true)
 	}
@@ -554,7 +553,7 @@ func (b *findBar) setSelectionOnly(checked bool) {
 	if !state.valid(v) || b.epoch != epoch || b.liveTarget() != v || v.Search() != query {
 		return
 	}
-	var scope *textedit.Range
+	var scope *TextRange
 	if checked {
 		scope = &selection
 	}

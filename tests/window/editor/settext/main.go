@@ -125,7 +125,7 @@ func (v *observedView) Paint(p gui.Painter) {
 	if v.want.name == "" {
 		return
 	}
-	check(v.Document().Model().Text() == v.want.text, "painted revision differs from expected source")
+	check(v.Document().Text() == v.want.text, "painted revision differs from expected source")
 	check(v.draws >= v.want.rows, fmt.Sprintf("%s blank or incomplete paint: got %d text draws, want >=%d", v.want.name, v.draws, v.want.rows))
 	check(v.context.created == before, "Paint created native text layouts")
 }
@@ -185,7 +185,7 @@ func main() {
 		}
 		if v.want.name != "" {
 			checked++
-			must(enc.Encode(map[string]any{"event": "after_paint", "frame": frame, "phase": v.want.name, "revision": raw.Document().Model().Revision(), "draws": v.draws, "scale": p.PixelScale(), "viewport": raw.Rect()}))
+			must(enc.Encode(map[string]any{"event": "after_paint", "frame": frame, "phase": v.want.name, "revision": raw.Document().Revision(), "draws": v.draws, "scale": p.PixelScale(), "viewport": raw.Rect()}))
 		}
 		p.FillRect(geometry.Rect(6, bounds.Height-22, 3, 16), graphics.ColorOf(color.NRGBA{R: 255, B: 255, A: 255}))
 		for bit := range 16 {
@@ -247,7 +247,7 @@ func main() {
 		} else {
 			must(raw.Document().SetLanguage(language.Plain))
 		}
-		model := raw.Document().Model()
+		model := raw.Document()
 		revision, created := model.Revision(), ctx.created
 		switch want.name {
 		case "latest-reset":

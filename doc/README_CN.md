@@ -23,6 +23,11 @@ import source "github.com/golang-gui/goui-sourceview/sourceview"
 旧根包路径，不包含上述新子包。`ui`、`language` 和 `scheme` 路径保持不变。
 布局和验证范围见[包迁移记录](PlanPackageMigration.md)。
 
+当前检出还将正文、历史及段落缓存独立到本仓。直接使用 `Document`，不再使用
+`Document.Model()`／`NewDocumentWithModel`；文本值改用 SourceView 的
+`TextRange`、`TextSelection`、`TextEdit`、`TextChange`，声明式层提供同名别名。
+这些接口变更尚未发布，详见[独立编辑内核](DesignEditorCore.md)。
+
 ## 主要能力
 
 - **语法高亮：** 支持 JSON/JSONC、JSON Lines、XML、HTML、Markdown、TOML、YAML、Shell、HTTP、Protobuf、

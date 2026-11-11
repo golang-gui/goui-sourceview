@@ -51,7 +51,7 @@ type Change struct {
 
 // Model is a shareable plain-text document: normalized UTF-8 content with
 // byte positions, a logical line index, a monotonic revision and undo/redo
-// history (doc/DesignTextEditing.md §3). A model owns no native resources and
+// history (doc/DesignEditorCore.md). A model owns no native resources and
 // needs no Destroy; views own their signal handles.
 //
 // A model is sequential: bound to a GUI it must only be touched on the GUI

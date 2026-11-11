@@ -14,13 +14,13 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -32,7 +32,7 @@ import (
 
 func TestAnalysisOnlyInvalidatesVisibleTokenChanges(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("<p>value</p>\n", 1000))
+	v.Document().SetText(strings.Repeat("<p>value</p>\n", 1000))
 	if err := v.Document().SetLanguage(language.XML); err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +54,8 @@ func TestAnalysisOnlyInvalidatesVisibleTokenChanges(t *testing.T) {
 		t.Fatal("unchanged published colors request another paint")
 	}
 	edit := func(row int) {
-		r, _ := v.Document().Model().LineRange(row)
-		if err := v.Document().Model().ReplaceAtomic(textedit.Range{Start: r.Start + 3, End: r.Start + 8}, "other"); err != nil {
+		r, _ := v.Document().LineRange(row)
+		if err := v.Document().ReplaceAtomic(TextRange{Start: r.Start + 3, End: r.Start + 8}, "other"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -130,7 +130,7 @@ func (l *fallbackLayout) MeasureMetrics() ([]typography.TextLine, []typography.T
 func revealFixture(t *testing.T) (*SourceView, *gui.ScrollView) {
 	t.Helper()
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("中文 row\n", 200))
+	v.Document().SetText(strings.Repeat("中文 row\n", 200))
 	observe(t, v)
 	ctx := &fallbackContext{}
 	v.context = ctx
@@ -160,8 +160,8 @@ func assertRevealed(t *testing.T, v *SourceView, scroll *gui.ScrollView) {
 
 func TestRevealSelectionAfterColdLayout(t *testing.T) {
 	v, scroll := revealFixture(t)
-	r, _ := v.Document().Model().LineRange(180)
-	v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+	r, _ := v.Document().LineRange(180)
+	v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 	assertRevealed(t, v, scroll)
 	// A finished reveal must not pin the caret when the user scrolls elsewhere.
 	scroll.SetScrollY(0)
@@ -173,8 +173,8 @@ func TestRevealSelectionAfterColdLayout(t *testing.T) {
 
 func TestRevealSelectionAfterLayoutReset(t *testing.T) {
 	v, scroll := revealFixture(t)
-	r, _ := v.Document().Model().LineRange(100)
-	v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+	r, _ := v.Document().LineRange(100)
+	v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 	assertRevealed(t, v, scroll)
 	// Reattachment keeps the logical selection but loses measured paragraphs.
 	// Its retained local offset is close to the new estimate, while the host's
@@ -192,8 +192,8 @@ func TestRevealSelectionBeforeAllocation(t *testing.T) {
 	v, scroll := revealFixture(t)
 	scroll.SetChild(nil)
 	v.LayoutVisible(geometry.Size{}, geometry.Point{})
-	r, _ := v.Document().Model().LineRange(180)
-	v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+	r, _ := v.Document().LineRange(180)
+	v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 	if v.reveal == nil {
 		t.Fatal("zero allocation lost the logical reveal request")
 	}
@@ -212,8 +212,8 @@ func TestRevealSelectionBeforeAllocation(t *testing.T) {
 func TestRevealSelectionInShortViewport(t *testing.T) {
 	v, scroll := revealFixture(t)
 	scroll.Arrange(geometry.Rect(0, 0, 400, 16))
-	r, _ := v.Document().Model().LineRange(180)
-	v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+	r, _ := v.Document().LineRange(180)
+	v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 	for range 8 {
 		scroll.Arrange(scroll.Rect())
 	}
@@ -228,20 +228,20 @@ func TestPendingRevealCancellation(t *testing.T) {
 		t.Run(action, func(t *testing.T) {
 			v, scroll := revealFixture(t)
 			scroll.SetChild(nil) // No host consumes the request yet.
-			r, _ := v.Document().Model().LineRange(180)
-			v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+			r, _ := v.Document().LineRange(180)
+			v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 			if v.reveal == nil {
 				t.Fatal("fixture has no pending reveal")
 			}
 			switch action {
 			case "pointer selection":
-				v.setSelection(textedit.Selection{}, false, false)
+				v.setSelection(TextSelection{}, false, false)
 			case "document":
 				v.SetDocument(NewDocument("replacement"))
 			case "model reset":
-				v.Document().Model().SetText("replacement")
+				v.Document().SetText("replacement")
 			case "shared edit":
-				if err := v.Document().Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "x"}, textedit.EditOptions{}); err != nil {
+				if err := v.document.model.Apply(TextEdit{Range: TextRange{}, Text: "x"}, textcore.EditOptions{}); err != nil {
 					t.Fatal(err)
 				}
 			case "unmount":
@@ -257,13 +257,13 @@ func TestPendingRevealCancellation(t *testing.T) {
 func TestRevealCallbackCanReplaceSelection(t *testing.T) {
 	v, scroll := revealFixture(t)
 	scroll.SetChild(nil)
-	r, _ := v.Document().Model().LineRange(180)
+	r, _ := v.Document().LineRange(180)
 	h := v.ConnectScrollIntoView(func(geometry.Rectangle) {
-		v.setSelection(textedit.Selection{}, false, false)
+		v.setSelection(TextSelection{}, false, false)
 	})
-	v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+	v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 	h.Disconnect()
-	if v.Selection() != (textedit.Selection{}) || v.reveal != nil {
+	if v.Selection() != (TextSelection{}) || v.reveal != nil {
 		t.Fatal("callback's newer selection was overwritten", v.Selection())
 	}
 	scroll.SetChild(v)
@@ -314,7 +314,7 @@ func layoutWorkFixture(t *testing.T, rows int) (*SourceView, *layoutWorkContext)
 		}
 		fmt.Fprintf(&text, "row %05d", i)
 	}
-	v.Document().Model().SetText(text.String())
+	v.Document().SetText(text.String())
 	v.SetShowLineNumbers(false)
 	v.SetWrapMode(WrapWordChar)
 	observe(t, v)
@@ -385,7 +385,7 @@ func TestResetInitializationEndsAfterPaint(t *testing.T) {
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
 	v.layoutStep(time.Time{})
 	ctx.requests = nil
-	v.Document().Model().SetText(strings.Repeat("row replacement\n", 10000))
+	v.Document().SetText(strings.Repeat("row replacement\n", 10000))
 	if len(ctx.requests) != 0 || v.initialLayout == nil {
 		t.Fatal("reset shaped text immediately or lost its first allocation")
 	}
@@ -415,14 +415,14 @@ func TestResetInitializationRejectsStaleWork(t *testing.T) {
 	for _, action := range []string{"edit", "document", "mount", "dispose"} {
 		t.Run(action, func(t *testing.T) {
 			v, _ := layoutWorkFixture(t, 100)
-			v.Document().Model().SetText("row replacement")
+			v.Document().SetText("row replacement")
 			saved := v.initialLayout
 			if saved == nil {
 				t.Fatal("reset did not register initialization")
 			}
 			switch action {
 			case "edit":
-				if err := v.Document().Model().Replace(textedit.Range{}, "x"); err != nil {
+				if err := v.Document().Replace(TextRange{}, "x"); err != nil {
 					t.Fatal(err)
 				}
 			case "document":
@@ -443,7 +443,7 @@ func TestResetInitializationBelongsToEachView(t *testing.T) {
 	a, _ := layoutWorkFixture(t, 100)
 	b, _ := layoutWorkFixture(t, 100)
 	b.SetDocument(a.Document())
-	a.Document().Model().SetText("row shared replacement")
+	a.Document().SetText("row shared replacement")
 	if a.initialLayout == nil || b.initialLayout == nil || a.initialLayout == b.initialLayout {
 		t.Fatal("shared document did not create independent viewport initialization")
 	}
@@ -465,8 +465,8 @@ func TestResetInitializationBelongsToEachView(t *testing.T) {
 
 func TestResetInitializationStopsAfterNativeReentry(t *testing.T) {
 	v, ctx := layoutWorkFixture(t, 100)
-	v.Document().Model().SetText("row obsolete\nrow obsolete")
-	ctx.hook = func() { v.Document().Model().SetText("row current") }
+	v.Document().SetText("row obsolete\nrow obsolete")
+	ctx.hook = func() { v.Document().SetText("row current") }
 	v.Arrange(geometry.Rect(0, 0, 400, 200))
 	if len(ctx.requests) != 1 || len(v.layouts) != 0 || !v.initializingViewport() {
 		t.Fatal("interrupted initialization published stale resources or lost the newer reset")
@@ -504,7 +504,7 @@ func TestResetInitializationShrinksEstimatedVisibleWork(t *testing.T) {
 			t.Fatal("tall reset leaked native layouts")
 		}
 	})
-	v.Document().Model().SetText(strings.Repeat("row tall paragraph\n", 10000))
+	v.Document().SetText(strings.Repeat("row tall paragraph\n", 10000))
 	v.Arrange(geometry.Rect(0, 0, 400, 300))
 	// One 1000-DIP paragraph covers the view; only its one-row overscan
 	// neighbor may also be prepared, not the 16 rows in the initial estimate.
@@ -577,7 +577,7 @@ func TestLayoutWorkStopsAfterNativeReentry(t *testing.T) {
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
 	ctx.hook = func() { v.SetDocument(NewDocument("replacement")) }
 	v.layoutStep(time.Time{})
-	if len(ctx.requests) != 1 || len(v.layouts) != 0 || v.Document().Model().Text() != "replacement" {
+	if len(ctx.requests) != 1 || len(v.layouts) != 0 || v.Document().Text() != "replacement" {
 		t.Fatal("stale layout work continued or published after document replacement")
 	}
 	if ctx.created != ctx.destroyed {
@@ -634,13 +634,13 @@ func TestDeferredRevealPreparesCaretAndEntireViewport(t *testing.T) {
 		}
 	}
 	settle()
-	end := v.Document().Model().Len()
-	v.SetSelection(textedit.Selection{Anchor: end, Caret: end})
+	end := v.Document().Len()
+	v.SetSelection(TextSelection{Anchor: end, Caret: end})
 	settle()
 	if scroll.ScrollY() == 0 {
 		t.Fatal("document end did not scroll")
 	}
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	settle()
 	if scroll.ScrollY() > padding || v.Selection().Caret != 0 {
 		t.Fatal("home did not restore the document start")
@@ -669,8 +669,8 @@ func TestTallViewportPinsItsWorkAndReleasesAfterShrinking(t *testing.T) {
 func TestViewportPinningDoesNotKeepEditedLineHistory(t *testing.T) {
 	v, _ := layoutWorkFixture(t, 100)
 	for i := 0; i < 2*maxLayouts; i++ {
-		r, _ := v.Document().Model().LineRange(0)
-		if err := v.Document().Model().ReplaceAtomic(r, fmt.Sprintf("row edit %d", i)); err != nil {
+		r, _ := v.Document().LineRange(0)
+		if err := v.Document().ReplaceAtomic(r, fmt.Sprintf("row edit %d", i)); err != nil {
 			t.Fatal(err)
 		}
 		v.LayoutVisible(geometry.Size{Width: 220, Height: 200}, geometry.Point{})
@@ -683,7 +683,7 @@ func TestViewportPinningDoesNotKeepEditedLineHistory(t *testing.T) {
 
 func TestHiddenParagraphsUseVisibleHeightsAndSourceCoordinates(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("head\nhidden\nhidden\nhidden\ntail")
+	v.Document().SetText("head\nhidden\nhidden\nhidden\ntail")
 	ctx := &shapedContext{}
 	v.context = ctx
 	t.Cleanup(v.dropLayouts)
@@ -696,7 +696,7 @@ func TestHiddenParagraphsUseVisibleHeightsAndSourceCoordinates(t *testing.T) {
 		t.Fatalf("visibility affected paragraph identity or heights: %d %g", v.heights.Count(), v.heights.Total())
 	}
 	pos := v.hit(geometry.Point{X: v.gutter + padding, Y: padding + 21})
-	r, _ := v.Document().Model().LineRange(4)
+	r, _ := v.Document().LineRange(4)
 	if pos.Offset != r.Start || v.paragraphTop(4) != 20 || v.neighboringRow(0, 1) != 4 || v.neighboringRow(4, -1) != 0 {
 		t.Fatalf("source/display mapping: hit=%v range=%v", pos, r)
 	}
@@ -723,7 +723,7 @@ func TestNativeLongWidthsUseExistingLayoutContract(t *testing.T) {
 	if len(text) < 32768 {
 		t.Fatal("fixture must cover the removed long-paragraph branch")
 	}
-	v.Document().Model().SetText(text)
+	v.Document().SetText(text)
 	show := func(width, height float32) *paragraph {
 		v.LayoutVisible(geometry.Size{Width: width, Height: height}, geometry.Point{})
 		return v.paragraph(0)
@@ -732,7 +732,7 @@ func TestNativeLongWidthsUseExistingLayoutContract(t *testing.T) {
 	if a == nil || a.fragment.LineCount() < 100 {
 		t.Fatal("missing measured long paragraph")
 	}
-	position := textedit.Position{Offset: strings.Index(text, "END")}
+	position := textcore.Position{Offset: strings.Index(text, "END")}
 	wantCaret := a.Geometry.Caret(position)
 	fragment := a.fragment
 	w, h := a.Layout.Size()
@@ -757,7 +757,7 @@ func TestNativeLongWidthsUseExistingLayoutContract(t *testing.T) {
 		}
 	}
 	style := b.style
-	style.selection = textedit.Range{Start: 10, End: 100}
+	style.selection = TextRange{Start: 10, End: 100}
 	style.focused = true
 	v.colors.SelectionForeground = color.NRGBA{R: 220, A: 255}
 	if !v.colorParagraph(v.paragraphKey(0), b, style, nil, activeFocus(v)) {
@@ -805,7 +805,7 @@ func TestNativeInitialWrappedEstimateAvoidsSecondScrollbarWidth(t *testing.T) {
 			v.context = ctx
 			v.SetShowLineNumbers(false)
 			v.SetWrapMode(WrapWordChar)
-			v.Document().Model().SetText(text)
+			v.Document().SetText(text)
 			v.ensureMetrics()
 			before := ctx.created
 			v.Measure(layout.Tight(geometry.Size{Width: 220, Height: 240}))
@@ -870,7 +870,7 @@ func TestNativeFragmentsSurviveLayoutRelease(t *testing.T) {
 			}
 			width, height := layout.MeasureSize()
 			lines, clusters := copyMetrics(layout)
-			f, err := textedit.NewFragment(textedit.Range{End: len(sample.text)}, geometry.Size{Width: width, Height: height}, lines, clusters)
+			f, err := textcore.NewFragment(TextRange{End: len(sample.text)}, geometry.Size{Width: width, Height: height}, lines, clusters)
 			layout.Destroy()
 			if err != nil {
 				t.Fatal(err)
@@ -878,7 +878,7 @@ func TestNativeFragmentsSurviveLayoutRelease(t *testing.T) {
 			if f.LineCount() <= 64 {
 				t.Fatalf("fixture did not cover pages: %d lines", f.LineCount())
 			}
-			got, want := f.Geometry(20), textedit.NewGeometry(lines, clusters, len(sample.text), 20)
+			got, want := f.Geometry(20), textcore.NewGeometry(lines, clusters, len(sample.text), 20)
 			for i, line := range lines {
 				for _, x := range []float32{-5, 0, 30, 100, 225} {
 					point := geometry.Point{X: x, Y: line.Y + line.Height/2}
@@ -886,7 +886,7 @@ func TestNativeFragmentsSurviveLayoutRelease(t *testing.T) {
 						t.Fatalf("hit at line %d x=%g: %+v want %+v", i, x, got.Hit(point), want.Hit(point))
 					}
 				}
-				for _, pos := range []textedit.Position{{Offset: line.Start}, {Offset: line.Start, Upstream: true}, {Offset: line.Start + line.Length, Upstream: true}} {
+				for _, pos := range []textcore.Position{{Offset: line.Start}, {Offset: line.Start, Upstream: true}, {Offset: line.Start + line.Length, Upstream: true}} {
 					if got.Caret(pos) != want.Caret(pos) || got.LineIndex(pos) != want.LineIndex(pos) {
 						t.Fatalf("caret at %+v differs: %v want %v", pos, got.Caret(pos), want.Caret(pos))
 					}
@@ -899,7 +899,7 @@ func TestNativeFragmentsSurviveLayoutRelease(t *testing.T) {
 			}
 			for first := 0; first < len(lines); first += 31 {
 				end := min(first+35, len(lines))
-				rng := textedit.Range{Start: lines[first].Start, End: lines[end-1].Start + lines[end-1].Length}
+				rng := TextRange{Start: lines[first].Start, End: lines[end-1].Start + lines[end-1].Length}
 				if !reflect.DeepEqual(got.SelectionLines(rng, first, end), want.SelectionLines(rng, first, end)) {
 					t.Fatalf("selection [%d,%d) differs", first, end)
 				}
@@ -939,7 +939,7 @@ func TestSourceViewRetainsFragmentAfterNativeCacheRelease(t *testing.T) {
 	v := NewSourceView()
 	v.context = ctx
 	defer v.dropLayouts()
-	v.Document().Model().SetText(strings.Repeat("one two three four five ", 300))
+	v.Document().SetText(strings.Repeat("one two three four five ", 300))
 	v.SetShowLineNumbers(false)
 	v.SetWrapMode(WrapWordChar)
 	v.LayoutVisible(geometry.Size{Width: 220, Height: 240}, geometry.Point{})
@@ -948,10 +948,10 @@ func TestSourceViewRetainsFragmentAfterNativeCacheRelease(t *testing.T) {
 		t.Fatal("missing measured fragment")
 	}
 	f := p.fragment
-	want := p.Geometry.Caret(textedit.Position{Offset: 500})
+	want := p.Geometry.Caret(textcore.Position{Offset: 500})
 	v.dropLayouts()
 	g := f.Geometry(v.lineHeight)
-	if got := g.Caret(textedit.Position{Offset: 500}); got != want {
+	if got := g.Caret(textcore.Position{Offset: 500}); got != want {
 		t.Fatal("native cache release lost fragment values", got, want)
 	}
 }
@@ -982,7 +982,7 @@ func TestFragmentSnapshotDoesNotInventMissingParagraphContext(t *testing.T) {
 	}
 	w, h := window.MeasureSize()
 	ls, cs := window.MeasureMetrics()
-	f, err := textedit.NewFragment(textedit.Range{Start: at, End: len(text)}, geometry.Size{Width: w, Height: h}, ls, cs)
+	f, err := textcore.NewFragment(TextRange{Start: at, End: len(text)}, geometry.Size{Width: w, Height: h}, ls, cs)
 	window.Destroy()
 	if err != nil {
 		t.Fatal(err)
@@ -1021,7 +1021,7 @@ type boundedFragmentProbe struct {
 
 // 片段的占用范围不包含下一行的间距。单独保存由重叠行基线确定的放置坐标。
 type probeFragment struct {
-	textedit.Fragment
+	textcore.Fragment
 	y float64
 }
 
@@ -1064,7 +1064,7 @@ func probeBoundedFragmentsWithPrefix(ctx typography.Context, text string, format
 			native.Destroy()
 			return result, err
 		}
-		fragment, err := textedit.NewFragment(textedit.Range{Start: start, End: end}, geometry.Size{Width: w, Height: h}, lines, clusters)
+		fragment, err := textcore.NewFragment(TextRange{Start: start, End: end}, geometry.Size{Width: w, Height: h}, lines, clusters)
 		native.Destroy()
 		if err != nil {
 			return result, err
@@ -1275,7 +1275,7 @@ func BenchmarkBoundedFragmentProbe(b *testing.B) {
 					}
 					w, h := native.MeasureSize()
 					lines, clusters := native.MeasureMetrics()
-					_, err = textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
+					_, err = textcore.NewFragment(TextRange{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
 					native.Destroy()
 					if err != nil {
 						b.Fatal(err)
@@ -1559,7 +1559,7 @@ func TestExplicitContextProbeDoesNotResolveImplicitContext(t *testing.T) {
 
 func TestPlainIndexCompletionDoesNotMutateNativeColors(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("ordinary text without syntax colors")
+	v.Document().SetText("ordinary text without syntax colors")
 	observe(t, v)
 	ctx := &shapedContext{}
 	v.context = ctx
@@ -1579,7 +1579,7 @@ func TestPlainIndexCompletionDoesNotMutateNativeColors(t *testing.T) {
 // 普通输入到分析完成之间，当前行和后续行不能先退回普通前景色。
 func TestEditingKeepsParagraphColorsWhileAnalysisPending(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("\"hello\"\n\"world\"\ntrue")
+	v.Document().SetText("\"hello\"\n\"world\"\ntrue")
 	if err := v.Document().SetLanguage(language.JSON); err != nil {
 		t.Fatal(err)
 	}
@@ -1593,7 +1593,7 @@ func TestEditingKeepsParagraphColorsWhileAnalysisPending(t *testing.T) {
 	current, suffix := v.paragraph(0), v.paragraph(1)
 	before := append([]color.NRGBA(nil), suffix.Layout.(*shapedLayout).colors...)
 	calls := suffix.Layout.(*shapedLayout).colorCalls
-	if err := v.Document().Model().ReplaceAtomic(textedit.Range{Start: 3, End: 3}, "X"); err != nil {
+	if err := v.Document().ReplaceAtomic(TextRange{Start: 3, End: 3}, "X"); err != nil {
 		t.Fatal(err)
 	}
 	current = v.paragraph(0)
@@ -1649,7 +1649,7 @@ func TestParagraphColorsPreserveSelectionAndClearObsoleteTokens(t *testing.T) {
 	// Exercise effective range construction directly; focus/lifetime validation
 	// still uses the same inactive fixture as the other color tests.
 	style := p.style
-	style.focused, style.selection = true, textedit.Range{Start: 3, End: 9}
+	style.focused, style.selection = true, TextRange{Start: 3, End: 9}
 	if !v.colorParagraph(v.paragraphKey(0), p, style, tokens, false) {
 		t.Fatal("selection color application failed")
 	}
@@ -1658,7 +1658,7 @@ func TestParagraphColorsPreserveSelectionAndClearObsoleteTokens(t *testing.T) {
 			t.Fatal("selection did not override token color", i)
 		}
 	}
-	style.focused, style.selection, style.tokenValid = false, textedit.Range{}, false
+	style.focused, style.selection, style.tokenValid = false, TextRange{}, false
 	style.language = language.JSON
 	if !v.colorParagraph(v.paragraphKey(0), p, style, nil, false) {
 		t.Fatal("clearing token and selection colors failed")
@@ -1677,7 +1677,7 @@ func TestColorChangesReuseParagraph(t *testing.T) {
 	created := ctx.created
 	height, width := v.heights.Total(), v.contentWidth
 	for i := 0; i < 20; i++ {
-		v.SetSelection(textedit.Selection{Anchor: i % 4, Caret: 8})
+		v.SetSelection(TextSelection{Anchor: i % 4, Caret: 8})
 		v.SetScheme([]*scheme.Scheme{scheme.Dark(), scheme.Light()}[i%2])
 		if got := v.paragraph(0); got != p || got.Layout != original || ctx.created != created {
 			t.Fatal("color-only change recreated native paragraph", ctx.created, created)
@@ -1743,7 +1743,7 @@ func TestUnchangedColorStateDoesNoNativeWork(t *testing.T) {
 func TestColdIndexAdoptsPlainLayout(t *testing.T) {
 	v := NewSourceView()
 	v.SetScheme(scheme.Light())
-	v.Document().Model().SetText("true")
+	v.Document().SetText("true")
 	if err := v.Document().SetLanguage(language.JSON); err != nil {
 		t.Fatal(err)
 	}
@@ -1775,7 +1775,7 @@ func TestRecolorReentryStopsUsingReleasedLayout(t *testing.T) {
 	if got := v.paragraph(0); got != nil {
 		t.Fatal("reentrant document switch returned stale paragraph")
 	}
-	if !native.dead || v.Document().Model().Text() != "replacement" {
+	if !native.dead || v.Document().Text() != "replacement" {
 		t.Fatal("reentry was not completed")
 	}
 	v.dropLayouts()
@@ -1882,7 +1882,7 @@ func TestSelectionMovementWithoutOverrideDoesNotRecolor(t *testing.T) {
 	native := p.Layout.(*shapedLayout)
 	calls, created := native.colorCalls, ctx.created
 	height, width := v.heights.Total(), v.contentWidth
-	for _, selected := range []textedit.Selection{{Anchor: 0, Caret: 7}, {Anchor: 12, Caret: 2}, {}, {Anchor: 0, Caret: 15}} {
+	for _, selected := range []TextSelection{{Anchor: 0, Caret: 7}, {Anchor: 12, Caret: 2}, {}, {Anchor: 0, Caret: 15}} {
 		v.SetSelection(selected)
 		if v.paragraph(0) != p || native.colorCalls != calls || ctx.created != created || v.heights.Total() != height || v.contentWidth != width {
 			t.Fatal("background-only selection changed native colors or geometry")
@@ -1923,7 +1923,7 @@ func (l *boundedParagraphNative) SetTextColor(start, length int, c color.Color) 
 
 func TestLongParagraphEditOwnership(t *testing.T) {
 	v := NewSourceView()
-	model := v.Document().Model()
+	model := v.Document()
 	model.SetText("before\n" + strings.Repeat("long word ", 10000) + "\nafter")
 	v.SetShowLineNumbers(false)
 	v.SetWrapMode(WrapNone)
@@ -1938,7 +1938,7 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 		t.Fatal("长段落未启用有界测量")
 	}
 	cache := p.Paged
-	if err := model.Replace(textedit.Range{Start: 0, End: 0}, "new\n"); err != nil {
+	if err := model.Replace(TextRange{Start: 0, End: 0}, "new\n"); err != nil {
 		t.Fatal(err)
 	}
 	v.document.engine.Advance(time.Time{})
@@ -1951,7 +1951,7 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 		t.Fatal("缓存读取范围未映射", p.sourceRange, r)
 	}
 	at := r.Start + 100
-	if err := model.Replace(textedit.Range{Start: at, End: at}, "Q"); err != nil {
+	if err := model.Replace(TextRange{Start: at, End: at}, "Q"); err != nil {
 		t.Fatal(err)
 	}
 	v.document.engine.Advance(time.Time{})
@@ -1962,7 +1962,7 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 	if g := p.Paged.GeometryAt(101); g == nil || g.Snap(101, false) != 101 {
 		t.Fatal("局部编辑光标错误")
 	}
-	if err := model.Replace(textedit.Range{Start: at, End: at}, "\n"); err != nil {
+	if err := model.Replace(TextRange{Start: at, End: at}, "\n"); err != nil {
 		t.Fatal(err)
 	}
 	v.document.engine.Advance(time.Time{})
@@ -1979,7 +1979,7 @@ func TestLongParagraphEditOwnership(t *testing.T) {
 // 长行尾部的词法进度不应重复清除并设置当前窗口的同一组原生颜色。
 func TestLongParagraphIgnoresOffscreenTokenChanges(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x ", 50000))
+	v.Document().SetText(strings.Repeat("x ", 50000))
 	observe(t, v)
 	v.document.engine.Advance(time.Time{})
 	context := &boundedParagraphContext{t: t}
@@ -2012,7 +2012,7 @@ func TestLongParagraphIgnoresOffscreenTokenChanges(t *testing.T) {
 // 文档坐标超过 2^28 后，旧路径的相邻 float32 值已相隔 32 DIP。
 func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x", 27_000_000))
+	v.Document().SetText(strings.Repeat("x", 27_000_000))
 	v.SetShowLineNumbers(false)
 	v.SetFoldingEnabled(false)
 	v.SetWrapMode(WrapNone)
@@ -2043,7 +2043,7 @@ func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
 		}
 	}
 	focusBracketFixture(t, v)
-	v.SetSelection(textedit.Selection{Anchor: first, Caret: first + 20})
+	v.SetSelection(TextSelection{Anchor: first, Caret: first + 20})
 	draw := &recordingPainter{}
 	v.Paint(draw)
 	fills := bracketFills(draw, v.colors.SelectionBackground)
@@ -2055,7 +2055,7 @@ func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
 	}
 	// End 是文档逻辑行末尾，不是当前 4 KiB 缓存的末尾。
 	v.navigate(events.KeyEnd, false)
-	if v.Selection().Caret != v.Document().Model().Len() {
+	if v.Selection().Caret != v.Document().Len() {
 		t.Fatal("End 停在缓存边界", v.Selection())
 	}
 	v.navigate(events.KeyHome, false)
@@ -2068,7 +2068,7 @@ func TestLongHorizontalSelectionUsesLocalCoordinates(t *testing.T) {
 // 旧路径在 End 后的实际光标 X=420，400-DIP 视口需要按三次左键才能完整显示。
 func TestLongHorizontalEndRevealsCaretImmediately(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x", 27_000_003))
+	v.Document().SetText(strings.Repeat("x", 27_000_003))
 	v.SetShowLineNumbers(false)
 	v.SetFoldingEnabled(false)
 	v.SetWrapMode(WrapNone)
@@ -2086,7 +2086,7 @@ func TestLongHorizontalEndRevealsCaretImmediately(t *testing.T) {
 		for range 16 {
 			scroll.Arrange(scroll.Rect())
 		}
-		if v.Selection().Caret != v.Document().Model().Len() {
+		if v.Selection().Caret != v.Document().Len() {
 			t.Fatal("End 改变了逻辑位置", v.Selection())
 		}
 		rect, ok := v.cachedCaretRect()

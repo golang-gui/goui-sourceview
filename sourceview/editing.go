@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // CaseMode selects locale-independent Unicode case conversion.
@@ -44,9 +44,9 @@ type editingQueue struct {
 // startEdit snapshots the model in event-loop slices and calculates one atomic
 // undo plan off GUI. Only one worker and the latest request are retained per view.
 func (v *SourceView) startEdit(plan editPlanner) error {
-	return v.startEditRange(textedit.Range{End: v.document.model.Len()}, plan)
+	return v.startEditRange(TextRange{End: v.document.model.Len()}, plan)
 }
-func (v *SourceView) startEditRange(span textedit.Range, plan editPlanner) error {
+func (v *SourceView) startEditRange(span TextRange, plan editPlanner) error {
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (v *SourceView) editStep() {
 	for !m.IsRuneBoundary(end) {
 		end--
 	}
-	part, _ := m.Slice(textedit.Range{Start: job.copied, End: end})
+	part, _ := m.Slice(TextRange{Start: job.copied, End: end})
 	job.chunks = append(job.chunks, part)
 	job.copied = end
 	if end < job.end {
@@ -199,7 +199,7 @@ func (v *SourceView) TransformCase(mode CaseMode) error {
 		})
 	}
 	return v.startEdit(func(ctx context.Context, text string) (editor.Plan, error) {
-		r := editor.WordRange(textedit.NewModel(text), s.Caret, word)
+		r := editor.WordRange(textcore.NewModel(text), s.Caret, word)
 		return editor.CasePlan(ctx, text[r.Start:r.End], s, r, mode == CaseUpper)
 	})
 }

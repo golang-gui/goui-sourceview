@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -28,7 +28,7 @@ func stateFixture(t *testing.T) (*SourceView, *shapedContext) {
 func TestViewStateFoldingDelayedExactMatchAndIsolation(t *testing.T) {
 	v := foldingFixture(t)
 	d := v.document
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	if !v.Fold(1) {
 		t.Fatal("初始折叠失败")
 	}
@@ -76,21 +76,21 @@ func TestViewStateFoldingDelayedExactMatchAndIsolation(t *testing.T) {
 
 func TestViewStateLateFoldsCannotOverrideUserOrHideSelection(t *testing.T) {
 	v := foldingFixture(t)
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.Fold(1)
 	s := saveView(t, v)
 	v.UnfoldAll()
 	if err := v.RestoreState(s); err != nil {
 		t.Fatal(err)
 	}
-	v.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+	v.SetSelection(TextSelection{Anchor: 10, Caret: 10})
 	finishFoldIntake(t, v)
 	if v.viewRestore != nil || v.folds[1].Collapsed {
 		t.Fatal("迟到折叠覆盖了用户选区")
 	}
 	// 即使旧快照来自较宽视图，也不能将新选区隐藏在区域体内。
 	protected := *s
-	protected.selection = textedit.Selection{Anchor: 10, Caret: 10}
+	protected.selection = TextSelection{Anchor: 10, Caret: 10}
 	if err := v.RestoreState(&protected); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestViewStateLanguageAndFoldingConfiguration(t *testing.T) {
 	for _, change := range []string{"language", "disabled"} {
 		t.Run(change, func(t *testing.T) {
 			v := foldingFixture(t)
-			v.SetSelection(textedit.Selection{})
+			v.SetSelection(TextSelection{})
 			v.Fold(1)
 			s := saveView(t, v)
 			if change == "language" {
@@ -135,10 +135,10 @@ func TestViewStateLanguageAndFoldingConfiguration(t *testing.T) {
 
 func TestViewStateCollapsedIndexTracksEditsAndReplacement(t *testing.T) {
 	v := foldingFixture(t)
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.Fold(1)
 	old := saveView(t, v)
-	if err := v.document.model.ReplaceAtomic(textedit.Range{}, "prefix\n"); err != nil {
+	if err := v.document.model.ReplaceAtomic(TextRange{}, "prefix\n"); err != nil {
 		t.Fatal(err)
 	}
 	s := saveView(t, v)
@@ -162,9 +162,9 @@ func TestViewStateEmptyIntentClearsMappedExternalFolds(t *testing.T) {
 	}
 	d.SetFolds(d.model.Revision(), f)
 	finishFoldIntake(t, v)
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.Fold(1)
-	if err := d.model.ReplaceAtomic(textedit.Range{}, "prefix\n"); err != nil {
+	if err := d.model.ReplaceAtomic(TextRange{}, "prefix\n"); err != nil {
 		t.Fatal(err)
 	}
 	if !d.foldReady || d.foldSnapshot != nil || len(v.collapsedFolds) != 1 {
@@ -187,7 +187,7 @@ func TestViewStateEmptyIntentClearsMappedExternalFolds(t *testing.T) {
 func TestViewStateReentrantSearchNotificationKeepsNewestRestore(t *testing.T) {
 	v, _ := stateFixture(t)
 	a := saveView(t, v)
-	v.SetSelection(textedit.Selection{Caret: 9})
+	v.SetSelection(TextSelection{Caret: 9})
 	b := saveView(t, v)
 	called := false
 	h := v.searchState.Connect(func() {
@@ -211,7 +211,7 @@ func TestViewStateManualLineCollapseAndNarrowDestination(t *testing.T) {
 	if !v.CollapseLine(0) {
 		t.Fatal("未收起长行")
 	}
-	v.SetSelection(textedit.Selection{Anchor: 30, Caret: 30})
+	v.SetSelection(TextSelection{Anchor: 30, Caret: 30})
 	s := saveView(t, v)
 	if len(s.lines) != 1 {
 		t.Fatal("快照遗漏手动长行")
@@ -298,7 +298,7 @@ func saveView(t *testing.T, v *SourceView) *ViewState {
 
 func TestViewStateSelectionAndViewportRoundTrip(t *testing.T) {
 	v, ctx := stateFixture(t)
-	selection := textedit.Selection{Anchor: 43, Caret: 5}
+	selection := TextSelection{Anchor: 43, Caret: 5}
 	v.SetSelection(selection)
 	v.upstream = true
 	size := geometry.Size{Width: 300, Height: 100}
@@ -312,7 +312,7 @@ func TestViewStateSelectionAndViewportRoundTrip(t *testing.T) {
 	if ctx.created != created || s.selection != selection || !s.upstream || !s.anchor.valid {
 		t.Fatal("保存改变了布局或未保留精确文本锚点", s.anchor, s.selection, ctx.created, created)
 	}
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.LayoutVisible(size, geometry.Point{})
 	v.SetReadOnly(true)
 	created = ctx.created
@@ -389,7 +389,7 @@ func TestViewStateRejectsInvalidAndStaleWithoutSideEffects(t *testing.T) {
 			t.Fatal("无效请求替换了已有恢复任务", err)
 		}
 	}
-	if err := v.document.model.ReplaceAtomic(textedit.Range{}, "x"); err != nil {
+	if err := v.document.model.ReplaceAtomic(TextRange{}, "x"); err != nil {
 		t.Fatal(err)
 	}
 	before := v.Selection()
@@ -409,7 +409,7 @@ func TestViewStateExplicitActionsCancelPendingRestore(t *testing.T) {
 			}
 			switch action {
 			case "selection":
-				v.SetSelection(textedit.Selection{Caret: 3})
+				v.SetSelection(TextSelection{Caret: 3})
 			case "reveal":
 				v.RevealSelection()
 			case "key":
@@ -428,11 +428,11 @@ func TestViewStateExplicitActionsCancelPendingRestore(t *testing.T) {
 
 func TestViewStateReentrantCompletionCloseKeepsNewestRestore(t *testing.T) {
 	v, _ := stateFixture(t)
-	v.SetSelection(textedit.Selection{Caret: 5})
+	v.SetSelection(TextSelection{Caret: 5})
 	a := saveView(t, v)
-	v.SetSelection(textedit.Selection{Caret: 9})
+	v.SetSelection(TextSelection{Caret: 9})
 	b := saveView(t, v)
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.completion = &completionSession{list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {
 		if err := v.RestoreState(b); err != nil {
 			t.Error(err)
@@ -449,7 +449,7 @@ func TestViewStateReentrantCompletionCloseKeepsNewestRestore(t *testing.T) {
 
 func TestViewStateRequestOwnsSubmittedValue(t *testing.T) {
 	v, _ := stateFixture(t)
-	v.SetSelection(textedit.Selection{Caret: 7})
+	v.SetSelection(TextSelection{Caret: 7})
 	s := saveView(t, v)
 	if err := v.RestoreState(s); err != nil {
 		t.Fatal(err)
@@ -464,7 +464,7 @@ func TestViewStateRequestOwnsSubmittedValue(t *testing.T) {
 func TestViewStateUnmeasuredAndPreeditCapture(t *testing.T) {
 	v, ctx := stateFixture(t)
 	v.context = nil
-	v.SetSelection(textedit.Selection{Anchor: 17, Caret: 12})
+	v.SetSelection(TextSelection{Anchor: 17, Caret: 12})
 	v.context = ctx
 	s := saveView(t, v)
 	if s.anchor.offset != 10 || ctx.created != 0 {
@@ -472,7 +472,7 @@ func TestViewStateUnmeasuredAndPreeditCapture(t *testing.T) {
 	}
 	v.anchor = viewportAnchor{offset: 25, inset: 3, x: 7, valid: true}
 	v.anchorRevision = v.observed
-	projection := textedit.NewProjection(v.document.model, v.Selection())
+	projection := textcore.NewProjection(v.document.model, v.Selection())
 	projection.Update("uncommitted\n", 2)
 	v.projection = projection
 	s = saveView(t, v)

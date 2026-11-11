@@ -5,7 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
 // Code words use Monaco's default ASCII separators. Other non-whitespace
@@ -24,7 +24,7 @@ func wordClass(r rune) int {
 
 // wordCursor bounds transient copies even on a very long logical line.
 type wordCursor struct {
-	m              *textedit.Model
+	m              *textcore.Model
 	at, start, end int
 	text           string
 	word           func(rune) bool
@@ -47,7 +47,7 @@ func (c *wordCursor) peek(forward bool) (rune, int) {
 				c.start++
 			}
 		}
-		c.text, _ = c.m.Slice(textedit.Range{Start: c.start, End: c.end})
+		c.text, _ = c.m.Slice(textcore.Range{Start: c.start, End: c.end})
 	}
 	if forward {
 		return utf8.DecodeRuneInString(c.text[c.at-c.start:])
@@ -69,21 +69,21 @@ func (c *wordCursor) class(r rune) int {
 }
 
 // WordRange selects a language word, whitespace run, or single punctuation rune.
-func WordRange(m *textedit.Model, at int, word func(rune) bool) textedit.Range {
+func WordRange(m *textcore.Model, at int, word func(rune) bool) textcore.Range {
 	c := wordCursor{m: m, at: at, word: word}
 	r, n := c.peek(true)
 	if n == 0 {
-		return textedit.Range{Start: at, End: at}
+		return textcore.Range{Start: at, End: at}
 	}
 	if c.class(r) == 1 || r == '\n' {
-		return textedit.Range{Start: at, End: at + n}
+		return textcore.Range{Start: at, End: at + n}
 	}
 	class := c.class(r)
 	c.consume(false, class)
 	start := c.at
 	c.at = at
 	c.consume(true, class)
-	return textedit.Range{Start: start, End: c.at}
+	return textcore.Range{Start: start, End: c.at}
 }
 
 func (c *wordCursor) consume(forward bool, class int) int {
@@ -105,12 +105,12 @@ func (c *wordCursor) consume(forward bool, class int) int {
 // WordBoundary moves to a code-word start on the left or end on the right.
 // Navigation crosses at most one LF and skips adjacent whitespace. Deletion
 // stops after a whitespace run of two or more, and treats a line join separately.
-func WordBoundary(m *textedit.Model, at int, forward, deleting bool) int {
+func WordBoundary(m *textcore.Model, at int, forward, deleting bool) int {
 	return WordBoundaryWith(m, at, forward, deleting, nil)
 }
 
 // WordBoundaryWith uses the language word predicate; nil preserves default separators.
-func WordBoundaryWith(m *textedit.Model, at int, forward, deleting bool, word func(rune) bool) int {
+func WordBoundaryWith(m *textcore.Model, at int, forward, deleting bool, word func(rune) bool) int {
 	c := wordCursor{m: m, at: at, word: word}
 	r, n := c.peek(forward)
 	if n == 0 {
@@ -158,7 +158,7 @@ func WordBoundaryWith(m *textedit.Model, at int, forward, deleting bool, word fu
 
 // InsertLine preserves the caret's logical line and inserts an indented blank
 // line beside it. It does not replace a selection or split the current line.
-func InsertLine(m *textedit.Model, s textedit.Selection, below bool) (Plan, error) {
+func InsertLine(m *textcore.Model, s textcore.Selection, below bool) (Plan, error) {
 	if _, _, err := SelectedLines(m, s); err != nil {
 		return Plan{}, err
 	}
@@ -182,12 +182,12 @@ func InsertLine(m *textedit.Model, s textedit.Selection, below bool) (Plan, erro
 		at, text = r.End, "\n"+indent.String()
 		caret = at + len(text)
 	}
-	return Plan{Before: s, After: textedit.Selection{Anchor: caret, Caret: caret}, Edits: []textedit.Edit{{Range: textedit.Range{Start: at, End: at}, Text: text}}}, nil
+	return Plan{Before: s, After: textcore.Selection{Anchor: caret, Caret: caret}, Edits: []textcore.Edit{{Range: textcore.Range{Start: at, End: at}, Text: text}}}, nil
 }
 
 // WordPartBoundary traverses code-word components without copying a logical line.
 // Combining marks stay with their base; native cluster snapping remains in the view.
-func WordPartBoundary(m *textedit.Model, at int, forward, deleting bool, word func(rune) bool) int {
+func WordPartBoundary(m *textcore.Model, at int, forward, deleting bool, word func(rune) bool) int {
 	c := wordCursor{m: m, at: at, word: word}
 	r, n := c.peek(forward)
 	if n == 0 {

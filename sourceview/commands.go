@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func (v *SourceView) ReplaceSelection(text string) error {
@@ -14,15 +14,15 @@ func (v *SourceView) ReplaceSelection(text string) error {
 	return v.replace(v.Selection().Range(), text, true)
 }
 
-func (v *SourceView) replace(r textedit.Range, text string, atomic bool) error {
+func (v *SourceView) replace(r TextRange, text string, atomic bool) error {
 	return v.replaceKeepingCompletion(r, text, atomic, nil)
 }
 
-func (v *SourceView) replaceKeepingCompletion(r textedit.Range, text string, atomic bool, keep *completionEdit) error {
+func (v *SourceView) replaceKeepingCompletion(r TextRange, text string, atomic bool, keep *completionEdit) error {
 	if err := v.editable(); err != nil {
 		return err
 	}
-	text = textedit.Normalize(text)
+	text = textcore.Normalize(text)
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
@@ -54,7 +54,7 @@ func (v *SourceView) replaceKeepingCompletion(r textedit.Range, text string, ato
 			}
 		}()
 	}
-	err := m.Apply(textedit.Edit{Range: r, Text: text}, textedit.EditOptions{Source: &v.source, Selection: &before, Atomic: atomic})
+	err := m.Apply(TextEdit{Range: r, Text: text}, textcore.EditOptions{Source: &v.source, Selection: &before, Atomic: atomic})
 	if err == nil && v.document == d && v.mountEpoch == epoch && m.Revision() == revision+1 && v.selectionEpoch == state.selection {
 		end := r.Start + len(text)
 		var session *completionSession
@@ -64,7 +64,7 @@ func (v *SourceView) replaceKeepingCompletion(r textedit.Range, text string, ato
 				keep.epoch++ // Normal selection cleanup cancels an undisplayed request.
 			}
 		}
-		v.setSelectionKeepingCompletion(textedit.Selection{Anchor: end, Caret: end}, false, true, session)
+		v.setSelectionKeepingCompletion(TextSelection{Anchor: end, Caret: end}, false, true, session)
 	}
 	return err
 }
@@ -91,7 +91,7 @@ func (v *SourceView) history(undo bool) bool {
 	}
 	d := v.document
 	epoch := v.mountEpoch
-	var result textedit.HistoryResult
+	var result textcore.HistoryResult
 	if undo {
 		result = d.model.UndoWithSelection()
 	} else {
@@ -158,8 +158,8 @@ func (v *SourceView) tab(outdent bool) error {
 
 // ApplyEdits applies original-coordinate edits as one undo unit, with an
 // explicit post-edit selection. Document identity and revision must match.
-// All ranges and the selection are validated before mutation by textedit.
-func (v *SourceView) ApplyEdits(document *Document, revision uint64, edits []textedit.Edit, after textedit.Selection) error {
+// All ranges and the selection are validated before mutation by textcore.
+func (v *SourceView) ApplyEdits(document *Document, revision uint64, edits []TextEdit, after TextSelection) error {
 	if document != v.document || revision != v.document.model.Revision() {
 		return ErrOperationChanged
 	}
@@ -219,7 +219,7 @@ func (v *SourceView) DeleteWord(forward bool) error {
 		v.foldingSignal.Emit()
 		return nil
 	}
-	return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: r.Start, Caret: r.Start}, Edits: []textedit.Edit{{Range: r}}})
+	return v.applyPlan(editor.Plan{Before: s, After: TextSelection{Anchor: r.Start, Caret: r.Start}, Edits: []TextEdit{{Range: r}}})
 }
 
 // SelectLine expands to whole logical lines, including the following LF.
@@ -242,7 +242,7 @@ func (v *SourceView) selectLine() {
 	start, _ := v.document.model.LineRange(v.document.model.LineAt(r.Start))
 	end := v.lineSelection(r.End)
 	v.document.model.BreakUndoGroup()
-	v.setSelection(textedit.Selection{Anchor: start.Start, Caret: end.End}, false, true)
+	v.setSelection(TextSelection{Anchor: start.Start, Caret: end.End}, false, true)
 }
 
 // JumpToBracket jumps between a confirmed pair adjacent to the caret. Unknown,
@@ -409,10 +409,10 @@ func (r *pasteRequest) complete(text string, err error) {
 		prefix, _ := v.lineContext(v.Selection().Range())
 		if known && !ctx.String && !ctx.Comment && definition.Editing().Reindent != nil && strings.Trim(prefix, " \t") == "" {
 			s, o := v.Selection(), v.indent
-			v.report(v.startEditRange(textedit.Range{}, func(ctx context.Context, _ string) (editor.Plan, error) {
+			v.report(v.startEditRange(TextRange{}, func(ctx context.Context, _ string) (editor.Plan, error) {
 				value, err := editor.ReindentedPaste(ctx, text, prefix, editor.IndentOptions(o), definition)
 				at := s.Range().Start + len(value)
-				return editor.Plan{Before: s, After: textedit.Selection{Anchor: at, Caret: at}, Edits: []textedit.Edit{{Range: s.Range(), Text: value}}}, err
+				return editor.Plan{Before: s, After: TextSelection{Anchor: at, Caret: at}, Edits: []TextEdit{{Range: s.Range(), Text: value}}}, err
 			}))
 			return
 		}
@@ -441,7 +441,7 @@ func (v *SourceView) ToggleLineComment() error {
 	if err != nil {
 		return err
 	}
-	var edits []textedit.Edit
+	var edits []TextEdit
 	all := true
 	for row := first; row <= last; row++ {
 		r, _ := m.LineRange(row)
@@ -454,8 +454,8 @@ func (v *SourceView) ToggleLineComment() error {
 		for !m.IsRuneBoundary(end) {
 			end--
 		}
-		prefix, _ := m.Slice(textedit.Range{Start: at, End: end})
-		e := textedit.Edit{Range: textedit.Range{Start: at, End: at}, Text: marker + " "}
+		prefix, _ := m.Slice(TextRange{Start: at, End: end})
+		e := TextEdit{Range: TextRange{Start: at, End: at}, Text: marker + " "}
 		if strings.HasPrefix(prefix, marker) {
 			e.Range.End += len(marker)
 			if strings.HasPrefix(prefix[len(marker):], " ") {
@@ -473,7 +473,7 @@ func (v *SourceView) ToggleLineComment() error {
 			edits[i].Range.End = edits[i].Range.Start
 		}
 	}
-	after := textedit.Selection{Anchor: editor.MapPosition(s.Anchor, edits), Caret: editor.MapPosition(s.Caret, edits)}
+	after := TextSelection{Anchor: editor.MapPosition(s.Anchor, edits), Caret: editor.MapPosition(s.Caret, edits)}
 	return v.ApplyEdits(v.document, m.Revision(), edits, after)
 }
 
@@ -497,7 +497,7 @@ func (v *SourceView) ToggleBlockComment() error {
 	after := s
 	if len(text) >= len(p.Open)+len(p.Close) && strings.HasPrefix(text, p.Open) && strings.HasSuffix(text, p.Close) {
 		text = text[len(p.Open) : len(text)-len(p.Close)]
-		after = textedit.Selection{Anchor: r.Start, Caret: r.Start + len(text)}
+		after = TextSelection{Anchor: r.Start, Caret: r.Start + len(text)}
 		if s.Anchor > s.Caret {
 			after.Anchor, after.Caret = after.Caret, after.Anchor
 		}
@@ -506,5 +506,5 @@ func (v *SourceView) ToggleBlockComment() error {
 		after.Anchor += len(p.Open)
 		after.Caret += len(p.Open)
 	}
-	return v.ApplyEdits(v.document, m.Revision(), []textedit.Edit{{Range: r, Text: text}}, after)
+	return v.ApplyEdits(v.document, m.Revision(), []TextEdit{{Range: r, Text: text}}, after)
 }

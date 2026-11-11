@@ -1,8 +1,8 @@
 package sourceview
 
 import (
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func (v *SourceView) cancelPreedit() {
@@ -57,11 +57,11 @@ func (v *SourceView) applyPreedit(text string, caret int) {
 				return
 			}
 		}
-		v.projection = textedit.NewProjection(m, v.Selection())
+		v.projection = textcore.NewProjection(m, v.Selection())
 		v.projectionRevision = m.Revision()
 		m.BreakUndoGroup()
 	}
-	v.projection.Update(textedit.Normalize(text), caret)
+	v.projection.Update(textcore.Normalize(text), caret)
 	v.invalidateLayout()
 	v.resetBlink()
 	v.RevealSelection()
@@ -116,10 +116,10 @@ func (v *SourceView) applyCommit(c gui.IMCommit) {
 		}
 	}
 	state := v.operationState()
-	continued, err := v.completionInput(r, textedit.Normalize(c.Text), atomic)
+	continued, err := v.completionInput(r, textcore.Normalize(c.Text), atomic)
 	v.report(err)
-	end := r.Start + len(textedit.Normalize(c.Text))
-	if err == nil && !continued && !atomic && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == (textedit.Selection{Anchor: end, Caret: end}) {
+	end := r.Start + len(textcore.Normalize(c.Text))
+	if err == nil && !continued && !atomic && v.automaticCompletion && v.mounted && v.editable() == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.model.Revision() == state.revision+1 && v.Selection() == (TextSelection{Anchor: end, Caret: end}) {
 		v.report(v.completeTriggered(false, c.Text))
 	}
 }
@@ -129,7 +129,7 @@ func (v *SourceView) displayCount() int {
 	}
 	return v.document.model.LineCount()
 }
-func (v *SourceView) displayRange(row int) textedit.Range {
+func (v *SourceView) displayRange(row int) TextRange {
 	if v.projection != nil {
 		return v.projection.LineRange(v.document.model, row)
 	}

@@ -30,7 +30,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
@@ -105,12 +104,12 @@ func (p *paintedText) DrawTextLayout(at geometry.Point, l typography.TextLayout)
 func (v *paintedView) Paint(p gui.Painter) {
 	observe := &paintedText{Painter: p, prefixes: make(map[int]string), seen: make(map[int]bool)}
 	for _, row := range v.CollapsedLines() {
-		r, _ := v.Document().Model().LineRange(row)
+		r, _ := v.Document().LineRange(row)
 		r.End = min(r.End, r.Start+24)
-		for !v.Document().Model().IsRuneBoundary(r.End) {
+		for !v.Document().IsRuneBoundary(r.End) {
 			r.End--
 		}
-		prefix, err := v.Document().Model().Slice(r)
+		prefix, err := v.Document().Slice(r)
 		must(err)
 		observe.prefixes[row] = prefix
 	}
@@ -217,12 +216,12 @@ func main() {
 	primary, _ := gui.ModPrimary.Resolve()
 	line := 1
 	selectStart := func() {
-		r, _ := doc.Model().LineRange(line)
-		v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+		r, _ := doc.LineRange(line)
+		v.SetSelection(source.TextSelection{Anchor: r.Start, Caret: r.Start})
 	}
-	revision, undo := doc.Model().Revision(), doc.Model().CanUndo()
+	revision, undo := doc.Revision(), doc.CanUndo()
 	unchanged := func() {
-		check(doc.Model().Text() == text && doc.Model().Revision() == revision && doc.Model().CanUndo() == undo, "collapse changed source/revision/history")
+		check(doc.Text() == text && doc.Revision() == revision && doc.CanUndo() == undo, "collapse changed source/revision/history")
 	}
 	var steps []func() bool
 	next := func(f func()) { steps = append(steps, func() bool { f(); return true }) }
@@ -357,12 +356,12 @@ func main() {
 		phase = "edit-expanded"
 	})
 	settle(func() {
-		check(len(v.CollapsedLines()) == 0 && strings.Contains(doc.Model().Text(), "!wrapped"), "typing did not expand the affected line")
+		check(len(v.CollapsedLines()) == 0 && strings.Contains(doc.Text(), "!wrapped"), "typing did not expand the affected line")
 		key(events.KeyZ, primary)
 	})
 	settle(func() {
-		check(doc.Model().Text() == text, "editing undo changed source")
-		revision, undo = doc.Model().Revision(), doc.Model().CanUndo()
+		check(doc.Text() == text, "editing undo changed source")
+		revision, undo = doc.Revision(), doc.CanUndo()
 		selectStart()
 		v.SetReadOnly(true)
 		key(events.KeyF6, 0)
@@ -395,7 +394,7 @@ func main() {
 	settle(func() {
 		check(len(v.CollapsedLines()) == 1, "unchanged reattach lost intent")
 		hosts[0].SetChild(nil)
-		doc.Model().SetText("fresh text")
+		doc.SetText("fresh text")
 		hosts[0].SetChild(observed)
 		win.SetFocusedWidget(v)
 		phase = "reloaded-expanded"
@@ -413,17 +412,17 @@ func main() {
 		next(func() {
 			text, line = sample.text, sample.line
 			must(doc.SetLanguage(sample.id))
-			doc.Model().SetText(text)
+			doc.SetText(text)
 			phase = sample.name + "-expanded"
 		})
 		settle(func() { selectStart(); key(events.KeyF6, 0); phase = sample.name + "-collapsed" })
 		settle(func() {
 			check(slices.Equal(v.CollapsedLines(), []int{line}) && hosts[0].Snapshot().MaxScrollY == 0, "language/paged line could not collapse: "+sample.name)
 			check(badge(v).Bounds.Height < 40, "language/paged preview is too tall")
-			check(doc.Model().Text() == text, "language collapse changed source")
+			check(doc.Text() == text, "language collapse changed source")
 			if sample.name == "paged" {
 				at := len(text) - 1
-				v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+				v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 				key(events.KeyArrowUp, 0)
 				check(len(v.CollapsedLines()) == 0 && v.Selection().Caret > len(text)-256, "Up missed the last display line of the collapsed paged paragraph")
 			} else {
@@ -431,7 +430,7 @@ func main() {
 			}
 		})
 	}
-	next(func() { doc.Model().SetText("short"); phase = "short" })
+	next(func() { doc.SetText("short"); phase = "short" })
 	settle(func() { key(events.KeyF6, 0); check(len(v.CollapsedLines()) == 0, "short line was collapsed") })
 	index, done := 0, false
 	deadline := time.Now().Add(40 * time.Second)

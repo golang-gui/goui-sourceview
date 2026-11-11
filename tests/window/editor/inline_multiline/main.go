@@ -30,7 +30,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
@@ -189,9 +188,9 @@ func main() {
 	must(win.Show())
 	win.SetFocusedWidget(v)
 	v.SetInlineSuggestionsEnabled(true)
-	v.SetSelection(textedit.Selection{Anchor: position, Caret: position})
+	v.SetSelection(source.TextSelection{Anchor: position, Caret: position})
 	publish := func(text string) {
-		ok, err := v.SetInlineSuggestion(doc, doc.Model().Revision(), source.InlineSuggestion{Position: v.Selection().Caret, Text: text})
+		ok, err := v.SetInlineSuggestion(doc, doc.Revision(), source.InlineSuggestion{Position: v.Selection().Caret, Text: text})
 		must(err)
 		check(ok, "host suggestion rejected")
 	}
@@ -207,10 +206,10 @@ func main() {
 	}
 	reset := func() {
 		v.ClearInlineSuggestion()
-		doc.Model().SetText(original)
+		doc.SetText(original)
 		hosts[0].SetScrollY(0)
 		hosts[0].SetScrollX(0)
-		v.SetSelection(textedit.Selection{Anchor: position, Caret: position})
+		v.SetSelection(source.TextSelection{Anchor: position, Caret: position})
 		win.SetFocusedWidget(v)
 	}
 	frame, phase := 0, "initial"
@@ -247,7 +246,7 @@ func main() {
 	}
 	visible := func() { check(meta(v) != nil && meta(v)["visible"] == true, "multiline preview not visible") }
 	clean := func() {
-		check(doc.Model().Text() == original && doc.Model().LineCount() == 2 && !doc.Model().CanUndo(), "preview changed source/history")
+		check(doc.Text() == original && doc.LineCount() == 2 && !doc.CanUndo(), "preview changed source/history")
 		check(meta(other) == nil, "preview leaked into shared view")
 	}
 	var baseY, baseHeight, wideHeight float32
@@ -279,13 +278,13 @@ func main() {
 	})
 	settle(func() { visible(); key(events.KeyTab, 0); phase = "accepted" })
 	settle(func() {
-		check(doc.Model().Text() == "func demo() {\n\treturn value\n}\nTAIL" && doc.Model().LineCount() == 4 && meta(v) == nil, "Tab failed exact multiline insertion")
+		check(doc.Text() == "func demo() {\n\treturn value\n}\nTAIL" && doc.LineCount() == 4 && meta(v) == nil, "Tab failed exact multiline insertion")
 		key(events.KeyZ, events.ModifierControl)
 		phase = "undo"
 	})
 	settle(func() { clean(); key(events.KeyZ, events.ModifierControl|events.ModifierShift); phase = "redo" })
 	settle(func() {
-		check(doc.Model().LineCount() == 4, "redo failed")
+		check(doc.LineCount() == 4, "redo failed")
 		reset()
 		publish(strings.Repeat("中文e\u0301 ", 100) + suggestion)
 		phase = "wrapped"
@@ -317,7 +316,7 @@ func main() {
 		phase = "scrolled-accepted"
 	})
 	settle(func() {
-		check(doc.Model().LineCount() == 43 && meta(v) == nil, "visible continuation could not be accepted with caret above viewport")
+		check(doc.LineCount() == 43 && meta(v) == nil, "visible continuation could not be accepted with caret above viewport")
 		key(events.KeyZ, events.ModifierControl)
 		phase = "scrolled-undo"
 	})
@@ -370,12 +369,12 @@ func main() {
 	})
 	settle(func() { visible(); must(win.CommitText("x")); phase = "typed" })
 	settle(func() {
-		check(doc.Model().Text() == "func demo() {x\nTAIL" && meta(v) == nil, "typing retained preview")
+		check(doc.Text() == "func demo() {x\nTAIL" && meta(v) == nil, "typing retained preview")
 		reset()
 		publish(suggestion)
 		phase = "before-external"
 	})
-	settle(func() { visible(); must(doc.Model().Replace(textedit.Range{}, "X")); phase = "external" })
+	settle(func() { visible(); must(doc.Replace(source.TextRange{}, "X")); phase = "external" })
 	settle(func() {
 		check(meta(v) == nil && closeTo(observed.at("TAIL").Y, baseY), "external edit retained preview height")
 		reset()

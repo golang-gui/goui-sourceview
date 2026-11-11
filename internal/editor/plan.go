@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
 var ErrOperationLimit = errors.New("sourceview: operation budget exceeded")
@@ -32,14 +32,14 @@ func (o IndentOptions) Normalized() (IndentOptions, error) {
 
 // Plan contains original-document edits and explicit history selections.
 type Plan struct {
-	Edits         []textedit.Edit
-	Before, After textedit.Selection
+	Edits         []textcore.Edit
+	Before, After textcore.Selection
 }
 
-func (p Plan) Apply(m *textedit.Model, source *textedit.EditSource) error {
-	return m.ApplyBatch(p.Edits, textedit.BatchOptions{Source: source, BeforeSelection: &p.Before, AfterSelection: &p.After})
+func (p Plan) Apply(m *textcore.Model, source *textcore.EditSource) error {
+	return m.ApplyBatch(p.Edits, textcore.BatchOptions{Source: source, BeforeSelection: &p.Before, AfterSelection: &p.After})
 }
-func MapPosition(pos int, edits []textedit.Edit) int {
+func MapPosition(pos int, edits []textcore.Edit) int {
 	delta := 0
 	for _, edit := range edits {
 		if pos < edit.Range.Start {
@@ -52,13 +52,13 @@ func MapPosition(pos int, edits []textedit.Edit) int {
 	}
 	return pos + delta
 }
-func mapSelection(s textedit.Selection, edits []textedit.Edit) textedit.Selection {
-	return textedit.Selection{Anchor: MapPosition(s.Anchor, edits), Caret: MapPosition(s.Caret, edits)}
+func mapSelection(s textcore.Selection, edits []textcore.Edit) textcore.Selection {
+	return textcore.Selection{Anchor: MapPosition(s.Anchor, edits), Caret: MapPosition(s.Caret, edits)}
 }
 
 // Indent plans a single undo unit, retaining selection direction. An end exactly
 // at the next line's start excludes that line from a nonempty selection.
-func Indent(m *textedit.Model, s textedit.Selection, options IndentOptions, outdent bool) (Plan, error) {
+func Indent(m *textcore.Model, s textcore.Selection, options IndentOptions, outdent bool) (Plan, error) {
 	p := Plan{Before: s, After: s}
 	o, err := options.Normalized()
 	if err != nil {
@@ -81,11 +81,11 @@ func Indent(m *textedit.Model, s textedit.Selection, options IndentOptions, outd
 		for end > rng.Start && !m.IsRuneBoundary(end) {
 			end--
 		}
-		prefix, err := m.Slice(textedit.Range{Start: rng.Start, End: end})
+		prefix, err := m.Slice(textcore.Range{Start: rng.Start, End: end})
 		if err != nil {
 			return p, err
 		}
-		edit := textedit.Edit{Range: textedit.Range{Start: rng.Start, End: rng.Start}}
+		edit := textcore.Edit{Range: textcore.Range{Start: rng.Start, End: rng.Start}}
 		if outdent {
 			n := 0
 			if strings.HasPrefix(prefix, "\t") {
@@ -111,7 +111,7 @@ func Indent(m *textedit.Model, s textedit.Selection, options IndentOptions, outd
 }
 
 // LeadingIndent returns the line's original leading whitespace, bounded at caret.
-func LeadingIndent(m *textedit.Model, caret int) string {
+func LeadingIndent(m *textcore.Model, caret int) string {
 	row := m.LineAt(caret)
 	r, _ := m.LineRange(row)
 	r.End = min(r.End, caret)
@@ -121,7 +121,7 @@ func LeadingIndent(m *textedit.Model, caret int) string {
 		for !m.IsRuneBoundary(end) {
 			end--
 		}
-		text, err := m.Slice(textedit.Range{Start: at, End: end})
+		text, err := m.Slice(textcore.Range{Start: at, End: end})
 		if err != nil {
 			return ""
 		}

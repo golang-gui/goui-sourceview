@@ -51,11 +51,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
@@ -95,11 +96,18 @@ func (o *observer) HandleEvent(ctx gui.EventContext) {
 	}
 }
 
+// Both controls expose these observations without sharing an editing model.
+type observedText interface {
+	Len() int
+	Revision() uint64
+	EqualText(string) bool
+}
+
 type paintObserver struct {
 	gui.WidgetBase
 	input      *observer
 	editor     gui.Widget
-	model      *textedit.Model
+	model      observedText
 	last       [24]byte
 	frameStart time.Time
 	runID      byte
@@ -166,7 +174,7 @@ func main() {
 	if !utf8.Valid(data) {
 		panic("input is not UTF-8")
 	}
-	original := textedit.Normalize(string(data))
+	original := textcore.Normalize(string(data))
 	app, err := gui.NewApplication("org.golanggui.SourceViewInteraction")
 	must(err)
 	if *profile != "" {
@@ -184,7 +192,11 @@ func main() {
 	}
 	must(win.SetTitle(fmt.Sprintf("SourceView interaction %s %s", *kind, filepath.Base(*file))))
 	var editor gui.Widget
-	var model *textedit.Model
+	var model observedText
+	var changeObserver signal.Handle
+	onChange := func(revision uint64) {
+		emit(map[string]any{"event": "change", "at_ns": time.Now().UnixNano(), "revision": revision, "bytes": model.Len()})
+	}
 	operationErrors := 0
 	switch *kind {
 	case "source":
@@ -196,19 +208,18 @@ func main() {
 			emit(map[string]any{"event": "error", "message": err.Error()})
 		})
 		must(v.Document().SetLanguage(language.Guess(*file, data[:min(len(data), 4096)])))
-		v.Document().Model().SetText(original)
-		editor, model = v, v.Document().Model()
+		v.Document().SetText(original)
+		editor, model = v, v.Document()
+		changeObserver = v.Document().ConnectChange(func(change source.TextChange) { onChange(change.Revision) })
 	case "text":
 		v := gui.NewTextView()
 		v.SetWrapMode(gui.WrapWordChar)
 		v.Model().SetText(original)
 		editor, model = v, v.Model()
+		changeObserver = v.ConnectChange(func(change gui.TextChange) { onChange(change.Revision) })
 	default:
 		panic("-kind must be source or text")
 	}
-	changeObserver := model.ConnectChange(func(change textedit.Change) {
-		emit(map[string]any{"event": "change", "at_ns": time.Now().UnixNano(), "revision": change.Revision, "bytes": model.Len()})
-	})
 	defer changeObserver.Disconnect()
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")

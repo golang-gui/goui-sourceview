@@ -3,14 +3,14 @@ package editor
 import (
 	"strings"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // TokenReader borrows analyzed tokens. The caller owns analysis scheduling.
 type TokenReader func(int) ([]language.Token, uint64, bool)
 
-func StructureCandidates(m *textedit.Model, r textedit.Range, rules language.EditingRules, tokens func() TokenReader, lexical func(int) (language.Context, bool), add func(textedit.Range)) {
+func StructureCandidates(m *textcore.Model, r textcore.Range, rules language.EditingRules, tokens func() TokenReader, lexical func(int) (language.Context, bool), add func(textcore.Range)) {
 	start, end := max(0, r.Start-64*1024), min(m.Len(), r.End+64*1024)
 	if end-start > 128*1024 {
 		return
@@ -21,11 +21,11 @@ func StructureCandidates(m *textedit.Model, r textedit.Range, rules language.Edi
 	for !m.IsRuneBoundary(end) {
 		end--
 	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: end})
+	text, _ := m.Slice(textcore.Range{Start: start, End: end})
 	// Markup parsing needs a known region boundary, not an arbitrary text suffix.
 	if rules.Tags != nil && start == 0 && end == m.Len() {
 		for _, q := range rules.Tags.SelectionRanges(text, language.NameRange{Start: r.Start, End: r.End}) {
-			add(textedit.Range{Start: q.Start, End: q.End})
+			add(textcore.Range{Start: q.Start, End: q.End})
 		}
 	}
 	allowed := make([]bool, len(text))
@@ -85,8 +85,8 @@ func StructureCandidates(m *textedit.Model, r textedit.Range, rules language.Edi
 				if p.Open != p.Close || !strings.HasPrefix(literal, p.Open) || !strings.HasSuffix(literal, p.Close) || len(literal) < len(p.Open)+len(p.Close) {
 					continue
 				}
-				add(textedit.Range{Start: a + len(p.Open), End: b - len(p.Close)})
-				add(textedit.Range{Start: a, End: b})
+				add(textcore.Range{Start: a + len(p.Open), End: b - len(p.Close)})
+				add(textcore.Range{Start: a, End: b})
 			}
 		}
 	}
@@ -129,8 +129,8 @@ func StructureCandidates(m *textedit.Model, r textedit.Range, rules language.Edi
 				stack = nil
 			} else {
 				stack = stack[:len(stack)-1]
-				add(textedit.Range{Start: start + o.end, End: start + at})
-				add(textedit.Range{Start: start + o.at, End: start + at + size})
+				add(textcore.Range{Start: start + o.end, End: start + at})
+				add(textcore.Range{Start: start + o.at, End: start + at + size})
 			}
 		}
 		at += size

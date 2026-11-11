@@ -7,7 +7,7 @@
 
 ```go
 type HighlightSpan struct {
-    Range textedit.Range
+    Range TextRange
     Kind  language.Kind
 }
 type Highlights struct { /* 不可变索引 */ }

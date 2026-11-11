@@ -24,7 +24,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 )
@@ -120,57 +119,57 @@ func main() {
 	steps := []func(){
 		func() {
 			check(win.Focused() && a.Focused() && probe.scale > 0, "native focus/painter not ready")
-			a.SetSelection(textedit.Selection{Anchor: 10, Caret: 7})
-			b.SetSelection(textedit.Selection{Anchor: 8, Caret: 8})
+			a.SetSelection(source.TextSelection{Anchor: 10, Caret: 7})
+			b.SetSelection(source.TextSelection{Anchor: 8, Caret: 8})
 			key(events.KeyArrowUp, alt)
-			check(doc.Model().Text() == "中two\none\nlast" && a.Selection() == (textedit.Selection{Anchor: 6, Caret: 3}) && b.Selection() == (textedit.Selection{Anchor: 4, Caret: 4}), "move up or shared-view anchors failed")
+			check(doc.Text() == "中two\none\nlast" && a.Selection() == (source.TextSelection{Anchor: 6, Caret: 3}) && b.Selection() == (source.TextSelection{Anchor: 4, Caret: 4}), "move up or shared-view anchors failed")
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == "one\n中two\nlast" && a.Selection() == (textedit.Selection{Anchor: 10, Caret: 7}), "move undo failed")
+			check(doc.Text() == "one\n中two\nlast" && a.Selection() == (source.TextSelection{Anchor: 10, Caret: 7}), "move undo failed")
 			key(events.KeyZ, primary|events.ModifierShift)
-			check(doc.Model().Text() == "中two\none\nlast" && a.Selection() == (textedit.Selection{Anchor: 6, Caret: 3}), "move redo failed")
+			check(doc.Text() == "中two\none\nlast" && a.Selection() == (source.TextSelection{Anchor: 6, Caret: 3}), "move redo failed")
 			key(events.KeyArrowDown, duplicate)
-			check(doc.Model().Text() == "中two\n中two\none\nlast" && a.Selection() == (textedit.Selection{Anchor: 13, Caret: 10}), "duplicate below failed")
+			check(doc.Text() == "中two\n中two\none\nlast" && a.Selection() == (source.TextSelection{Anchor: 13, Caret: 10}), "duplicate below failed")
 			key(events.KeyZ, primary)
 			key(events.KeyArrowUp, duplicate)
-			check(doc.Model().Text() == "中two\n中two\none\nlast" && a.Selection() == (textedit.Selection{Anchor: 6, Caret: 3}), "duplicate above failed")
+			check(doc.Text() == "中two\n中two\none\nlast" && a.Selection() == (source.TextSelection{Anchor: 6, Caret: 3}), "duplicate above failed")
 			key(events.KeyZ, primary)
 			key(events.KeyK, primary|events.ModifierShift)
-			check(doc.Model().Text() == "one\nlast" && a.Selection() == (textedit.Selection{}), "delete lines failed")
+			check(doc.Text() == "one\nlast" && a.Selection() == (source.TextSelection{}), "delete lines failed")
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == "中two\none\nlast" && a.Selection() == (textedit.Selection{Anchor: 6, Caret: 3}), "delete undo failed")
+			check(doc.Text() == "中two\none\nlast" && a.Selection() == (source.TextSelection{Anchor: 6, Caret: 3}), "delete undo failed")
 			key(events.KeyArrowDown, alt)
-			check(doc.Model().Text() == "one\n中two\nlast" && a.Selection() == (textedit.Selection{Anchor: 10, Caret: 7}), "move down failed")
+			check(doc.Text() == "one\n中two\nlast" && a.Selection() == (source.TextSelection{Anchor: 10, Caret: 7}), "move down failed")
 		},
 		func() {
-			doc.Model().SetText("a\nb")
-			a.SetSelection(textedit.Selection{Anchor: 1, Caret: 1})
+			doc.SetText("a\nb")
+			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
 			must(win.CommitText("X"))
 			key(events.KeyArrowDown, alt)
 			must(win.CommitText("Y"))
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == "b\naX", "typing after line command merged into its history")
+			check(doc.Text() == "b\naX", "typing after line command merged into its history")
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == "aX\nb", "line command merged into preceding typing")
+			check(doc.Text() == "aX\nb", "line command merged into preceding typing")
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == "a\nb", "preceding typing history lost")
-			doc.Model().SetText("a\nb")
-			a.SetSelection(textedit.Selection{Caret: 2})
+			check(doc.Text() == "a\nb", "preceding typing history lost")
+			doc.SetText("a\nb")
+			a.SetSelection(source.TextSelection{Caret: 2})
 			key(events.KeyArrowDown, alt)
-			check(doc.Model().Text() == "b\na" && a.Selection() == (textedit.Selection{Anchor: 2, Caret: 3}), "half-open selection or EOF failed")
-			doc.Model().SetText("\n")
-			a.SetSelection(textedit.Selection{})
+			check(doc.Text() == "b\na" && a.Selection() == (source.TextSelection{Anchor: 2, Caret: 3}), "half-open selection or EOF failed")
+			doc.SetText("\n")
+			a.SetSelection(source.TextSelection{})
 			key(events.KeyArrowDown, alt)
-			check(a.Selection() == (textedit.Selection{Anchor: 1, Caret: 1}) && doc.Model().Text() == "\n", "empty-line movement stuck")
+			check(a.Selection() == (source.TextSelection{Anchor: 1, Caret: 1}) && doc.Text() == "\n", "empty-line movement stuck")
 			key(events.KeyZ, primary)
-			check(a.Selection() == (textedit.Selection{}), "empty-line undo failed")
-			doc.Model().SetText("a\nb")
-			a.SetSelection(textedit.Selection{})
+			check(a.Selection() == (source.TextSelection{}), "empty-line undo failed")
+			doc.SetText("a\nb")
+			a.SetSelection(source.TextSelection{})
 			key(events.KeyArrowUp, alt)
-			check(!doc.Model().CanUndo() && fallback == 0, "edge key changed history or leaked")
+			check(!doc.CanUndo() && fallback == 0, "edge key changed history or leaked")
 			a.SetReadOnly(true)
 			key(events.KeyArrowDown, duplicate)
 			key(events.KeyK, primary|events.ModifierShift)
-			check(doc.Model().Text() == "a\nb" && fallback == 0 && reported == 0, "readonly command edited, leaked or reported an error")
+			check(doc.Text() == "a\nb" && fallback == 0 && reported == 0, "readonly command edited, leaked or reported an error")
 			key(events.KeyF10, events.ModifierShift)
 			check(len(win.Popovers()) == 1, "readonly menu missing")
 			popup = win.Popovers()[0]
@@ -195,9 +194,9 @@ func main() {
 			}
 			check(selectedLabel(popup.Widget().Snapshot()) == "Duplicate Lines Down", "menu keyboard target not reached")
 			key(events.KeyEnter, 0)
-			check(doc.Model().Text() == "a\na\nb" && len(win.Popovers()) == 0, "menu keyboard duplication failed")
+			check(doc.Text() == "a\na\nb" && len(win.Popovers()) == 0, "menu keyboard duplication failed")
 			key(events.KeyZ, primary)
-			a.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			a.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 			key(events.KeyF10, events.ModifierShift)
 			popup = win.Popovers()[0]
 		},
@@ -208,29 +207,29 @@ func main() {
 			for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
 				must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: point}))
 			}
-			check(doc.Model().Text() == "b\na" && a.Selection() == (textedit.Selection{}) && len(win.Popovers()) == 0, "menu pointer move failed")
+			check(doc.Text() == "b\na" && a.Selection() == (source.TextSelection{}) && len(win.Popovers()) == 0, "menu pointer move failed")
 			key(events.KeyZ, primary)
 			must(doc.SetLanguage(language.JSON))
-			doc.Model().SetText("tr\nx")
-			a.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			doc.SetText("tr\nx")
+			a.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "completion fixture missing")
 			key(events.KeyArrowDown, alt)
-			check(doc.Model().Text() == "x\ntr" && len(win.Popovers()) == 0, "line move did not cancel completion")
+			check(doc.Text() == "x\ntr" && len(win.Popovers()) == 0, "line move did not cancel completion")
 		},
 		func() {
 			check(reported == 0 && fallback == 0, "unexpected errors or shortcut fallback")
 			a.SetReadOnly(true)
 			win.Destroy()
 			check(a.Destroyed() && b.Destroyed(), "host did not destroy editors")
-			saved := doc.Model().Text()
+			saved := doc.Text()
 			for _, run := range []func() error{
 				b.DeleteLines,
 				func() error { return a.ReplaceSelection("unexpected") },
 				func() error { return a.MoveLines(false) },
 				func() error { return a.DuplicateLines(true) },
 			} {
-				check(errors.Is(run(), source.ErrDisabled) && doc.Model().Text() == saved, "destroyed editor accepted an edit")
+				check(errors.Is(run(), source.ErrDisabled) && doc.Text() == saved, "destroyed editor accepted an edit")
 			}
 			log.Printf("PASS line keyboard/menu, selection/history, shared views, readonly/edges, completion/lifecycle; typography=%s painter=%s scale=%g", app.Typography().Name(), probe.painter, probe.scale)
 			complete = true

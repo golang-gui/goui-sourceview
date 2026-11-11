@@ -26,12 +26,12 @@ import (
 )
 
 type selectionSource struct {
-	state               base.State[base.TextSelection]
+	state               base.State[sourceui.TextSelection]
 	connections, writes int
 }
 
-func (s *selectionSource) Get() base.TextSelection { return s.state.Get() }
-func (s *selectionSource) Set(value base.TextSelection) {
+func (s *selectionSource) Get() sourceui.TextSelection { return s.state.Get() }
+func (s *selectionSource) Set(value sourceui.TextSelection) {
 	s.writes++
 	s.state.Set(value)
 }
@@ -77,8 +77,8 @@ func must(err error) {
 
 func main() {
 	doc := source.NewDocument("one two three\nsecond line")
-	a := &selectionSource{state: base.MakeState(base.TextSelection{Anchor: 1, Caret: 1})}
-	b := &selectionSource{state: base.MakeState(base.TextSelection{Anchor: 7, Caret: 7})}
+	a := &selectionSource{state: base.MakeState(sourceui.TextSelection{Anchor: 1, Caret: 1})}
+	b := &selectionSource{state: base.MakeState(sourceui.TextSelection{Anchor: 7, Caret: 7})}
 	started, complete := false, false
 	global, builds, updates, callbacks, mode, step := 0, 0, 0, 0, 0, 0
 	var original *source.SourceView
@@ -96,7 +96,7 @@ func main() {
 						must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: key, Modifiers: modifiers}))
 					}
 				}
-				move := func(offset int) base.TextSelection { return base.TextSelection{Anchor: offset, Caret: offset} }
+				move := func(offset int) sourceui.TextSelection { return sourceui.TextSelection{Anchor: offset, Caret: offset} }
 				switch step {
 				case 0:
 					require(editor != nil && editor.Selection() == move(1) && a.connections == 1, "初始选区或订阅错误")
@@ -138,10 +138,10 @@ func main() {
 					key(events.KeyArrowRight, 0)
 					require(callbacks == 2 && a.writes == 3, "静态 Selection 清除了显式回调或残留回写")
 					must(win.CommitText("X"))
-					require(doc.Model().Text() == "oneX two three\nsecond line", "文本提交失败")
+					require(doc.Text() == "oneX two three\nsecond line", "文本提交失败")
 					primary, _ := gui.ModPrimary.Resolve()
 					key(events.KeyZ, primary)
-					require(doc.Model().Text() == "one two three\nsecond line", "撤销失败")
+					require(doc.Text() == "one two three\nsecond line", "撤销失败")
 					mode = 0
 					app.RequestUpdate()
 				case 8:
@@ -159,7 +159,7 @@ func main() {
 					app.RequestUpdate()
 				case 10:
 					require(editor != nil && editor != original && editor.Document() == doc && editor.Selection() == move(6), "重挂载未恢复文档和最新选区")
-					require(doc.Model().CanRedo(), "重建清除了文档历史")
+					require(doc.CanRedo(), "重建清除了文档历史")
 					complete = true
 					fmt.Println("PASS SourceView local selection binding, modifier order, source switching, teardown and history")
 					app.Quit()
@@ -180,11 +180,11 @@ func main() {
 				case 1:
 					v.BindSelection(b)
 				case 2:
-					v.BindSelection(b).OnSelection(func(base.TextSelection) { callbacks++ })
+					v.BindSelection(b).OnSelection(func(sourceui.TextSelection) { callbacks++ })
 				case 3:
-					v.BindSelection(b).Selection(base.TextSelection{Anchor: 3, Caret: 3})
+					v.BindSelection(b).Selection(sourceui.TextSelection{Anchor: 3, Caret: 3})
 				case 4:
-					v.BindSelection(a).OnSelection(func(base.TextSelection) { callbacks++ }).Selection(base.TextSelection{Anchor: 2, Caret: 2})
+					v.BindSelection(a).OnSelection(func(sourceui.TextSelection) { callbacks++ }).Selection(sourceui.TextSelection{Anchor: 2, Caret: 2})
 				}
 				return base.ScrollView(&editorView{SourceViewView: v, updates: &updates}).Style("source-view")
 			})))

@@ -7,14 +7,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
 // CompletionItem is an edit value, with no provider, request or editor state.
 type CompletionItem struct {
 	Label, Text, Detail string
-	Range               *textedit.Range
-	AdditionalEdits     []textedit.Edit
+	Range               *textcore.Range
+	AdditionalEdits     []textcore.Edit
 	Caret               *int
 }
 
@@ -23,8 +23,8 @@ type CompletionItem struct {
 type completionValue interface {
 	~struct {
 		Label, Text, Detail string
-		Range               *textedit.Range
-		AdditionalEdits     []textedit.Edit
+		Range               *textcore.Range
+		AdditionalEdits     []textcore.Edit
 		Caret               *int
 	}
 }
@@ -36,12 +36,12 @@ func SanitizeCompletions[T completionValue](items []T) []T {
 		if len(item.Label) > 512 || len(item.Detail) > 1024 || len(item.Text) > 64<<10 || len(item.AdditionalEdits) > 128 {
 			continue
 		}
-		item.Label = textedit.Normalize(item.Label)
-		item.Detail = strings.Join(strings.Fields(textedit.Normalize(item.Detail)), " ")
+		item.Label = textcore.Normalize(item.Label)
+		item.Detail = strings.Join(strings.Fields(textcore.Normalize(item.Detail)), " ")
 		if item.Text == "" {
 			item.Text = item.Label
 		}
-		item.Text = textedit.Normalize(item.Text)
+		item.Text = textcore.Normalize(item.Text)
 		if item.Label == "" || len(item.Text) > 64<<10 || strings.ContainsAny(item.Label, "\r\n\t\v\f\u0085\u2028\u2029") {
 			continue
 		}
@@ -80,7 +80,7 @@ func NormalizeCompletions[T completionValue](items []T, requestedPrefix string) 
 	prefix := strings.ToLower(requestedPrefix)
 	for _, value := range items {
 		candidate := CompletionItem(value)
-		if len(candidate.Label) > 512 || !strings.HasPrefix(strings.ToLower(textedit.Normalize(candidate.Label)), prefix) {
+		if len(candidate.Label) > 512 || !strings.HasPrefix(strings.ToLower(textcore.Normalize(candidate.Label)), prefix) {
 			continue
 		}
 		clean := SanitizeCompletions([]T{value})
@@ -113,7 +113,7 @@ func SameCompletion[T completionValue](left, right T) bool {
 	return (a.Range == nil || *a.Range == *b.Range) && (a.Caret == nil || *a.Caret == *b.Caret)
 }
 
-func CompletionEdits[T completionValue](value T, fallback textedit.Range) ([]textedit.Edit, int, error) {
+func CompletionEdits[T completionValue](value T, fallback textcore.Range) ([]textcore.Edit, int, error) {
 	item := CompletionItem(value)
 	r := fallback
 	if item.Range != nil {
@@ -132,12 +132,12 @@ func CompletionEdits[T completionValue](value T, fallback textedit.Range) ([]tex
 			return nil, 0, fmt.Errorf("sourceview: overlapping completion edits")
 		}
 	}
-	edits = append(edits, textedit.Edit{Range: r, Text: item.Text})
+	edits = append(edits, textcore.Edit{Range: r, Text: item.Text})
 	sort.SliceStable(edits, func(i, j int) bool { return edits[i].Range.Start < edits[j].Range.Start })
 	end := r.Start + caret
 	for _, e := range item.AdditionalEdits {
 		if e.Range.End <= r.Start {
-			end += len(textedit.Normalize(e.Text)) - (e.Range.End - e.Range.Start)
+			end += len(textcore.Normalize(e.Text)) - (e.Range.End - e.Range.Start)
 		}
 	}
 

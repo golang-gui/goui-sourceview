@@ -21,7 +21,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/modern"
@@ -60,14 +59,14 @@ func main() {
 	diagnostics.SetStyleName(modern.MutedText)
 	alive := true
 	service := analysis.NewService(app.Post, func(result analysis.Result, err error) {
-		if !alive || doc.Model().Len() > analysis.MaxBytes {
+		if !alive || doc.Len() > analysis.MaxBytes {
 			return
 		}
 		if err != nil {
 			status.SetText(err.Error())
 			return
 		}
-		if result.Snapshot.DocumentID != doc.ID() || result.Snapshot.Revision != doc.Model().Revision() {
+		if result.Snapshot.DocumentID != doc.ID() || result.Snapshot.Revision != doc.Revision() {
 			return
 		}
 		applied, err := doc.SetHighlights(result.Snapshot.Revision, result.Highlights)
@@ -97,7 +96,7 @@ func main() {
 	editor.SetCompletionProvider(service.Provider())
 	slow := false
 	submit := func() {
-		m := doc.Model()
+		m := doc
 		text := ""
 		if m.Len() <= analysis.MaxBytes {
 			text = m.Text()
@@ -111,7 +110,7 @@ func main() {
 		}
 		service.Submit(analysis.Snapshot{DocumentID: doc.ID(), Revision: m.Revision(), Text: text}, delay)
 	}
-	changes := editor.ConnectChange(func(textedit.Change) { submit() })
+	changes := editor.ConnectChange(func(source.TextChange) { submit() })
 	defer changes.Disconnect()
 	editor.ConnectError(func(err error) {
 		if alive {
@@ -135,7 +134,7 @@ func main() {
 		}
 	}))
 	tools.AddChild(button("Slow analysis", func() { slow = !slow; submit() }))
-	tools.AddChild(button("Reset", func() { doc.Model().SetText(analysis.Sample); submit() }))
+	tools.AddChild(button("Reset", func() { doc.SetText(analysis.Sample); submit() }))
 	tools.AddChild(button("Light / Dark", func() { *dark = !*dark; theme() }))
 	header := gui.NewHeaderBar()
 	header.SetChild(gui.NewLabel("Go editor · external parser and type checker"))

@@ -122,7 +122,7 @@ func colorFixture(t *testing.T) (*SourceView, *shapedContext) {
 	t.Helper()
 	v := NewSourceView()
 	v.SetScheme(scheme.Light())
-	v.Document().Model().SetText(`{"name":"value"}`)
+	v.Document().SetText(`{"name":"value"}`)
 	if err := v.Document().SetLanguage(language.JSON); err != nil {
 		t.Fatal(err)
 	}

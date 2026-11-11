@@ -9,10 +9,10 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -23,8 +23,8 @@ import (
 // AdditionalEdits use the same original document coordinates as the primary edit.
 type Completion struct {
 	Label, Text, Detail string
-	Range               *textedit.Range
-	AdditionalEdits     []textedit.Edit
+	Range               *TextRange
+	AdditionalEdits     []TextEdit
 	Caret               *int
 }
 
@@ -37,7 +37,7 @@ type CompletionContext struct {
 	DocumentID, Revision         uint64
 	Language                     language.ID
 	Definition                   *language.Language
-	Range                        textedit.Range
+	Range                        TextRange
 	Caret                        int
 	Prefix                       string
 	Explicit                     bool
@@ -61,7 +61,7 @@ type CompletionProvider struct {
 type completionSession struct {
 	state             operationState
 	language          language.ID
-	range_            textedit.Range
+	range_            TextRange
 	prefix            string
 	items             []Completion
 	index             int
@@ -110,7 +110,7 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	for !m.IsRuneBoundary(end) {
 		end--
 	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: end})
+	text, _ := m.Slice(TextRange{Start: start, End: end})
 	a, b := s.Caret-start, s.Caret-start
 	for a > 0 {
 		r, n := utf8.DecodeLastRuneInString(text[:a])
@@ -137,8 +137,8 @@ func (v *SourceView) completionContext(explicit bool) (CompletionContext, bool) 
 	for !m.IsRuneBoundary(nearbyEnd) {
 		nearbyEnd--
 	}
-	nearby, _ := m.Slice(textedit.Range{Start: nearbyStart, End: nearbyEnd})
-	wordRange := textedit.Range{Start: start + a, End: start + b}
+	nearby, _ := m.Slice(TextRange{Start: nearbyStart, End: nearbyEnd})
+	wordRange := TextRange{Start: start + a, End: start + b}
 	ctx, known := v.lexicalContext(wordRange.Start)
 	return CompletionContext{DocumentID: v.document.id, Revision: m.Revision(), Language: definition.ID(), Definition: definition, Range: wordRange, Caret: s.Caret, Prefix: text[a : s.Caret-start], Explicit: explicit, Lexical: ctx, ContextKnown: known, Before: before, After: after, NearbyText: nearby, NearbyOffset: nearbyStart, DocumentLength: m.Len()}, true
 }
@@ -181,7 +181,7 @@ func (v *SourceView) completionPosition(c CompletionContext, caret geometry.Rect
 	row := v.document.model.LineAt(c.Range.Start)
 	r, _ := v.document.model.LineRange(row)
 	if p := v.paragraph(row); p != nil {
-		start := p.Geometry.Caret(textedit.Position{Offset: c.Range.Start - r.Start})
+		start := p.Geometry.Caret(textcore.Position{Offset: c.Range.Start - r.Start})
 		start = start.Translate(geometry.Point{X: v.gutter + padding - v.offset.X, Y: padding + v.paragraphTop(row) - v.offset.Y})
 		// A wrapped or horizontally hidden word start cannot anchor the visible
 		// list. Keep it at the caret in that case; never alter editor selection.
@@ -475,7 +475,7 @@ func (v *SourceView) acceptCompletion(s *completionSession, index int) error {
 	if !s.state.valid(v) {
 		return ErrOperationChanged
 	}
-	return v.ApplyEdits(s.state.document, s.state.revision, edits, textedit.Selection{Anchor: end, Caret: end})
+	return v.ApplyEdits(s.state.document, s.state.revision, edits, TextSelection{Anchor: end, Caret: end})
 }
 
 func (v *SourceView) completionKey(event events.KeyEvent) bool {
@@ -650,11 +650,11 @@ type completionEdit struct {
 	session  *completionSession
 	provider *CompletionProvider
 	request  CompletionContext
-	edit     textedit.Edit
+	edit     TextEdit
 	applied  bool
 }
 
-func (v *SourceView) completionInput(r textedit.Range, text string, atomic bool) (bool, error) {
+func (v *SourceView) completionInput(r TextRange, text string, atomic bool) (bool, error) {
 	var keep *completionEdit
 	state, epoch, session, provider := v.operationState(), v.completionEpoch, v.completion, v.completionProvider
 	if !atomic && v.projection == nil {
@@ -669,7 +669,7 @@ func (v *SourceView) completionInput(r textedit.Range, text string, atomic bool)
 				}
 			}
 			if word && state.valid(v) && epoch == v.completionEpoch && session == v.completion && provider == v.completionProvider {
-				keep = &completionEdit{state: state, epoch: epoch, session: session, provider: provider, request: request, edit: textedit.Edit{Range: r, Text: text}}
+				keep = &completionEdit{state: state, epoch: epoch, session: session, provider: provider, request: request, edit: TextEdit{Range: r, Text: text}}
 			}
 		}
 	}
@@ -728,7 +728,7 @@ func (v *SourceView) liveCompletionRequest() (CompletionContext, bool) {
 	return CompletionContext{}, false
 }
 
-func (v *SourceView) retainCompletionChange(c textedit.Change) bool {
+func (v *SourceView) retainCompletionChange(c TextChange) bool {
 	keep := v.completionEdit
 	v.completionEdit = nil
 	if keep == nil {

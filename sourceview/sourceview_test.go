@@ -11,8 +11,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // CRLF 只能算一个逻辑换行；文件末尾的换行数量与输出格式独立保留。
@@ -46,15 +46,15 @@ func TestDocumentLineEndingRoundTrips(t *testing.T) {
 				t.Fatal("detection", ending, mixed)
 			}
 			d := NewDocument(tc.input)
-			if d.LineEnding() != tc.ending || d.Model().Text() != tc.normalized || d.Model().LineCount() != tc.lines {
-				t.Fatal("normalized model", d.LineEnding(), d.Model().Text(), d.Model().LineCount())
+			if d.LineEnding() != tc.ending || d.Text() != tc.normalized || d.LineCount() != tc.lines {
+				t.Fatal("normalized model", d.LineEnding(), d.Text(), d.LineCount())
 			}
 			var out bytes.Buffer
 			n, err := d.WriteTo(&out)
 			if err != nil || n != int64(len(tc.output)) || out.String() != tc.output {
 				t.Fatal("output", n, err, out.String())
 			}
-			if d.Model().Revision() != 0 || d.Model().CanUndo() {
+			if d.Revision() != 0 || d.CanUndo() {
 				t.Fatal("serialization changed model")
 			}
 		})
@@ -63,15 +63,15 @@ func TestDocumentLineEndingRoundTrips(t *testing.T) {
 
 // 输出格式是文档共享配置，不创建文本撤销项；无原始文本的模型不能反推 CRLF。
 func TestDocumentLineEndingConfigurationAndReentry(t *testing.T) {
-	m := textedit.NewModel("a\r\nb")
-	d := NewDocumentWithModel(m)
+	d := NewDocument(textcore.Normalize("a\r\nb"))
+	m := d.model
 	if d.LineEnding() != LineEndingLF {
 		t.Fatal("normalized model guessed its old line ending")
 	}
 	first, second := NewSourceView(), NewSourceView()
 	first.SetDocument(d)
 	second.SetDocument(d)
-	first.SetSelection(textedit.Selection{Anchor: 1, Caret: 1})
+	first.SetSelection(TextSelection{Anchor: 1, Caret: 1})
 	before, revision := first.Selection(), m.Revision()
 	var received []LineEnding
 	h := d.ConnectLineEndingChanged(func(e LineEnding) { received = append(received, e) })
@@ -106,7 +106,7 @@ func TestDocumentLineEndingConfigurationAndReentry(t *testing.T) {
 	if d.LineEnding() != LineEndingLF || !slices.Equal(observed, []LineEnding{LineEndingCRLF, LineEndingLF}) {
 		t.Fatal("reentrant setter published an obsolete event", observed)
 	}
-	if NewDocumentWithModel(nil).Model().Text() != "" {
+	if NewDocument("").Text() != "" {
 		t.Fatal("nil model")
 	}
 }
@@ -144,7 +144,7 @@ func TestDocumentWriteFailureAndMutation(t *testing.T) {
 					_ = d.SetLineEnding(LineEndingLF)
 					_ = d.SetLineEnding(LineEndingCRLF)
 				} else {
-					d.Model().SetText("replacement")
+					d.SetText("replacement")
 				}
 				return len(p), nil
 			}))
@@ -176,8 +176,8 @@ func TestDocumentWriteChunksAndEditedRoundTrip(t *testing.T) {
 	if err != nil || n != int64(len(text)) || output.String() != text || calls < 2 {
 		t.Fatal("chunked round trip", n, err, calls)
 	}
-	m := d.Model()
-	if err := m.ReplaceAtomic(textedit.Range{Start: m.Len(), End: m.Len()}, "\r\n"); err != nil {
+	m := d
+	if err := m.ReplaceAtomic(TextRange{Start: m.Len(), End: m.Len()}, "\r\n"); err != nil {
 		t.Fatal(err)
 	}
 	if !m.Undo() || !m.Redo() {
@@ -207,13 +207,13 @@ func TestCRLFLineBreakDeletionAndUndo(t *testing.T) {
 	v := NewSourceView()
 	v.SetDocument(d)
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 2})
 	if err := v.ReplaceSelection(""); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
 	_, err := d.WriteTo(&out)
-	if err != nil || out.String() != "ab\r\n" || v.Selection() != (textedit.Selection{Anchor: 1, Caret: 1}) {
+	if err != nil || out.String() != "ab\r\n" || v.Selection() != (TextSelection{Anchor: 1, Caret: 1}) {
 		t.Fatal("CRLF deletion", out.String(), err, v.Selection())
 	}
 	if !v.Undo() {
@@ -221,7 +221,7 @@ func TestCRLFLineBreakDeletionAndUndo(t *testing.T) {
 	}
 	out.Reset()
 	_, err = d.WriteTo(&out)
-	if err != nil || out.String() != "a\r\nb\r\n" || v.Selection() != (textedit.Selection{Anchor: 1, Caret: 2}) {
+	if err != nil || out.String() != "a\r\nb\r\n" || v.Selection() != (TextSelection{Anchor: 1, Caret: 2}) {
 		t.Fatal("CRLF deletion undo", out.String(), err, v.Selection())
 	}
 }
@@ -231,7 +231,7 @@ func TestIndependentDocumentsAndViews(t *testing.T) {
 	a, b := NewSourceView(), NewSourceView()
 	a.SetDocument(d)
 	b.SetDocument(d)
-	a.SetSelection(textedit.Selection{Anchor: 1, Caret: 2})
+	a.SetSelection(TextSelection{Anchor: 1, Caret: 2})
 	if d.connection != nil || d.engine != nil {
 		t.Fatal("constructor subscribed to external model")
 	}
@@ -240,17 +240,17 @@ func TestIndependentDocumentsAndViews(t *testing.T) {
 	if len(d.views) != 2 {
 		t.Fatal("shared subscriptions")
 	}
-	b.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+	b.SetSelection(TextSelection{Anchor: 5, Caret: 5})
 	if err := a.ReplaceSelection("ABC"); err != nil {
 		t.Fatal(err)
 	}
-	if got := d.Model().Text(); got != "aABCc\nxyz" {
+	if got := d.Text(); got != "aABCc\nxyz" {
 		t.Fatal(got)
 	}
-	if a.Selection() != (textedit.Selection{Anchor: 4, Caret: 4}) || b.Selection().Caret != 7 {
+	if a.Selection() != (TextSelection{Anchor: 4, Caret: 4}) || b.Selection().Caret != 7 {
 		t.Fatalf("selections %v / %v", a.Selection(), b.Selection())
 	}
-	if !a.Undo() || d.Model().Text() != "abc\nxyz" || a.Selection() != (textedit.Selection{Anchor: 1, Caret: 2}) {
+	if !a.Undo() || d.Text() != "abc\nxyz" || a.Selection() != (TextSelection{Anchor: 1, Caret: 2}) {
 		t.Fatal("undo selection", a.Selection())
 	}
 	b.SetReadOnly(true)
@@ -272,9 +272,9 @@ func TestIndependentDocumentsAndViews(t *testing.T) {
 func TestHistoryIndentSearchAndPrivateDocument(t *testing.T) {
 	v := NewSourceView()
 	original := v.Document()
-	m := original.Model()
+	m := original
 	m.SetText("  alpha\n  alpha\nlast")
-	v.SetSelection(textedit.Selection{Caret: 15})
+	v.SetSelection(TextSelection{Caret: 15})
 	observe(t, v)
 	if err := v.Indent(false); err != nil {
 		t.Fatal(err)
@@ -294,7 +294,7 @@ func TestHistoryIndentSearchAndPrivateDocument(t *testing.T) {
 		t.Fatal("atomic replace undo")
 	}
 	r, ok := v.FindNext(false)
-	if !ok || r != (textedit.Range{Start: 2, End: 7}) {
+	if !ok || r != (TextRange{Start: 2, End: 7}) {
 		t.Fatal(r, ok)
 	}
 	if ok, err := v.ReplaceCurrent("x"); !ok || err != nil || m.Text() != "  x\n  alpha\nlast" {
@@ -315,26 +315,26 @@ func TestNotificationReentryDoesNotOverwriteNewSelection(t *testing.T) {
 	// This listener runs before the mounted view and sees a newer revision
 	// while the older notification is still being delivered.
 	fired := false
-	handle := d.Model().ConnectChange(func(c textedit.Change) {
+	handle := d.ConnectChange(func(c TextChange) {
 		if fired {
 			return
 		}
 		fired = true
-		if err := d.Model().Replace(textedit.Range{Start: 0, End: 0}, "Ω"); err != nil {
+		if err := d.Replace(TextRange{Start: 0, End: 0}, "Ω"); err != nil {
 			t.Fatal(err)
 		}
-		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	})
 	defer handle.Disconnect()
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+	v.SetSelection(TextSelection{Anchor: 3, Caret: 3})
 	if err := v.ReplaceSelection("!"); err != nil {
 		t.Fatal(err)
 	}
-	if got := v.Selection(); got != (textedit.Selection{Anchor: 2, Caret: 2}) {
+	if got := v.Selection(); got != (TextSelection{Anchor: 2, Caret: 2}) {
 		t.Fatal("older edit overwrote reentrant selection", got)
 	}
-	if v.observed != d.Model().Revision() {
+	if v.observed != d.Revision() {
 		t.Fatal("notifications not drained")
 	}
 }
@@ -344,9 +344,9 @@ func TestResetAndLanguageValidation(t *testing.T) {
 	v := NewSourceView()
 	v.SetDocument(d)
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
-	d.Model().SetText("new")
-	if v.Selection() != (textedit.Selection{}) {
+	v.SetSelection(TextSelection{Anchor: 3, Caret: 3})
+	d.SetText("new")
+	if v.Selection() != (TextSelection{}) {
 		t.Fatal("reset selection")
 	}
 	if err := d.SetLanguage(language.JSON); err != nil {

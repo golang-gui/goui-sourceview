@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 type autoPair struct {
@@ -38,7 +38,7 @@ func (v *SourceView) lexicalContext(at int) (highlight.Context, bool) {
 }
 
 // pairText handles literal (non-IME) typing; language policy never owns history.
-func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
+func (v *SourceView) pairText(r TextRange, text string) (bool, error) {
 	if !v.autoPairs || text == "" {
 		return false, nil
 	}
@@ -103,11 +103,11 @@ func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
 		return true, err
 	}
 	inserted := text + content + pair.Close
-	after := textedit.Selection{Anchor: r.Start + len(text), Caret: r.Start + len(text)}
+	after := TextSelection{Anchor: r.Start + len(text), Caret: r.Start + len(text)}
 	if selected {
-		after = textedit.Selection{Anchor: before.Anchor + len(text), Caret: before.Caret + len(text)}
+		after = TextSelection{Anchor: before.Anchor + len(text), Caret: before.Caret + len(text)}
 	}
-	err = v.applyPlan(editor.Plan{Before: before, After: after, Edits: []textedit.Edit{{Range: r, Text: inserted}}})
+	err = v.applyPlan(editor.Plan{Before: before, After: after, Edits: []TextEdit{{Range: r, Text: inserted}}})
 	if err == nil && v.document == state.document && v.mountEpoch == state.mount && v.document.languageEpoch == state.language && v.document.model.Revision() == state.revision+1 && v.Selection() == after {
 		if len(v.pairs) == 1024 {
 			copy(v.pairs, v.pairs[1:])
@@ -119,7 +119,7 @@ func (v *SourceView) pairText(r textedit.Range, text string) (bool, error) {
 }
 
 // lineContext copies at most 16 KiB on each side, excluding LF.
-func (v *SourceView) lineContext(r textedit.Range) (string, string) {
+func (v *SourceView) lineContext(r TextRange) (string, string) {
 	m := v.document.model
 	left, _ := m.LineRange(m.LineAt(r.Start))
 	right, _ := m.LineRange(m.LineAt(r.End))
@@ -130,8 +130,8 @@ func (v *SourceView) lineContext(r textedit.Range) (string, string) {
 	for !m.IsRuneBoundary(end) {
 		end--
 	}
-	before, _ := m.Slice(textedit.Range{Start: start, End: r.Start})
-	after, _ := m.Slice(textedit.Range{Start: r.End, End: end})
+	before, _ := m.Slice(TextRange{Start: start, End: r.Start})
+	after, _ := m.Slice(TextRange{Start: r.End, End: end})
 	return before, after
 }
 
@@ -145,7 +145,7 @@ func (v *SourceView) quoteEscaped(at int) bool {
 	for !m.IsRuneBoundary(start) {
 		start++
 	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: at})
+	text, _ := m.Slice(TextRange{Start: start, End: at})
 	escape := v.definitionAt(at).Editing().QuoteEscape
 	if escape == 0 {
 		escape = '\\'
@@ -185,9 +185,9 @@ func (v *SourceView) newline() error {
 			if len(edit.Text) > 64<<10 || edit.DeleteBefore < 0 || edit.DeleteAfter < 0 || edit.DeleteBefore > len(before) || edit.DeleteAfter > len(after) || edit.Caret < 0 || edit.Caret > len(edit.Text) || !utf8.ValidString(edit.Text) || !utf8.ValidString(edit.Text[:edit.Caret]) || strings.ContainsRune(edit.Text, '\r') {
 				return fmt.Errorf("sourceview: invalid newline edit")
 			}
-			rng := textedit.Range{Start: r.Start - edit.DeleteBefore, End: r.End + edit.DeleteAfter}
+			rng := TextRange{Start: r.Start - edit.DeleteBefore, End: r.End + edit.DeleteAfter}
 			end := rng.Start + edit.Caret
-			return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: end, Caret: end}, Edits: []textedit.Edit{{Range: rng, Text: edit.Text}}})
+			return v.applyPlan(editor.Plan{Before: s, After: TextSelection{Anchor: end, Caret: end}, Edits: []TextEdit{{Range: rng, Text: edit.Text}}})
 		}
 	}
 	if s.Anchor == s.Caret && known && !ctx.String && !ctx.Comment {
@@ -195,7 +195,7 @@ func (v *SourceView) newline() error {
 			if strings.HasSuffix(before, p.Open) && strings.HasPrefix(after, p.Close) {
 				text := "\n" + base + unit + "\n" + base
 				end := s.Caret + 1 + len(base) + len(unit)
-				return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: end, Caret: end}, Edits: []textedit.Edit{{Range: r, Text: text}}})
+				return v.applyPlan(editor.Plan{Before: s, After: TextSelection{Anchor: end, Caret: end}, Edits: []TextEdit{{Range: r, Text: text}}})
 			}
 		}
 	}
@@ -207,11 +207,11 @@ func (v *SourceView) pairValid(p autoPair) bool {
 	if p.open < 0 || p.close+len(p.right) > m.Len() || p.close <= p.open {
 		return false
 	}
-	a, err := m.Slice(textedit.Range{Start: p.open, End: p.open + len(p.left)})
+	a, err := m.Slice(TextRange{Start: p.open, End: p.open + len(p.left)})
 	if err != nil {
 		return false
 	}
-	b, err := m.Slice(textedit.Range{Start: p.close, End: p.close + len(p.right)})
+	b, err := m.Slice(TextRange{Start: p.close, End: p.close + len(p.right)})
 	return err == nil && a == p.left && b == p.right
 }
 func (v *SourceView) deletePair() (bool, error) {
@@ -221,13 +221,13 @@ func (v *SourceView) deletePair() (bool, error) {
 	}
 	for _, p := range v.pairs {
 		if p.open+len(p.left) == s.Caret && p.close == s.Caret && v.pairValid(p) {
-			after := textedit.Selection{Anchor: p.open, Caret: p.open}
-			return true, v.applyPlan(editor.Plan{Before: s, After: after, Edits: []textedit.Edit{{Range: textedit.Range{Start: p.open, End: p.close + len(p.right)}}}})
+			after := TextSelection{Anchor: p.open, Caret: p.open}
+			return true, v.applyPlan(editor.Plan{Before: s, After: after, Edits: []TextEdit{{Range: TextRange{Start: p.open, End: p.close + len(p.right)}}}})
 		}
 	}
 	return false, nil
 }
-func (v *SourceView) mapPairs(c textedit.Change) {
+func (v *SourceView) mapPairs(c TextChange) {
 	if c.Reset {
 		v.pairs = nil
 		return
@@ -238,8 +238,8 @@ func (v *SourceView) mapPairs(c textedit.Change) {
 			if editor.TouchesPair(e.Range, p.open, len(p.left)) || editor.TouchesPair(e.Range, p.close, len(p.right)) {
 				continue
 			}
-			p.open = textedit.MapOffset(p.open, e)
-			p.close = textedit.MapOffset(p.close, e)
+			p.open = textcore.MapOffset(p.open, e)
+			p.close = textcore.MapOffset(p.close, e)
 			kept = append(kept, p)
 		}
 		v.pairs = kept
@@ -251,14 +251,14 @@ type bracketState struct {
 	revision uint64
 	caret    int
 	language uint64
-	ranges   []textedit.Range
+	ranges   []TextRange
 	valid    bool
 }
 
 // Matching scans at most 64 KiB on either side and never guesses unresolved
 // lexical styles. A single range identifies a candidate; only two ranges confirm
 // a pair and qualify for matching decoration.
-func (v *SourceView) matchingBrackets() []textedit.Range {
+func (v *SourceView) matchingBrackets() []TextRange {
 	m := v.document.model
 	s := v.Selection()
 	if s.Anchor != s.Caret || v.projection != nil {
@@ -348,7 +348,7 @@ func (v *SourceView) matchingBrackets() []textedit.Range {
 		start = max(start, span.Start)
 		end = min(end, span.End)
 	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: end})
+	text, _ := m.Slice(TextRange{Start: start, End: end})
 	allowed := make([]bool, len(text))
 	if v.document.definition.Tokenizer() == nil {
 		for i := range allowed {

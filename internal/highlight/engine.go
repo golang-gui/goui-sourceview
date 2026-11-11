@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 const ChunkSize = 16 * 1024
@@ -34,7 +34,7 @@ type work struct {
 
 // Engine belongs to one active Document. All calls are sequential.
 type Engine struct {
-	model        *textedit.Model
+	model        *textcore.Model
 	id           language.ID
 	syntax       *language.Language
 	revision     uint64
@@ -54,12 +54,12 @@ type Engine struct {
 }
 
 // New creates an incremental analyzer without reading the document.
-func New(model *textedit.Model, id language.ID) *Engine {
+func New(model *textcore.Model, id language.ID) *Engine {
 	l, _ := language.Builtin(id)
 	return NewWithLanguage(model, l)
 }
 
-func NewWithLanguage(model *textedit.Model, l *language.Language) *Engine {
+func NewWithLanguage(model *textcore.Model, l *language.Language) *Engine {
 	id := l.ID()
 	e := &Engine{model: model, id: id, syntax: l}
 	e.Reset(id)
@@ -275,7 +275,7 @@ func (e *Engine) firstDirty() int {
 }
 
 // Change updates old-coordinate metadata without reading current model text.
-func (e *Engine) Change(c textedit.Change) ([]Splice, bool) {
+func (e *Engine) Change(c textcore.Change) ([]Splice, bool) {
 	if c.Revision <= e.revision {
 		return nil, false
 	}
@@ -345,7 +345,7 @@ func (e *Engine) read(start, end int) (string, error) {
 	for end > start && !e.model.IsRuneBoundary(end) {
 		end--
 	}
-	return e.model.Slice(textedit.Range{Start: start, End: end})
+	return e.model.Slice(textcore.Range{Start: start, End: end})
 }
 
 func (e *Engine) buildStep() error {
@@ -496,7 +496,7 @@ func (e *Engine) Text(row int) (string, error) {
 		n--
 	}
 	start := e.lines.offset(row)
-	return e.model.Slice(textedit.Range{Start: start, End: start + n})
+	return e.model.Slice(textcore.Range{Start: start, End: start + n})
 }
 
 // TokenText is a diagnostic helper for fixtures.
@@ -539,7 +539,7 @@ func (e *Engine) ContextAt(at int) (Context, bool) {
 	for !e.model.IsRuneBoundary(end) {
 		end--
 	}
-	prefix, err := e.model.Slice(textedit.Range{Start: r.Start, End: end})
+	prefix, err := e.model.Slice(textcore.Range{Start: r.Start, End: end})
 	if err != nil {
 		return Context{}, false
 	}

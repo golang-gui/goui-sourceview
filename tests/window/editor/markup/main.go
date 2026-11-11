@@ -10,16 +10,16 @@ package main
 
 import (
 	"flag"
+	"log"
+	"runtime"
+	"time"
+
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
-	"log"
-	"runtime"
-	"time"
 )
 
 func must(e error) {
@@ -67,43 +67,43 @@ func main() {
 	var steps []func()
 	steps = append(steps, func() {
 		must(doc.SetLanguage(language.XML))
-		doc.Model().SetText("")
-		v.SetSelection(textedit.Selection{})
+		doc.SetText("")
+		v.SetSelection(source.TextSelection{})
 		must(win.CommitText("<"))
 		must(win.CommitText("node"))
 		must(win.CommitText(">"))
-		check(doc.Model().Text() == "<node></node>" && v.Selection().Caret == 6, "tag close")
+		check(doc.Text() == "<node></node>" && v.Selection().Caret == 6, "tag close")
 	})
 	steps = append(steps, func() {
-		v.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+		v.SetSelection(source.TextSelection{Anchor: 5, Caret: 5})
 		must(win.CommitText("x"))
-		check(doc.Model().Text() == "<nodex></nodex>", "linked typing")
+		check(doc.Text() == "<nodex></nodex>", "linked typing")
 		key(events.KeyBackspace, 0)
-		check(doc.Model().Text() == "<node></node>", "linked Backspace")
+		check(doc.Text() == "<node></node>", "linked Backspace")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "<nodex></nodex>", "linked Undo")
+		check(doc.Text() == "<nodex></nodex>", "linked Undo")
 	})
 	steps = append(steps, func() {
 		must(doc.SetLanguage(language.HTML))
-		doc.Model().SetText("<BR")
-		v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+		doc.SetText("<BR")
+		v.SetSelection(source.TextSelection{Anchor: 3, Caret: 3})
 		must(win.CommitText(">"))
-		check(doc.Model().Text() == "<BR>", "HTML void closed")
+		check(doc.Text() == "<BR>", "HTML void closed")
 		must(doc.SetLanguage(language.Markdown))
-		doc.Model().SetText("- item")
-		v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+		doc.SetText("- item")
+		v.SetSelection(source.TextSelection{Anchor: 6, Caret: 6})
 	})
 	steps = append(steps, func() {
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "- item\n- ", "Markdown list continuation")
-		doc.Model().SetText("```json\n\n```")
-		v.SetSelection(textedit.Selection{Anchor: 8, Caret: 8})
+		check(doc.Text() == "- item\n- ", "Markdown list continuation")
+		doc.SetText("```json\n\n```")
+		v.SetSelection(source.TextSelection{Anchor: 8, Caret: 8})
 	})
 	steps = append(steps, func() {
 		must(win.CommitText("{"))
-		check(doc.Model().Text() == "```json\n{}\n```", "embedded JSON pair")
+		check(doc.Text() == "```json\n{}\n```", "embedded JSON pair")
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "```json\n{\n    \n}\n```", "embedded JSON newline")
+		check(doc.Text() == "```json\n{\n    \n}\n```", "embedded JSON newline")
 	})
 
 	index := 0

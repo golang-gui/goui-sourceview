@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func scanAll(id language.ID, text string, chunk int) ([]Token, State) {
@@ -375,7 +375,7 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		{language.Groovy, "def s=$/first\nbody\n/$", "$/", `"`, "body", language.KindPlain},
 		{language.Groovy, `def s="${true}"`, "$", "", "true", language.KindString},
 	} {
-		m := textedit.NewModel(tc.text)
+		m := textcore.NewModel(tc.text)
 		e := New(m, tc.id)
 		e.SetLanguage(tc.id)
 		drain(t, e)
@@ -383,9 +383,9 @@ func TestNewLanguageIncrementalRecovery(t *testing.T) {
 		if at < 0 {
 			t.Fatalf("missing edit fixture %q", tc.old)
 		}
-		change := textedit.Change{}
-		m.ConnectChange(func(c textedit.Change) { change = c; e.Change(c) })
-		if err := m.Replace(textedit.Range{Start: at, End: at + len(tc.old)}, tc.replacement); err != nil {
+		change := textcore.Change{}
+		m.ConnectChange(func(c textcore.Change) { change = c; e.Change(c) })
+		if err := m.Replace(textcore.Range{Start: at, End: at + len(tc.old)}, tc.replacement); err != nil {
 			t.Fatal(err)
 		}
 		drain(t, e)
@@ -420,11 +420,11 @@ func TestTemplateHostIncrementalRecovery(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := textedit.NewModel("key: \"{{true}}\"\n# body\nnext: false")
+		m := textcore.NewModel("key: \"{{true}}\"\n# body\nnext: false")
 		e := NewWithLanguage(m, l)
 		drain(t, e)
-		m.ConnectChange(func(c textedit.Change) { e.Change(c) })
-		if err := m.Replace(textedit.Range{Start: 5, End: 6}, ""); err != nil {
+		m.ConnectChange(func(c textcore.Change) { e.Change(c) })
+		if err := m.Replace(textcore.Range{Start: 5, End: 6}, ""); err != nil {
 			t.Fatal(err)
 		}
 		drain(t, e)
@@ -609,7 +609,7 @@ func TestLateClassificationAcrossEngineChunks(t *testing.T) {
 		{language.YAML, strings.Repeat("k", ChunkSize*3) + ": true", ChunkSize, language.KindProperty},
 		{language.Shell, "cat <<" + strings.Repeat("x", ChunkSize*3) + "\nbody\n" + strings.Repeat("x", ChunkSize*3), ChunkSize*3 + len("cat <<\nbody\n"), language.KindMeta},
 	} {
-		m := textedit.NewModel(tc.text)
+		m := textcore.NewModel(tc.text)
 		e := New(m, tc.id)
 		e.SetLanguage(tc.id)
 		drain(t, e)

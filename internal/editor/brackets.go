@@ -3,11 +3,11 @@ package editor
 import (
 	"strings"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
-func BracketCandidates(m *textedit.Model, caret int, pairs []language.Pair) []textedit.Range {
+func BracketCandidates(m *textcore.Model, caret int, pairs []language.Pair) []textcore.Range {
 	longest := 0
 	for _, p := range pairs {
 		longest = max(longest, len(p.Open), len(p.Close))
@@ -22,14 +22,14 @@ func BracketCandidates(m *textedit.Model, caret int, pairs []language.Pair) []te
 	for !m.IsRuneBoundary(end) {
 		end++
 	}
-	text, _ := m.Slice(textedit.Range{Start: start, End: end})
+	text, _ := m.Slice(textcore.Range{Start: start, End: end})
 	local := caret - start
-	var candidates []textedit.Range
+	var candidates []textcore.Range
 	for _, p := range pairs {
 		for _, sequence := range []string{p.Open, p.Close} {
 			for at := max(0, local-len(sequence)); at <= local && at+len(sequence) <= len(text); at++ {
 				if strings.HasPrefix(text[at:], sequence) {
-					candidates = append(candidates, textedit.Range{Start: start + at, End: start + at + len(sequence)})
+					candidates = append(candidates, textcore.Range{Start: start + at, End: start + at + len(sequence)})
 				}
 			}
 		}
@@ -37,8 +37,8 @@ func BracketCandidates(m *textedit.Model, caret int, pairs []language.Pair) []te
 	return candidates
 }
 
-func MatchingBrackets(text string, start, caret int, allowed []bool, pairs []language.Pair) []textedit.Range {
-	var ranges []textedit.Range
+func MatchingBrackets(text string, start, caret int, allowed []bool, pairs []language.Pair) []textcore.Range {
+	var ranges []textcore.Range
 	type delimiter struct {
 		at, end, pair int
 		open          bool
@@ -97,7 +97,7 @@ func MatchingBrackets(text string, start, caret int, allowed []bool, pairs []lan
 		step = -1
 	}
 	stack := []int{current.pair}
-	ranges = []textedit.Range{{Start: start + current.at, End: start + current.end}}
+	ranges = []textcore.Range{{Start: start + current.at, End: start + current.end}}
 	for i := at + step; i >= 0 && i < len(delimiters); i += step {
 		d := delimiters[i]
 		if d.open == current.open {
@@ -109,7 +109,7 @@ func MatchingBrackets(text string, start, caret int, allowed []bool, pairs []lan
 		}
 		stack = stack[:len(stack)-1]
 		if len(stack) == 0 {
-			ranges = append(ranges, textedit.Range{Start: start + d.at, End: start + d.end})
+			ranges = append(ranges, textcore.Range{Start: start + d.at, End: start + d.end})
 			break
 		}
 	}

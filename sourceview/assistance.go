@@ -8,10 +8,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
@@ -135,13 +135,13 @@ func (v *SourceView) deleteIndent() (bool, error) {
 	}
 	insert := strings.Repeat(" ", target-current)
 	end := r.Start + at + len(insert)
-	return true, v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: end, Caret: end}, Edits: []textedit.Edit{{Range: textedit.Range{Start: r.Start + at, End: s.Caret}, Text: insert}}})
+	return true, v.applyPlan(editor.Plan{Before: s, After: TextSelection{Anchor: end, Caret: end}, Edits: []TextEdit{{Range: TextRange{Start: r.Start + at, End: s.Caret}, Text: insert}}})
 }
 
-func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.Key) textedit.Position {
+func (v *SourceView) smartEdge(p *paragraph, pos textcore.Position, key events.Key) textcore.Position {
 	if p.Paged != nil && v.wrap == WrapNone {
 		r := v.displayRange(p.row)
-		edge := textedit.Position{}
+		edge := textcore.Position{}
 		if key == events.KeyEnd {
 			edge.Offset = r.End - r.Start
 			edge.Upstream = true
@@ -152,7 +152,7 @@ func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.K
 		if key == events.KeyHome {
 			at := len(editor.LeadingIndent(v.document.model, r.Start+pos.Offset))
 			if at != pos.Offset {
-				return textedit.Position{Offset: at}
+				return textcore.Position{Offset: at}
 			}
 		} else {
 			// Only the trailing whitespace is relevant. Stop at the first
@@ -163,7 +163,7 @@ func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.K
 				for !v.document.model.IsRuneBoundary(a) {
 					a++
 				}
-				text, _ := v.document.model.Slice(textedit.Range{Start: a, End: at})
+				text, _ := v.document.model.Slice(TextRange{Start: a, End: at})
 				n := len(text) - len(strings.TrimRight(text, " \t"))
 				at -= n
 				if n < len(text) {
@@ -171,7 +171,7 @@ func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.K
 				}
 			}
 			if at-r.Start != pos.Offset {
-				return textedit.Position{Offset: at - r.Start, Upstream: true}
+				return textcore.Position{Offset: at - r.Start, Upstream: true}
 			}
 		}
 		return edge
@@ -199,7 +199,7 @@ func (v *SourceView) smartEdge(p *paragraph, pos textedit.Position, key events.K
 	if at+p.textStart == pos.Offset {
 		return edge
 	}
-	return textedit.Position{Offset: at + p.textStart, Upstream: key == events.KeyEnd}
+	return textcore.Position{Offset: at + p.textStart, Upstream: key == events.KeyEnd}
 }
 
 func (v *SourceView) occurrenceWord() string {
@@ -226,7 +226,7 @@ func (v *SourceView) occurrenceWord() string {
 		for !m.IsRuneBoundary(at) {
 			at++
 		}
-		previous, _ := m.Slice(textedit.Range{Start: at, End: r.Start})
+		previous, _ := m.Slice(TextRange{Start: at, End: r.Start})
 		c, _ := utf8.DecodeLastRuneInString(previous)
 		if word(c) {
 			return ""
@@ -237,7 +237,7 @@ func (v *SourceView) occurrenceWord() string {
 		for !m.IsRuneBoundary(at) {
 			at--
 		}
-		after, _ := m.Slice(textedit.Range{Start: r.End, End: at})
+		after, _ := m.Slice(TextRange{Start: r.End, End: at})
 		c, _ := utf8.DecodeRuneInString(after)
 		if word(c) {
 			return ""
@@ -267,8 +267,8 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 				next = col + v.indent.TabWidth - col%v.indent.TabWidth
 			}
 			for target <= next && target < columns {
-				start := p.Geometry.Caret(textedit.Position{Offset: at})
-				end := p.Geometry.Caret(textedit.Position{Offset: at + 1, Upstream: true})
+				start := p.Geometry.Caret(textcore.Position{Offset: at})
+				end := p.Geometry.Caret(textcore.Position{Offset: at + 1, Upstream: true})
 				if start.Y == end.Y {
 					x := origin.X + start.X + (end.X-start.X)*float32(target-col)/float32(next-col)
 					draw.DrawLine(geometry.Point{X: x, Y: origin.Y + start.Y}, geometry.Point{X: x, Y: origin.Y + start.Y + start.Height}, 1, guide)
@@ -303,7 +303,7 @@ func (v *SourceView) paintAssistanceBackground(draw gui.Painter, row int, p *par
 				continue
 			}
 		}
-		r := textedit.Range{Start: line.Start + p.textStart + start, End: line.Start + p.textStart + end}
+		r := TextRange{Start: line.Start + p.textStart + start, End: line.Start + p.textStart + end}
 		if r == v.Selection().Range() {
 			continue
 		}
@@ -435,13 +435,13 @@ func (v *SourceView) refreshWhitespace(p *paragraph, start int, version uint64) 
 		}
 		r, _ := utf8.DecodeRuneInString(p.text[at:end])
 		if view.WhitespaceKind(r) != 0 {
-			a := p.Geometry.Caret(textedit.Position{Offset: start + at})
-			b := p.Geometry.Caret(textedit.Position{Offset: start + end, Upstream: true})
+			a := p.Geometry.Caret(textcore.Position{Offset: start + at})
+			b := p.Geometry.Caret(textcore.Position{Offset: start + end, Upstream: true})
 			direction := typography.TextLeftToRight
 			if a.Y == b.Y && a.X > b.X {
 				direction = typography.TextRightToLeft
 			}
-			for _, rect := range p.Geometry.Selection(textedit.Range{Start: start + at, End: start + end}) {
+			for _, rect := range p.Geometry.Selection(TextRange{Start: start + at, End: start + end}) {
 				clusters = append(clusters, typography.TextCluster{Start: at, Length: end - at, X: rect.X, Width: rect.Width, LineIndex: len(lines), Direction: direction})
 				lines = append(lines, typography.TextLine{Y: rect.Y, Height: rect.Height})
 			}
@@ -470,15 +470,15 @@ func (v *SourceView) refreshWhitespace(p *paragraph, start int, version uint64) 
 				b--
 			}
 		}
-		text, _ := model.Slice(textedit.Range{Start: source.Start + a, End: source.Start + b})
+		text, _ := model.Slice(TextRange{Start: source.Start + a, End: source.Start + b})
 		return text
 	}
 	if start+len(p.text) == length {
-		w.End = p.Geometry.Caret(textedit.Position{Offset: length, Upstream: true})
+		w.End = p.Geometry.Caret(textcore.Position{Offset: length, Upstream: true})
 		w.EndReady = true
 		if length > start {
 			at := p.Geometry.Snap(length-1, false)
-			before := p.Geometry.Caret(textedit.Position{Offset: at})
+			before := p.Geometry.Caret(textcore.Position{Offset: at})
 			w.EndRTL = before.Y == w.End.Y && before.X > w.End.X
 		}
 	}

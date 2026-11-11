@@ -34,7 +34,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
@@ -133,13 +132,13 @@ func main() {
 		}
 	}
 	var find, replacement *gui.TextView
-	var selected textedit.Selection
+	var selected source.TextSelection
 	var inputSelected gui.TextSelection
 	var revision uint64
 	var text string
 	query := source.SearchQuery{Text: "one", IgnoreCase: true, WholeWord: true}
 	assertState := func() {
-		check(v.Document().Model().Text() == text && uint64(v.Document().Model().Revision()) == revision && v.Document().Model().CanUndo() && !v.Document().Model().CanRedo(), "language change altered document/history")
+		check(v.Document().Text() == text && uint64(v.Document().Revision()) == revision && v.Document().CanUndo() && !v.Document().CanRedo(), "language change altered document/history")
 		check(v.Selection() == selected && v.Search() == query && replacement.Model().Text() == "replacement 中" && panelVisible(v, "sourceview-find-bar") && replacement.Visible(), "language change altered selection/search/replacement")
 	}
 	assertBar := func(entry translation) {
@@ -235,9 +234,9 @@ func main() {
 			must(err)
 			scale = float32(img.Bounds().Dx()) / overlay.Rect().Width
 			win.SetFocusedWidget(v)
-			v.SetSelection(textedit.Selection{Anchor: v.Document().Model().Len(), Caret: v.Document().Model().Len()})
+			v.SetSelection(source.TextSelection{Anchor: v.Document().Len(), Caret: v.Document().Len()})
 			must(win.CommitText("!"))
-			v.SetSelection(textedit.Selection{Caret: 3})
+			v.SetSelection(source.TextSelection{Caret: 3})
 			openReplace()
 			find = named(bar, "Find").(*gui.TextView)
 			replacement = named(bar, "Replacement").(*gui.TextView)
@@ -246,7 +245,7 @@ func main() {
 			must(win.CommitText("replacement 中"))
 			replacement.SetSelection(gui.TextSelection{Anchor: 2, Caret: 8})
 			selected, inputSelected = v.Selection(), replacement.Selection()
-			text, revision = v.Document().Model().Text(), uint64(v.Document().Model().Revision())
+			text, revision = v.Document().Text(), uint64(v.Document().Revision())
 			phase++
 		case 1:
 			must(mlang.SetLanguage(languages[index].Tag))
@@ -325,7 +324,7 @@ func main() {
 			phase = 4
 			if index == len(languages) {
 				key(events.KeyEnter, 0)
-				check(v.Selection() == (textedit.Selection{Caret: len(text)}), "translated select-all command did not execute")
+				check(v.Selection() == (source.TextSelection{Caret: len(text)}), "translated select-all command did not execute")
 				v.SetSelection(selected)
 				overlay.SetChild(nil)
 				must(mlang.SetLanguage("ja"))

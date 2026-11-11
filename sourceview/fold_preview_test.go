@@ -9,7 +9,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -60,10 +59,10 @@ func TestWrappedLongLineHasGutterEntryWithoutLanguageFolds(t *testing.T) {
 
 func TestWrappedStructuralFoldShortensHeaderAndHasOneArrow(t *testing.T) {
 	v, original := wrappedFoldFixture(t)
-	m := v.Document().Model()
+	m := v.Document()
 	revision, undo := m.Revision(), m.CanUndo()
 	header, _ := m.LineRange(0)
-	v.SetSelection(textedit.Selection{Anchor: header.End - 3, Caret: header.End - 3})
+	v.SetSelection(TextSelection{Anchor: header.End - 3, Caret: header.End - 3})
 	if !v.toggleGutterFold(0) {
 		t.Fatal("structure did not collapse")
 	}
@@ -127,7 +126,7 @@ func TestWrappedStructuralHeaderReveal(t *testing.T) {
 			switch action {
 			case "selection":
 				at := strings.Index(original, "HEADER_NEEDLE")
-				v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+				v.SetSelection(TextSelection{Anchor: at, Caret: at})
 			case "search":
 				v.SetSearch(SearchQuery{Text: "HEADER_NEEDLE"})
 				if _, ok := v.FindNext(false); !ok {
@@ -142,7 +141,7 @@ func TestWrappedStructuralHeaderReveal(t *testing.T) {
 					t.Fatal("delete did not reveal a shortened header")
 				}
 			}
-			if v.folds[0].Collapsed || v.lineCollapsed(0) || v.Document().Model().Text() != original {
+			if v.folds[0].Collapsed || v.lineCollapsed(0) || v.Document().Text() != original {
 				t.Fatal("hidden-header reveal failed or changed source")
 			}
 		})
@@ -199,8 +198,8 @@ func TestWrappedFoldPreviewCallbackAndOtherParagraphIME(t *testing.T) {
 	v, _ := wrappedFoldFixture(t)
 	v.Fold(0)
 	// Composition in a subsequent visible paragraph preserves this preview.
-	at := v.Document().Model().Len()
-	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	at := v.Document().Len()
+	v.SetSelection(TextSelection{Anchor: at, Caret: at})
 	focusBracketFixture(t, v)
 	v.applyPreedit("中\n文", 7)
 	v.Arrange(v.Rect())
@@ -215,7 +214,7 @@ func TestWrappedFoldPreviewCallbackAndOtherParagraphIME(t *testing.T) {
 	v.cancelPreedit()
 	v.ConnectFoldingChanged(func() { v.SetDocument(NewDocument("replacement")) })
 	v.expandLinePreview(0)
-	if v.Document().Model().Text() != "replacement" {
+	if v.Document().Text() != "replacement" {
 		t.Fatal("expansion callback was overwritten")
 	}
 }
@@ -265,11 +264,11 @@ func TestWrappedFoldCompositionExpandsTargetBeforeCallback(t *testing.T) {
 			}
 			v.applyPreedit("中", 3)
 			if reenter {
-				if v.Document().Model().Text() != "replacement" || v.projection != nil {
+				if v.Document().Text() != "replacement" || v.projection != nil {
 					t.Fatal("preedit continued after the expansion callback replaced its document")
 				}
 			} else {
-				if v.folds[0].Collapsed || v.lineCollapsed(0) || v.projection == nil || v.Document().Model().Text() != original {
+				if v.folds[0].Collapsed || v.lineCollapsed(0) || v.projection == nil || v.Document().Text() != original {
 					t.Fatal("IME did not reveal its structural header before projection")
 				}
 				v.cancelPreedit()
@@ -301,7 +300,7 @@ func TestWrappedPagedStructuralHeaderKeepsPreviewClip(t *testing.T) {
 		}
 	}
 	v.SetSearch(SearchQuery{Text: "HEADER_END"})
-	if _, ok := v.FindNext(false); !ok || v.folds[0].Collapsed || v.Selection().Caret < 100000 || v.Document().Model().Text() != text {
+	if _, ok := v.FindNext(false); !ok || v.folds[0].Collapsed || v.Selection().Caret < 100000 || v.Document().Text() != text {
 		t.Fatal("search did not reveal a distant structural header page")
 	}
 }

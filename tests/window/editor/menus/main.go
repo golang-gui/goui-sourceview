@@ -29,7 +29,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/basic"
@@ -97,7 +96,7 @@ func main() {
 	const text = "alpha\nbeta\n"
 	doc := source.NewDocument(text)
 	v.SetDocument(doc)
-	v.SetSelection(textedit.Selection{Caret: 5})
+	v.SetSelection(source.TextSelection{Caret: 5})
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
@@ -233,12 +232,12 @@ func main() {
 			r := rows(popup)
 			check(!r[5].info.Enabled && r[11].info.Enabled, "readonly menu availability was not updated")
 			v.SetReadOnly(false)
-			v.SetSelection(textedit.Selection{})
+			v.SetSelection(source.TextSelection{})
 			return true
 		},
 		func() bool {
 			check(!rows(popup)[5].info.Enabled, "collapsed selection left Delete enabled")
-			v.SetSelection(textedit.Selection{Caret: 5})
+			v.SetSelection(source.TextSelection{Caret: 5})
 			must(mlang.SetLanguage("zh-CN"))
 			return true
 		},
@@ -256,7 +255,7 @@ func main() {
 			return true
 		},
 		func() bool {
-			check(doc.Model().Text() == "\nbeta\n" && len(win.Popovers()) == 0, fmt.Sprintf("unbound Delete: text=%q popovers=%d selection=%+v", doc.Model().Text(), len(win.Popovers()), v.Selection()))
+			check(doc.Text() == "\nbeta\n" && len(win.Popovers()) == 0, fmt.Sprintf("unbound Delete: text=%q popovers=%d selection=%+v", doc.Text(), len(win.Popovers()), v.Selection()))
 			open()
 			return true
 		},
@@ -269,7 +268,7 @@ func main() {
 			return true
 		},
 		func() bool {
-			check(doc.Model().Text() == text && len(win.Popovers()) == 0, "menu undo failed")
+			check(doc.Text() == text && len(win.Popovers()) == 0, "menu undo failed")
 			open()
 			return true
 		},
@@ -291,7 +290,7 @@ func main() {
 			}
 			verify()
 			v.SetDocument(source.NewDocument("replacement"))
-			check(len(win.Popovers()) == 0 && v.Document().Model().Text() == "replacement", "document replacement retained old menu")
+			check(len(win.Popovers()) == 0 && v.Document().Text() == "replacement", "document replacement retained old menu")
 			return true
 		},
 	}

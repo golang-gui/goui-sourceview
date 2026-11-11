@@ -5,7 +5,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -25,14 +24,14 @@ func TestCompletionInputWordCallbackReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	original.SetLanguageDefinition(definition)
-	original.Model().SetText("word")
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
-	s := &completionSession{state: v.operationState(), definition: definition, range_: textedit.Range{Start: 0, End: 4}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {}}}
+	original.SetText("word")
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
+	s := &completionSession{state: v.operationState(), definition: definition, range_: TextRange{Start: 0, End: 4}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {}}}
 	v.completion = s
 	armed = true
-	_, err = v.completionInput(textedit.Range{Start: 2, End: 2}, "a", false)
-	if err != ErrOperationChanged || v.Document() != replacement || replacement.Model().Text() != "keep" || original.Model().Text() != "word" {
-		t.Fatalf("word callback edited replacement: err=%v old=%q replacement=%q", err, original.Model().Text(), replacement.Model().Text())
+	_, err = v.completionInput(TextRange{Start: 2, End: 2}, "a", false)
+	if err != ErrOperationChanged || v.Document() != replacement || replacement.Text() != "keep" || original.Text() != "word" {
+		t.Fatalf("word callback edited replacement: err=%v old=%q replacement=%q", err, original.Text(), replacement.Text())
 	}
 }
 
@@ -42,31 +41,31 @@ func TestCompletionOwnedEditRetention(t *testing.T) {
 			v := NewSourceView()
 			observe(t, v)
 			v.document.model.SetText("word tail")
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 			c, _ := v.completionContext(true)
 			closed := 0
 			s := &completionSession{state: v.operationState(), definition: c.Definition, language: c.Language, range_: c.Range, explicit: true, items: []Completion{{Label: "worker", Text: "worker"}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() { closed++ }}}
 			v.completion = s
 			t.Cleanup(v.closeCompletion)
-			r, text := textedit.Range{Start: 2, End: 2}, "a"
+			r, text := TextRange{Start: 2, End: 2}, "a"
 			end := 5
 			if kind == "backspace" {
-				r, text, end = textedit.Range{Start: 1, End: 2}, "", 3
+				r, text, end = TextRange{Start: 1, End: 2}, "", 3
 			}
 			if kind == "delete" {
-				r, text, end = textedit.Range{Start: 2, End: 3}, "", 3
+				r, text, end = TextRange{Start: 2, End: 3}, "", 3
 			}
 			if kind == "reenter model" {
-				v.ConnectChange(func(textedit.Change) {
+				v.ConnectChange(func(TextChange) {
 					if v.document.model.Text() != "replacement" {
 						v.document.model.SetText("replacement")
 					}
 				})
 			}
 			if kind == "reenter selection" {
-				v.ConnectSelection(func(textedit.Selection) { v.SetSelection(textedit.Selection{Anchor: 1, Caret: 1}) })
+				v.ConnectSelection(func(TextSelection) { v.SetSelection(TextSelection{Anchor: 1, Caret: 1}) })
 			}
-			keep := &completionEdit{state: v.operationState(), epoch: v.completionEpoch, session: s, request: CompletionContext{Definition: c.Definition, Range: c.Range, Explicit: true}, edit: textedit.Edit{Range: r, Text: text}}
+			keep := &completionEdit{state: v.operationState(), epoch: v.completionEpoch, session: s, request: CompletionContext{Definition: c.Definition, Range: c.Range, Explicit: true}, edit: TextEdit{Range: r, Text: text}}
 			switch kind {
 			case "external":
 				if err := v.ReplaceSelection(text); err != nil {
@@ -86,7 +85,7 @@ func TestCompletionOwnedEditRetention(t *testing.T) {
 				}
 			}
 			if kind == "insert" || kind == "backspace" || kind == "delete" {
-				if v.completion != s || closed != 0 || !s.pending || !s.state.valid(v) || s.range_ != (textedit.Range{Start: 0, End: end}) || v.completionEdit != nil {
+				if v.completion != s || closed != 0 || !s.pending || !s.state.valid(v) || s.range_ != (TextRange{Start: 0, End: end}) || v.completionEdit != nil {
 					t.Fatalf("lost owned session: closed=%d pending=%t range=%v", closed, s.pending, s.range_)
 				}
 				before := v.document.model.Text()

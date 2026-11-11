@@ -9,12 +9,12 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
 )
 
@@ -59,12 +59,12 @@ type SourceView struct {
 	mounted                bool
 	mountEpoch, pasteEpoch uint64
 	observed               uint64
-	source                 textedit.EditSource
+	source                 textcore.EditSource
 	windowFocus            signal.Handle
 
 	// Selection and editing options.
 	selectionTrail                    selectionTrail
-	selection                         textedit.Selection
+	selection                         TextSelection
 	selectionRevision, selectionEpoch uint64
 	upstream                          bool
 	preferredX                        float32
@@ -81,7 +81,7 @@ type SourceView struct {
 	// Native text and input-method resources belong to this view.
 	context                      typography.Context
 	im                           gui.IMContext
-	projection                   *textedit.Projection
+	projection                   *textcore.Projection
 	projectionRevision           uint64
 	compositionSeen, resettingIM bool
 	pendingPaste                 *pasteRequest
@@ -99,7 +99,7 @@ type SourceView struct {
 	// Viewport, measurements and deferred layout.
 	viewport                   geometry.Size
 	offset                     geometry.Point
-	heights                    textedit.HeightIndex
+	heights                    textcore.HeightIndex
 	heightEstimated            bool
 	visibleLines               folding.VisibleLines
 	hiddenLines                []folding.Interval
@@ -123,8 +123,8 @@ type SourceView struct {
 	foldColumn                                                                        float32
 	foldingEnabled                                                                    bool
 	folds                                                                             []folding.Entry
-	collapsedFolds                                                                    map[int]textedit.Range
-	collapsedLines                                                                    map[int]textedit.Range
+	collapsedFolds                                                                    map[int]TextRange
+	collapsedLines                                                                    map[int]TextRange
 	collapsedRevision                                                                 uint64
 	foldRevision                                                                      uint64
 	foldDefinition                                                                    *language.Language
@@ -149,7 +149,7 @@ type SourceView struct {
 	dragInline       bool // keep the initial hit while dismissed inline space closes
 	dragGutter       bool
 	dragUnit         int // 0: caret, 1: word, 2: logical line
-	dragRange        textedit.Range
+	dragRange        TextRange
 	clickCount       int
 	lastClick        time.Time
 	lastClickPoint   geometry.Point
@@ -165,7 +165,7 @@ type SourceView struct {
 	query                  SearchQuery
 	highlightSearchMatches bool
 	search                 *editor.Search
-	searchRange            *textedit.Range
+	searchRange            *TextRange
 	currentMatch           *searchMatch
 
 	// Optional host-provided inline suffix; its native layout belongs to this view.
@@ -180,10 +180,10 @@ type SourceView struct {
 	completionEpoch                        uint64
 	closingCompletion, automaticCompletion bool
 
-	selectionSignal signal.Signal1[textedit.Selection]
+	selectionSignal signal.Signal1[TextSelection]
 	errorSignal     signal.Signal1[error]
 	scrollSignal    signal.Signal1[geometry.Rectangle]
-	changeSignal    signal.Signal1[textedit.Change]
+	changeSignal    signal.Signal1[TextChange]
 	foldingSignal   signal.Signal0
 	searchState     signal.Signal0
 }
@@ -268,7 +268,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	v.pairs = nil
 	v.brackets = bracketState{}
 	v.tagMatches = tagMatchState{}
-	v.selection = textedit.Selection{}
+	v.selection = TextSelection{}
 	v.upstream = false
 	v.selectionEpoch++
 	v.selectionRevision = d.model.Revision()
@@ -298,9 +298,9 @@ func (v *SourceView) SetDocument(d *Document) {
 	}
 }
 
-func (v *SourceView) Selection() textedit.Selection { return v.clampSelection(v.selection) }
+func (v *SourceView) Selection() TextSelection { return v.clampSelection(v.selection) }
 
-func (v *SourceView) SetSelection(s textedit.Selection) {
+func (v *SourceView) SetSelection(s TextSelection) {
 	v.pendingInput = nil
 	state := v.operationState()
 	v.cancelPreedit()
@@ -311,7 +311,7 @@ func (v *SourceView) SetSelection(s textedit.Selection) {
 	v.setSelection(s, false, true)
 }
 
-func (v *SourceView) clampSelection(s textedit.Selection) textedit.Selection {
+func (v *SourceView) clampSelection(s TextSelection) TextSelection {
 	s.Anchor = v.clampOffset(s.Anchor)
 	s.Caret = v.clampOffset(s.Caret)
 	return s
@@ -326,13 +326,13 @@ func (v *SourceView) clampOffset(offset int) int {
 	return offset
 }
 
-func (v *SourceView) setSelection(s textedit.Selection, upstream, reveal bool) {
+func (v *SourceView) setSelection(s TextSelection, upstream, reveal bool) {
 	v.setSelectionKeepingCompletion(s, upstream, reveal, nil)
 }
 
 // Only owned input or keyboard movement inside a completion word retains its UI.
 // Explicit setters, pointer input and reentrant callbacks use setSelection.
-func (v *SourceView) setSelectionKeepingCompletion(s textedit.Selection, upstream, reveal bool, keep *completionSession) {
+func (v *SourceView) setSelectionKeepingCompletion(s TextSelection, upstream, reveal bool, keep *completionSession) {
 	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	defer v.searchState.Emit()
@@ -468,13 +468,13 @@ func (v *SourceView) SetShowLineNumbers(show bool) {
 // SetScheme overrides code-area colors only. nil uses the owning stylesheet.
 func (v *SourceView) SetScheme(s *scheme.Scheme) { v.explicitScheme = s; v.updateScheme() }
 
-func (v *SourceView) ConnectSelection(fn func(textedit.Selection)) signal.Handle {
+func (v *SourceView) ConnectSelection(fn func(TextSelection)) signal.Handle {
 	return v.selectionSignal.Connect(fn)
 }
 
 func (v *SourceView) ConnectError(fn func(error)) signal.Handle { return v.errorSignal.Connect(fn) }
 
-func (v *SourceView) ConnectChange(fn func(textedit.Change)) signal.Handle {
+func (v *SourceView) ConnectChange(fn func(TextChange)) signal.Handle {
 	return v.changeSignal.Connect(fn)
 }
 
@@ -570,7 +570,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 		r.End--
 	}
 	text, _ := m.Slice(r)
-	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: v.Selection(), Length: m.Len(), VisibleRange: r, VisibleText: text}
+	info.TextEditing = &gui.TextEditingInfo{ReadOnly: v.readOnly, Selection: gui.TextSelection(v.Selection()), Length: m.Len(), VisibleRange: gui.TextRange(r), VisibleText: text}
 	v.snapshotFolding(&info, first, last)
 	v.snapshotCollapsedLines(&info, first, last)
 	v.snapshotLineMarks(&info, first, last)
@@ -578,13 +578,13 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	v.snapshotInlineSuggestion(&info)
 	if v.projection != nil {
 		text := v.projection.Text()
-		limit := textedit.ClampOffset(text, min(len(text), 64*1024))
-		info.TextEditing.Preedit = &gui.TextPreeditInfo{Replacement: v.projection.Replacement(), Text: text[:limit], Caret: v.projection.Caret(), Length: len(text)}
+		limit := textcore.ClampOffset(text, min(len(text), 64*1024))
+		info.TextEditing.Preedit = &gui.TextPreeditInfo{Replacement: gui.TextRange(v.projection.Replacement()), Text: text[:limit], Caret: v.projection.Caret(), Length: len(text)}
 	}
 	return info
 }
 
-func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, reset bool) {
+func (v *SourceView) changed(c TextChange, splices []highlight.Splice, reset bool) {
 	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	v.initialLayout = nil
@@ -617,7 +617,7 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 		v.pendingAnchor = false
 	} else if v.anchor.valid && v.anchorRevision < c.Revision {
 		for _, edit := range c.Edits {
-			v.anchor.offset = textedit.MapOffset(v.anchor.offset, edit)
+			v.anchor.offset = textcore.MapOffset(v.anchor.offset, edit)
 		}
 		v.anchorRevision = c.Revision
 		v.pendingAnchor = true
@@ -633,11 +633,11 @@ func (v *SourceView) changed(c textedit.Change, splices []highlight.Splice, rese
 	old := v.selection
 	if v.selectionRevision < c.Revision {
 		if c.Reset {
-			v.selection = textedit.Selection{}
+			v.selection = TextSelection{}
 		} else {
 			for _, e := range c.Edits {
-				v.selection.Anchor = textedit.MapOffset(v.selection.Anchor, e)
-				v.selection.Caret = textedit.MapOffset(v.selection.Caret, e)
+				v.selection.Anchor = textcore.MapOffset(v.selection.Anchor, e)
+				v.selection.Caret = textcore.MapOffset(v.selection.Caret, e)
 			}
 		}
 		v.selectionRevision = c.Revision

@@ -27,7 +27,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
 )
@@ -65,11 +64,11 @@ func main() {
 	}
 	v.SetScheme(colors)
 	text := "{\"name\": \"hello\",\n" + strings.Repeat("  \"key\": \"value\",\n", 9) + "  \"last\": true\n}"
-	m := v.Document().Model()
+	m := v.Document()
 	m.SetText(text)
 	must(v.Document().SetLanguage(language.JSON))
 	caret := strings.Index(text, "hello") + 2
-	v.SetSelection(textedit.Selection{Anchor: caret, Caret: caret})
+	v.SetSelection(source.TextSelection{Anchor: caret, Caret: caret})
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)

@@ -10,21 +10,21 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/style"
 )
 
 func TestHighlightsValidationAndOwnership(t *testing.T) {
 	for _, spans := range [][]HighlightSpan{
-		{{Range: textedit.Range{Start: -1, End: 1}}},
-		{{Range: textedit.Range{Start: 0, End: 0}}},
-		{{Range: textedit.Range{Start: 1, End: 2}}},
-		{{Range: textedit.Range{Start: 0, End: 7}}},
-		{{Range: textedit.Range{Start: 0, End: 3}, Kind: "bad key"}},
-		{{Range: textedit.Range{Start: 0, End: 3}}, {Range: textedit.Range{Start: 0, End: 3}}},
+		{{Range: TextRange{Start: -1, End: 1}}},
+		{{Range: TextRange{Start: 0, End: 0}}},
+		{{Range: TextRange{Start: 1, End: 2}}},
+		{{Range: TextRange{Start: 0, End: 7}}},
+		{{Range: TextRange{Start: 0, End: 3}, Kind: "bad key"}},
+		{{Range: TextRange{Start: 0, End: 3}}, {Range: TextRange{Start: 0, End: 3}}},
 	} {
 		if _, err := NewHighlights("值\nab", spans); err == nil {
 			t.Fatalf("接受非法范围: %+v", spans)
@@ -35,7 +35,7 @@ func TestHighlightsValidationAndOwnership(t *testing.T) {
 			t.Fatal("接受未规范化文本")
 		}
 	}
-	spans := []HighlightSpan{{textedit.Range{Start: 0, End: 4}, language.KindNumber}}
+	spans := []HighlightSpan{{TextRange{Start: 0, End: 4}, language.KindNumber}}
 	h, err := NewHighlights("值\nab", spans)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestHighlightsValidationAndOwnership(t *testing.T) {
 	if ok, err := d.SetHighlights(d.model.Revision(), h); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	got := d.highlightSpans(textedit.Range{End: d.model.Len()})
+	got := d.highlightSpans(TextRange{End: d.model.Len()})
 	if len(got) != 1 || got[0].Kind != language.KindNumber {
 		t.Fatal("快照没有独立持有数据", got)
 	}
@@ -57,16 +57,16 @@ func TestHighlightsValidationAndOwnership(t *testing.T) {
 	if ok, err := d.SetHighlights(revision, wrong); ok || err == nil {
 		t.Fatal("不同长度没有拒绝")
 	}
-	if !reflect.DeepEqual(got, d.highlightSpans(textedit.Range{End: d.model.Len()})) {
+	if !reflect.DeepEqual(got, d.highlightSpans(TextRange{End: d.model.Len()})) {
 		t.Fatal("失败发布改动了颜色")
 	}
 	if ok, err := d.SetHighlights(revision, nil); !ok || err != nil || d.highlightRoot != nil {
 		t.Fatal("清除失败")
 	}
 	// 错误的同长度快照也不能把半个 UTF-8 字符交给原生渲染器。
-	wrong, _ = NewHighlights("abcdef", []HighlightSpan{{textedit.Range{Start: 1, End: 2}, language.KindString}})
+	wrong, _ = NewHighlights("abcdef", []HighlightSpan{{TextRange{Start: 1, End: 2}, language.KindString}})
 	d.SetHighlights(revision, wrong)
-	if len(d.highlightSpans(textedit.Range{End: 6})) != 0 {
+	if len(d.highlightSpans(TextRange{End: 6})) != 0 {
 		t.Fatal("绘制传入非法字节边界")
 	}
 }
@@ -77,24 +77,24 @@ func TestHighlightsEditMappingAndIsolation(t *testing.T) {
 		text       string
 		want       []HighlightSpan
 	}{
-		{2, 2, "XX", []HighlightSpan{{textedit.Range{Start: 4, End: 7}, language.KindNumber}}},
-		{5, 5, "XX", []HighlightSpan{{textedit.Range{Start: 2, End: 5}, language.KindNumber}}},
-		{3, 3, "XX", nil}, {1, 3, "", nil}, {4, 6, "", nil}, {0, 2, "", []HighlightSpan{{textedit.Range{Start: 0, End: 3}, language.KindNumber}}},
+		{2, 2, "XX", []HighlightSpan{{TextRange{Start: 4, End: 7}, language.KindNumber}}},
+		{5, 5, "XX", []HighlightSpan{{TextRange{Start: 2, End: 5}, language.KindNumber}}},
+		{3, 3, "XX", nil}, {1, 3, "", nil}, {4, 6, "", nil}, {0, 2, "", []HighlightSpan{{TextRange{Start: 0, End: 3}, language.KindNumber}}},
 	} {
 		d := NewDocument("abcdefgh")
-		h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{textedit.Range{Start: 2, End: 5}, language.KindNumber}})
+		h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{TextRange{Start: 2, End: 5}, language.KindNumber}})
 		d.SetHighlights(d.model.Revision(), h)
 		other := NewDocument(d.model.Text())
 		other.SetHighlights(other.model.Revision(), h)
 		conn := d.model.ConnectChange(d.changeHighlights)
-		if err := d.model.ReplaceAtomic(textedit.Range{Start: tc.start, End: tc.end}, tc.text); err != nil {
+		if err := d.model.ReplaceAtomic(TextRange{Start: tc.start, End: tc.end}, tc.text); err != nil {
 			t.Fatal(err)
 		}
 		conn.Disconnect()
-		if got := d.highlightSpans(textedit.Range{End: d.model.Len()}); !reflect.DeepEqual(got, tc.want) {
+		if got := d.highlightSpans(TextRange{End: d.model.Len()}); !reflect.DeepEqual(got, tc.want) {
 			t.Fatalf("编辑 %v 后: %v, 预期 %v", tc, got, tc.want)
 		}
-		if got := other.highlightSpans(textedit.Range{End: 8}); len(got) != 1 || got[0].Range != (textedit.Range{Start: 2, End: 5}) {
+		if got := other.highlightSpans(TextRange{End: 8}); len(got) != 1 || got[0].Range != (TextRange{Start: 2, End: 5}) {
 			t.Fatal("共享快照被修改")
 		}
 	}
@@ -105,7 +105,7 @@ func TestHighlightsRandomEdits(t *testing.T) {
 	text := strings.Repeat("x", 600)
 	var spans []HighlightSpan
 	for i := 0; i < 600; i += 6 {
-		spans = append(spans, HighlightSpan{textedit.Range{Start: i, End: i + 3}, language.KindNumber})
+		spans = append(spans, HighlightSpan{TextRange{Start: i, End: i + 3}, language.KindNumber})
 	}
 	d := NewDocument(text)
 	h, _ := NewHighlights(text, spans)
@@ -131,11 +131,11 @@ func TestHighlightsRandomEdits(t *testing.T) {
 				want = append(want, s)
 			}
 		}
-		if err := d.model.ReplaceAtomic(textedit.Range{Start: start, End: end}, insert); err != nil {
+		if err := d.model.ReplaceAtomic(TextRange{Start: start, End: end}, insert); err != nil {
 			t.Fatal(err)
 		}
 		spans = want
-		if got := d.highlightSpans(textedit.Range{End: d.model.Len()}); !reflect.DeepEqual(got, want) {
+		if got := d.highlightSpans(TextRange{End: d.model.Len()}); !reflect.DeepEqual(got, want) {
 			t.Fatalf("第 %d 步结果不符: %v / %v", step, got, want)
 		}
 	}
@@ -145,21 +145,21 @@ func TestHighlightsLifecycleAndReentrantPublication(t *testing.T) {
 	v := NewSourceView()
 	v.SetDocument(NewDocument("abc"))
 	d := v.document
-	h, _ := NewHighlights("abc", []HighlightSpan{{textedit.Range{End: 3}, language.KindNumber}})
+	h, _ := NewHighlights("abc", []HighlightSpan{{TextRange{End: 3}, language.KindNumber}})
 	d.SetHighlights(d.model.Revision(), h)
 	// 未挂载时不维持模型订阅；错过修订后挂载必须清除提示。
-	d.model.ReplaceAtomic(textedit.Range{}, "x")
+	d.model.ReplaceAtomic(TextRange{}, "x")
 	observe(t, v)
 	if d.highlightRoot != nil {
 		t.Fatal("重新挂载保留了旧坐标")
 	}
-	h, _ = NewHighlights(d.model.Text(), []HighlightSpan{{textedit.Range{End: 4}, language.KindNumber}})
+	h, _ = NewHighlights(d.model.Text(), []HighlightSpan{{TextRange{End: 4}, language.KindNumber}})
 	d.SetHighlights(d.model.Revision(), h)
 	d.model.SetText("new")
 	if d.highlightRoot != nil {
 		t.Fatal("重载未清除颜色")
 	}
-	h, _ = NewHighlights("new", []HighlightSpan{{textedit.Range{End: 3}, language.KindNumber}})
+	h, _ = NewHighlights("new", []HighlightSpan{{TextRange{End: 3}, language.KindNumber}})
 	d.SetHighlights(d.model.Revision(), h)
 	d.SetLanguage(language.JSON)
 	if d.highlightRoot != nil {
@@ -167,15 +167,15 @@ func TestHighlightsLifecycleAndReentrantPublication(t *testing.T) {
 	}
 	// 早于 Document 订阅者发布新结果时，迟到的同修订编辑通知不能再映射它。
 	d = NewDocument("abc")
-	c := d.model.ConnectChange(func(change textedit.Change) {
-		h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{textedit.Range{End: d.model.Len()}, language.KindString}})
+	c := d.model.ConnectChange(func(change TextChange) {
+		h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{TextRange{End: d.model.Len()}, language.KindString}})
 		d.SetHighlights(change.Revision, h)
 	})
 	defer c.Disconnect()
 	mapChange := d.model.ConnectChange(d.changeHighlights)
 	defer mapChange.Disconnect()
-	d.model.ReplaceAtomic(textedit.Range{}, "x")
-	if got := d.highlightSpans(textedit.Range{End: 4}); len(got) != 1 || got[0].Range.End != 4 {
+	d.model.ReplaceAtomic(TextRange{}, "x")
+	if got := d.highlightSpans(TextRange{End: 4}); len(got) != 1 || got[0].Range.End != 4 {
 		t.Fatal("重复映射了新结果", got)
 	}
 }
@@ -190,7 +190,7 @@ func TestHighlightsForegroundComposition(t *testing.T) {
 	def.Tokens[language.KindString] = lexical
 	s, _ := scheme.New(def)
 	v.SetScheme(s)
-	got := v.paragraphColors(8, paragraphStyle{selection: textedit.Range{Start: 3, End: 5}, focused: true}, []highlight.Token{{Start: 0, End: 8, Kind: language.KindString}}, HighlightSpan{textedit.Range{Start: 2, End: 6}, "external"}, HighlightSpan{textedit.Range{Start: 6, End: 7}, language.KindPlain})
+	got := v.paragraphColors(8, paragraphStyle{selection: TextRange{Start: 3, End: 5}, focused: true}, []highlight.Token{{Start: 0, End: 8, Kind: language.KindString}}, HighlightSpan{TextRange{Start: 2, End: 6}, "external"}, HighlightSpan{TextRange{Start: 6, End: 7}, language.KindPlain})
 	want := []paragraphColor{{0, 2, lexical}, {2, 3, semantic}, {3, 5, selected}, {5, 6, semantic}, {7, 8, lexical}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal("前景优先级不正确", got)
@@ -208,7 +208,7 @@ func TestHighlightsReuseNativeGeometry(t *testing.T) {
 	revision := d.model.Revision()
 	definition := d.definition
 	engine := d.engine
-	h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{textedit.Range{End: 3}, language.KindNumber}})
+	h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{TextRange{End: 3}, language.KindNumber}})
 	d.SetHighlights(revision, h)
 	v.Paint(&recordingPainter{})
 	v.layoutStep(time.Time{})
@@ -233,7 +233,7 @@ func BenchmarkHighlightsPublishAndEdit(b *testing.B) {
 			text := strings.Repeat("abc ", count)
 			spans := make([]HighlightSpan, count)
 			for i := range spans {
-				spans[i] = HighlightSpan{textedit.Range{Start: i * 4, End: i*4 + 3}, language.KindNumber}
+				spans[i] = HighlightSpan{TextRange{Start: i * 4, End: i*4 + 3}, language.KindNumber}
 			}
 			h, _ := NewHighlights(text, spans)
 			d := NewDocument(text)
@@ -241,7 +241,7 @@ func BenchmarkHighlightsPublishAndEdit(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				d.SetHighlights(d.model.Revision(), h)
-				d.changeHighlights(textedit.Change{Revision: d.model.Revision() + 1, Edits: []textedit.Edit{{Range: textedit.Range{Start: count * 2, End: count * 2}, Text: "x"}}})
+				d.changeHighlights(TextChange{Revision: d.model.Revision() + 1, Edits: []TextEdit{{Range: TextRange{Start: count * 2, End: count * 2}, Text: "x"}}})
 			}
 		})
 	}
@@ -256,7 +256,7 @@ func TestHighlightsSharedViewsUndoAndMinimap(t *testing.T) {
 	observe(t, other)
 	v.SetScheme(scheme.Light())
 	other.SetScheme(scheme.Dark())
-	h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{textedit.Range{Start: 4, End: 7}, language.KindNumber}})
+	h, _ := NewHighlights(d.model.Text(), []HighlightSpan{{TextRange{Start: 4, End: 7}, language.KindNumber}})
 	d.SetHighlights(d.model.Revision(), h)
 	v.prepareMinimap()
 	finishMap(t, v)
@@ -270,20 +270,20 @@ func TestHighlightsSharedViewsUndoAndMinimap(t *testing.T) {
 	if v.highlightColor(language.KindNumber) == other.highlightColor(language.KindNumber) {
 		t.Fatal("共享文档污染视图配色")
 	}
-	d.model.ReplaceAtomic(textedit.Range{}, "x")
-	if got := d.highlightSpans(textedit.Range{End: 8}); len(got) != 1 || got[0].Range.Start != 5 {
+	d.model.ReplaceAtomic(TextRange{}, "x")
+	if got := d.highlightSpans(TextRange{End: 8}); len(got) != 1 || got[0].Range.Start != 5 {
 		t.Fatal("共享视图重复映射")
 	}
 	if !d.model.Undo() {
 		t.Fatal("撤销失败")
 	}
-	if got := d.highlightSpans(textedit.Range{End: 7}); len(got) != 1 || got[0].Range.Start != 4 {
+	if got := d.highlightSpans(TextRange{End: 7}); len(got) != 1 || got[0].Range.Start != 4 {
 		t.Fatal("撤销提示坐标不正确")
 	}
 	if !d.model.Redo() {
 		t.Fatal("重做失败")
 	}
-	if got := d.highlightSpans(textedit.Range{End: 8}); len(got) != 1 || got[0].Range.Start != 5 {
+	if got := d.highlightSpans(TextRange{End: 8}); len(got) != 1 || got[0].Range.Start != 5 {
 		t.Fatal("重做提示坐标不正确")
 	}
 	d.SetHighlights(d.model.Revision(), nil)
@@ -320,12 +320,12 @@ func TestHighlightsCustomStyleWithoutLanguageRegistration(t *testing.T) {
 func TestHighlightsPreeditProjection(t *testing.T) {
 	v := NewSourceView()
 	v.SetDocument(NewDocument("abc\ndef"))
-	h, _ := NewHighlights(v.document.model.Text(), []HighlightSpan{{textedit.Range{End: 7}, language.KindNumber}})
+	h, _ := NewHighlights(v.document.model.Text(), []HighlightSpan{{TextRange{End: 7}, language.KindNumber}})
 	v.document.SetHighlights(v.document.model.Revision(), h)
-	v.projection = textedit.NewProjection(v.document.model, textedit.Selection{Anchor: 2, Caret: 5})
+	v.projection = textcore.NewProjection(v.document.model, TextSelection{Anchor: 2, Caret: 5})
 	v.projection.Update("中文", 3)
-	got := v.displayHighlights(textedit.Range{End: 10})
-	want := []HighlightSpan{{textedit.Range{End: 2}, language.KindNumber}, {textedit.Range{Start: 8, End: 10}, language.KindNumber}}
+	got := v.displayHighlights(TextRange{End: 10})
+	want := []HighlightSpan{{TextRange{End: 2}, language.KindNumber}, {TextRange{Start: 8, End: 10}, language.KindNumber}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal("预编辑影响了其他文本着色", got)
 	}

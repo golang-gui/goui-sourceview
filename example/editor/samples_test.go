@@ -14,7 +14,7 @@ func TestSampleDocuments(t *testing.T) {
 	hosts := map[string]language.ID{"deployment.yaml.gotmpl": language.YAML, "deployment.yaml.j2": language.YAML,
 		"settings.toml.j2": language.TOML, "view.xml.gotmpl": language.XML}
 	for _, sample := range documents {
-		if sample.document.Model().Len() == 0 || sample.document.Language() == language.Plain {
+		if sample.document.Len() == 0 || sample.document.Language() == language.Plain {
 			t.Fatalf("unrecognized sample: %s", sample.name)
 		}
 		seen[sample.document.Language()] = true

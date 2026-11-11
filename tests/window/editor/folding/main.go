@@ -33,7 +33,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
@@ -96,13 +95,13 @@ func main() {
 		}
 	}
 	caret := func(line int, end bool) {
-		r, err := doc.Model().LineRange(line)
+		r, err := doc.LineRange(line)
 		must(err)
 		at := r.Start
 		if end {
 			at = r.End
 		}
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 	}
 	var steps []func() bool
 	next := func(f func()) { steps = append(steps, func() bool { f(); return true }) }
@@ -142,16 +141,16 @@ func main() {
 		caret(3, false)
 		key(events.KeyBracketLeft, foldMods)
 		check(v.FoldingRegions()[1].Collapsed && !other.FoldingRegions()[1].Collapsed, "keyboard folding/view isolation")
-		check(doc.Model().Text() == original && !doc.Model().CanUndo(), "fold changed model/history")
+		check(doc.Text() == original && !doc.CanUndo(), "fold changed model/history")
 	})
 	next(func() {
 		caret(1, true)
 		key(events.KeyDelete, 0)
-		check(!v.FoldingRegions()[1].Collapsed && doc.Model().Text() == original, "boundary delete changed hidden text")
+		check(!v.FoldingRegions()[1].Collapsed && doc.Text() == original, "boundary delete changed hidden text")
 		key(events.KeyDelete, 0)
-		check(doc.Model().Text() != original, "second Delete did not edit")
+		check(doc.Text() != original, "second Delete did not edit")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == original, "undo did not restore")
+		check(doc.Text() == original, "undo did not restore")
 	})
 	steps = append(steps, func() bool { return len(v.FoldingRegions()) == 2 })
 	next(func() { v.SetShowLineNumbers(false); caret(1, true) })
@@ -181,12 +180,12 @@ func main() {
 		v.SetSearch(source.SearchQuery{Text: "2"})
 		key(events.KeyF3, 0)
 		check(!v.FoldingRegions()[0].Collapsed && !v.FoldingRegions()[1].Collapsed, "search target remained hidden")
-		text, err := doc.Model().Slice(v.Selection().Range())
+		text, err := doc.Slice(v.Selection().Range())
 		must(err)
 		check(text == "2", "search lost source coordinates")
 	})
 	next(func() {
-		doc.Model().SetText("<DIV title=\">\">\n<br>\n<script>\nconst x = '<fake>';\n</script>\n</div>")
+		doc.SetText("<DIV title=\">\">\n<br>\n<script>\nconst x = '<fake>';\n</script>\n</div>")
 		must(doc.SetLanguage(language.HTML))
 	})
 	steps = append(steps, func() bool { return len(v.FoldingRegions()) == 2 })

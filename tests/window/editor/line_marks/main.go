@@ -23,7 +23,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/basic"
@@ -101,7 +100,7 @@ func main() {
 	stage := 0
 	done := false
 	deadline := time.Now().Add(20 * time.Second)
-	var selected textedit.Selection
+	var selected source.TextSelection
 	timer := app.NewTimer()
 	defer timer.Stop()
 	timer.ConnectTimeout(func() {
@@ -115,7 +114,7 @@ func main() {
 			if len(v.FoldingRegions()) == 0 {
 				return
 			}
-			v.SetSelection(textedit.Selection{Anchor: 1, Caret: 3})
+			v.SetSelection(source.TextSelection{Anchor: 1, Caret: 3})
 			selected = v.Selection()
 			img, err := gui.RenderWidget(v, 2)
 			must(err)
@@ -147,11 +146,11 @@ func main() {
 			for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 				must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: events.KeyF9}))
 			}
-			check(len(received) == 4 && received[3].Line == doc.Model().LineAt(selected.Caret), "F9 target")
+			check(len(received) == 4 && received[3].Line == doc.LineAt(selected.Caret), "F9 target")
 			check(v.Selection() == selected && len(doc.LineMarks()) == 1, "request changed model")
 			click(geometry.Point{X: info.Bounds.X + info.Bounds.Width + 8, Y: info.Bounds.Y + info.Bounds.Height/2}, events.PointerButtonLeft, 0)
 			check(v.Selection().Anchor != v.Selection().Caret, "line numbers no longer select")
-			v.SetSelection(textedit.Selection{})
+			v.SetSelection(source.TextSelection{})
 			check(v.Fold(0), "cannot fold")
 		case 4:
 			fold, ok := markInfo(0)
@@ -166,7 +165,7 @@ func main() {
 			must(v.RevealLine(2))
 		case 6:
 			check(!v.FoldingRegions()[0].Collapsed, "reveal did not expand containing fold")
-			must(doc.Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "\n"}, textedit.EditOptions{Atomic: true}))
+			must(doc.ReplaceAtomic(source.TextRange{}, "\n"))
 			check(doc.LineMarks()[0].Line == 3, "mark did not track mounted edit")
 			line, ok := v.ExecutionLine()
 			check(ok && line == 3, "execution did not track")

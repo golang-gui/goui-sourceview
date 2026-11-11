@@ -10,7 +10,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/style"
 )
 
@@ -18,7 +17,7 @@ import (
 // KindPlain explicitly restores the ordinary foreground. It changes no lexical
 // context, completion rules, diagnostics, or other editor behavior.
 type HighlightSpan struct {
-	Range textedit.Range
+	Range TextRange
 	Kind  language.Kind
 }
 
@@ -81,7 +80,7 @@ func (d *Document) SetHighlights(revision uint64, h *Highlights) (bool, error) {
 	return true, nil
 }
 
-func (d *Document) changeHighlights(c textedit.Change) {
+func (d *Document) changeHighlights(c TextChange) {
 	// A callback may have already published for this or a later committed revision.
 	if c.Revision <= d.highlightRevision {
 		return
@@ -96,7 +95,7 @@ func (d *Document) changeHighlights(c textedit.Change) {
 		d.highlightEpoch++
 	}
 }
-func (d *Document) highlightSpans(r textedit.Range) []HighlightSpan {
+func (d *Document) highlightSpans(r TextRange) []HighlightSpan {
 	if r.End <= r.Start || d.highlightRevision != d.model.Revision() {
 		return nil
 	}
@@ -111,7 +110,7 @@ func (d *Document) highlightSpans(r textedit.Range) []HighlightSpan {
 }
 
 // Preserve colors outside preedit without applying document colors to IME text.
-func (v *SourceView) displayHighlights(r textedit.Range) []HighlightSpan {
+func (v *SourceView) displayHighlights(r TextRange) []HighlightSpan {
 	if v.projection == nil {
 		return v.document.highlightSpans(r)
 	}
@@ -121,10 +120,10 @@ func (v *SourceView) displayHighlights(r textedit.Range) []HighlightSpan {
 	delta := end - replace.End
 	var spans []HighlightSpan
 	if r.Start < replace.Start {
-		spans = v.document.highlightSpans(textedit.Range{Start: r.Start, End: min(r.End, replace.Start)})
+		spans = v.document.highlightSpans(TextRange{Start: r.Start, End: min(r.End, replace.Start)})
 	}
 	if r.End > end {
-		suffix := v.document.highlightSpans(textedit.Range{Start: max(r.Start, end) - delta, End: r.End - delta})
+		suffix := v.document.highlightSpans(TextRange{Start: max(r.Start, end) - delta, End: r.End - delta})
 		for i := range suffix {
 			suffix[i].Range.Start += delta
 			suffix[i].Range.End += delta

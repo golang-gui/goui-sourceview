@@ -21,12 +21,12 @@ import (
 	"runtime"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -97,7 +97,7 @@ func main() {
 	v.SetScheme(explicit)
 	v.SetAcceptsTab(true)
 	d := v.Document()
-	d.Model().SetText("alpha beta\n")
+	d.SetText("alpha beta\n")
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
@@ -124,13 +124,13 @@ func main() {
 		func() {
 			check(win.Focused() && ctx.line != nil, "native focus/layout unavailable")
 			lines, clusters := ctx.line.MeasureMetrics()
-			g := textedit.NewGeometry(lines, clusters, 10, 22)
-			r := g.Selection(textedit.Range{Start: 4, End: 5})[0]
+			g := textcore.NewGeometry(lines, clusters, 10, 22)
+			r := g.Selection(source.TextRange{Start: 4, End: 5})[0]
 			bounds := v.Snapshot().Bounds
 			point = geometry.Point{X: bounds.X + 6 + r.X + r.Width*.8, Y: bounds.Y + 6 + r.Y + r.Height/2}
 			click(events.PointerButtonLeft, point)
 			click(events.PointerButtonLeft, point)
-			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 5}), "double-click release lost word")
+			check(v.Selection().Range() == (source.TextRange{Start: 0, End: 5}), "double-click release lost word")
 			v.RevealSelection()
 			original := ctx.line
 			f := original.Format()
@@ -146,10 +146,10 @@ func main() {
 			check(got.Width == want.Width && got.Height == want.Height && got.Stride == want.Stride && bytes.Equal(pixels, want.Pixels), "partial selection foreground mismatch")
 			fresh.Destroy()
 			click(events.PointerButtonLeft, point)
-			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 11}), "triple-click release lost logical line")
-			v.SetSelection(textedit.Selection{Caret: 5})
+			check(v.Selection().Range() == (source.TextRange{Start: 0, End: 11}), "triple-click release lost logical line")
+			v.SetSelection(source.TextSelection{Caret: 5})
 			click(events.PointerButtonRight, point)
-			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 5}), "right-click changed selected trailing half")
+			check(v.Selection().Range() == (source.TextRange{Start: 0, End: 5}), "right-click changed selected trailing half")
 			check(len(win.Popovers()) == 1, "context menu missing")
 			popup = win.Popovers()[0]
 		},
@@ -171,10 +171,10 @@ func main() {
 			for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
 				must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: p}))
 			}
-			check(d.Model().Text() == " beta\n", "menu Delete failed")
+			check(d.Text() == " beta\n", "menu Delete failed")
 			check(len(win.Popovers()) == 0, "menu failed to close")
 			key(events.KeyZ, primary)
-			check(d.Model().Text() == "alpha beta\n", "menu Delete undo failed")
+			check(d.Text() == "alpha beta\n", "menu Delete undo failed")
 			key(events.KeyF10, events.ModifierShift)
 			check(len(win.Popovers()) == 1, "keyboard menu missing")
 			key(events.KeyEnd, 0)
@@ -195,7 +195,7 @@ func main() {
 			}
 			check(selected(win.Popovers()[0].Widget().Snapshot()), "menu keyboard selection missing")
 			key(events.KeyEnter, 0)
-			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 11}) && len(win.Popovers()) == 0, "menu keyboard activation failed")
+			check(v.Selection().Range() == (source.TextRange{Start: 0, End: 11}) && len(win.Popovers()) == 0, "menu keyboard activation failed")
 			key(events.KeyF10, events.ModifierShift)
 			key(events.KeyEscape, 0)
 			check(len(win.Popovers()) == 0, "Escape did not close menu")
@@ -203,8 +203,8 @@ func main() {
 			check(len(win.Popovers()) == 0, "completion opened for a nonempty selection")
 			log.Printf("PASS double/triple click, partial selection colors, context menu and history; backend=%s", app.Typography().Name())
 			must(d.SetLanguage(language.JSON))
-			d.Model().SetText("tr")
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			d.SetText("tr")
+			v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "JSON completion popup missing")
 		},
@@ -213,45 +213,45 @@ func main() {
 			info := completionInfo(popup.Widget().Snapshot())
 			check(info.Role == gui.Role("completion-list") && len(info.Children) > 0 && info.Children[0].Text == "true", "JSON completion proposal missing")
 			key(events.KeyEnter, 0)
-			check(d.Model().Text() == "true" && v.Selection().Caret == 4 && len(win.Popovers()) == 0, "completion acceptance failed")
+			check(d.Text() == "true" && v.Selection().Caret == 4 && len(win.Popovers()) == 0, "completion acceptance failed")
 			key(events.KeyZ, primary)
-			check(d.Model().Text() == "tr" && v.Selection().Caret == 2, "completion undo failed")
-			d.Model().SetText("")
-			v.SetSelection(textedit.Selection{})
+			check(d.Text() == "tr" && v.Selection().Caret == 2, "completion undo failed")
+			d.SetText("")
+			v.SetSelection(source.TextSelection{})
 			must(win.CommitText("["))
-			check(d.Model().Text() == "[]" && v.Selection().Caret == 1, "auto pair insertion failed")
+			check(d.Text() == "[]" && v.Selection().Caret == 1, "auto pair insertion failed")
 			key(events.KeyEnter, 0)
-			check(d.Model().Text() == "[\n    \n]" && v.Selection().Caret == 6, "pair newline indentation failed")
+			check(d.Text() == "[\n    \n]" && v.Selection().Caret == 6, "pair newline indentation failed")
 			key(events.KeyZ, primary)
-			check(d.Model().Text() == "[]" && v.Selection().Caret == 1, "pair newline undo failed")
+			check(d.Text() == "[]" && v.Selection().Caret == 1, "pair newline undo failed")
 			must(win.CommitText("{"))
 			must(win.CommitText("}"))
 			must(win.CommitText("]"))
-			check(d.Model().Text() == "[{}]" && v.Selection().Caret == 4, "nested pair overtype failed")
+			check(d.Text() == "[{}]" && v.Selection().Caret == 4, "nested pair overtype failed")
 			key(events.KeyZ, primary)
-			check(d.Model().Text() == "[]", "nested pair undo failed")
-			d.Model().SetText("")
-			v.SetSelection(textedit.Selection{})
+			check(d.Text() == "[]", "nested pair undo failed")
+			d.SetText("")
+			v.SetSelection(source.TextSelection{})
 			must(win.CommitText("["))
 			key(events.KeyBackspace, 0)
-			check(d.Model().Text() == "", "pair backspace failed")
+			check(d.Text() == "", "pair backspace failed")
 			key(events.KeyZ, primary)
-			check(d.Model().Text() == "[]", "pair delete undo failed")
-			d.Model().SetText("word")
-			v.SetSelection(textedit.Selection{Caret: 4})
+			check(d.Text() == "[]", "pair delete undo failed")
+			d.SetText("word")
+			v.SetSelection(source.TextSelection{Caret: 4})
 			must(win.CommitText(`"`))
-			check(d.Model().Text() == `"word"` && v.Selection() == (textedit.Selection{Anchor: 1, Caret: 5}), "selection surround failed")
+			check(d.Text() == `"word"` && v.Selection() == (source.TextSelection{Anchor: 1, Caret: 5}), "selection surround failed")
 			key(events.KeyZ, primary)
-			check(d.Model().Text() == "word", "selection surround undo failed")
-			d.Model().SetText("")
-			v.SetSelection(textedit.Selection{})
+			check(d.Text() == "word", "selection surround undo failed")
+			d.SetText("")
+			v.SetSelection(source.TextSelection{})
 			must(win.CommitText("t"))
 			check(len(win.Popovers()) == 1, "automatic JSON completion missing")
 			key(events.KeyEscape, 0)
-			check(d.Model().Text() == "t" && len(win.Popovers()) == 0, "completion Escape modified text")
+			check(d.Text() == "t" && len(win.Popovers()) == 0, "completion Escape modified text")
 			must(d.SetLanguage(language.HTML))
-			d.Model().SetText("<di")
-			v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+			d.SetText("<di")
+			v.SetSelection(source.TextSelection{Anchor: 3, Caret: 3})
 			key(events.KeyF2, 0)
 			check(len(win.Popovers()) == 1, "HTML completion missing")
 		},
@@ -264,26 +264,26 @@ func main() {
 			for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
 				must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: p}))
 			}
-			check(d.Model().Text() == "<div" && len(win.Popovers()) == 0, "completion pointer activation failed")
-			d.Model().SetText("<di")
-			v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+			check(d.Text() == "<div" && len(win.Popovers()) == 0, "completion pointer activation failed")
+			d.SetText("<di")
+			v.SetSelection(source.TextSelection{Anchor: 3, Caret: 3})
 			key(events.KeyF2, 0)
 			v.SetReadOnly(true)
 			check(len(win.Popovers()) == 0, "read-only retained completion")
 			v.SetReadOnly(false)
 			v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
 				// Application mutation belongs on GUI, even from a provider.
-				app.Post(func() { d.Model().SetText("changed") })
+				app.Post(func() { d.SetText("changed") })
 				return []source.Completion{{Label: "div"}}, nil
 			}})
 			key(events.KeyF2, 0)
 		},
 		func() {
-			check(len(win.Popovers()) == 0 && d.Model().Text() == "changed", "late completion escaped revision guard")
+			check(len(win.Popovers()) == 0 && d.Text() == "changed", "late completion escaped revision guard")
 			v.SetCompletionProvider(nil)
 			must(d.SetLanguage(language.JSON))
-			d.Model().SetText("tr")
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			d.SetText("tr")
+			v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 			key(events.KeyF2, 0)
 			scroll.SetChild(nil)
 			check(len(win.Popovers()) == 0, "unmount retained completion")

@@ -10,7 +10,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -20,14 +19,14 @@ func inlineFixture(t *testing.T, text string) (*SourceView, *countedNativeContex
 	v, ctx := collapsedLineFixture(t, text)
 	v.SetAutomaticCompletion(false)
 	focusBracketFixture(t, v)
-	v.SetSelection(textedit.Selection{Anchor: len(text), Caret: len(text)})
+	v.SetSelection(TextSelection{Anchor: len(text), Caret: len(text)})
 	v.SetInlineSuggestionsEnabled(true)
 	t.Cleanup(v.ClearInlineSuggestion)
 	return v, ctx
 }
 func showInline(t *testing.T, v *SourceView, text string) {
 	t.Helper()
-	ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{Position: v.Selection().Caret, Text: text})
+	ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{Position: v.Selection().Caret, Text: text})
 	if err != nil || !ok {
 		t.Fatal("suggestion not installed", ok, err)
 	}
@@ -38,7 +37,7 @@ func showInline(t *testing.T, v *SourceView, text string) {
 
 func TestInlineSuggestionIsViewOnlyAndAcceptsAsOneEdit(t *testing.T) {
 	v, ctx := inlineFixture(t, "fmt.Pr")
-	m := v.Document().Model()
+	m := v.Document()
 	revision := m.Revision()
 	size := v.ContentSize()
 	showInline(t, v, `intln("hello")`)
@@ -84,7 +83,7 @@ func TestInlineSuggestionIsViewOnlyAndAcceptsAsOneEdit(t *testing.T) {
 func TestInlineSuggestionRejectsInvalidAndStaleResults(t *testing.T) {
 	v, _ := inlineFixture(t, "prefix")
 	d := v.Document()
-	rev := d.Model().Revision()
+	rev := d.Revision()
 	v.SetInlineSuggestionsEnabled(false)
 	if ok, err := v.SetInlineSuggestion(d, rev, InlineSuggestion{6, "suffix"}); ok || err != nil {
 		t.Fatal("default-off feature accepted a suggestion")
@@ -113,7 +112,7 @@ func TestInlineSuggestionRejectsInvalidAndStaleResults(t *testing.T) {
 	if ok, err := v.SetInlineSuggestion(d, rev, InlineSuggestion{3, "other"}); ok || err != nil {
 		t.Fatal("non-caret/non-end suggestion accepted")
 	}
-	v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+	v.SetSelection(TextSelection{Anchor: 3, Caret: 3})
 	if ok, err := v.SetInlineSuggestion(d, rev, InlineSuggestion{3, "other"}); ok || err != nil {
 		t.Fatal("midline suggestion accepted")
 	}
@@ -130,13 +129,13 @@ func TestInlineSuggestionInvalidationAndEscape(t *testing.T) {
 					t.Fatal("Escape did not dismiss exclusively")
 				}
 			case "selection":
-				v.SetSelection(textedit.Selection{})
+				v.SetSelection(TextSelection{})
 			case "edit":
 				if err := v.ReplaceSelection("x"); err != nil {
 					t.Fatal(err)
 				}
 			case "reset":
-				v.Document().Model().SetText("reset")
+				v.Document().SetText("reset")
 			case "document":
 				v.SetDocument(NewDocument("other"))
 			case "readonly":
@@ -179,7 +178,7 @@ func TestInlineSuggestionInvalidationAndEscape(t *testing.T) {
 func TestInlineSuggestionClipsAtNativeClustersAndReusesLayout(t *testing.T) {
 	v, ctx := inlineFixture(t, "prefix")
 	showInline(t, v, strings.Repeat("中文e\u0301😀", 30))
-	original := v.Document().Model().Text()
+	original := v.Document().Text()
 	for _, width := range []float32{220.3, 310.7, 400} {
 		before := v.inlineSuggestion.layout
 		v.Arrange(geometry.Rect(0, 0, width, 180))
@@ -197,7 +196,7 @@ func TestInlineSuggestionClipsAtNativeClustersAndReusesLayout(t *testing.T) {
 		created := ctx.created
 		v.Paint(&recordingPainter{})
 		v.Snapshot()
-		if ctx.created != created || v.Document().Model().Text() != original {
+		if ctx.created != created || v.Document().Text() != original {
 			t.Fatal("paint or resize mutated source or allocated native layouts")
 		}
 	}
@@ -212,13 +211,13 @@ func TestInlineSuggestionHiddenPreviewCannotStealTab(t *testing.T) {
 	v, _ := inlineFixture(t, strings.Repeat("x", 38))
 	v.SetWrapMode(WrapNone)
 	v.Arrange(geometry.Rect(0, 0, 100, 180))
-	if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{38, "suffix"}); !ok || err != nil {
+	if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{38, "suffix"}); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
 	if _, visible := v.inlinePreview(); visible {
 		t.Fatal("offscreen suggestion reported visible")
 	}
-	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Model().Text() != strings.Repeat("x", 38) {
+	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Text() != strings.Repeat("x", 38) {
 		t.Fatal("invisible suggestion was committed", err)
 	}
 	v.SetAcceptsTab(false)
@@ -245,10 +244,10 @@ func TestInlineSuggestionSharedViewAndUndoBoundary(t *testing.T) {
 	if err := v.AcceptInlineSuggestion(); err != nil {
 		t.Fatal(err)
 	}
-	if !v.Undo() || v.Document().Model().Text() != "prefix " {
+	if !v.Undo() || v.Document().Text() != "prefix " {
 		t.Fatal("accept undo erased prior input")
 	}
-	if !v.Undo() || v.Document().Model().Text() != "prefix" {
+	if !v.Undo() || v.Document().Text() != "prefix" {
 		t.Fatal("prior input history lost")
 	}
 }
@@ -270,10 +269,10 @@ func (c *inlineReentryContext) NewTextLayout(text string, f typography.TextForma
 func TestInlineSuggestionNativeFailureAndReentry(t *testing.T) {
 	v, ctx := inlineFixture(t, "prefix")
 	v.context = &inlineReentryContext{Context: ctx, onCreate: func() { v.SetDocument(NewDocument("replacement")) }}
-	if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{6, "suffix"}); ok || err != nil {
+	if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{6, "suffix"}); ok || err != nil {
 		t.Fatal("reentrant native creation attached stale suggestion", ok, err)
 	}
-	if v.inlineSuggestion != nil || v.Document().Model().Text() != "replacement" {
+	if v.inlineSuggestion != nil || v.Document().Text() != "replacement" {
 		t.Fatal("native callback replacement was overwritten")
 	}
 }
@@ -290,21 +289,21 @@ func (c inlineFailureContext) NewTextLayout(text string, f typography.TextFormat
 func TestInlineSuggestionNativeFailureIsReturned(t *testing.T) {
 	v, ctx := inlineFixture(t, "prefix")
 	v.context = inlineFailureContext{Context: ctx}
-	if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{6, "suffix"}); ok || err == nil || v.inlineSuggestion != nil {
+	if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{6, "suffix"}); ok || err == nil || v.inlineSuggestion != nil {
 		t.Fatal("native failure was hidden or left retry state", ok, err)
 	}
 }
 
 func TestInlineSuggestionWithholdsUnsafeRTLPlacement(t *testing.T) {
 	v, _ := inlineFixture(t, "مرحبا")
-	ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{Position: len("مرحبا"), Text: "suffix"})
+	ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{Position: len("مرحبا"), Text: "suffix"})
 	if !ok || err != nil {
 		t.Fatal(ok, err)
 	}
 	if _, visible := v.inlinePreview(); visible {
 		t.Fatal("RTL logical end overlaid existing source")
 	}
-	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Model().Text() != "مرحبا" {
+	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Text() != "مرحبا" {
 		t.Fatal("invisible RTL suffix was accepted")
 	}
 }
@@ -314,10 +313,10 @@ func TestInlineSuggestionAcceptConsumesPriorEscapeTabIntent(t *testing.T) {
 	v.SetAcceptsTab(true)
 	v.applyKey(events.KeyEvent{Key: events.KeyEscape})
 	showInline(t, v, "suffix")
-	if !v.applyKey(events.KeyEvent{Key: events.KeyTab}) || v.Document().Model().Text() != "prefixsuffix" {
+	if !v.applyKey(events.KeyEvent{Key: events.KeyTab}) || v.Document().Text() != "prefixsuffix" {
 		t.Fatal("visible suggestion did not accept after ordinary Escape")
 	}
-	if !v.applyKey(events.KeyEvent{Key: events.KeyTab}) || v.Document().Model().Text() != "prefixsuffix    " {
+	if !v.applyKey(events.KeyEvent{Key: events.KeyTab}) || v.Document().Text() != "prefixsuffix    " {
 		t.Fatal("accepted suggestion left a stale focus-traversal Tab intent")
 	}
 }

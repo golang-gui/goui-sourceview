@@ -25,6 +25,11 @@ local Go workspace. Published v0.5.0 uses the previous root import path and does
 not contain the new subpackage. The `ui`, `language` and `scheme` paths are unchanged.
 See the [package migration notes](doc/PlanPackageMigration.md) for the layout and validation scope.
 
+This checkout also owns its text model, history and paragraph caches. Use `Document`
+directly in place of `Document.Model()` / `NewDocumentWithModel`; use SourceView
+`TextRange`, `TextSelection`, `TextEdit` and `TextChange` (also available in `ui`).
+These changes are unreleased. See the [editor core migration](doc/DesignEditorCore.md).
+
 ## Features
 
 - **Syntax highlighting** for JSON/JSONC, JSON Lines, XML, HTML, Markdown, TOML, YAML, Shell,

@@ -9,7 +9,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/resource"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
@@ -123,7 +122,7 @@ func (b *goToBar) Open() error {
 	at := v.Selection().Caret
 	line := m.LineAt(at)
 	r, _ := m.LineRange(line)
-	prefix, _ := m.Slice(textedit.Range{Start: r.Start, End: at})
+	prefix, _ := m.Slice(TextRange{Start: r.Start, End: at})
 	b.Input.SetText(fmt.Sprintf("%d:%d", line+1, utf8.RuneCountInString(prefix)+1))
 	changed := !b.open
 	b.open = true
@@ -134,7 +133,7 @@ func (b *goToBar) Open() error {
 	if b.Destroyed() || b.epoch != epoch || !b.open {
 		return nil
 	}
-	b.Input.SetSelection(textedit.Selection{Caret: len(b.Input.Text())})
+	b.Input.SetSelection(gui.TextSelection{Caret: len(b.Input.Text())})
 	if changed {
 		b.openSignal.Emit(true)
 	}
@@ -219,7 +218,7 @@ func (b *goToBar) submit() {
 		return
 	}
 	d, epoch := v.document, b.epoch
-	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	v.SetSelection(TextSelection{Anchor: at, Caret: at})
 	if !b.Destroyed() && b.epoch == epoch && b.liveTarget() == v && v.document == d {
 		b.Close()
 	}

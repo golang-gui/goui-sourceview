@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // Region is the value portion of a private entry. Public FoldRegion stays in
@@ -42,7 +42,7 @@ func Hidden(records []Entry) []Interval {
 // BuildSnapshot copies and validates candidates against normalized UTF-8/LF text.
 // Duplicate headers retain their outermost range; crossing ranges are invalid.
 func BuildSnapshot(text string, ranges []language.FoldRange) (Snapshot, error) {
-	text = textedit.Normalize(text)
+	text = textcore.Normalize(text)
 	starts := []int{0}
 	for at := 0; at < len(text); {
 		n := strings.IndexByte(text[at:], '\n')
@@ -69,7 +69,7 @@ func BuildSnapshot(text string, ranges []language.FoldRange) (Snapshot, error) {
 
 // Reconcile preserves collapse intent only for identical byte endpoints. The
 // returned slice belongs to the caller; published snapshots are never mutated.
-func Reconcile(records []Entry, ranges []language.FoldRange, lineRange func(int) (textedit.Range, error)) []Entry {
+func Reconcile(records []Entry, ranges []language.FoldRange, lineRange func(int) (textcore.Range, error)) []Entry {
 	old := make(map[[2]int]bool, len(records))
 	for _, r := range records {
 		old[[2]int{r.Start, r.End}] = r.Collapsed
@@ -87,7 +87,7 @@ func Reconcile(records []Entry, ranges []language.FoldRange, lineRange func(int)
 
 // MapEntries maps a caller-owned mutable slice. The caller handles resets and
 // revision checks; incremental means splices match this change's sequential edits.
-func MapEntries(records []Entry, c textedit.Change, splices []highlight.Splice, incremental bool, lineAt func(int) int) []Entry {
+func MapEntries(records []Entry, c textcore.Change, splices []highlight.Splice, incremental bool, lineAt func(int) int) []Entry {
 	if incremental && len(c.Edits) > 1 {
 		if mapped, ok := mapBatch(records, c, splices); ok {
 			return mapped
@@ -107,8 +107,8 @@ func MapEntries(records []Entry, c textedit.Change, splices []highlight.Splice, 
 				r.StartLine += delta
 				r.EndLine += delta
 			}
-			r.Start = textedit.MapOffset(r.Start, e)
-			r.End = textedit.MapOffset(r.End, e)
+			r.Start = textcore.MapOffset(r.Start, e)
+			r.End = textcore.MapOffset(r.End, e)
 		}
 		if valid {
 			if !incremental {
@@ -126,9 +126,9 @@ func MapEntries(records []Entry, c textedit.Change, splices []highlight.Splice, 
 // Monotone non-overlapping batch notifications can be mapped in O(E+F log E).
 // Undo publishes ascending sequential coordinates; normalize those before
 // searching. Ordinary arbitrary sequential changes retain the general path.
-func mapBatch(records []Entry, c textedit.Change, splices []highlight.Splice) ([]Entry, bool) {
+func mapBatch(records []Entry, c textcore.Change, splices []highlight.Splice) ([]Entry, bool) {
 	type change struct {
-		edit         textedit.Edit
+		edit         textcore.Edit
 		bytes, lines int
 	}
 	changes := make([]change, len(c.Edits))

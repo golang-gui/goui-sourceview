@@ -77,7 +77,7 @@ func main() {
 	code.SetAutomaticCompletion(false)
 	text := strings.Repeat("A line with enough text to overflow: "+strings.Repeat("word ", 240)+"\n", 80)
 	plain.Model().SetText(text)
-	code.Document().Model().SetText(text)
+	code.Document().SetText(text)
 	editors := []gui.Widget{plain, code}
 	hosts := []*gui.ScrollView{gui.NewScrollView(), gui.NewScrollView()}
 	row := gui.NewLinearBox(layout.DirectionHorizontal)
@@ -285,7 +285,7 @@ func main() {
 				check(!barOf(i, layout.DirectionHorizontal).Visible() && barOf(i, layout.DirectionVertical).Visible(), "wrapping did not hide only the horizontal bar")
 			}
 			plain.Model().SetText("short")
-			code.Document().Model().SetText("short")
+			code.Document().SetText("short")
 		case 8:
 			for i, host := range hosts {
 				check(!barOf(i, layout.DirectionHorizontal).Visible() && !barOf(i, layout.DirectionVertical).Visible(), "short text retained a scrollbar")
@@ -301,7 +301,7 @@ func main() {
 			code.SetWrapMode(source.WrapNone)
 			code.SetShowLineNumbers(false)
 			code.SetFoldingEnabled(false)
-			code.Document().Model().SetText(strings.Repeat("W", 20_000) + "\nshort")
+			code.Document().SetText(strings.Repeat("W", 20_000) + "\nshort")
 			hosts[1].SetScrollX(0)
 			hosts[1].SetScrollY(0)
 		case 10:
@@ -374,7 +374,7 @@ func main() {
 				plain.SetWrapMode(gui.WrapNone)
 				code.SetWrapMode(source.WrapNone)
 				plain.Model().SetText(text)
-				code.Document().Model().SetText(text)
+				code.Document().SetText(text)
 				*mode = "light"
 				app.SetStyleSheet(sheet())
 				timer.Stop()

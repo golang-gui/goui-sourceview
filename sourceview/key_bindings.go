@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -265,7 +264,7 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		v.cancelPreedit()
 		if state.valid(v) {
 			v.document.model.BreakUndoGroup()
-			v.setSelection(textedit.Selection{Caret: v.document.model.Len()}, false, true)
+			v.setSelection(TextSelection{Caret: v.document.model.Len()}, false, true)
 		}
 	case CommandToggleLineComment:
 		run(v.ToggleLineComment)

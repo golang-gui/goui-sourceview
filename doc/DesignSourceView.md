@@ -1,7 +1,8 @@
 # SourceView 代码编辑器设计
 
 > 状态：首版设计契约，已有初始实现。本文及专题中的范围不代表全部实现或平台验收完成；实际能力与结果见 [实现记录](Plan.md)。
-> 本项目是独立代码编辑器，不以 `gui.TextView` 或私有 `textEditor` 为基础。
+> 本项目自有文本编辑内核，不以 `gui.TextView` 或私有 `textEditor` 为基础。
+> 2026-11-11 的模型与布局所有权更新见 [独立编辑内核](DesignEditorCore.md)。
 
 ## 1. 定位、范围与阅读顺序
 
@@ -36,13 +37,13 @@ GOUI 不反向依赖本模块。
 ## 2. 固定决策
 
 1. SourceView 独立实现 Widget、输入行为和排版缓存，复用 GOUI 的框架设施。
-2. 复用 `gui/textedit.Model` 作为首版文本及历史基础，优先复用 Projection、Geometry、HeightIndex；不复制 Piece Tree 或私有编辑器。
+2. 自有正文存储、历史、位置、预编辑、编辑几何及段落缓存；`Document` 是唯一公开文档入口，GOUI 提供 GUI 和原生 TextLayout。迁入的公开设施保留来源与许可，在本仓独立维护。
 3. 以 Document 组合模型、语言和共享分析；选区、预编辑、视口、查找、配色及原生布局属于每个视图。
 4. SourceView 实现 `Scrollable`，自行绘制正文并拥有内部配套子控件。外部组合 GOUI ScrollView 提供滚动条；宿主显式使用 `source-view` 样式，统一绘制包含滚动条的外框；行号与正文由同一控件呈现。
 5. 首版语言使用自行编写的纯 Go、有状态、可分段扫描器。暂不引入原生编辑器、WebView、Tree-sitter、完整 Monarch 或 TextMate 运行时。
 6. 首版在 GUI 线程按预算推进分析；先不引入后台 goroutine、模型快照协议或多线程排版。
 7. 首版 token 样式只改变前景色。字号、字重和斜体等按 token 改变度量的能力后续单独设计。
-8. 批量编辑与历史选区、可配置 Tab 排版、剪贴板错误反馈的通用缺口单独提案；不要求扩展 TextView。
+8. 编辑事务与历史在本仓演进；GUI、Tab 排版和剪贴板沿用已发布 GOUI 公开契约，不扩展 TextView 来承载代码编辑功能。
 
 自有扫描器让各语言的状态、取消边界和错误恢复可控。它不承担完整语义解析，
 也不承诺读取其他编辑器的语言规则格式；应用可实现公开 Tokenizer 适配其他引擎，
@@ -63,6 +64,7 @@ GOUI 不反向依赖本模块。
 | 公开核心包 `sourceview/` | Document、SourceView、公共 API、状态、生命周期和跨功能协调 |
 | `language` | 不可变语言定义、扫描协议、内置扫描器与编辑规则；不导入 gui |
 | `scheme` | 不可变代码配色与 token 颜色；不导入 gui |
+| `internal/text` | 自有正文存储、行索引、修订、事务、历史、位置、投影、几何、片段及高度索引；不依赖 Widget 或原生对象 |
 | `internal/editor` | 编辑计划、缩进粘贴、选区及锚点映射、括号与结构扫描、补全值规范化、定位解析和搜索；不依赖 Widget |
 | `internal/highlight` | 行元数据、增量调度、高亮缓存及不可变前景区间索引；不导入 gui |
 | `internal/folding` | 折叠快照构建、候选重建、编辑映射、隐藏区间与可见行索引；不依赖 Widget |
@@ -119,7 +121,7 @@ flowchart LR
     V --> D["Document：模型与语言"]
     V --> E["editor：命令与搜索"]
     V --> G["GOUI Widget / IME / ScrollView / typography"]
-    D --> M["textedit.Model：内容与历史"]
+    D --> M["internal/text：内容与历史"]
     D --> H["highlight：行索引与分析"]
     H --> L["language：内置及自定义定义"]
     V --> S["scheme：配色"]
@@ -129,7 +131,7 @@ flowchart LR
 
 | 对象 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| Document | 模型引用、不可变语言定义、语言 ID/epoch、共享行元数据和 token 缓存 | 活动光标、视口、原生对象、文件路径 |
+| Document | 自有模型与历史、不可变语言定义、语言 ID/epoch、共享行元数据和 token 缓存 | 活动光标、视口、原生对象、文件路径 |
 | SourceView | Document 引用、EditSource、选区与视觉 affinity、预编辑、搜索、布局缓存、挂载期订阅 | 其他视图状态、模型历史栈、Application |
 | 内部配套栏 | 输入与按钮子树、替换文字、分块计数、挂载期连接；由 SourceView 拥有 | Document、历史 |
 | ScrollView | 滚动偏移、滚动条与视口裁剪 | 文档和代码编辑策略 |
@@ -138,15 +140,15 @@ flowchart LR
 
 Document 本身只有 Go 数据，不要求 Destroy。首个视图挂载时连接模型，最后一个视图
 卸载时断开并释放分析工作缓存；无挂载视图期间可直接操作模型，下次挂载按修订重新建索引。
-应用长期监听内容直接使用 `Document.Model().ConnectChange`，自行管理 handle。
+应用长期监听内容直接使用 `Document.ConnectChange`，自行管理 handle。
 
 SourceView 构造时不创建原生资源，不建立从外部模型指向控件的订阅。
 卸载释放所有模型/根/计时器订阅、布局与预编辑；同一控件允许重新挂载。
 未挂载期间模型没有变化则保留选区；修订变化而无法重放中间编辑时，将选区复位到 0，
 不猜测映射。已销毁控件不能重新激活。
 
-多个 Document 可以包装同一个 Model，各自选择语言与分析；共享分析只在共享同一个
-Document 时发生，不建设全局 Model 注册表。
+每个 Document 独立拥有正文与历史。多个视图通过同一 Document 共享内容、历史、语言和分析；
+不公开或借用外部模型，不建设全局模型注册表。
 
 ## 5. 公共 API 草案
 
@@ -160,7 +162,6 @@ import (
     "github.com/golang-gui/goui/core/geometry"
     "github.com/golang-gui/goui/core/signal"
     "github.com/golang-gui/goui/gui"
-    "github.com/golang-gui/goui/gui/textedit"
     "github.com/golang-gui/goui/platform/typography"
     "github.com/golang-gui/goui-sourceview/language"
     "github.com/golang-gui/goui-sourceview/scheme"
@@ -168,9 +169,27 @@ import (
 
 type Document struct { /* private */ }
 func NewDocument(text string) *Document
-func NewDocumentWithModel(model *textedit.Model) *Document
 func (d *Document) ID() uint64
-func (d *Document) Model() *textedit.Model
+func (d *Document) Text() string
+func (d *Document) EqualText(text string) bool
+func (d *Document) Len() int
+func (d *Document) Revision() uint64
+func (d *Document) LineCount() int
+func (d *Document) LineRange(line int) (TextRange, error)
+func (d *Document) LineAt(offset int) int
+func (d *Document) Slice(r TextRange) (string, error)
+func (d *Document) IsRuneBoundary(offset int) bool
+func (d *Document) SetText(text string)
+func (d *Document) Replace(r TextRange, text string) error
+func (d *Document) ReplaceAtomic(r TextRange, text string) error
+func (d *Document) ApplyEdits(edits []TextEdit) error
+func (d *Document) Undo() bool
+func (d *Document) Redo() bool
+func (d *Document) CanUndo() bool
+func (d *Document) CanRedo() bool
+func (d *Document) BreakUndoGroup()
+func (d *Document) ClearHistory()
+func (d *Document) ConnectChange(fn func(TextChange)) signal.Handle
 func (d *Document) Language() language.ID
 func (d *Document) SetLanguage(id language.ID) error
 func (d *Document) LanguageDefinition() *language.Language
@@ -190,8 +209,8 @@ type SourceView struct {
 func NewSourceView() *SourceView
 func (v *SourceView) Document() *Document
 func (v *SourceView) SetDocument(document *Document)
-func (v *SourceView) Selection() textedit.Selection
-func (v *SourceView) SetSelection(selection textedit.Selection)
+func (v *SourceView) Selection() TextSelection
+func (v *SourceView) SetSelection(selection TextSelection)
 func (v *SourceView) ReadOnly() bool
 func (v *SourceView) SetReadOnly(value bool)
 func (v *SourceView) AcceptsTab() bool
@@ -201,7 +220,7 @@ func (v *SourceView) SetWrapMode(mode WrapMode)
 func (v *SourceView) SetShowLineNumbers(value bool)
 func (v *SourceView) SetScheme(value *scheme.Scheme)
 func (v *SourceView) ReplaceSelection(text string) error
-func (v *SourceView) ApplyEdits(d *Document, revision uint64, edits []textedit.Edit, after textedit.Selection) error
+func (v *SourceView) ApplyEdits(d *Document, revision uint64, edits []TextEdit, after TextSelection) error
 func (v *SourceView) MoveLines(down bool) error
 func (v *SourceView) DuplicateLines(down bool) error
 func (v *SourceView) DeleteLines() error
@@ -211,7 +230,7 @@ func (v *SourceView) Copy() error
 func (v *SourceView) Cut() error
 func (v *SourceView) Paste() error
 func (v *SourceView) SetSearch(query SearchQuery)
-func (v *SourceView) FindNext(backward bool) (textedit.Range, bool)
+func (v *SourceView) FindNext(backward bool) (TextRange, bool)
 func (v *SourceView) ReplaceCurrent(text string) (bool, error)
 func (v *SourceView) ReplaceAll(text string) (int, error)
 func (v *SourceView) ShowFind() error
@@ -219,7 +238,7 @@ func (v *SourceView) ShowReplace() error
 func (v *SourceView) ShowGoTo() error
 func (v *SourceView) HidePanel()
 func (v *SourceView) RevealSelection()
-func (v *SourceView) ConnectSelection(fn func(textedit.Selection)) signal.Handle
+func (v *SourceView) ConnectSelection(fn func(TextSelection)) signal.Handle
 func (v *SourceView) ConnectError(fn func(error)) signal.Handle
 func (v *SourceView) ConnectScrollIntoView(fn func(geometry.Rectangle)) signal.Handle
 
@@ -236,18 +255,18 @@ type SearchQuery struct {
 ```
 
 - `NewDocument` 在规范化前识别文档输出换行格式，再创建 UTF-8/LF 模型，初始语言为 plain；
-  WithModel 的 nil 建立空模型，默认 LF 输出。原格式导出、混合换行和末尾空行的契约见
+  不接受外部模型。原格式导出、混合换行和末尾空行的契约见
   [文档换行](DesignLineEndings.md)。
 - 内置 `language.ID` 为 `Plain`（空 ID）、`JSON`、`XML`、`HTML`；未知 ID 返回错误，原配置不变。同一语言不触发失效。
 - `SetDocument(nil)` 回到该控件保留的私有文档（初始为空，保留此前内容）；同一指针是无操作。真正切换取消预编辑、待粘贴和搜索结果，重置选区及视觉状态，并请求从文首显示。
 - SetSelection 钳制到模型及 rune 边界；相关行可排版时按 Cluster 修正，保持 Anchor/Caret 方向。程序设置可操作未挂载对象，不触发用户编辑。
 - ReadOnly 限制该视图的修改命令，不限制调用方直接修改共享模型；Undo/Redo 在只读时返回 false。
-- ReplaceSelection、ReplaceCurrent、ReplaceAll 同样遵守只读，不把公开方法当作绕过用户模式的后门；外部数据装载使用 Model.SetText。
+- ReplaceSelection、ReplaceCurrent、ReplaceAll 同样遵守只读，不把公开方法当作绕过用户模式的后门；外部数据装载使用 Document.SetText。
 - MoveLines、DuplicateLines、DeleteLines 操作逻辑整行，复用同一权限与历史流水线；规则见 [编辑设计](DesignEditing.md#12-逻辑行编辑)。
 - Copy/Cut/Paste 需要挂载及 GUI 剪贴板能力；Paste 返回 nil 只表示请求已受理，其回调可同步发生，后续失败通过 ConnectError 报告。
 - 同一个失败只经一个通道报告：同步公共调用返回 error；输入控制器代调用时转为错误信号；异步回调只发信号。
 - 用户在只读/禁用模式触发受限输入是正常无操作，不反复发错误信号；公共修改方法仍返回对应模式错误供程序判断。
-- SourceView 不再中转一份永久内容信号；内容监听放在 Model。Selection 信号只报告该视图实际变化。
+- 应用长期监听内容使用 Document.ConnectChange；SourceView.ConnectChange 只在挂载期转发。Selection 信号只报告该视图实际变化。
 - FindNext 更新选区并请求可见，空查询或无命中返回 false；ReplaceCurrent 仅替换当前选区确实对应的命中；ReplaceAll 为一个撤销单元。内置查找栏在当前替换成功且操作未过期时选择下一项。
 - `errors.Is` 可识别 ErrReadOnly、ErrDisabled、ErrNotMounted、ErrUnknownLanguage、ErrInvalidOptions、ErrOperationLimit；平台失败保留原错误链。被取消的过期粘贴不当作失败上报。
 - Scheme 是复制并验证后的不可变值；nil 使用所属 Basic/Modern 样式。Root 包提供 wrap 类型/常量别名供 ui 使用，ui 不直接导入 typography。
@@ -265,13 +284,13 @@ type SearchQuery struct {
 | 折叠数据 | `FoldRegion` |
 | 补全 | `Completion`、`CompletionContext`、`CompletionProvider` |
 | 快捷键 | `Command`、全部 44 个命令常量、`KeyBindings`、`KeyGesture` |
-| 通用文本 | `TextModel`、`TextRange`、`TextEdit`、`TextChange`、`TextSelection`，与 GOUI ui 共用类型 |
+| 文本值 | `TextRange`、`TextEdit`、`TextChange`、`TextSelection`，与 SourceView 核心包同名类型共用身份 |
 
-声明式方法签名使用这些本包名称。别名与核心包/GOUI 类型身份相同，能直接传递已有文档、
+声明式方法签名使用这些本包名称。别名与核心包类型身份相同，能直接传递已有文档、
 选项、选区、回调、补全提供者及快捷键表；不复制模型、包装资源或另建状态。
 `BindSelection` 继续使用 GOUI 的 `BindState[TextSelection]`，协调与生命周期机制不变。
 
-`NewDocument`、`NewDocumentWithModel`、`DetectLineEnding`、`DefaultKeyBindings` 及
+`NewDocument`、`DetectLineEnding`、`DefaultKeyBindings` 及
 三种内置补全函数只转发到核心包原实现。函数使用普通声明而非可变函数变量；默认快捷键
 仍每次返回独立表，补全仍遵守原有有界快照与取消契约。
 
@@ -331,7 +350,7 @@ TabWidth 取 1..16；传 0 取 4。IndentWidth 传 0 取 TabWidth，其余取 1.
 
 ## 超长逻辑行中的纯文本辅助操作（2026-10-24）
 
-词法元数据直接复用 TextModel 的逻辑行范围，每轮最多构建 128 行；不重新读取完整
+词法元数据直接使用 Document 的逻辑行范围，每轮最多构建 128 行；不重新读取完整
 模型只为统计 LF。实际 tokenizer 仍按原有有限输入与语言 State 推进，模型修订变化
 使旧工作失效；这不是将语法分析放到后台线程。
 

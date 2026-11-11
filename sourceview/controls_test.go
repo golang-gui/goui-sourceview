@@ -8,11 +8,11 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/graphics"
@@ -63,7 +63,7 @@ func TestDetachedFindBarBorrowsTargetWithoutSubscriptions(t *testing.T) {
 }
 
 func TestGoToOffsetUsesOneBasedRuneColumns(t *testing.T) {
-	m := textedit.NewModel("")
+	m := textcore.NewModel("")
 	m.SetText("abc\n中e\u0301x\n")
 	for _, tc := range []struct {
 		query string
@@ -364,10 +364,10 @@ func TestCompanionCommandsRequireMountWithoutAllocation(t *testing.T) {
 // 使用真实模型和信号验证隐藏的清理契约，不模拟窗口输入。
 func TestHidePanelPreservesQuerySelectionAndReplacement(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("one two one")
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 4})
+	v.Document().SetText("one two one")
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 4})
 	v.SetSearch(SearchQuery{Text: "one", WholeWord: true})
-	scope := textedit.Range{Start: 0, End: 7}
+	scope := TextRange{Start: 0, End: 7}
 	if err := v.SetSearchRange(&scope); err != nil {
 		t.Fatal(err)
 	}

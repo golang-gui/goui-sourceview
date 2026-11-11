@@ -9,7 +9,6 @@ import (
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 )
 
@@ -130,7 +129,7 @@ func (v *SourceView) RevealLine(line int) error {
 		return ErrOperationChanged
 	}
 	r, _ := v.document.model.LineRange(line)
-	if v.unfoldSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start}) {
+	if v.unfoldSelection(TextSelection{Anchor: r.Start, Caret: r.Start}) {
 		v.foldingSignal.Emit()
 		if !state.valid(v) || v.Destroyed() {
 			return ErrOperationChanged

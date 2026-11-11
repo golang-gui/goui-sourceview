@@ -4,10 +4,10 @@ import (
 	"image/color"
 	"strconv"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -31,7 +31,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 	caretRow := v.displayLine(v.displayCaret())
 	selection := v.Selection().Range()
 	occurrence := v.occurrenceWord()
-	var brackets []textedit.Range
+	var brackets []TextRange
 	if activeFocus(v) && (v.colors.BracketMatchBackground.A != 0 || v.colors.BracketMatchBorder.A != 0) {
 		brackets = v.matchingBrackets()
 	}
@@ -72,7 +72,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 				searchRange := r
 				if item.Paged != nil {
 					visible := item.Paged.VisibleRange()
-					searchRange = textedit.Range{Start: r.Start + visible.Start, End: r.Start + visible.End}
+					searchRange = TextRange{Start: r.Start + visible.Start, End: r.Start + visible.End}
 				}
 				for _, match := range v.search.InRange(v.document.model, searchRange, 2000) {
 					c := v.colors.SearchBackground
@@ -95,7 +95,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 				}
 			}
 			if selection.Start <= r.End && selection.End > r.End && row < v.displayCount()-1 && (item.Paged == nil || item.Paged.CachedOffset(r.End-r.Start)) {
-				edge := item.Geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
+				edge := item.Geometry.Caret(textcore.Position{Offset: r.End - r.Start, Upstream: true})
 				p.FillRect(geometry.Rect(origin.X+edge.X, origin.Y+edge.Y, v.spaceWidth, edge.Height), graphics.ColorOf(c))
 			}
 		}
@@ -113,7 +113,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 		if v.projection != nil {
 			start := v.projection.Replacement().Start
 			end := start + len(v.projection.Text())
-			local := textedit.Range{Start: max(r.Start, start) - r.Start, End: min(r.End, end) - r.Start}
+			local := TextRange{Start: max(r.Start, start) - r.Start, End: min(r.End, end) - r.Start}
 			if local.End > local.Start {
 				for _, rect := range v.visibleSelection(item, local, origin) {
 					y := origin.Y + rect.Y + rect.Height - 1
@@ -174,17 +174,17 @@ func (v *SourceView) Paint(p gui.Painter) {
 	v.paintMinimap(p)
 }
 
-func (v *SourceView) paintRange(p gui.Painter, item *paragraph, line textedit.Range, origin geometry.Point, r textedit.Range, c color.NRGBA) {
+func (v *SourceView) paintRange(p gui.Painter, item *paragraph, line TextRange, origin geometry.Point, r TextRange, c color.NRGBA) {
 	start, end := max(line.Start, r.Start)-line.Start, min(line.End, r.End)-line.Start
 	if end <= start {
 		return
 	}
-	for _, rect := range v.visibleSelection(item, textedit.Range{Start: start, End: end}, origin) {
+	for _, rect := range v.visibleSelection(item, TextRange{Start: start, End: end}, origin) {
 		p.FillRect(rect.Translate(origin), graphics.ColorOf(c))
 	}
 }
 
-func (v *SourceView) visibleSelection(item *paragraph, r textedit.Range, origin geometry.Point) []geometry.Rectangle {
+func (v *SourceView) visibleSelection(item *paragraph, r TextRange, origin geometry.Point) []geometry.Rectangle {
 	if v.viewport.Height <= 0 {
 		return nil
 	}

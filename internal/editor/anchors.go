@@ -1,10 +1,10 @@
 package editor
 
-import "github.com/golang-gui/goui/gui/textedit"
+import textcore "github.com/golang-gui/goui-sourceview/internal/text"
 
 // Mapping uses change coordinates, never the possibly newer model contents.
 // Insertions at an anchor use right gravity; deletion covering it invalidates it.
-func MapLineAnchor(offset int, valid bool, c textedit.Change) (int, bool) {
+func MapLineAnchor(offset int, valid bool, c textcore.Change) (int, bool) {
 	if c.Reset {
 		return offset, false
 	}
@@ -12,12 +12,12 @@ func MapLineAnchor(offset int, valid bool, c textedit.Change) (int, bool) {
 		if edit.Range.Start <= offset && offset < edit.Range.End {
 			valid = false
 		}
-		offset = textedit.MapOffset(offset, edit)
+		offset = textcore.MapOffset(offset, edit)
 	}
 	return offset, valid
 }
 
-func TouchesPair(r textedit.Range, at, size int) bool {
+func TouchesPair(r textcore.Range, at, size int) bool {
 	if r.Start == r.End {
 		return r.Start > at && r.Start < at+size
 	}

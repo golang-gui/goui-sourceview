@@ -3,7 +3,6 @@ package sourceview
 import (
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // MoveWordPart moves across camel-case, acronym, digit and underscore boundaries.
@@ -50,12 +49,12 @@ func (v *SourceView) DeleteWordPart(forward bool) error {
 		v.foldingSignal.Emit()
 		return nil
 	}
-	return v.applyPlan(editor.Plan{Before: s, After: textedit.Selection{Anchor: r.Start, Caret: r.Start}, Edits: []textedit.Edit{{Range: r}}})
+	return v.applyPlan(editor.Plan{Before: s, After: TextSelection{Anchor: r.Start, Caret: r.Start}, Edits: []TextEdit{{Range: r}}})
 }
 
 type selectionTrail struct {
 	state operationState
-	steps []textedit.Selection
+	steps []TextSelection
 }
 
 // ExpandSelection selects the smallest confirmed enclosing word, literal,
@@ -71,9 +70,9 @@ func (v *SourceView) ExpandSelection() bool {
 	if !v.selectionTrail.state.valid(v) {
 		v.selectionTrail.steps = nil
 	}
-	best := textedit.Range{Start: 0, End: m.Len()}
+	best := TextRange{Start: 0, End: m.Len()}
 	found := best != r
-	add := func(q textedit.Range) {
+	add := func(q TextRange) {
 		if q.Start <= r.Start && q.End >= r.End && q != r && (!found || q.End-q.Start < best.End-best.Start) {
 			best = q
 			found = true
@@ -82,18 +81,18 @@ func (v *SourceView) ExpandSelection() bool {
 	add(editor.WordRange(m, r.Start, v.definitionAt(s.Caret).IsWord))
 	a, _ := m.LineRange(m.LineAt(r.Start))
 	b, _ := m.LineRange(m.LineAt(r.End))
-	add(textedit.Range{Start: a.Start, End: b.End})
-	add(textedit.Range{Start: a.Start, End: min(m.Len(), b.End+1)})
+	add(TextRange{Start: a.Start, End: b.End})
+	add(TextRange{Start: a.Start, End: min(m.Len(), b.End+1)})
 	v.structureCandidates(r, add)
 	if !found || !state.valid(v) {
 		return false
 	}
-	steps := append([]textedit.Selection(nil), v.selectionTrail.steps...)
+	steps := append([]TextSelection(nil), v.selectionTrail.steps...)
 	if len(steps) == 64 {
 		steps = steps[1:]
 	}
 	steps = append(steps, s)
-	next := textedit.Selection{Anchor: best.Start, Caret: best.End}
+	next := TextSelection{Anchor: best.Start, Caret: best.End}
 	if s.Anchor > s.Caret {
 		next.Anchor, next.Caret = next.Caret, next.Anchor
 	}
@@ -122,7 +121,7 @@ func (v *SourceView) ShrinkSelection() bool {
 	return true
 }
 
-func (v *SourceView) structureCandidates(r textedit.Range, add func(textedit.Range)) {
+func (v *SourceView) structureCandidates(r TextRange, add func(TextRange)) {
 	editor.StructureCandidates(v.document.model, r, v.definitionAt(r.Start).Editing(), func() editor.TokenReader {
 		if e := v.document.engine; e != nil {
 			return e.Tokens

@@ -12,7 +12,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 )
 
@@ -198,7 +197,7 @@ func (v *SourceView) minimapStep(deadline time.Time) {
 		v.RequestPaint()
 	}
 }
-func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimapState) []color.NRGBA {
+func (v *SourceView) minimapRow(row int, r TextRange, start int, s *minimapState) []color.NRGBA {
 	e := v.document.engine
 	key := minimapRowKey{highlights: v.document.highlightEpoch, highlightStyle: v.highlightStyleEpoch, start: start, columns: s.generation.columns, tab: max(1, v.indent.TabWidth), scheme: v.appliedScheme, language: v.document.languageEpoch}
 	if e != nil && e.Ready() {
@@ -216,7 +215,7 @@ func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimap
 	for end > r.Start+start && !v.document.model.IsRuneBoundary(end) {
 		end--
 	}
-	text, _ := v.document.model.Slice(textedit.Range{Start: r.Start + start, End: end})
+	text, _ := v.document.model.Slice(TextRange{Start: r.Start + start, End: end})
 	var tokenAt func(int) color.NRGBA
 	if e != nil && e.Ready() {
 		tokens, _, ok := e.PaintTokens(row)
@@ -232,7 +231,7 @@ func (v *SourceView) minimapRow(row int, r textedit.Range, start int, s *minimap
 			}
 		}
 	}
-	spans := v.document.highlightSpans(textedit.Range{Start: r.Start + start, End: end})
+	spans := v.document.highlightSpans(TextRange{Start: r.Start + start, End: end})
 	si := 0
 	pixels := view.MinimapCells(text, key.columns, key.tab, func(at int) color.NRGBA {
 		c := v.colors.Foreground

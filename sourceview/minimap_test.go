@@ -9,11 +9,11 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
@@ -102,7 +102,7 @@ func TestMinimapConfigurationAndNavigation(t *testing.T) {
 		}
 	}
 	v.mounted = true
-	v.selection = textedit.Selection{Anchor: 1, Caret: 2}
+	v.selection = TextSelection{Anchor: 1, Caret: 2}
 	selected := v.Selection()
 	var target geometry.Rectangle
 	v.ConnectScrollIntoView(func(r geometry.Rectangle) { target = r })
@@ -162,9 +162,9 @@ func TestMinimapSamplingAndReuse(t *testing.T) {
 	}
 	r2, _ := d.model.LineRange(1)
 	preserved := v.minimapRow(1, r2, 0, v.minimap)
-	h := d.model.ConnectChange(func(c textedit.Change) { d.engine.Change(c) })
+	h := d.model.ConnectChange(func(c TextChange) { d.engine.Change(c) })
 	defer h.Disconnect()
-	if err := d.model.Apply(textedit.Edit{Range: textedit.Range{Start: 0, End: 0}, Text: "x"}, textedit.EditOptions{}); err != nil {
+	if err := d.model.Apply(TextEdit{Range: TextRange{Start: 0, End: 0}, Text: "x"}, textcore.EditOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	v.prepareMinimap()
@@ -240,7 +240,7 @@ func TestMinimapCaretRevealAndHorizontalScroll(t *testing.T) {
 	v, scroll := revealFixture(t)
 	v.SetShowMinimap(true)
 	v.document.model.SetText(strings.Repeat("a", 2000))
-	v.SetSelection(textedit.Selection{Caret: 1900})
+	v.SetSelection(TextSelection{Caret: 1900})
 	v.RevealSelection()
 	for range 12 {
 		scroll.Arrange(scroll.Rect())

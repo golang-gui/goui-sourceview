@@ -5,10 +5,10 @@ import (
 	"slices"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 )
 
@@ -44,10 +44,10 @@ func (v *SourceView) manuallyCollapsed(row int) bool {
 
 // Unchanged paragraphs retain their source identity during IME projection,
 // even when preedit inserts/removes temporary display paragraphs before them.
-func (v *SourceView) collapsedLineRange(row int) (textedit.Range, bool) {
+func (v *SourceView) collapsedLineRange(row int) (TextRange, bool) {
 	sourceRow, ok := v.highlightRow(row)
 	if !ok {
-		return textedit.Range{}, false
+		return TextRange{}, false
 	}
 	if v.manuallyCollapsed(sourceRow) {
 		return v.collapsedLines[sourceRow], true
@@ -58,7 +58,7 @@ func (v *SourceView) collapsedLineRange(row int) (textedit.Range, bool) {
 			return r, err == nil
 		}
 	}
-	return textedit.Range{}, false
+	return TextRange{}, false
 }
 
 // A preview can belong to an ordinary long line or to a collapsed structure.
@@ -145,7 +145,7 @@ func (v *SourceView) CollapseLine(line int) bool {
 	}
 	r, _ := v.document.model.LineRange(line)
 	if v.collapsedLines == nil || v.collapsedRevision != v.document.model.Revision() {
-		v.collapsedLines = make(map[int]textedit.Range)
+		v.collapsedLines = make(map[int]TextRange)
 	}
 	v.collapsedRevision = v.document.model.Revision()
 	v.collapsedLines[line] = r
@@ -154,7 +154,7 @@ func (v *SourceView) CollapseLine(line int) bool {
 	hidden := func(at int) bool { return at >= r.Start && at <= r.End && v.collapsedOffsetHidden(line, p, at, false) }
 	if hidden(selection.Anchor) || hidden(selection.Caret) {
 		pos := g.HitLine(0, 0)
-		selection = textedit.Selection{Anchor: r.Start + pos.Offset, Caret: r.Start + pos.Offset}
+		selection = TextSelection{Anchor: r.Start + pos.Offset, Caret: r.Start + pos.Offset}
 		upstream = pos.Upstream
 	}
 	v.refreshCollapsedLine(line)
@@ -203,7 +203,7 @@ func (v *SourceView) refreshCollapsedLine(row int) {
 
 // linePreview borrows cached first-page geometry; painting/snapshots never
 // prepare missing pages just to locate a badge or describe hidden text.
-func (v *SourceView) linePreview(p *paragraph) (*textedit.Geometry, float32) {
+func (v *SourceView) linePreview(p *paragraph) (*textcore.Geometry, float32) {
 	if p == nil {
 		return nil, v.lineHeight
 	}
@@ -246,12 +246,12 @@ func (v *SourceView) collapsedOffsetHidden(row int, p *paragraph, at int, upstre
 	if g == nil {
 		return at != r.Start
 	}
-	pos := textedit.Position{Offset: at - r.Start, Upstream: upstream}
+	pos := textcore.Position{Offset: at - r.Start, Upstream: upstream}
 	caret := g.Caret(pos)
 	return g.LineIndex(pos) != 0 || caret.X < 0 || caret.X > v.linePreviewRect(row, p).Width
 }
 
-func (v *SourceView) expandCollapsedRange(r textedit.Range) bool {
+func (v *SourceView) expandCollapsedRange(r TextRange) bool {
 	changed := false
 	for row, line := range v.collapsedLines {
 		if !v.lineCollapsed(row) || r.End < line.Start || r.Start > line.End {
@@ -267,7 +267,7 @@ func (v *SourceView) expandCollapsedRange(r textedit.Range) bool {
 	return changed
 }
 
-func (v *SourceView) mapCollapsedLines(c textedit.Change) bool {
+func (v *SourceView) mapCollapsedLines(c TextChange) bool {
 	v.collapsedRevision = c.Revision
 	if len(v.collapsedLines) == 0 {
 		return false
@@ -276,7 +276,7 @@ func (v *SourceView) mapCollapsedLines(c textedit.Change) bool {
 		v.collapsedLines = nil
 		return true
 	}
-	mapped := make(map[int]textedit.Range, len(v.collapsedLines))
+	mapped := make(map[int]TextRange, len(v.collapsedLines))
 	changed := false
 	for oldRow, line := range v.collapsedLines {
 		valid := true
@@ -285,8 +285,8 @@ func (v *SourceView) mapCollapsedLines(c textedit.Change) bool {
 				valid = false
 				break
 			}
-			line.Start = textedit.MapOffset(line.Start, e)
-			line.End = textedit.MapOffset(line.End, e)
+			line.Start = textcore.MapOffset(line.Start, e)
+			line.End = textcore.MapOffset(line.End, e)
 		}
 		if valid {
 			row := v.document.model.LineAt(line.Start)
@@ -344,7 +344,7 @@ func (v *SourceView) snapshotCollapsedLines(info *gui.WidgetInfo, first, last in
 		// Composition is exposed separately; do not report hidden committed
 		// suffixes as visible text. Unchanged previews remain in place.
 		at := projection.Replacement().Start
-		info.TextEditing.VisibleRange, info.TextEditing.VisibleText = textedit.Range{Start: at, End: at}, ""
+		info.TextEditing.VisibleRange, info.TextEditing.VisibleText = gui.TextRange{Start: at, End: at}, ""
 		delta := projection.ParagraphCount() - (projection.LastLine() - projection.FirstLine() + 1)
 		for sourceRow := range v.collapsedLines {
 			row := sourceRow
@@ -393,7 +393,7 @@ func (v *SourceView) snapshotCollapsedLines(info *gui.WidgetInfo, first, last in
 		budget -= len(text)
 		spans = append(spans, map[string]any{"range": r, "text": text})
 		if len(spans) == 1 {
-			info.TextEditing.VisibleRange, info.TextEditing.VisibleText = r, text
+			info.TextEditing.VisibleRange, info.TextEditing.VisibleText = gui.TextRange(r), text
 		}
 	}
 	meta["visibleSpans"] = spans

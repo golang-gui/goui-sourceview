@@ -23,7 +23,6 @@ import (
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	base "github.com/golang-gui/goui/ui"
@@ -115,11 +114,11 @@ func main() {
 					s.ConnectActivate(func() { fallback++ })
 					win.Shortcuts().AddShortcut(s)
 					win.SetFocusedWidget(a)
-					a.SetSelection(textedit.Selection{Anchor: 3, Caret: 0})
+					a.SetSelection(source.TextSelection{Anchor: 3, Caret: 0})
 					key(events.KeyF, primary)
 					bar = panel(a, "sourceview-find-bar")
 					originalBar = bar
-					check(bar.Visible() && named(bar, "Find").Focused() && a.Search().Text == "one" && !doc.Model().CanUndo(), "query seed, focus or history")
+					check(bar.Visible() && named(bar, "Find").Focused() && a.Search().Text == "one" && !doc.CanUndo(), "query seed, focus or history")
 				case 1:
 					count(3)
 					// 栏内拖选和右击不能触发正文的拖选或编辑菜单。
@@ -143,9 +142,9 @@ func main() {
 					key(events.KeyEscape, 0)
 					check(bar.Visible() && input.Focused() && len(win.Popovers()) == 0, "input menu dismissal closed the find UI")
 					key(events.KeyEnter, 0)
-					check(a.Selection() == (textedit.Selection{Anchor: 10, Caret: 13}), "find enter")
+					check(a.Selection() == (source.TextSelection{Anchor: 10, Caret: 13}), "find enter")
 					key(events.KeyEnter, events.ModifierShift)
-					check(a.Selection() == (textedit.Selection{Caret: 3}), "find shift-enter")
+					check(a.Selection() == (source.TextSelection{Caret: 3}), "find shift-enter")
 					click(named(bar, "Match case"))
 					check(a.Search().IgnoreCase, "case toggle pointer")
 				case 2:
@@ -164,15 +163,15 @@ func main() {
 					win.SetFocusedWidget(field)
 					must(win.CommitText("X"))
 					key(events.KeyEnter, 0)
-					check(doc.Model().Text() == "X ONE stone one" && a.Selection() == (textedit.Selection{Anchor: 2, Caret: 5}), "replace and advance")
+					check(doc.Text() == "X ONE stone one" && a.Selection() == (source.TextSelection{Anchor: 2, Caret: 5}), "replace and advance")
 					win.SetFocusedWidget(a)
 					key(events.KeyZ, primary)
-					check(doc.Model().Text() == "one ONE stone one", "replace undo")
+					check(doc.Text() == "one ONE stone one", "replace undo")
 					win.SetFocusedWidget(named(bar, "Find"))
 					key(events.KeyEscape, 0)
 					check(!bar.Visible() && a.Focused() && a.Search().Text == "one" && !a.HighlightSearchMatches() && a.Cursor() == gui.CursorText, "close focus/query/highlights/cursor")
 					key(events.KeyF3, 0)
-					check(a.Selection() == (textedit.Selection{Anchor: 4, Caret: 7}), "closed-bar search navigation")
+					check(a.Selection() == (source.TextSelection{Anchor: 4, Caret: 7}), "closed-bar search navigation")
 					check(!a.HighlightSearchMatches(), "F3 restored closed-bar highlights")
 					a.SetReadOnly(true)
 					openReplace()
@@ -214,12 +213,12 @@ func main() {
 					app.RequestUpdate()
 				case 8:
 					check(a != originalOwner && bar == nil, "editor remount retained an old private subtree")
-					a.SetSelection(textedit.Selection{})
+					a.SetSelection(source.TextSelection{})
 					win.SetFocusedWidget(a)
 					key(events.KeyF, primary)
 					bar = panel(a, "sourceview-find-bar")
 					check(bar != nil && bar != originalBar, "remounted editor did not create a new owned bar")
-					doc.Model().SetText(strings.Repeat("x", 200000))
+					doc.SetText(strings.Repeat("x", 200000))
 					a.SetSearch(source.SearchQuery{Text: "x"})
 					var handle interface{ Disconnect() }
 					handle = win.ConnectFrame(func(time.Time) {
@@ -227,7 +226,7 @@ func main() {
 						if state["countComplete"] == false && state["count"].(int) > 0 {
 							partialReset = true
 							handle.Disconnect()
-							doc.Model().SetText("reset reset")
+							doc.SetText("reset reset")
 							a.SetSearch(source.SearchQuery{Text: "reset"})
 						}
 					})
@@ -236,24 +235,24 @@ func main() {
 					count(2)
 					openReplace()
 					named(bar, "Replacement").(*gui.TextView).Model().SetText("R")
-					a.SetSelection(textedit.Selection{})
+					a.SetSelection(source.TextSelection{})
 					key(events.KeyEnter, 0)
 				case 10:
 					click(named(bar, "Replace all"))
-					check(doc.Model().Text() == "R R", "replace all")
+					check(doc.Text() == "R R", "replace all")
 					win.SetFocusedWidget(a)
 					key(events.KeyZ, primary)
-					check(doc.Model().Text() == "reset reset", "replace-all atomic undo")
+					check(doc.Text() == "reset reset", "replace-all atomic undo")
 					openReplace()
 					replacementDoc := source.NewDocument("keep reset")
-					h := a.ConnectChange(func(textedit.Change) {
+					h := a.ConnectChange(func(source.TextChange) {
 						a.SetDocument(replacementDoc)
-						a.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+						a.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 					})
 					win.SetFocusedWidget(named(bar, "Replacement"))
 					key(events.KeyEnter, 0)
 					h.Disconnect()
-					check(a.Document() == replacementDoc && replacementDoc.Model().Text() == "keep reset" && a.Selection() == (textedit.Selection{Anchor: 2, Caret: 2}), "replacement callback state overwritten")
+					check(a.Document() == replacementDoc && replacementDoc.Text() == "keep reset" && a.Selection() == (source.TextSelection{Anchor: 2, Caret: 2}), "replacement callback state overwritten")
 					check(errors == 0, "internal companion errors were not forwarded exactly once")
 					probe := app.FindWidget("main", "probe").(*scaleProbe)
 					check(probe.scale > 0, "painter probe not rendered")

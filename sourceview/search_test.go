@@ -5,12 +5,11 @@ import (
 	"testing"
 
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func TestSearchKeepsRawMatchSeparateFromClusterSelection(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("e\u0301 z")
+	v.Document().SetText("e\u0301 z")
 	observe(t, v)
 	ctx := &shapedContext{}
 	v.context = ctx
@@ -18,11 +17,11 @@ func TestSearchKeepsRawMatchSeparateFromClusterSelection(t *testing.T) {
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	v.SetSearch(SearchQuery{Text: "\u0301"})
 	raw, ok := v.FindNext(false)
-	if !ok || raw != (textedit.Range{Start: 1, End: 3}) || v.Selection() != (textedit.Selection{Caret: 3}) {
+	if !ok || raw != (TextRange{Start: 1, End: 3}) || v.Selection() != (TextSelection{Caret: 3}) {
 		t.Fatalf("raw %v selection %v", raw, v.Selection())
 	}
-	if ok, err := v.ReplaceCurrent("X"); !ok || err != nil || v.Document().Model().Text() != "eX z" {
-		t.Fatal("visual selection replaced the base character", ok, err, v.Document().Model().Text())
+	if ok, err := v.ReplaceCurrent("X"); !ok || err != nil || v.Document().Text() != "eX z" {
+		t.Fatal("visual selection replaced the base character", ok, err, v.Document().Text())
 	}
 	v.dropLayouts()
 	// Every native object, including measurement probes, has one view owner.
@@ -33,18 +32,18 @@ func TestSearchKeepsRawMatchSeparateFromClusterSelection(t *testing.T) {
 
 func TestFindReentryDoesNotRestoreAnObsoleteRawMatch(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("abc abc")
+	v.Document().SetText("abc abc")
 	observe(t, v)
 	v.SetSearch(SearchQuery{Text: "abc"})
 	once := true
-	v.ConnectSelection(func(textedit.Selection) {
+	v.ConnectSelection(func(TextSelection) {
 		if once {
 			once = false
-			v.SetSelection(textedit.Selection{Anchor: 4, Caret: 4})
+			v.SetSelection(TextSelection{Anchor: 4, Caret: 4})
 		}
 	})
 	_, _ = v.FindNext(false)
-	if ok, err := v.ReplaceCurrent("X"); ok || err != nil || v.Document().Model().Text() != "abc abc" {
+	if ok, err := v.ReplaceCurrent("X"); ok || err != nil || v.Document().Text() != "abc abc" {
 		t.Fatal("reentrant selection ignored", ok, err)
 	}
 }
@@ -54,7 +53,7 @@ func TestSelectionSearchRangeSurvivesResultSelectionsAndEdits(t *testing.T) {
 	v.document.model.SetText("a a a")
 	observe(t, v)
 	v.SetSearch(SearchQuery{Text: "a"})
-	scope := textedit.Range{Start: 2, End: 5}
+	scope := TextRange{Start: 2, End: 5}
 	if err := v.SetSearchRange(&scope); err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +69,7 @@ func TestSelectionSearchRangeSurvivesResultSelectionsAndEdits(t *testing.T) {
 	if n, err := v.ReplaceAll("bb"); err != nil || n != 2 || v.document.model.Text() != "a bb bb" {
 		t.Fatal(n, err, v.document.model.Text())
 	}
-	if r, _ := v.SearchRange(); r != (textedit.Range{Start: 2, End: 7}) {
+	if r, _ := v.SearchRange(); r != (TextRange{Start: 2, End: 7}) {
 		t.Fatal("mapped scope", r)
 	}
 	v.SetDocument(NewDocument("other"))
@@ -101,10 +100,10 @@ func TestZeroWidthFindProgressAndInvalidRegex(t *testing.T) {
 
 func TestSearchResultDiscardedWhenSelectionCallbackChangesScope(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("foo foo")
+	v.Document().SetText("foo foo")
 	v.SetSearch(SearchQuery{Text: "foo"})
-	h := v.ConnectSelection(func(textedit.Selection) {
-		r := textedit.Range{Start: 4, End: 7}
+	h := v.ConnectSelection(func(TextSelection) {
+		r := TextRange{Start: 4, End: 7}
 		if err := v.SetSearchRange(&r); err != nil {
 			t.Fatal(err)
 		}
@@ -151,17 +150,17 @@ func TestSearchHighlightVisibilityPreservesSyntaxAndSelection(t *testing.T) {
 
 func TestHiddenSearchKeepsZeroWidthNavigationAndReplacement(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("a\nb")
+	v.Document().SetText("a\nb")
 	observe(t, v)
 	v.SetSearch(SearchQuery{Text: `(?m)^`, Regex: true})
-	if r, ok := v.FindNext(false); !ok || r != (textedit.Range{}) {
+	if r, ok := v.FindNext(false); !ok || r != (TextRange{}) {
 		t.Fatal(r, ok)
 	}
 	v.SetHighlightSearchMatches(false)
-	if r, ok := v.FindNext(false); !ok || r != (textedit.Range{Start: 2, End: 2}) || v.HighlightSearchMatches() {
+	if r, ok := v.FindNext(false); !ok || r != (TextRange{Start: 2, End: 2}) || v.HighlightSearchMatches() {
 		t.Fatal("hidden navigation repeated or showed highlights", r, ok)
 	}
-	if n, err := v.ReplaceAll(">"); err != nil || n != 2 || v.Document().Model().Text() != ">a\n>b" {
+	if n, err := v.ReplaceAll(">"); err != nil || n != 2 || v.Document().Text() != ">a\n>b" {
 		t.Fatal("visibility affected replacement", n, err)
 	}
 }

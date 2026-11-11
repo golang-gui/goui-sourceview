@@ -28,7 +28,7 @@ Regex=false 时替换文本保持字面值；true 使用 Go ExpandString 的 $1/
 
 ## 独立查询范围
 
-SetSearchRange(*textedit.Range) 复制并验证原文范围；nil 恢复全文件，SearchRange 返回副本。
+SetSearchRange(*TextRange) 复制并验证原文范围；nil 恢复全文件，SearchRange 返回副本。
 它不依赖 FindNext 更新的可视选区。FindBar 的“在选区中查找”打开时捕获编辑器当前范围，
 关闭时清除；之后更改选区不会重新捕获。查询变化保留范围，换 Document、模型 Reset，或
 卸载期间漏过模型修订后重挂载时清除。普通编辑按 Change 中的顺序映射边界：起点相同的

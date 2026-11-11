@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func scan(t *testing.T, text string, chunk int) []language.Token {
@@ -108,9 +107,9 @@ func TestMarkdownProviderOwnsRangesAndAdditionalEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := source.CompletionContext{Definition: definition, ContextKnown: true, Caret: 1, Range: textedit.Range{Start: 1, End: 1}, Before: "[", After: "]", DocumentLength: 2, Trigger: "["}
+	c := source.CompletionContext{Definition: definition, ContextKnown: true, Caret: 1, Range: source.TextRange{Start: 1, End: 1}, Before: "[", After: "]", DocumentLength: 2, Trigger: "["}
 	items, err := complete(context.Background(), c)
-	if err != nil || len(items) != 1 || items[0].Range == nil || *items[0].Range != (textedit.Range{Start: 0, End: 2}) || items[0].Caret == nil || *items[0].Caret != 8 {
+	if err != nil || len(items) != 1 || items[0].Range == nil || *items[0].Range != (source.TextRange{Start: 0, End: 2}) || items[0].Caret == nil || *items[0].Caret != 8 {
 		t.Fatal(items, err)
 	}
 	c.Before = "@"

@@ -2,13 +2,13 @@
 package highlight
 
 import (
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // Span is a validated foreground range, independent of document and view state.
 type Span struct {
-	Range textedit.Range
+	Range textcore.Range
 	Kind  language.Kind
 }
 
@@ -109,7 +109,7 @@ func splitHighlights(n *SpanNode, at int, byEnd bool) (*SpanNode, *SpanNode) {
 }
 
 // MapSpans returns a new index, preserving nodes outside edited ranges.
-func MapSpans(root *SpanNode, edits []textedit.Edit) *SpanNode {
+func MapSpans(root *SpanNode, edits []textcore.Edit) *SpanNode {
 	for _, e := range edits {
 		left, rest := splitHighlights(root, e.Range.Start, true)
 		_, right := splitHighlights(rest, e.Range.End, false)
@@ -119,7 +119,7 @@ func MapSpans(root *SpanNode, edits []textedit.Edit) *SpanNode {
 }
 
 // VisitSpans visits ordered spans clipped to r without mutating shared nodes.
-func VisitSpans(root *SpanNode, r textedit.Range, visitSpan func(Span)) {
+func VisitSpans(root *SpanNode, r textcore.Range, visitSpan func(Span)) {
 	if r.End <= r.Start {
 		return
 	}

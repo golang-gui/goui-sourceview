@@ -39,7 +39,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -170,7 +169,7 @@ func run() (result error) {
 	var original string
 	lines := 0
 	assertContent := func(edits ...expectedEdit) {
-		model := doc.Model()
+		model := doc
 		at, previous, wantLines := 0, 0, lines
 		part := func(want string) {
 			for start := 0; start < len(want); {
@@ -178,7 +177,7 @@ func run() (result error) {
 				for end < len(want) && !utf8.RuneStart(want[end]) {
 					end--
 				}
-				got, err := model.Slice(textedit.Range{Start: at, End: at + end - start})
+				got, err := model.Slice(source.TextRange{Start: at, End: at + end - start})
 				must(err)
 				check(got == want[start:end], fmt.Sprintf("content differs at byte %d", at))
 				at += end - start
@@ -199,9 +198,9 @@ func run() (result error) {
 		info := view.Snapshot().TextEditing
 		check(info != nil, "visible editing snapshot unavailable")
 		check(info.VisibleRange.Start <= at && info.VisibleRange.End >= at && strings.Contains(info.VisibleText, marker), fmt.Sprintf("caret/marker not in visible excerpt: expected=%d marker=%q range=%+v selection=%+v bounds=%+v", at, marker, info.VisibleRange, info.Selection, view.Snapshot().Bounds))
-		text, err := doc.Model().Slice(textedit.Range{Start: info.VisibleRange.Start, End: info.VisibleRange.End})
+		text, err := doc.Slice(source.TextRange{Start: info.VisibleRange.Start, End: info.VisibleRange.End})
 		must(err)
-		check(text == info.VisibleText && info.Length == doc.Model().Len(), "visible excerpt does not match model")
+		check(text == info.VisibleText && info.Length == doc.Len(), "visible excerpt does not match model")
 	}
 	assertSyntax := func(marker string) bool {
 		for text, line := range ctx.lines {
@@ -273,22 +272,22 @@ func run() (result error) {
 		must(err)
 		original = string(bytes)
 		lines = strings.Count(original, "\n") + 1
-		doc.Model().SetText(original)
+		doc.SetText(original)
 		must(doc.SetLanguage(id))
 		win.SetFocusedWidget(v)
 		assertContent()
-		check(!doc.Model().CanUndo(), "initial load created undo history")
+		check(!doc.CanUndo(), "initial load created undo history")
 		log.Printf("LOADED language=%s bytes=%d lines=%d read/model/verification=%s typography=%s", id, len(original), lines, time.Since(start), app.Typography().Name())
 	})
 	add("edit without waiting for highlight", func() {
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 		must(win.CommitText(" "))
 		assertContent(expectedEdit{0, 0, " "})
 	})
 	add("undo early edit", func() { undo(); assertContent() })
 	for slot, marker := range markers {
 		at := data.positions[slot]
-		add("reveal "+marker, func() { v.SetSelection(textedit.Selection{Anchor: at, Caret: at}); v.RevealSelection() })
+		add("reveal "+marker, func() { v.SetSelection(source.TextSelection{Anchor: at, Caret: at}); v.RevealSelection() })
 		wait("visible and syntax "+marker, func() bool {
 			if !layoutReady(v) {
 				return false
@@ -321,14 +320,14 @@ func run() (result error) {
 	})
 	mid := data.positions[1]
 	add("move middle line down", func() {
-		v.SetSelection(textedit.Selection{Anchor: mid, Caret: mid})
+		v.SetSelection(source.TextSelection{Anchor: mid, Caret: mid})
 		key(events.KeyArrowDown, alt)
 		swapped := original[data.middleEnd:data.followingEnd] + original[data.middleStart:data.middleEnd]
 		assertContent(expectedEdit{data.middleStart, data.followingEnd, swapped})
 	})
 	add("undo line move", func() { undo(); assertContent() })
 	add("duplicate middle line", func() {
-		v.SetSelection(textedit.Selection{Anchor: mid, Caret: mid})
+		v.SetSelection(source.TextSelection{Anchor: mid, Caret: mid})
 		mods := gui.ModAlt | gui.ModShift
 		if runtime.GOOS == "linux" {
 			mods |= gui.ModControl
@@ -340,7 +339,7 @@ func run() (result error) {
 	})
 	add("undo line duplicate", func() { undo(); assertContent() })
 	add("delete middle line", func() {
-		v.SetSelection(textedit.Selection{Anchor: mid, Caret: mid})
+		v.SetSelection(source.TextSelection{Anchor: mid, Caret: mid})
 		key(events.KeyK, primary|events.ModifierShift)
 		assertContent(expectedEdit{data.middleStart, data.middleEnd, ""})
 	})
@@ -353,14 +352,14 @@ func run() (result error) {
 			check(at >= 0, "missing indent fixture")
 			indentEnd += at + 1
 		}
-		v.SetSelection(textedit.Selection{Anchor: data.middleStart, Caret: indentEnd})
+		v.SetSelection(source.TextSelection{Anchor: data.middleStart, Caret: indentEnd})
 		key(events.KeyTab, 0)
 		indented := "    " + strings.ReplaceAll(original[data.middleStart:indentEnd-1], "\n", "\n    ") + "\n"
 		assertContent(expectedEdit{data.middleStart, indentEnd, indented})
 	})
 	add("undo whole indent once", func() { undo(); assertContent() })
 	add("open find", func() {
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 		key(events.KeyF, primary)
 		check(panelVisible(v, "sourceview-find-bar") && named(bar, "Find").Focused(), "find shortcut")
 		key(events.KeyA, primary)
@@ -388,13 +387,13 @@ func run() (result error) {
 		check(len(matches) == 3, "independent search fixture")
 		for _, at := range matches {
 			key(events.KeyEnter, 0)
-			check(v.Selection().Range() == (textedit.Range{Start: at, End: at + len(searchText)}), "find next range")
+			check(v.Selection().Range() == (source.TextRange{Start: at, End: at + len(searchText)}), "find next range")
 		}
 		key(events.KeyEnter, events.ModifierShift)
 		check(v.Selection().Range().Start == matches[1], "find previous range")
 		key(events.KeyEscape, 0)
 		check(v.Focused(), "close find focus")
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 		key(events.KeyF3, 0)
 	})
 	add("open replace", func() {
@@ -428,11 +427,11 @@ func run() (result error) {
 	add("undo all once", func() { undo(); assertContent(); v.HidePanel(); v.SetSearch(source.SearchQuery{}) })
 	add("readonly input and history", func() {
 		v.SetReadOnly(true)
-		revision := doc.Model().Revision()
+		revision := doc.Revision()
 		check(win.CommitText("blocked") != nil, "readonly accepted text")
 		key(events.KeyDelete, 0)
 		key(events.KeyZ, primary)
-		check(doc.Model().Revision() == revision, "readonly changed revision")
+		check(doc.Revision() == revision, "readonly changed revision")
 		assertContent()
 		v.SetReadOnly(false)
 	})
@@ -446,14 +445,14 @@ func run() (result error) {
 	otherScroll.SetChild(second)
 	add("mount second view", func() {
 		row.AddChild(otherScroll)
-		second.SetSelection(textedit.Selection{Anchor: data.positions[2], Caret: data.positions[2]})
+		second.SetSelection(source.TextSelection{Anchor: data.positions[2], Caret: data.positions[2]})
 		second.RevealSelection()
 	})
 	afterLayout("new shared tail visible", second, func() {
 		recordDisplay("new shared tail", func() { assertVisible(second, data.positions[2], markers[2]) })
 	})
 	add("shared view edit", func() {
-		v.SetSelection(textedit.Selection{Anchor: mid, Caret: mid})
+		v.SetSelection(source.TextSelection{Anchor: mid, Caret: mid})
 		win.SetFocusedWidget(v)
 		must(win.CommitText("共享"))
 		assertContent(expectedEdit{mid, mid, "共享"})
@@ -468,7 +467,7 @@ func run() (result error) {
 		otherScroll.SetChild(nil)
 	})
 	add("detach and remount", func() {
-		v.SetSelection(textedit.Selection{Anchor: mid, Caret: mid})
+		v.SetSelection(source.TextSelection{Anchor: mid, Caret: mid})
 		scroll.SetChild(nil)
 		scroll.SetChild(v)
 		win.SetFocusedWidget(v)

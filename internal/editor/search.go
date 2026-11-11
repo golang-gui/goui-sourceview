@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
 type Query struct {
@@ -23,15 +23,15 @@ type Search struct {
 	failure        []int
 	regex          *regexp.Regexp
 	err            error
-	scope          *textedit.Range
-	cachedModel    *textedit.Model
+	scope          *textcore.Range
+	cachedModel    *textcore.Model
 	cachedRevision uint64
 	cachedText     string
 	cachedMatches  [][]int
 }
 
 func Compile(q Query) *Search {
-	q.Text = textedit.Normalize(q.Text)
+	q.Text = textcore.Normalize(q.Text)
 	s := &Search{query: q, pattern: []rune(q.Text)}
 	if q.Regex {
 		pattern := q.Text
@@ -64,7 +64,7 @@ func (s *Search) Empty() bool { return s == nil || s.err != nil || len(s.pattern
 // CountChunk counts non-overlapping match starts in one source chunk, reading a
 // pattern-sized suffix. matchedEnd carries the last accepted range across chunks;
 // callers start it at zero and retain the returned value, not a match list.
-func (s *Search) CountChunk(m *textedit.Model, start, budget, matchedEnd int) (next, count, after int) {
+func (s *Search) CountChunk(m *textcore.Model, start, budget, matchedEnd int) (next, count, after int) {
 	next = min(m.Len(), start+max(4, budget))
 	for next < m.Len() && !m.IsRuneBoundary(next) {
 		next++
@@ -87,7 +87,7 @@ func (s *Search) CountChunk(m *textedit.Model, start, budget, matchedEnd int) (n
 		return next, 0, after
 	}
 	end := min(m.Len(), next+len(s.pattern)*utf8.UTFMax)
-	s.scan(m, textedit.Range{Start: max(start, after), End: end}, func(r textedit.Range) bool {
+	s.scan(m, textcore.Range{Start: max(start, after), End: end}, func(r textcore.Range) bool {
 		if r.Start >= next {
 			return false
 		}
@@ -121,7 +121,7 @@ type runePosition struct {
 
 // scan visits overlapping matches in a bounded source span. whole-word context
 // is read outside the span when necessary. No full document string is built.
-func (s *Search) scan(m *textedit.Model, span textedit.Range, visit func(textedit.Range) bool) error {
+func (s *Search) scan(m *textcore.Model, span textcore.Range, visit func(textcore.Range) bool) error {
 	if s.Empty() {
 		return nil
 	}
@@ -147,18 +147,18 @@ func (s *Search) scan(m *textedit.Model, span textedit.Range, visit func(textedi
 		for before > 0 && !m.IsRuneBoundary(before) {
 			before--
 		}
-		t, _ := m.Slice(textedit.Range{Start: before, End: start})
+		t, _ := m.Slice(textcore.Range{Start: before, End: start})
 		r, _ := utf8.DecodeRuneInString(t)
 		previousWord = word(r)
 	}
-	var pending *textedit.Range
+	var pending *textcore.Range
 	pendingLastWord := false
 	for at := start; at < end; {
 		next := min(end, at+16*1024)
 		for next > at && !m.IsRuneBoundary(next) {
 			next--
 		}
-		text, err := m.Slice(textedit.Range{Start: at, End: next})
+		text, err := m.Slice(textcore.Range{Start: at, End: next})
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func (s *Search) scan(m *textedit.Model, span textedit.Range, visit func(textedi
 			}
 			if matched == len(s.pattern) {
 				first := ring[(seen-len(s.pattern))%len(ring)]
-				match := textedit.Range{Start: first.start, End: at + local + utf8.RuneLen(runeAt(text, local))}
+				match := textcore.Range{Start: first.start, End: at + local + utf8.RuneLen(runeAt(text, local))}
 				if !s.query.WholeWord {
 					if !visit(match) {
 						return nil
@@ -216,24 +216,24 @@ func (s *Search) scan(m *textedit.Model, span textedit.Range, visit func(textedi
 
 func runeAt(text string, at int) rune { r, _ := utf8.DecodeRuneInString(text[at:]); return r }
 
-func runeAtModel(m *textedit.Model, at int) rune {
+func runeAtModel(m *textcore.Model, at int) rune {
 	end := min(m.Len(), at+utf8.UTFMax)
 	for end < m.Len() && !m.IsRuneBoundary(end) {
 		end--
 	}
-	text, _ := m.Slice(textedit.Range{Start: at, End: end})
+	text, _ := m.Slice(textcore.Range{Start: at, End: end})
 	return runeAt(text, 0)
 }
 
 // Find locates a match outside the current one, wrapping at most once.
-func (s *Search) Find(m *textedit.Model, start int, backward bool) (textedit.Range, bool) {
+func (s *Search) Find(m *textcore.Model, start int, backward bool) (textcore.Range, bool) {
 	if s.cached() {
 		return s.findCached(m, start, backward)
 	}
-	var first, last, best textedit.Range
+	var first, last, best textcore.Range
 	have, found := false, false
 	matchedEnd := 0
-	s.scan(m, textedit.Range{Start: 0, End: m.Len()}, func(r textedit.Range) bool {
+	s.scan(m, textcore.Range{Start: 0, End: m.Len()}, func(r textcore.Range) bool {
 		if r.Start < matchedEnd {
 			return true
 		}
@@ -266,16 +266,16 @@ func (s *Search) Find(m *textedit.Model, start int, backward bool) (textedit.Ran
 		}
 		return first, true
 	}
-	return textedit.Range{}, false
+	return textcore.Range{}, false
 }
 
 // InRange returns matches intersecting a visible span, with bounded decorations.
-func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []textedit.Range {
+func (s *Search) InRange(m *textcore.Model, span textcore.Range, limit int) []textcore.Range {
 	if s.Empty() || limit <= 0 {
 		return nil
 	}
 	if s.cached() {
-		var out []textedit.Range
+		var out []textcore.Range
 
 		matches := s.matches(m)
 		begin := sort.Search(len(matches), func(i int) bool { return matches[i][1] >= span.Start })
@@ -283,7 +283,7 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 			if idx[0] > span.End {
 				break
 			}
-			r := textedit.Range{Start: idx[0], End: idx[1]}
+			r := textcore.Range{Start: idx[0], End: idx[1]}
 			if r.End > span.Start && r.Start < span.End || r.Start == r.End && r.Start >= span.Start && r.Start <= span.End {
 				out = append(out, r)
 				if len(out) == limit {
@@ -295,7 +295,7 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 		return out
 	}
 	context := len(s.pattern) * utf8.UTFMax
-	source := textedit.Range{Start: max(0, span.Start-context), End: min(m.Len(), span.End+context)}
+	source := textcore.Range{Start: max(0, span.Start-context), End: min(m.Len(), span.End+context)}
 	singleLine := !strings.ContainsRune(s.query.Text, '\n')
 	if singleLine {
 		// A single-line pattern cannot overlap a preceding logical line. The
@@ -304,9 +304,9 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 		line, _ := m.LineRange(m.LineAt(span.Start))
 		source.Start = line.Start
 	}
-	var matches []textedit.Range
+	var matches []textcore.Range
 	matchedEnd := 0
-	s.scan(m, source, func(r textedit.Range) bool {
+	s.scan(m, source, func(r textcore.Range) bool {
 		if singleLine && r.Start < matchedEnd {
 			return true
 		}
@@ -319,7 +319,7 @@ func (s *Search) InRange(m *textedit.Model, span textedit.Range, limit int) []te
 	return matches
 }
 
-func (s *Search) Matches(m *textedit.Model, r textedit.Range) bool {
+func (s *Search) Matches(m *textcore.Model, r textcore.Range) bool {
 	if s.Empty() {
 		return false
 	}
@@ -332,7 +332,7 @@ func (s *Search) Matches(m *textedit.Model, r textedit.Range) bool {
 		return false
 	}
 	found := false
-	s.scan(m, r, func(actual textedit.Range) bool {
+	s.scan(m, r, func(actual textcore.Range) bool {
 		if actual == r {
 			found = true
 		}
@@ -342,7 +342,7 @@ func (s *Search) Matches(m *textedit.Model, r textedit.Range) bool {
 }
 
 // ReplaceAll plans non-overlapping replacements against one original revision.
-func (s *Search) ReplaceAll(m *textedit.Model, selection textedit.Selection, replacement string) (Plan, error) {
+func (s *Search) ReplaceAll(m *textcore.Model, selection textcore.Selection, replacement string) (Plan, error) {
 	if s.err != nil {
 		return Plan{}, s.err
 	}
@@ -350,10 +350,10 @@ func (s *Search) ReplaceAll(m *textedit.Model, selection textedit.Selection, rep
 		return s.replaceCached(m, selection, replacement)
 	}
 	p := Plan{Before: selection, After: selection}
-	text := textedit.Normalize(replacement)
+	text := textcore.Normalize(replacement)
 	lastEnd, total := 0, 0
 	budget := false
-	err := s.scan(m, textedit.Range{Start: 0, End: m.Len()}, func(r textedit.Range) bool {
+	err := s.scan(m, textcore.Range{Start: 0, End: m.Len()}, func(r textcore.Range) bool {
 		if r.Start < lastEnd {
 			return true
 		}
@@ -361,7 +361,7 @@ func (s *Search) ReplaceAll(m *textedit.Model, selection textedit.Selection, rep
 			budget = true
 			return false
 		}
-		p.Edits = append(p.Edits, textedit.Edit{Range: r, Text: text})
+		p.Edits = append(p.Edits, textcore.Edit{Range: r, Text: text})
 		lastEnd = r.End
 		total += len(text)
 		return true
@@ -383,7 +383,7 @@ func (s *Search) Err() error {
 	return s.err
 }
 
-func (s *Search) SetRange(r *textedit.Range) {
+func (s *Search) SetRange(r *textcore.Range) {
 	s.scope = nil
 	if r != nil {
 		copy := *r
@@ -401,7 +401,7 @@ func (s *Search) cached() bool {
 // matches caches one canonical non-overlapping source sequence per query/model
 // revision/scope. Regex anchors keep full-document context even with a scope.
 // Captures and original text remain private and never escape to GUI callbacks.
-func (s *Search) matches(m *textedit.Model) [][]int {
+func (s *Search) matches(m *textcore.Model) [][]int {
 	if s.Empty() {
 		return nil
 	}
@@ -425,7 +425,7 @@ func (s *Search) matches(m *textedit.Model) [][]int {
 		}
 	} else {
 		after := 0
-		s.scan(m, textedit.Range{End: m.Len()}, func(r textedit.Range) bool {
+		s.scan(m, textcore.Range{End: m.Len()}, func(r textcore.Range) bool {
 			if r.Start >= after {
 				s.cachedMatches = append(s.cachedMatches, []int{r.Start, r.End})
 				after = r.End
@@ -459,10 +459,10 @@ func wholeMatch(text string, a, b int) bool {
 	return true
 }
 
-func (s *Search) findCached(m *textedit.Model, start int, backward bool) (textedit.Range, bool) {
+func (s *Search) findCached(m *textcore.Model, start int, backward bool) (textcore.Range, bool) {
 	matches := s.matches(m)
 	if len(matches) == 0 {
-		return textedit.Range{}, false
+		return textcore.Range{}, false
 	}
 
 	index := 0
@@ -479,14 +479,14 @@ func (s *Search) findCached(m *textedit.Model, start int, backward bool) (texted
 	}
 	best := matches[index]
 
-	return textedit.Range{Start: best[0], End: best[1]}, true
+	return textcore.Range{Start: best[0], End: best[1]}, true
 }
 
-func (s *Search) Replacement(m *textedit.Model, r textedit.Range, replacement string) (string, error) {
+func (s *Search) Replacement(m *textcore.Model, r textcore.Range, replacement string) (string, error) {
 	if s.err != nil {
 		return "", s.err
 	}
-	replacement = textedit.Normalize(replacement)
+	replacement = textcore.Normalize(replacement)
 	if !s.query.Regex {
 		return replacement, nil
 	}
@@ -502,10 +502,10 @@ func (s *Search) Replacement(m *textedit.Model, r textedit.Range, replacement st
 	return "", fmt.Errorf("sourceview: search match changed")
 }
 
-func (s *Search) replaceCached(m *textedit.Model, selection textedit.Selection, replacement string) (Plan, error) {
+func (s *Search) replaceCached(m *textcore.Model, selection textcore.Selection, replacement string) (Plan, error) {
 	p := Plan{Before: selection, After: selection}
 	total := 0
-	replacement = textedit.Normalize(replacement)
+	replacement = textcore.Normalize(replacement)
 	for _, idx := range s.matches(m) {
 		if len(p.Edits) >= 100000 {
 			return Plan{}, ErrOperationLimit
@@ -518,7 +518,7 @@ func (s *Search) replaceCached(m *textedit.Model, selection textedit.Selection, 
 			return Plan{}, ErrOperationLimit
 		}
 		total += len(text)
-		p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: idx[0], End: idx[1]}, Text: text})
+		p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: idx[0], End: idx[1]}, Text: text})
 	}
 	p.After = mapSelection(selection, p.Edits)
 	return p, nil

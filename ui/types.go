@@ -3,7 +3,6 @@ package ui
 import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/gui"
-	base "github.com/golang-gui/goui/ui"
 )
 
 // Declarative configuration uses the same types as the imperative control.
@@ -38,13 +37,12 @@ type (
 	LineMarkEvent      = source.LineMarkEvent
 )
 
-// Text values share GOUI's UTF-8 byte coordinates and model contracts.
+// Text values belong to SourceView and use normalized UTF-8 byte coordinates.
 type (
-	TextModel     = base.TextModel
-	TextRange     = base.TextRange
-	TextEdit      = base.TextEdit
-	TextChange    = base.TextChange
-	TextSelection = base.TextSelection
+	TextRange     = source.TextRange
+	TextEdit      = source.TextEdit
+	TextChange    = source.TextChange
+	TextSelection = source.TextSelection
 )
 
 // KeyGesture uses GOUI's key and modifier values, also available in goui/ui.
@@ -146,9 +144,6 @@ const (
 
 // NewDocument creates a document using the control's normalization and language defaults.
 func NewDocument(text string) *Document { return source.NewDocument(text) }
-
-// NewDocumentWithModel shares an existing GOUI text model.
-func NewDocumentWithModel(model *TextModel) *Document { return source.NewDocumentWithModel(model) }
 
 // DetectLineEnding inspects raw text before its newlines are normalized.
 func DetectLineEnding(text string) (ending LineEnding, mixed bool) {

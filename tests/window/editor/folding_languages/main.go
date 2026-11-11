@@ -28,7 +28,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/basic"
@@ -112,13 +111,13 @@ func main() {
 	}
 	var doc *source.Document
 	caret := func(row int, end bool) {
-		r, err := doc.Model().LineRange(row)
+		r, err := doc.LineRange(row)
 		must(err)
 		at := r.Start
 		if end {
 			at = r.End
 		}
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 	}
 	matches := func(editor *source.SourceView, want []language.FoldRange) bool {
 		got := editor.FoldingRegions()
@@ -148,18 +147,18 @@ func main() {
 			caret(2, false)
 			key(events.KeyBracketLeft, foldMods)
 			check(v.FoldingRegions()[1].Collapsed && !mirror.FoldingRegions()[1].Collapsed, "keyboard fold/view isolation")
-			check(doc.Model().Text() == sample.text && !doc.Model().CanUndo(), "fold changed source/history")
+			check(doc.Text() == sample.text && !doc.CanUndo(), "fold changed source/history")
 		})
 		next(func() {
 			info := v.Snapshot()
 			check(info.TextEditing != nil && !strings.Contains(info.TextEditing.VisibleText, "hidden();"), "hidden body still in visible snapshot")
 			caret(1, true)
 			key(events.KeyDelete, 0)
-			check(!v.FoldingRegions()[1].Collapsed && doc.Model().Text() == sample.text, "first Delete removed hidden text")
+			check(!v.FoldingRegions()[1].Collapsed && doc.Text() == sample.text, "first Delete removed hidden text")
 			key(events.KeyDelete, 0)
-			check(doc.Model().Text() != sample.text, "second Delete did not edit")
+			check(doc.Text() != sample.text, "second Delete did not edit")
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == sample.text, "undo did not restore source")
+			check(doc.Text() == sample.text, "undo did not restore source")
 		})
 		steps = append(steps, func() bool { return matches(v, sample.want) && matches(mirror, sample.want) })
 		next(func() { caret(0, false) })
@@ -187,7 +186,7 @@ func main() {
 			v.SetSearch(source.SearchQuery{Text: "hidden"})
 			key(events.KeyF3, 0)
 			check(!v.FoldingRegions()[0].Collapsed, "search did not reveal hidden match")
-			text, err := doc.Model().Slice(v.Selection().Range())
+			text, err := doc.Slice(v.Selection().Range())
 			must(err)
 			check(text == "hidden", "search selected wrong source bytes")
 			mirror.FoldAll()
@@ -202,10 +201,10 @@ func main() {
 		next(func() {
 			caret(sample.want[0].EndLine, true)
 			key(events.KeyBackspace, 0)
-			check(doc.Model().Text() == strings.Replace(sample.text, "\n}\ntail", "\n\ntail", 1), "closing delimiter edit")
+			check(doc.Text() == strings.Replace(sample.text, "\n}\ntail", "\n\ntail", 1), "closing delimiter edit")
 		})
 		steps = append(steps, func() bool { return matches(v, sample.want[1:]) && matches(mirror, sample.want[1:]) })
-		next(func() { key(events.KeyZ, primary); check(doc.Model().Text() == sample.text, "closing delimiter undo") })
+		next(func() { key(events.KeyZ, primary); check(doc.Text() == sample.text, "closing delimiter undo") })
 		steps = append(steps, func() bool { return matches(v, sample.want) && matches(mirror, sample.want) })
 		next(func() {
 			log.Printf("PASS %s exact ranges, keyboard/pointer, history, search, view isolation and reanalysis", sample.id)

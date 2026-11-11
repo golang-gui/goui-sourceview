@@ -106,7 +106,7 @@ func main() {
 		case source.LineMarkContextMenu:
 			menu := gui.NewMenu()
 			safe := func(fn func()) {
-				if doc.Model().Revision() == e.Revision && editor.Document() == doc {
+				if doc.Revision() == e.Revision && editor.Document() == doc {
 					fn()
 				}
 			}
@@ -145,7 +145,7 @@ func main() {
 		if !ok {
 			line = 3
 		}
-		line = (line + 1) % doc.Model().LineCount()
+		line = (line + 1) % doc.LineCount()
 		must(editor.SetExecutionLine(line))
 		must(editor.RevealLine(line))
 	})

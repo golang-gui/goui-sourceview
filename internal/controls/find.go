@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/icon/svg"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
@@ -375,7 +375,7 @@ func (l *findBarLayout) Arrange(children []layout.Child, r geometry.Rectangle) {
 
 // SetFindText preserves field history/selection on ordinary refreshes.
 func SetFindText(field *gui.TextView, text string) {
-	text = textedit.Normalize(text)
+	text = textcore.Normalize(text)
 	if !field.Model().EqualText(text) {
 		field.Model().SetText(text)
 	}

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func drain(t *testing.T, e *Engine) {
@@ -27,7 +27,7 @@ func drain(t *testing.T, e *Engine) {
 	}
 }
 
-func checkIndex(t *testing.T, e *Engine, m *textedit.Model) {
+func checkIndex(t *testing.T, e *Engine, m *textcore.Model) {
 	t.Helper()
 	parts := strings.Split(m.Text(), "\n")
 	if e.LineCount() != len(parts) {
@@ -52,13 +52,13 @@ func checkIndex(t *testing.T, e *Engine, m *textedit.Model) {
 }
 
 func TestIncrementalIndexAndHighlight(t *testing.T) {
-	m := textedit.NewModel("<x>\n<!-- a\n b -->\n<p/>\n</x>")
+	m := textcore.NewModel("<x>\n<!-- a\n b -->\n<p/>\n</x>")
 	e := New(m, language.XML)
-	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 	defer h.Disconnect()
 	drain(t, e)
 	oldID := e.Line(4).ID
-	if err := m.Replace(textedit.Range{Start: 4, End: 8}, ""); err != nil {
+	if err := m.Replace(textcore.Range{Start: 4, End: 8}, ""); err != nil {
 		t.Fatal(err)
 	}
 	drain(t, e)
@@ -78,9 +78,9 @@ func TestIncrementalIndexAndHighlight(t *testing.T) {
 }
 
 func TestRandomLineSplices(t *testing.T) {
-	m := textedit.NewModel("a\nb\n")
+	m := textcore.NewModel("a\nb\n")
 	e := New(m, language.XML)
-	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 	defer h.Disconnect()
 	drain(t, e)
 	random := rand.New(rand.NewSource(71))
@@ -89,7 +89,7 @@ func TestRandomLineSplices(t *testing.T) {
 		a := random.Intn(len(text) + 1)
 		b := a + random.Intn(len(text)-a+1)
 		insert := []string{"", "x", "\n", "\n\n", "<p>\n"}[random.Intn(5)]
-		if err := m.Replace(textedit.Range{Start: a, End: b}, insert); err != nil {
+		if err := m.Replace(textcore.Range{Start: a, End: b}, insert); err != nil {
 			t.Fatal(err)
 		}
 		drain(t, e)
@@ -98,13 +98,13 @@ func TestRandomLineSplices(t *testing.T) {
 }
 
 func TestConvergenceAndStaleRows(t *testing.T) {
-	m := textedit.NewModel(strings.Repeat("<p>x</p>\n", 1000))
+	m := textcore.NewModel(strings.Repeat("<p>x</p>\n", 1000))
 	e := New(m, language.HTML)
-	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 	defer h.Disconnect()
 	drain(t, e)
 	before := e.ScannedLines()
-	if err := m.Replace(textedit.Range{Start: 3, End: 4}, "hello"); err != nil {
+	if err := m.Replace(textcore.Range{Start: 3, End: 4}, "hello"); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, valid := e.Tokens(700); valid {
@@ -121,14 +121,14 @@ func TestConvergenceAndStaleRows(t *testing.T) {
 
 // 显示可暂用同一定义的旧颜色，但编辑上下文和 Class 不能借此变成有效结果。
 func TestPaintTokensSurviveInvalidation(t *testing.T) {
-	m := textedit.NewModel("/* note */\nconst value = true;\nreturn value;")
+	m := textcore.NewModel("/* note */\nconst value = true;\nreturn value;")
 	e := New(m, language.JavaScript)
-	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 	defer h.Disconnect()
 	drain(t, e)
 	old, version, _ := e.PaintTokens(1)
 	old = append([]Token(nil), old...)
-	if err := m.ReplaceAtomic(textedit.Range{Start: 8, End: 10}, ""); err != nil {
+	if err := m.ReplaceAtomic(textcore.Range{Start: 8, End: 10}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, valid := e.Tokens(1); valid {
@@ -184,11 +184,11 @@ func TestPaintTokensMapEdits(t *testing.T) {
 		{"\"abc\"\n\"def\"", 4, 8, "", [][]Token{{{Start: 0, End: 7, Kind: language.KindString, Class: language.ClassString}}}},
 		{"\"abcdef\"", 3, 5, "XY", [][]Token{{{Start: 0, End: 3, Kind: language.KindString, Class: language.ClassString}, {Start: 5, End: 8, Kind: language.KindString, Class: language.ClassString}}}},
 	} {
-		m := textedit.NewModel(tc.text)
+		m := textcore.NewModel(tc.text)
 		e := New(m, language.JSON)
-		h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+		h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 		drain(t, e)
-		if err := m.ReplaceAtomic(textedit.Range{Start: tc.start, End: tc.end}, tc.insert); err != nil {
+		if err := m.ReplaceAtomic(textcore.Range{Start: tc.start, End: tc.end}, tc.insert); err != nil {
 			t.Fatal(err)
 		}
 		for row, want := range tc.want {
@@ -238,13 +238,13 @@ func TestPaintSnapshotSurvivesPartialWorkAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := textedit.NewModel("\"" + strings.Repeat("x", ChunkSize*8) + "\"\ntrue")
+	m := textcore.NewModel("\"" + strings.Repeat("x", ChunkSize*8) + "\"\ntrue")
 	e := NewWithLanguage(m, l)
-	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 	defer h.Disconnect()
 	drain(t, e)
 	for i := 0; i < 5; i++ {
-		if err := m.ReplaceAtomic(textedit.Range{Start: 10, End: 10}, "y"); err != nil {
+		if err := m.ReplaceAtomic(textcore.Range{Start: 10, End: 10}, "y"); err != nil {
 			t.Fatal(err)
 		}
 		_, version, _ := e.PaintTokens(0)
@@ -288,11 +288,11 @@ func TestPaintWorkRewindAndBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, body := range []string{"\"" + strings.Repeat("x", ChunkSize*4) + "\"", "[" + strings.Repeat("0,", maxLineTokens/2) + "0]"} {
-		m := textedit.NewModel("true\n" + body)
+		m := textcore.NewModel("true\n" + body)
 		e := NewWithLanguage(m, l)
-		h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+		h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 		drain(t, e)
-		if err := m.ReplaceAtomic(textedit.Range{Start: 15, End: 15}, "1"); err != nil {
+		if err := m.ReplaceAtomic(textcore.Range{Start: 15, End: 15}, "1"); err != nil {
 			t.Fatal(err)
 		}
 		scanner.slow = true
@@ -322,19 +322,19 @@ func TestPaintWorkRewindAndBudget(t *testing.T) {
 }
 
 func TestReentryAndLongLine(t *testing.T) {
-	m := textedit.NewModel("a")
+	m := textcore.NewModel("a")
 	var e *Engine
-	first := m.ConnectChange(func(c textedit.Change) {
+	first := m.ConnectChange(func(c textcore.Change) {
 		if c.Revision == 1 {
-			m.Replace(textedit.Range{Start: 0, End: 0}, "b")
+			m.Replace(textcore.Range{Start: 0, End: 0}, "b")
 		}
 	})
 	defer first.Disconnect()
 	e = New(m, language.JSON)
 	drain(t, e)
-	h := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
+	h := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
 	defer h.Disconnect()
-	m.Replace(textedit.Range{Start: 0, End: 1}, "1")
+	m.Replace(textcore.Range{Start: 0, End: 1}, "1")
 	drain(t, e)
 	checkIndex(t, e, m)
 	m.SetText("<x a='" + strings.Repeat("é", 20000) + "'>x</x>")
@@ -358,7 +358,7 @@ func TestMalformedMarkupProgress(t *testing.T) {
 }
 
 func TestLanguageSwitchKeepsMetadataAndHidesOldTokens(t *testing.T) {
-	m := textedit.NewModel("true\nfalse")
+	m := textcore.NewModel("true\nfalse")
 	e := New(m, language.JSON)
 	drain(t, e)
 	ids := []uint64{e.Line(0).ID, e.Line(1).ID}
@@ -389,7 +389,7 @@ func TestLanguageSwitchKeepsMetadataAndHidesOldTokens(t *testing.T) {
 }
 
 func TestEditingContextAcrossLinesAndInvalidation(t *testing.T) {
-	m := textedit.NewModel("<!--\nstill comment\n-->\n<x a=\"")
+	m := textcore.NewModel("<!--\nstill comment\n-->\n<x a=\"")
 	e := New(m, language.XML)
 	if _, ok := e.ContextAt(8); ok {
 		t.Fatal("guessed unresolved previous line")
@@ -405,7 +405,7 @@ func TestEditingContextAcrossLinesAndInvalidation(t *testing.T) {
 	if _, ok := e.ContextAt(m.Len()); ok {
 		t.Fatal("used previous language context")
 	}
-	m = textedit.NewModel(strings.Repeat(" ", 17<<10))
+	m = textcore.NewModel(strings.Repeat(" ", 17<<10))
 	e = New(m, language.JSON)
 	if _, ok := e.ContextAt(m.Len()); ok {
 		t.Fatal("unbounded prefix scan")
@@ -429,7 +429,7 @@ func TestConfigurationAndShellEditingContext(t *testing.T) {
 		{language.Shell, "cat <<'END'\nbody", true, false, true},
 		{language.Shell, "echo value # note", false, true, false},
 	} {
-		m := textedit.NewModel(tc.text)
+		m := textcore.NewModel(tc.text)
 		e := New(m, tc.id)
 		e.Advance(time.Time{})
 		c, ok := e.ContextAt(m.Len())
@@ -459,7 +459,7 @@ func TestSameIDDefinitionInvalidation(t *testing.T) {
 		}
 		return l
 	}
-	m := textedit.NewModel("abc\nxyz")
+	m := textcore.NewModel("abc\nxyz")
 	e := NewWithLanguage(m, makeLanguage("first"))
 	drain(t, e)
 	before := e.Line(0).ID
@@ -485,7 +485,7 @@ func (s badScanner) Scan(in language.Input, state language.State) (language.Resu
 
 func TestInvalidProviderStopsAnalysis(t *testing.T) {
 	l, _ := language.New(language.Definition{Info: language.Info{ID: "bad", Name: "Bad"}, Tokenizer: badScanner{}})
-	e := NewWithLanguage(textedit.NewModel("text"), l)
+	e := NewWithLanguage(textcore.NewModel("text"), l)
 	for e.Pending() {
 		e.Advance(time.Now().Add(time.Second))
 	}
@@ -500,11 +500,11 @@ func TestInvalidProviderStopsAnalysis(t *testing.T) {
 func TestNoTokenizerEditsOnlyUpdateLineMetadata(t *testing.T) {
 	l, _ := language.New(language.Definition{Info: language.Info{ID: "uncolored", Name: "No colors"}})
 	for _, definition := range []*language.Language{l, func() *language.Language { plain, _ := language.Builtin(language.Plain); return plain }()} {
-		m := textedit.NewModel("one\ntwo")
+		m := textcore.NewModel("one\ntwo")
 		e := NewWithLanguage(m, definition)
 		drain(t, e)
-		handle := m.ConnectChange(func(c textedit.Change) { e.Change(c) })
-		if err := m.Replace(textedit.Range{Start: 0, End: 3}, "a\nb"); err != nil {
+		handle := m.ConnectChange(func(c textcore.Change) { e.Change(c) })
+		if err := m.Replace(textcore.Range{Start: 0, End: 3}, "a\nb"); err != nil {
 			t.Fatal(err)
 		}
 		if e.Pending() {
@@ -533,7 +533,7 @@ func BenchmarkCorpusAnalysis(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			model := textedit.NewModel(string(data))
+			model := textcore.NewModel(string(data))
 			id := language.Guess(name, data[:min(len(data), 4096)])
 			b.ReportAllocs()
 			b.SetBytes(int64(model.Len()))
@@ -555,7 +555,7 @@ func TestLineStoreBlockAggregatesMatchEveryBytePosition(t *testing.T) {
 		parts = append(parts, strings.Repeat("x", row%37)+"中")
 	}
 	parts = append(parts, "") // The trailing empty paragraph is a legal endpoint.
-	model := textedit.NewModel(strings.Join(parts, "\n"))
+	model := textcore.NewModel(strings.Join(parts, "\n"))
 	engine := New(model, language.Plain)
 	engine.Advance(time.Time{})
 	if engine.Err() != nil || engine.Pending() || engine.LineCount() != len(parts) {
@@ -585,7 +585,7 @@ func TestLineStoreBlockAggregatesMatchEveryBytePosition(t *testing.T) {
 // 单个元数据步骤复用模型行索引，不应按单行 byte 数分批重新读完整文本。
 func TestMetadataUsesModelLineIndex(t *testing.T) {
 	for _, text := range []string{strings.Repeat("x", 4<<20), "a\n\nb\n", strings.Repeat("a\n", 300)} {
-		m := textedit.NewModel(text)
+		m := textcore.NewModel(text)
 		e := New(m, language.Plain)
 		steps := 0
 		for e.building {

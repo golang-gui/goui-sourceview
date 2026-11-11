@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
@@ -31,7 +31,7 @@ func TestSmartIndentBackspaceIsOneUndo(t *testing.T) {
 		options.IndentWidth = 4
 		_ = v.SetIndentOptions(options)
 		n, _ := editor.LeadingColumns(tc.before, 8)
-		v.SetSelection(textedit.Selection{Anchor: n, Caret: n})
+		v.SetSelection(TextSelection{Anchor: n, Caret: n})
 		ok, err := v.deleteIndent()
 		if !ok || err != nil || v.document.model.Text() != tc.after || v.Selection().Caret != tc.caret {
 			t.Fatal(tc, v.document.model.Text(), v.Selection(), err)
@@ -48,7 +48,7 @@ func TestSmartEdgesAndShift(t *testing.T) {
 	observe(t, v)
 	v.context = &shapedContext{}
 	t.Cleanup(v.dropLayouts)
-	v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+	v.SetSelection(TextSelection{Anchor: 6, Caret: 6})
 	for _, tc := range []struct {
 		key           events.Key
 		shift         bool
@@ -79,7 +79,7 @@ func TestAssistancePaintDoesNotChangeGeometry(t *testing.T) {
 	}{{WhitespaceAll, true, 2, 4, 1}, {WhitespaceTrailing, false, 1, 0, 0}, {WhitespaceNone, true, 0, 4, 0}, {WhitespaceSelection, false, 1, 0, 0}} {
 		_ = v.SetWhitespaceMode(tc.mode)
 		v.SetShowLineEndings(tc.end)
-		v.SetSelection(textedit.Selection{Caret: 1})
+		v.SetSelection(TextSelection{Caret: 1})
 		out := &recordingPainter{}
 		v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
 		if len(out.fills) != tc.dots || out.lines != tc.lines || len(out.paths) != tc.paths {
@@ -117,7 +117,7 @@ func TestCRLFEndMarkersPreserveTerminalNewlines(t *testing.T) {
 			t.Cleanup(v.dropLayouts)
 			v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 			markers := 0
-			for row := 0; row < v.Document().Model().LineCount(); row++ {
+			for row := 0; row < v.Document().LineCount(); row++ {
 				p := v.paragraph(row)
 				if p == nil {
 					t.Fatal("missing paragraph")
@@ -142,7 +142,7 @@ func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 	observe(t, v)
 	v.context = &shapedContext{}
 	t.Cleanup(v.dropLayouts)
-	v.SetSelection(textedit.Selection{Caret: 3})
+	v.SetSelection(TextSelection{Caret: 3})
 	v.SetSearch(SearchQuery{Text: "food"})
 	word := v.occurrenceWord()
 	if word != "foo" {
@@ -156,7 +156,7 @@ func TestOccurrenceRequiresWholeSelectedWord(t *testing.T) {
 	if len(out.fills) != 1 || out.fills[0].rect.X != 90 || out.fills[0].rect.Width != 30 || v.Search().Text != "food" {
 		t.Fatal(out.fills, v.Search())
 	}
-	v.SetSelection(textedit.Selection{Anchor: 4, Caret: 7})
+	v.SetSelection(TextSelection{Anchor: 4, Caret: 7})
 	if v.occurrenceWord() != "" {
 		t.Fatal("partial word highlighted")
 	}
@@ -179,7 +179,7 @@ func TestOccurrenceWordDoesNotMeasureOffscreenSelection(t *testing.T) {
 		observe(t, v)
 		ctx := &shapedContext{}
 		v.context = ctx
-		v.SetSelection(textedit.Selection{Anchor: tc.start, Caret: tc.end})
+		v.SetSelection(TextSelection{Anchor: tc.start, Caret: tc.end})
 		v.dropLayouts() // The selection's paragraph was evicted after scrolling.
 		before := ctx.created
 		got := v.occurrenceWord()
@@ -223,13 +223,13 @@ func TestAutoPairsHistoryAndTracking(t *testing.T) {
 		t.Fatal("pair redo selection", m.Text(), v.Selection())
 	}
 	// Redo does not fabricate generated-pair ownership.
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	typeText("]")
 	if m.Text() != "([]])" {
 		t.Fatal("skipped a non-generated closer", m.Text())
 	}
 	m.SetText("")
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	typeText("{")
 	if ok, err := v.deletePair(); !ok || err != nil || m.Text() != "" {
 		t.Fatal("paired backspace", ok, err, m.Text())
@@ -238,21 +238,21 @@ func TestAutoPairsHistoryAndTracking(t *testing.T) {
 		t.Fatal("paired backspace undo")
 	}
 	m.SetText("word")
-	v.SetSelection(textedit.Selection{Anchor: 4, Caret: 0})
+	v.SetSelection(TextSelection{Anchor: 4, Caret: 0})
 	typeText("\"")
-	if m.Text() != `"word"` || v.Selection() != (textedit.Selection{Anchor: 5, Caret: 1}) {
+	if m.Text() != `"word"` || v.Selection() != (TextSelection{Anchor: 5, Caret: 1}) {
 		t.Fatal("surround", m.Text(), v.Selection())
 	}
-	if !v.Undo() || m.Text() != "word" || v.Selection() != (textedit.Selection{Anchor: 4, Caret: 0}) {
+	if !v.Undo() || m.Text() != "word" || v.Selection() != (TextSelection{Anchor: 4, Caret: 0}) {
 		t.Fatal("surround history")
 	}
 	m.SetText("")
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	typeText("[")
-	if err := m.Replace(textedit.Range{}, "x"); err != nil {
+	if err := m.Replace(TextRange{}, "x"); err != nil {
 		t.Fatal(err)
 	}
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	typeText("]")
 	if m.Text() != "x[]" || v.Selection().Caret != 3 {
 		t.Fatal("mapped pair", m.Text(), v.Selection())
@@ -280,7 +280,7 @@ func TestPairsRespectLexicalContext(t *testing.T) {
 			}
 			observe(t, v)
 			v.document.engine.Advance(time.Time{})
-			v.SetSelection(textedit.Selection{Anchor: tt.at, Caret: tt.at})
+			v.SetSelection(TextSelection{Anchor: tt.at, Caret: tt.at})
 			handled, err := v.pairText(v.Selection().Range(), tt.typed)
 			if err != nil {
 				t.Fatal(err)
@@ -301,20 +301,20 @@ func TestMatchingBracketsUsesLexicalTokens(t *testing.T) {
 	_ = v.document.SetLanguage(language.JSON)
 	observe(t, v)
 	v.document.engine.Advance(time.Time{})
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	r := v.matchingBrackets()
 	if len(r) != 2 || r[0].Start != 0 || r[1].End != v.document.model.Len() {
 		t.Fatal("string brace changed matching", r)
 	}
 	v.document.model.SetText("{[}]")
 	v.document.engine.Advance(time.Time{})
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	if r := v.matchingBrackets(); len(r) != 1 {
 		t.Fatal("crossed mismatched bracket", r)
 	}
 	v.document.model.SetText(`{"x":"[]"}`)
 	v.document.engine.Advance(time.Time{})
-	v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+	v.SetSelection(TextSelection{Anchor: 6, Caret: 6})
 	if r := v.matchingBrackets(); len(r) != 0 {
 		t.Fatal("matched a string bracket", r)
 	}
@@ -324,7 +324,7 @@ func TestQuoteEscapeAndPairNewline(t *testing.T) {
 	v := NewSourceView()
 	_ = v.document.SetLanguage(language.JSON)
 	observe(t, v)
-	if ok, err := v.pairText(textedit.Range{}, `"`); !ok || err != nil {
+	if ok, err := v.pairText(TextRange{}, `"`); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
 	if err := v.ReplaceSelection(`\`); err != nil {
@@ -334,7 +334,7 @@ func TestQuoteEscapeAndPairNewline(t *testing.T) {
 		t.Fatal("escaped quote skipped generated closer", handled, err)
 	}
 	v.document.model.SetText("  {}")
-	v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+	v.SetSelection(TextSelection{Anchor: 3, Caret: 3})
 	if err := v.newline(); err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +357,7 @@ func TestCustomQuoteEscape(t *testing.T) {
 		text    string
 		escaped bool
 	}{{"x§", true}, {"x§§", false}, {"x\\", false}, {"§§§", true}} {
-		v.Document().Model().SetText(tc.text)
+		v.Document().SetText(tc.text)
 		if got := v.quoteEscaped(len(tc.text)); got != tc.escaped {
 			t.Fatalf("%q: %t", tc.text, got)
 		}
@@ -383,7 +383,7 @@ func TestConfigurationAndShellQuoteTyping(t *testing.T) {
 			v.document.model.SetText(tc.initial)
 			_ = v.document.SetLanguage(tc.id)
 			observe(t, v)
-			v.SetSelection(textedit.Selection{Anchor: len(tc.initial), Caret: len(tc.initial)})
+			v.SetSelection(TextSelection{Anchor: len(tc.initial), Caret: len(tc.initial)})
 			for _, c := range tc.typed {
 				v.document.engine.Advance(time.Time{})
 				handled, err := v.pairText(v.Selection().Range(), string(c))
@@ -422,7 +422,7 @@ func TestConfigurationAndShellBracketContexts(t *testing.T) {
 		observe(t, v)
 		v.document.engine.Advance(time.Time{})
 		at := strings.IndexByte(tc.text, tc.open)
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(TextSelection{Anchor: at, Caret: at})
 		got := v.matchingBrackets()
 		if !tc.pair {
 			if len(got) != 0 {
@@ -431,7 +431,7 @@ func TestConfigurationAndShellBracketContexts(t *testing.T) {
 			continue
 		}
 		end := strings.LastIndexByte(tc.text, tc.close)
-		if len(got) != 2 || got[0] != (textedit.Range{Start: at, End: at + 1}) || got[1] != (textedit.Range{Start: end, End: end + 1}) {
+		if len(got) != 2 || got[0] != (TextRange{Start: at, End: at + 1}) || got[1] != (TextRange{Start: end, End: end + 1}) {
 			t.Fatalf("%s pair: %v", tc.id, got)
 		}
 	}
@@ -439,7 +439,7 @@ func TestConfigurationAndShellBracketContexts(t *testing.T) {
 
 func TestNonBracketCaretDoesNotWaitForSearchWindowLexing(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("plain text\n" + strings.Repeat("<item>value</item>\n", 10000))
+	v.Document().SetText("plain text\n" + strings.Repeat("<item>value</item>\n", 10000))
 	if err := v.Document().SetLanguage(language.XML); err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +457,7 @@ func TestNonBracketCaretDoesNotWaitForSearchWindowLexing(t *testing.T) {
 
 func TestBracketCandidateHandlesSequenceEdgesAndUTF8(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("字««x»»z")
+	v.Document().SetText("字««x»»z")
 	pairs := []language.Pair{{Open: "««", Close: "»»"}}
 	for _, tc := range []struct {
 		at   int
@@ -474,9 +474,9 @@ func TestBracketCandidateHandlesSequenceEdgesAndUTF8(t *testing.T) {
 	}
 	v.Document().SetLanguageDefinition(l)
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+	v.SetSelection(TextSelection{Anchor: 5, Caret: 5})
 	r := v.matchingBrackets()
-	if len(r) != 2 || r[0] != (textedit.Range{Start: 3, End: 7}) || r[1] != (textedit.Range{Start: 8, End: 12}) {
+	if len(r) != 2 || r[0] != (TextRange{Start: 3, End: 7}) || r[1] != (TextRange{Start: 8, End: 12}) {
 		t.Fatal("candidate check changed custom matching", r)
 	}
 }
@@ -500,7 +500,7 @@ func TestNonStructuralCandidateOnlyNeedsItsOwnLexicalLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	v.Document().SetLanguageDefinition(l)
-	v.Document().Model().SetText("<?xml version=\"1.0\"?>\n" + strings.Repeat("<item>value</item>\n", 100))
+	v.Document().SetText("<?xml version=\"1.0\"?>\n" + strings.Repeat("<item>value</item>\n", 100))
 	observe(t, v)
 	e := v.Document().engine
 	for {
@@ -523,12 +523,12 @@ func TestTagCloseLinkedEditAndUndo(t *testing.T) {
 	v.document.model.SetText("<ns:a")
 	observe(t, v)
 	v.document.engine.Advance(time.Time{})
-	v.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+	v.SetSelection(TextSelection{Anchor: 5, Caret: 5})
 	handled, err := v.closeTag(v.Selection().Range(), ">")
 	if !handled || err != nil || v.document.model.Text() != "<ns:a></ns:a>" || v.Selection().Caret != 6 {
 		t.Fatal(v.document.model.Text(), v.Selection(), err)
 	}
-	v.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+	v.SetSelection(TextSelection{Anchor: 5, Caret: 5})
 	handled, err = v.linkedTag(v.Selection().Range(), "b")
 	if !handled || err != nil || v.document.model.Text() != "<ns:ab></ns:ab>" {
 		t.Fatal(v.document.model.Text(), err)
@@ -547,12 +547,12 @@ func TestEmbeddedEditingAndCompletion(t *testing.T) {
 	v.document.model.SetText("```json\n{\"value\": tr}\n```\n- item")
 	observe(t, v)
 	v.document.engine.Advance(time.Time{})
-	v.SetSelection(textedit.Selection{Anchor: 20, Caret: 20})
+	v.SetSelection(TextSelection{Anchor: 20, Caret: 20})
 	ctx, ok := v.completionContext(true)
 	if !ok || ctx.Language != language.JSON || ctx.Definition.ID() != language.JSON || v.document.Language() != language.Markdown {
 		t.Fatal(ctx, ok)
 	}
-	v.SetSelection(textedit.Selection{Anchor: v.document.model.Len(), Caret: v.document.model.Len()})
+	v.SetSelection(TextSelection{Anchor: v.document.model.Len(), Caret: v.document.model.Len()})
 	if err := v.newline(); err != nil || v.document.model.Text() != "```json\n{\"value\": tr}\n```\n- item\n- " {
 		t.Fatal(v.document.model.Text(), err)
 	}
@@ -592,14 +592,14 @@ func TestLinkedTagEditNotRepeatedBySharedView(t *testing.T) {
 	other.SetDocument(doc)
 	observe(t, other)
 	revisions := 0
-	h := doc.Model().ConnectChange(func(textedit.Change) { revisions++ })
+	h := doc.ConnectChange(func(TextChange) { revisions++ })
 	defer h.Disconnect()
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	handled, err := v.linkedTag(v.Selection().Range(), "b")
-	if !handled || err != nil || revisions != 1 || doc.Model().Text() != "<ab></ab>" {
-		t.Fatal(doc.Model().Text(), revisions, err)
+	if !handled || err != nil || revisions != 1 || doc.Text() != "<ab></ab>" {
+		t.Fatal(doc.Text(), revisions, err)
 	}
-	if !other.Undo() || doc.Model().Text() != "<a></a>" {
+	if !other.Undo() || doc.Text() != "<a></a>" {
 		t.Fatal("shared undo lost atomic names")
 	}
 }
@@ -611,23 +611,23 @@ func TestTagAssistanceRemainsAvailableBeyondSmallDocuments(t *testing.T) {
 	doc.SetLanguage(language.XML)
 	v.SetDocument(doc)
 	observe(t, v)
-	at := doc.Model().Len()
-	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	at := doc.Len()
+	v.SetSelection(TextSelection{Anchor: at, Caret: at})
 	handled, err := v.closeTag(v.Selection().Range(), ">")
-	if !handled || err != nil || doc.Model().Text() != prefix+"<node></node>" {
+	if !handled || err != nil || doc.Text() != prefix+"<node></node>" {
 		t.Fatal("tag close disabled by document size", err)
 	}
 	at = len(prefix) + 5
-	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	v.SetSelection(TextSelection{Anchor: at, Caret: at})
 	handled, err = v.linkedTag(v.Selection().Range(), "x")
-	if !handled || err != nil || doc.Model().Text() != prefix+"<nodex></nodex>" {
+	if !handled || err != nil || doc.Text() != prefix+"<nodex></nodex>" {
 		t.Fatal("linked name disabled by document size", err)
 	}
 }
 
 func TestTagMatchingCachesNegativeResultWhileLexing(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("[<?xml version=\"1.0\"?>\n" + strings.Repeat("<item>value</item>\n", 10000))
+	v.Document().SetText("[<?xml version=\"1.0\"?>\n" + strings.Repeat("<item>value</item>\n", 10000))
 	if err := v.Document().SetLanguage(language.XML); err != nil {
 		t.Fatal(err)
 	}
@@ -649,16 +649,16 @@ func TestTagMatchingCachesNegativeResultWhileLexing(t *testing.T) {
 
 func TestTagMatchCacheInvalidatesForDocumentPositionAndLanguage(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("<root><a></a><b></b></root>")
+	v.Document().SetText("<root><a></a><b></b></root>")
 	if err := v.Document().SetLanguage(language.XML); err != nil {
 		t.Fatal(err)
 	}
 	observe(t, v)
 	check := func(at, opening, closing int) {
 		t.Helper()
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(TextSelection{Anchor: at, Caret: at})
 		r := v.matchingTags()
-		if len(r) != 2 || r[0] != (textedit.Range{Start: opening, End: opening + 1}) || r[1] != (textedit.Range{Start: closing, End: closing + 1}) {
+		if len(r) != 2 || r[0] != (TextRange{Start: opening, End: opening + 1}) || r[1] != (TextRange{Start: closing, End: closing + 1}) {
 			t.Fatal("incorrect matched pair", r)
 		}
 		if got := v.matchingTags(); &got[0] != &r[0] {
@@ -667,7 +667,7 @@ func TestTagMatchCacheInvalidatesForDocumentPositionAndLanguage(t *testing.T) {
 	}
 	check(7, 7, 11)
 	check(14, 14, 18)
-	if err := v.Document().Model().ReplaceAtomic(textedit.Range{}, "\n"); err != nil {
+	if err := v.Document().ReplaceAtomic(TextRange{}, "\n"); err != nil {
 		t.Fatal(err)
 	}
 	check(15, 15, 19)
@@ -699,9 +699,9 @@ func TestWhitespaceSelectionAndLayoutLifetime(t *testing.T) {
 	t.Cleanup(v.dropLayouts)
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 100}, geometry.Point{})
 	p := v.paragraph(0)
-	created, revision := ctx.created, v.Document().Model().Revision()
+	created, revision := ctx.created, v.Document().Revision()
 	size := v.ContentSize()
-	for _, sel := range []textedit.Selection{{Anchor: 2, Caret: 4}, {Anchor: 4, Caret: 2}} {
+	for _, sel := range []TextSelection{{Anchor: 2, Caret: 4}, {Anchor: 4, Caret: 2}} {
 		v.SetSelection(sel)
 		if err := v.SetWhitespaceMode(WhitespaceSelection); err != nil {
 			t.Fatal(err)
@@ -712,13 +712,13 @@ func TestWhitespaceSelectionAndLayoutLifetime(t *testing.T) {
 			t.Fatal("selection boundary", out)
 		}
 	}
-	v.SetSelection(textedit.Selection{Anchor: 4, Caret: 4})
+	v.SetSelection(TextSelection{Anchor: 4, Caret: 4})
 	out := &recordingPainter{}
 	v.paintWhitespace(out, 0, p, geometry.Point{X: v.gutter + padding, Y: padding})
 	if len(out.fills)+len(out.borders)+out.lines != 0 {
 		t.Fatal("empty selection painted")
 	}
-	if p != v.paragraph(0) || ctx.created != created || v.Document().Model().Revision() != revision || v.ContentSize() != size || v.Document().Model().CanUndo() {
+	if p != v.paragraph(0) || ctx.created != created || v.Document().Revision() != revision || v.ContentSize() != size || v.Document().CanUndo() {
 		t.Fatal("decoration changed document or geometry")
 	}
 	// 显示分段的行末不等于逻辑行末。
@@ -738,8 +738,8 @@ func TestWhitespaceOutsideIMEParagraphs(t *testing.T) {
 	v.SetDocument(NewDocument("a \nb \nc "))
 	v.SetFoldingEnabled(false)
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 7, Caret: 8})
-	v.projection = textedit.NewProjection(v.Document().Model(), textedit.Selection{Anchor: 3, Caret: 4})
+	v.SetSelection(TextSelection{Anchor: 7, Caret: 8})
+	v.projection = textcore.NewProjection(v.document.model, TextSelection{Anchor: 3, Caret: 4})
 	v.projection.Update("x\ny", 0)
 	v.context = &shapedContext{}
 	t.Cleanup(v.dropLayouts)
@@ -764,7 +764,7 @@ func TestWhitespaceFromPartialGeometry(t *testing.T) {
 	v.SetDocument(NewDocument("ab c  de\n"))
 	lines := []typography.TextLine{{Start: 3, Length: 3, Y: 20, Height: 20}}
 	clusters := []typography.TextCluster{{Start: 3, Length: 1, X: 0, Width: 10}, {Start: 4, Length: 1, X: 10, Width: 10}, {Start: 5, Length: 1, X: 20, Width: 10}}
-	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, 8, 20)}, row: 0, text: "c  "}
+	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textcore.NewGeometry(lines, clusters, 8, 20)}, row: 0, text: "c  "}
 	v.refreshWhitespace(p, 3, 1)
 	w := p.whitespace
 	for w.Pending(true) {

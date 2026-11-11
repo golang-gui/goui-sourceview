@@ -81,7 +81,7 @@ Basic / Modern 通过 `source-view` 的 `inline-suggestion` part 提供 GutterFo
 
 ## GOUI 能力缺口与绕过
 
-GOUI v0.7.0 有 `textedit.Projection` 的范围投影基础，但当前 SourceView 的该状态服务于输入法，并发布 Preedit 语义；
+SourceView 自有 `internal/text.Projection` 的范围投影基础，该状态服务于输入法，并发布 Preedit 语义；
 公开接口未提供对应 Monaco 注入文字与 ViewZone 的成套能力。不能直接占用输入法状态实现 AI 预览。
 本版在逻辑行末使用独立、有限的原生文字布局与视图 HeightIndex 临时增高绕过，不占用 IME 投影，不修改 GOUI、不复制其私有实现。
 行中替换仍需单独设计；当前不借估算字符宽度或临时改写 Model 模拟完整功能。

@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui/core/signal"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // LineMarkID identifies a mark for the lifetime of its owning Document.
@@ -160,7 +159,7 @@ func (d *Document) lineMarksChanged() {
 	d.marksChanged.Emit()
 }
 
-func (d *Document) mapLineMarks(c textedit.Change) {
+func (d *Document) mapLineMarks(c TextChange) {
 	changed := false
 	for _, mark := range d.marks {
 		if mark.revision >= c.Revision {

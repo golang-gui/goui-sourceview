@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	source "github.com/golang-gui/goui-sourceview/sourceview"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/style"
 )
 
@@ -26,7 +25,7 @@ func complete(ctx context.Context, c source.CompletionContext) ([]source.Complet
 		return nil, nil
 	}
 	if strings.HasSuffix(c.Before, "[") {
-		r := textedit.Range{Start: c.Caret - 1, End: c.Caret}
+		r := source.TextRange{Start: c.Caret - 1, End: c.Caret}
 		if strings.HasPrefix(c.After, "]") {
 			r.End++
 		}
@@ -34,8 +33,8 @@ func complete(ctx context.Context, c source.CompletionContext) ([]source.Complet
 		return []source.Completion{{Label: "Link", Text: "[label](https://example.com)", Detail: "Choose a URL", Range: &r, Caret: &at}}, nil
 	}
 	if at := len(c.Before) - len(c.Prefix) - 1; at >= 0 && c.Before[at] == '@' {
-		r := textedit.Range{Start: c.Range.Start - 1, End: c.Range.End}
-		return []source.Completion{{Label: "GOUI reference", Text: "[GOUI][goui]", Detail: "Also add a reference definition", Range: &r, AdditionalEdits: []textedit.Edit{{Range: textedit.Range{Start: c.DocumentLength, End: c.DocumentLength}, Text: "\n\n[goui]: https://github.com/golang-gui/goui\n"}}}}, nil
+		r := source.TextRange{Start: c.Range.Start - 1, End: c.Range.End}
+		return []source.Completion{{Label: "GOUI reference", Text: "[GOUI][goui]", Detail: "Also add a reference definition", Range: &r, AdditionalEdits: []source.TextEdit{{Range: source.TextRange{Start: c.DocumentLength, End: c.DocumentLength}, Text: "\n\n[goui]: https://github.com/golang-gui/goui\n"}}}}, nil
 	}
 	if !c.Explicit && c.Prefix == "" {
 		return nil, nil

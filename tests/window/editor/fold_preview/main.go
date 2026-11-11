@@ -35,7 +35,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/mlang"
 	"github.com/golang-gui/goui/platform/events"
@@ -118,12 +117,12 @@ func (v *paintedView) Paint(p gui.Painter) {
 	}
 	draw := &previewPaint{Painter: p, sample: v.sampleText}
 	if collapsed {
-		r, _ := v.Document().Model().LineRange(row)
+		r, _ := v.Document().LineRange(row)
 		r.End = min(r.End, r.Start+24)
-		for !v.Document().Model().IsRuneBoundary(r.End) {
+		for !v.Document().IsRuneBoundary(r.End) {
 			r.End--
 		}
-		prefix, err := v.Document().Model().Slice(r)
+		prefix, err := v.Document().Slice(r)
 		must(err)
 		draw.prefix = prefix
 	}
@@ -271,31 +270,31 @@ func main() {
 			return true
 		})
 	}
-	revision, undo := doc.Model().Revision(), doc.Model().CanUndo()
+	revision, undo := doc.Revision(), doc.CanUndo()
 	settle(func() {
 		check(math.Abs(float64(box.Rect().Width-windowWidth)) < .5,
 			fmt.Sprintf("测试布局前置条件不满足：窗口客户区宽 %.2f DIP，要求 %.2f DIP；请扩大桌面工作区（150%% 时建议 1920x1440）", box.Rect().Width, windowWidth))
-		check(doc.Model().LineCount() == 1 && len(v.FoldingRegions()) == 0, "single-line JSON should have no cross-line fold")
+		check(doc.LineCount() == 1 && len(v.FoldingRegions()) == 0, "single-line JSON should have no cross-line fold")
 		check(gutter(v).Attributes["goui.sourceview.fold"].(map[string]any)["kind"] == "line", "single-line JSON missing long-line gutter entry")
 		click(gutter(v).Bounds.Center())
 		phase = "line-collapsed"
 	})
 	settle(func() {
 		preview()
-		check(len(v.CollapsedLines()) == 1 && doc.Model().Revision() == revision && doc.Model().CanUndo() == undo && doc.Model().Text() == original, "line collapse changed source or history")
+		check(len(v.CollapsedLines()) == 1 && doc.Revision() == revision && doc.CanUndo() == undo && doc.Text() == original, "line collapse changed source or history")
 		click(gutter(v).Bounds.Center())
 		phase = "line-expanded"
 	})
 	settle(func() {
 		check(len(v.CollapsedLines()) == 0, "gutter failed to expand line")
-		v.SetSelection(textedit.Selection{Anchor: split, Caret: split})
+		v.SetSelection(source.TextSelection{Anchor: split, Caret: split})
 		must(win.CommitText("\n\n"))
 		phase = "after-newlines"
 	})
 	settle(func() {
 		ranges := v.FoldingRegions()
-		check(doc.Model().LineCount() == 3 && len(ranges) == 1 && ranges[0].StartLine == 0 && ranges[0].EndLine == 2, "newline insertion produced the wrong logical fold range")
-		v.SetSelection(textedit.Selection{})
+		check(doc.LineCount() == 3 && len(ranges) == 1 && ranges[0].StartLine == 0 && ranges[0].EndLine == 2, "newline insertion produced the wrong logical fold range")
+		v.SetSelection(source.TextSelection{})
 		click(gutter(v).Bounds.Center())
 		phase = "structure-collapsed"
 	})
@@ -307,7 +306,7 @@ func main() {
 	})
 	settle(func() {
 		check(!v.FoldingRegions()[0].Collapsed, "badge failed to unfold structure")
-		v.SetSelection(textedit.Selection{Anchor: split - 2, Caret: split - 2})
+		v.SetSelection(source.TextSelection{Anchor: split - 2, Caret: split - 2})
 		click(gutter(v).Bounds.Center())
 		phase = "caret-relocated"
 	})
@@ -319,7 +318,7 @@ func main() {
 	})
 	settle(func() {
 		check(!v.FoldingRegions()[0].Collapsed, "Down did not reveal hidden header")
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 		click(gutter(v).Bounds.Center())
 		phase = "before-resize"
 	})
@@ -339,13 +338,13 @@ func main() {
 	})
 	settle(func() {
 		check(!v.FoldingRegions()[0].Collapsed && v.Selection().Caret > split, "search failed to reveal hidden payload")
-		check(doc.Model().Text() == original[:split]+"\n\n"+original[split:] && json.Valid([]byte(doc.Model().Text())), "folding changed source bytes")
+		check(doc.Text() == original[:split]+"\n\n"+original[split:] && json.Valid([]byte(doc.Text())), "folding changed source bytes")
 		v.SetSearch(source.SearchQuery{})
 		key(events.KeyZ, events.ModifierControl)
 		phase = "undo-newlines"
 	})
 	settle(func() {
-		check(doc.Model().Text() == original && doc.Model().LineCount() == 1 && len(v.FoldingRegions()) == 0, "undo failed to restore single-line JSON")
+		check(doc.Text() == original && doc.LineCount() == 1 && len(v.FoldingRegions()) == 0, "undo failed to restore single-line JSON")
 		plain := source.NewDocument(strings.Repeat("plain wrapped text ", 400))
 		v.SetDocument(plain)
 		phase = "plain"
@@ -423,7 +422,7 @@ func main() {
 	}
 	settle(func() {
 		check(len(v.CollapsedLines()) == 1 && v.CollapsedLines()[0] == 1 && !v.FoldingRegions()[0].Collapsed, "string arrow collapsed the root structure")
-		check(shortDoc.Model().Text() == shortText && shortDoc.Model().Revision() == 0 && !shortDoc.Model().CanUndo(), "short-line collapse changed source/history")
+		check(shortDoc.Text() == shortText && shortDoc.Revision() == 0 && !shortDoc.CanUndo(), "short-line collapse changed source/history")
 		setPane(0)
 		phase = "threshold-wide-collapsed"
 	})
@@ -443,7 +442,7 @@ func main() {
 	})
 	settle(func() {
 		check(v.FoldingRegions()[0].Collapsed && len(v.CollapsedLines()) == 0, "root arrow did not independently collapse the structure")
-		check(shortDoc.Model().Text() == shortText && shortDoc.Model().Revision() == 0 && !shortDoc.Model().CanUndo(), "short JSON controls changed source/history")
+		check(shortDoc.Text() == shortText && shortDoc.Revision() == 0 && !shortDoc.CanUndo(), "short JSON controls changed source/history")
 	})
 	index, done := 0, false
 	deadline := time.Now().Add(40 * time.Second)

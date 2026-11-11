@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
 type SearchQuery struct {
@@ -13,14 +13,14 @@ type SearchQuery struct {
 }
 
 type searchMatch struct {
-	raw                      textedit.Range
+	raw                      TextRange
 	revision, selectionEpoch uint64
 }
 
 func (v *SourceView) Search() SearchQuery { return v.query }
 
 func (v *SourceView) SetSearch(q SearchQuery) {
-	q.Text = textedit.Normalize(q.Text)
+	q.Text = textcore.Normalize(q.Text)
 	if q == v.query {
 		return
 	}
@@ -32,14 +32,14 @@ func (v *SourceView) SetSearch(q SearchQuery) {
 	v.searchState.Emit()
 }
 
-func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
+func (v *SourceView) FindNext(backward bool) (TextRange, bool) {
 	if v.search.Empty() {
-		return textedit.Range{}, false
+		return TextRange{}, false
 	}
 	state := v.operationState()
 	v.cancelPreedit()
 	if !state.valid(v) {
-		return textedit.Range{}, false
+		return TextRange{}, false
 	}
 	start := v.Selection().Range().End
 	if backward {
@@ -63,14 +63,14 @@ func (v *SourceView) FindNext(backward bool) (textedit.Range, bool) {
 
 // findFrom includes the starting position, unlike advancing past a current
 // match. findBar uses it to reconcile results after changing the search scope.
-func (v *SourceView) findFrom(start int, backward bool) (textedit.Range, bool) {
+func (v *SourceView) findFrom(start int, backward bool) (TextRange, bool) {
 	r, ok := v.search.Find(v.document.model, start, backward)
 	if ok {
 		v.document.model.BreakUndoGroup()
 		d, revision, search := v.document, v.document.model.Revision(), v.search
 		scope, limited := v.SearchRange()
 		expectedSelectionEpoch := v.selectionEpoch + 1
-		v.setSelection(textedit.Selection{Anchor: r.Start, Caret: r.End}, false, true)
+		v.setSelection(TextSelection{Anchor: r.Start, Caret: r.End}, false, true)
 		actual, scoped := v.SearchRange()
 		if !v.Destroyed() && v.document == d && v.search == search && actual == scope && scoped == limited && d.model.Revision() == revision && v.selectionEpoch == expectedSelectionEpoch {
 			v.currentMatch = &searchMatch{raw: r, revision: revision, selectionEpoch: v.selectionEpoch}
@@ -140,9 +140,9 @@ func (v *SourceView) SetHighlightSearchMatches(highlight bool) {
 }
 
 // SearchRange is independent of the current selection and FindNext results.
-func (v *SourceView) SearchRange() (textedit.Range, bool) {
+func (v *SourceView) SearchRange() (TextRange, bool) {
 	if v.searchRange == nil {
-		return textedit.Range{}, false
+		return TextRange{}, false
 	}
 	return *v.searchRange, true
 }
@@ -150,7 +150,7 @@ func (v *SourceView) SearchRange() (textedit.Range, bool) {
 // SetSearchRange copies a validated byte range. nil searches the whole document.
 // Regex anchors retain the full-document context. Empty ranges may match empty
 // expressions; no caller-owned pointer is retained.
-func (v *SourceView) SetSearchRange(r *textedit.Range) error {
+func (v *SourceView) SetSearchRange(r *TextRange) error {
 	if v.Destroyed() {
 		return nil
 	}
@@ -176,7 +176,7 @@ func (v *SourceView) SetSearchRange(r *textedit.Range) error {
 	return nil
 }
 
-func (v *SourceView) mapSearchRange(c textedit.Change) {
+func (v *SourceView) mapSearchRange(c TextChange) {
 	if v.searchRange == nil {
 		return
 	}
@@ -185,11 +185,11 @@ func (v *SourceView) mapSearchRange(c textedit.Change) {
 	} else {
 		for _, e := range c.Edits {
 			start := v.searchRange.Start
-			v.searchRange.Start = textedit.MapOffset(start, e)
+			v.searchRange.Start = textcore.MapOffset(start, e)
 			if start == e.Range.Start {
 				v.searchRange.Start = e.Range.Start
 			}
-			v.searchRange.End = textedit.MapOffset(v.searchRange.End, e)
+			v.searchRange.End = textcore.MapOffset(v.searchRange.End, e)
 		}
 	}
 	if v.search != nil {

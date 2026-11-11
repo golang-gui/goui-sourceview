@@ -26,7 +26,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/style"
@@ -98,9 +97,9 @@ func main() {
 	reset := func(text string) {
 		v.SetAutomaticCompletion(false)
 		v.SetCompletionProvider(markdown.Provider())
-		doc.Model().SetText(text)
+		doc.SetText(text)
 		at := len(text)
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 		win.SetFocusedWidget(v)
 	}
 	var steps []func() bool
@@ -122,46 +121,46 @@ func main() {
 	next(func() {
 		reset("- item")
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "- item\n- ", "list continuation")
+		check(doc.Text() == "- item\n- ", "list continuation")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "- item", "list undo")
+		check(doc.Text() == "- item", "list undo")
 	})
 	next(func() {
 		reset("hello-world rest")
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 		key(events.KeyArrowRight, events.ModifierControl)
 		check(v.Selection().Caret == 11, "custom word navigation")
 	})
 	next(func() {
 		reset("")
 		must(win.CommitText("`"))
-		check(doc.Model().Text() == "``" && v.Selection().Caret == 1, "inline pair")
+		check(doc.Text() == "``" && v.Selection().Caret == 1, "inline pair")
 		must(win.CommitText("`"))
 		must(win.CommitText("`"))
-		check(doc.Model().Text() == "``````" && v.Selection().Caret == 3, "triple delimiter")
+		check(doc.Text() == "``````" && v.Selection().Caret == 3, "triple delimiter")
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "```\n\n```" && v.Selection().Caret == 4, "fence newline")
+		check(doc.Text() == "```\n\n```" && v.Selection().Caret == 4, "fence newline")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "``````" && v.Selection().Caret == 3, "fence undo")
+		check(doc.Text() == "``````" && v.Selection().Caret == 3, "fence undo")
 	})
 	next(func() {
 		reset("")
 		v.SetAutomaticCompletion(true)
 		must(win.CommitText("["))
-		check(doc.Model().Text() == "[]", "link pair")
+		check(doc.Text() == "[]", "link pair")
 	})
 	waitPopup("Link", events.KeyEnter)
 	next(func() {
-		check(doc.Model().Text() == "[label](https://example.com)" && v.Selection().Caret == 8, "per-item range/caret")
+		check(doc.Text() == "[label](https://example.com)" && v.Selection().Caret == 8, "per-item range/caret")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "[]", "link completion undo")
+		check(doc.Text() == "[]", "link completion undo")
 	})
 	next(func() { reset(""); v.SetAutomaticCompletion(true); must(win.CommitText("@")) })
 	waitPopup("GOUI reference", events.KeyTab)
 	next(func() {
-		check(doc.Model().Text() == "[GOUI][goui]\n\n[goui]: https://github.com/golang-gui/goui\n" && v.Selection().Caret == 12, "additional edits/caret")
+		check(doc.Text() == "[GOUI][goui]\n\n[goui]: https://github.com/golang-gui/goui\n" && v.Selection().Caret == 12, "additional edits/caret")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "@" && v.Selection().Caret == 1, "atomic additional-edit undo")
+		check(doc.Text() == "@" && v.Selection().Caret == 1, "atomic additional-edit undo")
 	})
 	next(func() {
 		reset("abc")
@@ -171,7 +170,7 @@ func main() {
 		key(events.KeyF2, 0)
 	})
 	waitPopup("zebra", events.KeyEnter)
-	next(func() { check(doc.Model().Text() == "zebra", "provider candidate was prefix-filtered or reordered") })
+	next(func() { check(doc.Text() == "zebra", "provider candidate was prefix-filtered or reordered") })
 	started, cancelled := make(chan struct{}, 1), make(chan struct{}, 1)
 	next(func() {
 		reset("abc")
@@ -197,7 +196,7 @@ func main() {
 	steps = append(steps, func() bool {
 		select {
 		case <-cancelled:
-			check(len(win.Popovers()) == 0 && doc.Model().Text() == "abc", "same-ID definition retained request")
+			check(len(win.Popovers()) == 0 && doc.Text() == "abc", "same-ID definition retained request")
 			return true
 		default:
 			return false

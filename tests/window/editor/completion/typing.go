@@ -15,12 +15,11 @@ import (
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
 func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc *source.Document, key func(events.Key, events.Modifiers), probe *scaleProbe, dark bool) {
-	original := doc.Model().Text()
+	original := doc.Text()
 	start := strings.Index(original, "truffle")
 	primary, _ := gui.ModPrimary.Resolve()
 	var popup gui.Popover
@@ -84,28 +83,28 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 	next(func() {
 		key(events.KeyDelete, 0)
 		stable()
-		check(doc.Model().Text() == original[:start+2]+original[start+3:], "forward deletion changed wrong range")
+		check(doc.Text() == original[:start+2]+original[start+3:], "forward deletion changed wrong range")
 	})
 	steps = append(steps, ready)
 	next(func() { key(events.KeyArrowLeft, 0); stable(); key(events.KeyArrowRight, 0); stable() })
 	next(func() { end("default") })
 	var before string
-	var selection textedit.Selection
+	var selection source.TextSelection
 	next(func() {
-		before = doc.Model().Text()
+		before = doc.Text()
 		selection = v.Selection()
 		key(events.KeyEnter, 0)
-		check(len(win.Popovers()) == 0 && doc.Model().Text() == "trade trace true\ntrade tail", "typed completion used stale range")
+		check(len(win.Popovers()) == 0 && doc.Text() == "trade trace true\ntrade tail", "typed completion used stale range")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == before && v.Selection() == selection, "typed completion undo")
+		check(doc.Text() == before && v.Selection() == selection, "typed completion undo")
 	})
 	reset := func() {
 		key(events.KeyEscape, 0)
 		v.SetAutomaticCompletion(true)
 		v.SetCompletionProvider(nil)
-		doc.Model().SetText(original)
+		doc.SetText(original)
 		must(doc.SetLanguage(language.Plain))
-		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		v.SetSelection(source.TextSelection{Anchor: start + 2, Caret: start + 2})
 	}
 	next(func() { reset(); v.SetAutomaticCompletion(false); key(events.KeyF2, 0) })
 	steps = append(steps, ready)
@@ -150,12 +149,12 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 	next(func() {
 		info := candidates(popup)
 		check(info.Attributes["sourceview.completion.pending"] == true && !info.Children[0].Enabled && len(info.Children[0].Actions) == 0, "pending typing exposed an action")
-		old := doc.Model().Text()
+		old := doc.Text()
 		key(events.KeyEnter, 0)
 		key(events.KeyTab, 0)
 		key(events.KeyArrowDown, 0)
 		stable()
-		check(doc.Model().Text() == old, "pending typing committed a stale candidate")
+		check(doc.Text() == old, "pending typing committed a stale candidate")
 		typeText(events.KeyD, "d")
 		replies <- []source.Completion{{Label: "stale"}}
 	})
@@ -169,12 +168,12 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 	next(func() {
 		end("pending")
 		check(labels() == "trade", "latest provider was lost")
-		before = doc.Model().Text()
+		before = doc.Text()
 		selection = v.Selection()
 		key(events.KeyTab, 0)
-		check(doc.Model().Text() == "trade trace true\ntrade tail", "latest typing range not committed")
+		check(doc.Text() == "trade trace true\ntrade tail", "latest typing range not committed")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == before && v.Selection() == selection, "provider typing undo")
+		check(doc.Text() == before && v.Selection() == selection, "provider typing undo")
 	})
 	// Start typing before the first request has returned. Only the latest
 	// request may create the first popup; no growing parallel provider queue.
@@ -203,7 +202,7 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 	next(func() { reset(); key(events.KeyF2, 0) })
 	steps = append(steps, ready)
 	next(func() {
-		doc.Model().SetText("external")
+		doc.SetText("external")
 		check(len(win.Popovers()) == 0, "external edit retained completion")
 	})
 	next(func() { reset(); key(events.KeyF2, 0) })
@@ -222,8 +221,8 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 		next(func() {
 			reset()
 			must(doc.SetLanguage(sample.id))
-			doc.Model().SetText(sample.text)
-			v.SetSelection(textedit.Selection{Anchor: sample.caret, Caret: sample.caret})
+			doc.SetText(sample.text)
+			v.SetSelection(source.TextSelection{Anchor: sample.caret, Caret: sample.caret})
 		})
 		next(func() { key(events.KeyF2, 0) })
 		steps = append(steps, ready)
@@ -242,15 +241,15 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 		steps = append(steps, ready)
 		next(func() {
 			end(sample.phase)
-			check(doc.Model().Text() == sample.text, "code-language Backspace range")
+			check(doc.Text() == sample.text, "code-language Backspace range")
 			key(events.KeyEscape, 0)
 		})
 	}
 	next(func() {
 		reset()
-		doc.Model().SetText("中文字词 中文")
+		doc.SetText("中文字词 中文")
 		at := len("中文字词 中文")
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 		key(events.KeyF2, 0)
 	})
 	steps = append(steps, ready)
@@ -261,28 +260,28 @@ func verifyTyping(app gui.Application, win gui.Window, v *source.SourceView, doc
 	steps = append(steps, ready)
 	next(func() {
 		end("unicode")
-		check(doc.Model().Text() == "中文字词 中文", "unicode Backspace deleted wrong range")
+		check(doc.Text() == "中文字词 中文", "unicode Backspace deleted wrong range")
 		key(events.KeyEscape, 0)
 	})
 	next(func() { reset(); key(events.KeyF2, 0) })
 	steps = append(steps, ready)
 	var handle interface{ Disconnect() }
 	next(func() {
-		handle = v.ConnectChange(func(textedit.Change) {
+		handle = v.ConnectChange(func(source.TextChange) {
 			if v.Document() == doc {
 				v.SetDocument(source.NewDocument("replacement"))
 			}
 		})
 		key(events.KeyA, 0)
 		must(win.CommitText("a"))
-		check(v.Document().Model().Text() == "replacement" && len(win.Popovers()) == 0, "typing callback replacement was overwritten")
+		check(v.Document().Text() == "replacement" && len(win.Popovers()) == 0, "typing callback replacement was overwritten")
 		handle.Disconnect()
 	})
 	index, done := 0, false
 	deadline := time.Now().Add(20 * time.Second)
 	timer := app.NewTimer()
 	timer.ConnectTimeout(func() {
-		check(time.Now().Before(deadline), fmt.Sprintf("typing step %d timed out; popups=%d text=%q", index, len(win.Popovers()), v.Document().Model().Text()))
+		check(time.Now().Before(deadline), fmt.Sprintf("typing step %d timed out; popups=%d text=%q", index, len(win.Popovers()), v.Document().Text()))
 		if index < len(steps) {
 			if steps[index]() {
 				index++

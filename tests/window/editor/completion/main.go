@@ -47,7 +47,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/style"
@@ -189,7 +188,7 @@ func main() {
 	if *scenario == "navigation" || *scenario == "typing" {
 		caret = strings.Index(text, "truffle") + len(prefix)
 	}
-	v.SetSelection(textedit.Selection{Anchor: caret, Caret: caret})
+	v.SetSelection(source.TextSelection{Anchor: caret, Caret: caret})
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
@@ -306,7 +305,7 @@ func main() {
 				for _, kind := range []events.EventType{events.PointerDown, events.PointerUp} {
 					must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: geometry.Point{X: popup.Widget().Snapshot().Bounds.X + 1, Y: info.Children[0].Bounds.Y + info.Children[0].Bounds.Height/2}}))
 				}
-				check(len(win.Popovers()) == 1 && doc.Model().Text() == text, "padding accepted a candidate")
+				check(len(win.Popovers()) == 1 && doc.Text() == text, "padding accepted a candidate")
 				key(events.KeyArrowDown, 0)
 				key(events.KeyArrowUp, 0)
 				info = candidates(popup)
@@ -364,9 +363,9 @@ func main() {
 					must(popup.DispatchEvent(events.PointerEvent{EventType: kind, Button: events.PointerButtonLeft, Position: point}))
 				}
 				expected := text[:caret-len(prefix)] + target.Text
-				check(len(win.Popovers()) == 0 && doc.Model().Text() == expected, "pointer completion inserted wrong text")
+				check(len(win.Popovers()) == 0 && doc.Text() == expected, "pointer completion inserted wrong text")
 				key(events.KeyZ, primary)
-				check(doc.Model().Text() == text, "completion undo failed")
+				check(doc.Text() == text, "completion undo failed")
 				log.Print("PASS stable size, editor hover retention, keyboard/hover, pixel/line wheel, scrollbar drag, reveal, padding, pointer acceptance, focus and undo")
 				complete = true
 				win.Destroy()
@@ -405,7 +404,7 @@ func verifyCornerPixels(popup gui.Popover, info gui.WidgetInfo) {
 
 // 所有交互均走窗口输入；模型、Provider 和选区 setter 只用于准备场景或回调重入。
 func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView, doc *source.Document, key func(events.Key, events.Modifiers), probe *scaleProbe, dark bool) {
-	original := doc.Model().Text()
+	original := doc.Text()
 	expectedFailure := fmt.Errorf("verification provider failure")
 	failures := 0
 	handle := v.ConnectError(func(err error) {
@@ -467,22 +466,22 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 		check(win.Popovers()[0] == popup && v.Selection().Caret == start && len(labels()) == 4, "word-start completion did not retain empty prefix")
 		key(events.KeyArrowLeft, 0)
 		check(len(win.Popovers()) == 0, "leaving word range kept completion")
-		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		v.SetSelection(source.TextSelection{Anchor: start + 2, Caret: start + 2})
 		key(events.KeyF2, 0)
 	})
 	steps = append(steps, ready)
 	next(func() {
 		key(events.KeyArrowLeft, events.ModifierShift)
 		check(len(win.Popovers()) == 0 && v.Selection().Anchor != v.Selection().Caret, "selection extension retained completion")
-		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		v.SetSelection(source.TextSelection{Anchor: start + 2, Caret: start + 2})
 		key(events.KeyF2, 0)
 	})
 	steps = append(steps, ready)
 	next(func() {
 		key(events.KeyArrowRight, 0)
 		key(events.KeyArrowRight, 0)
-		check(len(win.Popovers()) == 0 && doc.Model().Text() == original, "empty default result kept the popup or changed text")
-		v.SetSelection(textedit.Selection{Anchor: start + 2, Caret: start + 2})
+		check(len(win.Popovers()) == 0 && doc.Text() == original, "empty default result kept the popup or changed text")
+		v.SetSelection(source.TextSelection{Anchor: start + 2, Caret: start + 2})
 		key(events.KeyF2, 0)
 	})
 	steps = append(steps, ready)
@@ -490,12 +489,12 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 	steps = append(steps, ready)
 	next(func() {
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "trade trace true\ntrue tail" && len(win.Popovers()) == 0, "completion after movement used a stale edit range")
+		check(doc.Text() == "trade trace true\ntrue tail" && len(win.Popovers()) == 0, "completion after movement used a stale edit range")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == original && !doc.Model().CanUndo(), "completion after movement was not one undo step")
+		check(doc.Text() == original && !doc.CanUndo(), "completion after movement was not one undo step")
 		must(doc.SetLanguage(language.Markdown))
-		doc.Model().SetText("```json\ntr\n```")
-		v.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+		doc.SetText("```json\ntr\n```")
+		v.SetSelection(source.TextSelection{Anchor: 10, Caret: 10})
 	})
 	// 先让事件循环完成围栏行的增量词法状态；补全不对未知嵌入上下文猜测语言。
 	next(func() { key(events.KeyF2, 0) })
@@ -505,7 +504,7 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 	next(func() {
 		check(strings.Join(labels(), ",") == "true", "embedded JSON lost completion after movement")
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "```json\ntrue\n```", "embedded language completion did not commit")
+		check(doc.Text() == "```json\ntrue\n```", "embedded language completion did not commit")
 	})
 	requests := make(chan source.CompletionContext, 16)
 	nextRequest := func() source.CompletionContext {
@@ -520,8 +519,8 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 	gate := make(chan struct{})
 	next(func() {
 		must(doc.SetLanguage(language.Plain))
-		doc.Model().SetText("word tail")
-		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		doc.SetText("word tail")
+		v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
 			requests <- c
 			if c.Prefix == "w" {
@@ -541,7 +540,7 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 	steps = append(steps, func() bool {
 		select {
 		case c := <-requests:
-			check(c.Caret == 1 && c.Prefix == "w" && c.Range == (textedit.Range{Start: 0, End: 4}), "provider received stale cursor context")
+			check(c.Caret == 1 && c.Prefix == "w" && c.Range == (source.TextRange{Start: 0, End: 4}), "provider received stale cursor context")
 			return true
 		default:
 			return false
@@ -552,7 +551,7 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 		info := candidates(popup)
 		check(info.Attributes["sourceview.completion.pending"] == true && !info.Children[0].Enabled && len(info.Children[0].Actions) == 0, "pending candidate exposed an action")
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "word tail" && win.Popovers()[0] == popup, "Enter committed a pending candidate")
+		check(doc.Text() == "word tail" && win.Popovers()[0] == popup, "Enter committed a pending candidate")
 		key(events.KeyArrowRight, 0)
 		close(gate)
 	})
@@ -568,12 +567,12 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 		check(win.Popovers()[0] == popup && strings.Join(labels(), ",") == "zebra,alpha", "editor filtered or reordered provider results")
 		nextRequest()
 		key(events.KeyEnter, 0)
-		check(doc.Model().Text() == "zebra tail", "provider completion after movement used stale range")
+		check(doc.Text() == "zebra tail", "provider completion after movement used stale range")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "word tail", "provider completion undo")
+		check(doc.Text() == "word tail", "provider completion undo")
 	})
 	next(func() {
-		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
 			if c.Prefix == "w" {
 				return nil, expectedFailure
@@ -588,12 +587,12 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 		if failures == 0 {
 			return false
 		}
-		check(failures == 1 && len(win.Popovers()) == 0 && doc.Model().Text() == "word tail", "provider failure kept a pending popup or was reported more than once")
+		check(failures == 1 && len(win.Popovers()) == 0 && doc.Text() == "word tail", "provider failure kept a pending popup or was reported more than once")
 		return true
 	})
 	initialGate := make(chan struct{})
 	next(func() {
-		v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+		v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 		v.SetCompletionProvider(&source.CompletionProvider{Complete: func(ctx context.Context, c source.CompletionContext) ([]source.Completion, error) {
 			requests <- c
 			if c.Prefix == "wo" {
@@ -623,24 +622,24 @@ func verifyNavigation(app gui.Application, win gui.Window, v *source.SourceView,
 		check(strings.Join(labels(), ",") == "latest", "initial cancelled request was published")
 		nextRequest()
 		once := true
-		h := v.ConnectSelection(func(textedit.Selection) {
+		h := v.ConnectSelection(func(source.TextSelection) {
 			if !once {
 				return
 			}
 			once = false
 			v.SetDocument(source.NewDocument("keep"))
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 		})
 		key(events.KeyArrowRight, 0)
 		h.Disconnect()
-		check(len(win.Popovers()) == 0 && v.Document().Model().Text() == "keep" && v.Selection().Caret == 2, "navigation callback state was overwritten")
+		check(len(win.Popovers()) == 0 && v.Document().Text() == "keep" && v.Selection().Caret == 2, "navigation callback state was overwritten")
 	})
 	index, done := 0, false
 	deadline := time.Now().Add(10 * time.Second)
 	timer := app.NewTimer()
 	defer timer.Stop()
 	timer.ConnectTimeout(func() {
-		check(time.Now().Before(deadline), fmt.Sprintf("navigation step %d timed out; popups=%d text=%q", index, len(win.Popovers()), v.Document().Model().Text()))
+		check(time.Now().Before(deadline), fmt.Sprintf("navigation step %d timed out; popups=%d text=%q", index, len(win.Popovers()), v.Document().Text()))
 		if index < len(steps) {
 			if steps[index]() {
 				index++

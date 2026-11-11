@@ -6,9 +6,9 @@ import (
 	"slices"
 
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 )
 
@@ -117,7 +117,7 @@ func PaintLineMark(p gui.Painter, r geometry.Rectangle, kind MarkerKind, state M
 
 // Only a confirmed pair receives matching decoration. A lone candidate may be
 // unmatched or simply have its partner beyond the bounded analysis window.
-func BracketRectangles(measured *textedit.Geometry, line textedit.Range, origin geometry.Point, brackets []textedit.Range) []geometry.Rectangle {
+func BracketRectangles(measured *textcore.Geometry, line textcore.Range, origin geometry.Point, brackets []textcore.Range) []geometry.Rectangle {
 	if len(brackets) != 2 {
 		return nil
 	}
@@ -126,7 +126,7 @@ func BracketRectangles(measured *textedit.Geometry, line textedit.Range, origin 
 		if bracket.End <= line.Start || bracket.Start >= line.End {
 			continue
 		}
-		local := textedit.Range{Start: max(line.Start, bracket.Start) - line.Start, End: min(line.End, bracket.End) - line.Start}
+		local := textcore.Range{Start: max(line.Start, bracket.Start) - line.Start, End: min(line.End, bracket.End) - line.Start}
 		for _, rect := range measured.Selection(local) {
 			// Native visual-line geometry keeps wrapped/bidi positions exact.
 			// A small vertical inset separates the box from neighboring rows.

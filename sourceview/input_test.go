@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -64,34 +65,34 @@ func TestPointerRegionsUseCachedFoldGeometry(t *testing.T) {
 
 func TestWordPointerAndDragUnits(t *testing.T) {
 	v, _ := colorFixture(t)
-	v.Document().Model().SetText("alpha beta\nlast\n")
+	v.Document().SetText("alpha beta\nlast\n")
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
 	point := func(x float32) geometry.Point { return geometry.Point{X: v.gutter + padding + x, Y: padding + 10} }
 	// Last half of the final 'a' still selects alpha, not the following space.
-	if got := v.wordSelection(point(48)); got != (textedit.Range{Start: 0, End: 5}) {
+	if got := v.wordSelection(point(48)); got != (TextRange{Start: 0, End: 5}) {
 		t.Fatal(got)
 	}
-	v.dragging, v.dragUnit, v.dragRange = true, 1, textedit.Range{Start: 0, End: 5}
-	v.setSelection(textedit.Selection{Caret: 5}, false, false)
+	v.dragging, v.dragUnit, v.dragRange = true, 1, TextRange{Start: 0, End: 5}
+	v.setSelection(TextSelection{Caret: 5}, false, false)
 	v.dragSelection(point(48))
-	if v.Selection() != (textedit.Selection{Caret: 5}) {
+	if v.Selection() != (TextSelection{Caret: 5}) {
 		t.Fatal("release shrank word", v.Selection())
 	}
 	v.dragSelection(point(85))
-	if v.Selection() != (textedit.Selection{Caret: 10}) {
+	if v.Selection() != (TextSelection{Caret: 10}) {
 		t.Fatal("word drag", v.Selection())
 	}
-	v.dragRange = textedit.Range{Start: 6, End: 10}
+	v.dragRange = TextRange{Start: 6, End: 10}
 	v.dragSelection(point(18))
-	if v.Selection() != (textedit.Selection{Anchor: 10, Caret: 0}) {
+	if v.Selection() != (TextSelection{Anchor: 10, Caret: 0}) {
 		t.Fatal("backward word drag", v.Selection())
 	}
 	v.dragUnit, v.dragRange = 2, v.lineSelection(2)
 	v.dragSelection(point(10))
-	if v.Selection().Range() != (textedit.Range{Start: 0, End: 11}) {
+	if v.Selection().Range() != (TextRange{Start: 0, End: 11}) {
 		t.Fatal("line release lost LF", v.Selection())
 	}
-	if got := v.lineSelection(v.Document().Model().Len()); got.Start != got.End {
+	if got := v.lineSelection(v.Document().Len()); got.Start != got.End {
 		t.Fatal("last empty line", got)
 	}
 }
@@ -102,15 +103,15 @@ func TestNavigationCancelsProjectionBeforeReadingGeometry(t *testing.T) {
 	v := NewSourceView()
 	v.document.model.SetText("abcdef")
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	v.context = &shapedContext{}
 	t.Cleanup(v.dropLayouts)
-	v.projection = textedit.NewProjection(v.document.model, v.Selection())
+	v.projection = textcore.NewProjection(v.document.model, v.Selection())
 	v.projection.Update("p\nq", 1)
 	resets := 0
 	v.im = &resetContext{reset: func() { resets++ }}
 	v.navigate(events.KeyEnd, false)
-	if v.Selection() != (textedit.Selection{Anchor: 6, Caret: 6}) || v.projection != nil || resets != 1 {
+	if v.Selection() != (TextSelection{Anchor: 6, Caret: 6}) || v.projection != nil || resets != 1 {
 		t.Fatal("navigation used temporary paragraph geometry", v.Selection(), resets)
 	}
 }
@@ -119,13 +120,13 @@ func TestNavigationKeepsStateChosenByResetCallback(t *testing.T) {
 	v := NewSourceView()
 	v.document.model.SetText("abcdef")
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
-	v.projection = textedit.NewProjection(v.document.model, v.Selection())
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
+	v.projection = textcore.NewProjection(v.document.model, v.Selection())
 	v.projection.Update("p\nq", 1)
 	d := NewDocument("keep")
-	v.im = &resetContext{reset: func() { v.SetDocument(d); v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2}) }}
+	v.im = &resetContext{reset: func() { v.SetDocument(d); v.SetSelection(TextSelection{Anchor: 2, Caret: 2}) }}
 	v.navigate(events.KeyEnd, false)
-	if v.Document() != d || v.Selection() != (textedit.Selection{Anchor: 2, Caret: 2}) {
+	if v.Document() != d || v.Selection() != (TextSelection{Anchor: 2, Caret: 2}) {
 		t.Fatal("reset callback state overwritten", v.Selection())
 	}
 }
@@ -134,17 +135,17 @@ func TestResetReentryCannotApplyOldEditRange(t *testing.T) {
 	for _, switchDocument := range []bool{false, true} {
 		t.Run(map[bool]string{false: "model edit", true: "document switch"}[switchDocument], func(t *testing.T) {
 			v := NewSourceView()
-			v.Document().Model().SetText("abc")
+			v.Document().SetText("abc")
 			observe(t, v)
-			v.SetSelection(textedit.Selection{Caret: 2})
+			v.SetSelection(TextSelection{Caret: 2})
 			old := v.Document()
-			v.projection = textedit.NewProjection(old.model, v.Selection())
+			v.projection = textcore.NewProjection(old.model, v.Selection())
 			v.projection.Update("preedit", 2)
 			v.im = &resetContext{reset: func() {
 				if switchDocument {
 					v.SetDocument(NewDocument("new"))
 				} else {
-					_ = old.model.Replace(textedit.Range{Start: 3, End: 3}, "Z")
+					_ = old.model.Replace(TextRange{Start: 3, End: 3}, "Z")
 				}
 			}}
 			if err := v.ReplaceSelection("X"); !errors.Is(err, ErrOperationChanged) {
@@ -168,7 +169,7 @@ func TestUnmountReleasesOriginalDocumentBeforeNativeReset(t *testing.T) {
 	v := NewSourceView()
 	observe(t, v)
 	original := v.Document()
-	v.projection = textedit.NewProjection(original.model, v.Selection())
+	v.projection = textcore.NewProjection(original.model, v.Selection())
 	replacement := NewDocument("new")
 	v.im = &resetContext{reset: func() { v.SetDocument(replacement) }}
 	v.unmount()
@@ -181,18 +182,18 @@ func TestEditCallbackSelectionTakesPrecedence(t *testing.T) {
 	v := NewSourceView()
 	v.Document().model.SetText("abc")
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Caret: 2})
+	v.SetSelection(TextSelection{Caret: 2})
 	once := true
-	v.ConnectChange(func(textedit.Change) {
+	v.ConnectChange(func(TextChange) {
 		if once {
 			once = false
-			v.SetSelection(textedit.Selection{Caret: 1})
+			v.SetSelection(TextSelection{Caret: 1})
 		}
 	})
 	if err := v.ReplaceSelection("X"); err != nil {
 		t.Fatal(err)
 	}
-	if v.Selection() != (textedit.Selection{Caret: 1}) {
+	if v.Selection() != (TextSelection{Caret: 1}) {
 		t.Fatal("command overwrote callback selection", v.Selection())
 	}
 }
@@ -200,7 +201,7 @@ func TestEditCallbackSelectionTakesPrecedence(t *testing.T) {
 func TestProjectionOnlySuppressesAffectedLineHighlighting(t *testing.T) {
 	v := NewSourceView()
 	v.Document().model.SetText("zero\none\ntwo\nthree")
-	v.projection = textedit.NewProjection(v.Document().model, textedit.Selection{Anchor: 5, Caret: 12})
+	v.projection = textcore.NewProjection(v.Document().model, TextSelection{Anchor: 5, Caret: 12})
 	v.projection.Update("a\nb\nc", 2)
 	// Two committed paragraphs become three display paragraphs.
 	for row, expected := range []struct {
@@ -304,15 +305,15 @@ func primaryAlias() gui.KeyModifiers {
 
 func TestClearedCommandBindingsPreserveDirectOperations(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("a\nb")
+	v.Document().SetText("a\nb")
 	observe(t, v)
 	if err := v.SetKeyBindings(nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := v.MoveLines(true); err != nil || v.Document().Model().Text() != "b\na" {
+	if err := v.MoveLines(true); err != nil || v.Document().Text() != "b\na" {
 		t.Fatal("clearing shortcuts disabled direct methods", err)
 	}
-	if !v.Undo() || v.Document().Model().Text() != "a\nb" {
+	if !v.Undo() || v.Document().Text() != "a\nb" {
 		t.Fatal("clearing shortcuts disabled history")
 	}
 }
@@ -351,17 +352,17 @@ func TestLineKeyBindingsUseExactPlatformModifiers(t *testing.T) {
 func TestMenuCommandsRespectStateAndHistory(t *testing.T) {
 	v := NewSourceView()
 	observe(t, v)
-	v.Document().Model().SetText("abc")
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 2})
+	v.Document().SetText("abc")
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 2})
 	if !v.canCommand(CommandDeleteSelection) || v.canCommand(CommandUndo) {
 		t.Fatal("initial command state")
 	}
 	v.runCommand(CommandDeleteSelection)
-	if v.Document().Model().Text() != "ac" || !v.canCommand(CommandUndo) {
+	if v.Document().Text() != "ac" || !v.canCommand(CommandUndo) {
 		t.Fatal("delete command")
 	}
 	v.runCommand(CommandUndo)
-	if v.Document().Model().Text() != "abc" || v.Selection() != (textedit.Selection{Anchor: 1, Caret: 2}) {
+	if v.Document().Text() != "abc" || v.Selection() != (TextSelection{Anchor: 1, Caret: 2}) {
 		t.Fatal("undo command")
 	}
 	v.SetReadOnly(true)
@@ -372,14 +373,14 @@ func TestMenuCommandsRespectStateAndHistory(t *testing.T) {
 		v.runCommand(c)
 	}
 	v.runCommand(CommandSelectAll)
-	if v.Selection() != (textedit.Selection{Caret: 3}) || v.Document().Model().Text() != "abc" {
+	if v.Selection() != (TextSelection{Caret: 3}) || v.Document().Text() != "abc" {
 		t.Fatal("read-only select all")
 	}
 }
 
 func TestSelectionHitIncludesTrailingHalf(t *testing.T) {
 	v, _ := colorFixture(t)
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 5})
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 5})
 	if !v.selectionContains(geometry.Point{X: v.gutter + padding + 48, Y: padding + 10}) {
 		t.Fatal("selected last half missed")
 	}
@@ -392,11 +393,11 @@ func TestLineMenuAvailabilityUsesLogicalSelectedRows(t *testing.T) {
 	v := NewSourceView()
 	observe(t, v)
 	v.document.model.SetText("a\nb")
-	v.SetSelection(textedit.Selection{Caret: 2}) // Ends at the next row's start.
+	v.SetSelection(TextSelection{Caret: 2}) // Ends at the next row's start.
 	if v.canCommand(CommandMoveLinesUp) || !v.canCommand(CommandMoveLinesDown) || !v.canCommand(CommandDeleteLines) {
 		t.Fatal("incorrect selected line boundary")
 	}
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	if !v.canCommand(CommandMoveLinesUp) || v.canCommand(CommandMoveLinesDown) {
 		t.Fatal("last line availability")
 	}
@@ -422,7 +423,7 @@ func TestLineMenuAvailabilityUsesLogicalSelectedRows(t *testing.T) {
 func pendingInputFixture(t *testing.T, tail string) *SourceView {
 	t.Helper()
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x ", 1_000_000) + tail)
+	v.Document().SetText(strings.Repeat("x ", 1_000_000) + tail)
 	v.SetFoldingEnabled(false)
 	v.SetShowLineNumbers(false)
 	v.SetAutomaticCompletion(false)
@@ -436,7 +437,7 @@ func pendingInputFixture(t *testing.T, tail string) *SourceView {
 	p.Paged.Destroy()
 	model := v.document.model
 	format := typography.TextFormat{Font: v.font, WrapMode: typography.WrapNone, TextColor: v.colors.Foreground, TabWidth: 4 * v.spaceWidth}
-	p.Paged = gui.NewParagraphLayout(v.context, format, v.paragraphWidth(), model.Len(), func(r textedit.Range) (string, error) { time.Sleep(3 * time.Millisecond); return model.Slice(r) })
+	p.Paged = view.NewParagraphLayout(v.context, format, v.paragraphWidth(), model.Len(), func(r TextRange) (string, error) { time.Sleep(3 * time.Millisecond); return model.Slice(r) })
 	p.styled = false
 	t.Cleanup(v.dropLayouts)
 	focusBracketFixture(t, v)
@@ -457,8 +458,8 @@ func drainInput(t *testing.T, v *SourceView) {
 }
 func tailText(t *testing.T, v *SourceView, n int) string {
 	t.Helper()
-	m := v.Document().Model()
-	text, err := m.Slice(textedit.Range{Start: m.Len() - n, End: m.Len()})
+	m := v.Document()
+	text, err := m.Slice(TextRange{Start: m.Len() - n, End: m.Len()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +468,7 @@ func tailText(t *testing.T, v *SourceView, n int) string {
 
 func TestDeferredNavigationTextAndHistoryStayOrdered(t *testing.T) {
 	v := pendingInputFixture(t, "abc")
-	m := v.Document().Model()
+	m := v.Document()
 	originalLength, revision := m.Len(), m.Revision()
 	handled := false
 	v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyArrowLeft, Handled: &handled})
@@ -487,7 +488,7 @@ func TestDeferredNavigationTextAndHistoryStayOrdered(t *testing.T) {
 	primary, _ := gui.ModPrimary.Resolve()
 	v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyZ, Modifiers: primary})
 	drainInput(t, v)
-	if tailText(t, v, 4) != "abZc" || v.Selection().Range() != (textedit.Range{Start: originalLength - 1, End: originalLength}) {
+	if tailText(t, v, 4) != "abZc" || v.Selection().Range() != (TextRange{Start: originalLength - 1, End: originalLength}) {
 		t.Fatal("undo selection/text", v.Selection(), tailText(t, v, 4))
 	}
 	v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyZ, Modifiers: primary | events.ModifierShift})
@@ -499,13 +500,13 @@ func TestDeferredNavigationTextAndHistoryStayOrdered(t *testing.T) {
 
 func TestDeferredDeleteUsesMeasuredCluster(t *testing.T) {
 	v := pendingInputFixture(t, "e\u0301")
-	length := v.Document().Model().Len()
+	length := v.Document().Len()
 	v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyBackspace})
-	if v.pendingInput == nil || v.Document().Model().Len() != length {
+	if v.pendingInput == nil || v.Document().Len() != length {
 		t.Fatal("unready deletion used stale geometry")
 	}
 	drainInput(t, v)
-	if v.Document().Model().Len() != length-3 || tailText(t, v, 2) != "x " {
+	if v.Document().Len() != length-3 || tailText(t, v, 2) != "x " {
 		t.Fatal("combining cluster split", tailText(t, v, 6))
 	}
 	if !v.Undo() || tailText(t, v, 3) != "e\u0301" {
@@ -517,7 +518,7 @@ func TestDeferredInputContextChangesCancelPendingText(t *testing.T) {
 	for _, kind := range []string{"selection", "document", "edit", "readonly", "disabled", "bindings", "focus", "unmount", "escape", "hidden", "language"} {
 		t.Run(kind, func(t *testing.T) {
 			v := pendingInputFixture(t, "abc")
-			model := v.Document().Model()
+			model := v.Document()
 			v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyArrowLeft})
 			v.commit(gui.IMCommit{Text: "Z"})
 			if v.pendingInput == nil {
@@ -525,11 +526,11 @@ func TestDeferredInputContextChangesCancelPendingText(t *testing.T) {
 			}
 			switch kind {
 			case "selection":
-				v.SetSelection(textedit.Selection{})
+				v.SetSelection(TextSelection{})
 			case "document":
 				v.SetDocument(NewDocument("replacement"))
 			case "edit":
-				_ = model.Replace(textedit.Range{}, "!")
+				_ = model.Replace(TextRange{}, "!")
 			case "readonly":
 				v.SetReadOnly(true)
 			case "disabled":
@@ -558,12 +559,12 @@ func TestDeferredInputContextChangesCancelPendingText(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			expected := v.Document().Model().Text()
+			expected := v.Document().Text()
 			v.inputStep(time.Time{})
 			if v.pendingInput != nil {
 				t.Fatal("obsolete input retained", kind)
 			}
-			if !v.Document().Model().EqualText(expected) {
+			if !v.Document().EqualText(expected) {
 				t.Fatal("stale text applied", kind)
 			}
 		})
@@ -575,10 +576,10 @@ func TestDeferredInputReentrantSelectionCancelsRemainder(t *testing.T) {
 	v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyArrowLeft})
 	v.commit(gui.IMCommit{Text: "Z"})
 	once := false
-	handle := v.ConnectSelection(func(textedit.Selection) {
+	handle := v.ConnectSelection(func(TextSelection) {
 		if !once {
 			once = true
-			v.SetSelection(textedit.Selection{})
+			v.SetSelection(TextSelection{})
 		}
 	})
 	defer handle.Disconnect()
@@ -590,7 +591,7 @@ func TestDeferredInputReentrantSelectionCancelsRemainder(t *testing.T) {
 
 func TestDeferredCompositionFollowsNavigation(t *testing.T) {
 	v := pendingInputFixture(t, "abc")
-	originalLength := v.Document().Model().Len()
+	originalLength := v.Document().Len()
 	v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyArrowLeft})
 	v.preedit("中", 3)
 	v.commit(gui.IMCommit{Text: "中文", Composed: true})
@@ -701,8 +702,8 @@ func TestDeferredPasteAndTypingStayOrdered(t *testing.T) {
 // 几何未就绪时设置在组合 cluster 内的合法 rune 偏移，编辑前仍须校正。
 func TestDeferredInputNormalizesPreviouslyUnmeasuredSelection(t *testing.T) {
 	v := pendingInputFixture(t, "e\u0301")
-	length := v.Document().Model().Len()
-	v.SetSelection(textedit.Selection{Anchor: length - 2, Caret: length - 2})
+	length := v.Document().Len()
+	v.SetSelection(TextSelection{Anchor: length - 2, Caret: length - 2})
 	v.commit(gui.IMCommit{Text: "Z"})
 	drainInput(t, v)
 	if tailText(t, v, 4) != "e\u0301Z" || v.Selection().Caret != length+1 {
@@ -718,18 +719,18 @@ func TestDeferredInputAcrossShapingWindows(t *testing.T) {
 	for _, at := range []int{4095, 4096, 4097, 8192, 65536, 1_000_000} {
 		t.Run(fmt.Sprint(at), func(t *testing.T) {
 			v := pendingInputFixture(t, "abc")
-			m := v.Document().Model()
+			m := v.Document()
 			original := m.Text()
-			v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+			v.SetSelection(TextSelection{Anchor: at, Caret: at})
 			v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyArrowLeft})
 			v.commit(gui.IMCommit{Text: "Z"})
 			v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyArrowLeft, Modifiers: events.ModifierShift})
 			v.inputKey(events.KeyEvent{EventType: events.KeyDown, Key: events.KeyDelete})
 			drainInput(t, v)
-			if !m.EqualText(original) || v.Selection() != (textedit.Selection{Anchor: at - 1, Caret: at - 1}) {
+			if !m.EqualText(original) || v.Selection() != (TextSelection{Anchor: at - 1, Caret: at - 1}) {
 				t.Fatal("window boundary changed edit position", at, v.Selection())
 			}
-			if !v.Undo() || !m.EqualText(original[:at-1]+"Z"+original[at-1:]) || v.Selection().Range() != (textedit.Range{Start: at - 1, End: at}) {
+			if !v.Undo() || !m.EqualText(original[:at-1]+"Z"+original[at-1:]) || v.Selection().Range() != (TextRange{Start: at - 1, End: at}) {
 				t.Fatal("window boundary history", at, v.Selection())
 			}
 			if !v.Redo() || !m.EqualText(original) {
@@ -745,11 +746,11 @@ func TestDeferredInputReentrantModelEditCancelsRemainder(t *testing.T) {
 	v.commit(gui.IMCommit{Text: "Z"})
 	v.commit(gui.IMCommit{Text: "Q"})
 	changed := false
-	h := v.ConnectChange(func(textedit.Change) {
+	h := v.ConnectChange(func(TextChange) {
 		if !changed {
 			changed = true
-			m := v.Document().Model()
-			if err := m.Replace(textedit.Range{Start: m.Len(), End: m.Len()}, "!"); err != nil {
+			m := v.Document()
+			if err := m.Replace(TextRange{Start: m.Len(), End: m.Len()}, "!"); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -764,19 +765,19 @@ func TestDeferredInputReentrantModelEditCancelsRemainder(t *testing.T) {
 // 第一行的宽度不能让第二行已经到尾部的拖选继续向右滚动。
 func TestDragOutsideShortLineDoesNotScrollHorizontally(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x", 120) + "\nshort\n")
+	v.Document().SetText(strings.Repeat("x", 120) + "\nshort\n")
 	v.SetFoldingEnabled(false)
 	v.SetShowLineNumbers(false)
 	observe(t, v)
 	v.context = &shapedContext{}
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 100}, geometry.Point{})
 	v.dragging = true
-	v.setSelection(textedit.Selection{Anchor: 122, Caret: 122}, false, false)
+	v.setSelection(TextSelection{Anchor: 122, Caret: 122}, false, false)
 	var targets []geometry.Rectangle
 	h := v.ConnectScrollIntoView(func(r geometry.Rectangle) { targets = append(targets, r) })
 	defer h.Disconnect()
 	v.dragSelection(geometry.Point{X: 450, Y: padding + v.lineHeight + 5})
-	if v.Selection().Range() != (textedit.Range{Start: 122, End: 126}) {
+	if v.Selection().Range() != (TextRange{Start: 122, End: 126}) {
 		t.Fatal("short line end", v.Selection())
 	}
 	for _, r := range targets {
@@ -803,7 +804,7 @@ func TestDragAutoscrollKeepsAxesIndependent(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewSourceView()
-			v.Document().Model().SetText(strings.Repeat("x", 120) + "\nshort\n")
+			v.Document().SetText(strings.Repeat("x", 120) + "\nshort\n")
 			v.SetFoldingEnabled(false)
 			v.SetShowLineNumbers(false)
 			if tc.wrap {
@@ -813,8 +814,8 @@ func TestDragAutoscrollKeepsAxesIndependent(t *testing.T) {
 			v.context = &shapedContext{}
 			v.LayoutVisible(geometry.Size{Width: 400, Height: 100}, geometry.Point{X: tc.offset})
 			v.dragging, v.dragGutter = true, tc.gutter
-			r, _ := v.Document().Model().LineRange(tc.row)
-			v.setSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start}, false, false)
+			r, _ := v.Document().LineRange(tc.row)
+			v.setSelection(TextSelection{Anchor: r.Start, Caret: r.Start}, false, false)
 			var targets []geometry.Rectangle
 			h := v.ConnectScrollIntoView(func(r geometry.Rectangle) { targets = append(targets, r) })
 			defer h.Disconnect()
@@ -847,7 +848,7 @@ func TestDragAutoscrollKeepsAxesIndependent(t *testing.T) {
 
 func TestDragScrollCallbackCannotApplyOldSelection(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x", 120))
+	v.Document().SetText(strings.Repeat("x", 120))
 	v.SetShowLineNumbers(false)
 	v.SetFoldingEnabled(false)
 	observe(t, v)
@@ -858,7 +859,7 @@ func TestDragScrollCallbackCannotApplyOldSelection(t *testing.T) {
 	h := v.ConnectScrollIntoView(func(geometry.Rectangle) { v.SetDocument(replacement) })
 	defer h.Disconnect()
 	v.dragSelection(geometry.Point{X: 450, Y: 10})
-	if v.Document() != replacement || v.Selection() != (textedit.Selection{}) {
+	if v.Document() != replacement || v.Selection() != (TextSelection{}) {
 		t.Fatal("applied selection after reentrant document replacement", v.Selection())
 	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -30,7 +29,7 @@ func collapsedLineFixture(t *testing.T, text string) (*SourceView, *countedNativ
 	v.SetShowLineNumbers(false)
 	v.SetFoldingEnabled(false)
 	v.SetWrapMode(WrapWordChar)
-	v.Document().Model().SetText(text)
+	v.Document().SetText(text)
 	observe(t, v)
 	v.context = ctx
 	t.Cleanup(func() {
@@ -46,11 +45,11 @@ func collapsedLineFixture(t *testing.T, text string) (*SourceView, *countedNativ
 func TestLongLineCollapsePreservesSourceAndNativeLayout(t *testing.T) {
 	text := "prefix\n" + strings.Repeat("wrapped 中文 word ", 500) + "\nsuffix"
 	v, ctx := collapsedLineFixture(t, text)
-	r, _ := v.Document().Model().LineRange(1)
+	r, _ := v.Document().LineRange(1)
 	p := v.paragraph(1)
 	fullHeight, created := p.height, ctx.created
-	revision, undo := v.Document().Model().Revision(), v.Document().Model().CanUndo()
-	v.SetSelection(textedit.Selection{Anchor: r.End - 10, Caret: r.End - 10})
+	revision, undo := v.Document().Revision(), v.Document().CanUndo()
+	v.SetSelection(TextSelection{Anchor: r.End - 10, Caret: r.End - 10})
 	if !v.CollapseLine(1) || !slices.Equal(v.CollapsedLines(), []int{1}) {
 		t.Fatal("long wrapped line was not shortened")
 	}
@@ -63,8 +62,8 @@ func TestLongLineCollapsePreservesSourceAndNativeLayout(t *testing.T) {
 	}
 	// Endpoints in surrounding visible rows select the entire original line,
 	// including its hidden suffix. Selection and export use model coordinates.
-	v.SetSelection(textedit.Selection{Caret: len(text)})
-	selected, err := v.Document().Model().Slice(v.Selection().Range())
+	v.SetSelection(TextSelection{Caret: len(text)})
+	selected, err := v.Document().Slice(v.Selection().Range())
 	if err != nil || selected != text || !v.lineCollapsed(1) {
 		t.Fatal("cross-line selection lost hidden source or unexpectedly expanded it", err)
 	}
@@ -72,7 +71,7 @@ func TestLongLineCollapsePreservesSourceAndNativeLayout(t *testing.T) {
 	if _, err := v.Document().WriteTo(&saved); err != nil || saved.String() != text {
 		t.Fatal("collapsed export changed source", err)
 	}
-	if v.Document().Model().Revision() != revision || v.Document().Model().CanUndo() != undo {
+	if v.Document().Revision() != revision || v.Document().CanUndo() != undo {
 		t.Fatal("display collapse changed revision or history")
 	}
 	if !v.ExpandLine(1) || v.paragraphTop(2)-v.paragraphTop(1) != fullHeight || v.paragraph(1) != p || ctx.created != created {
@@ -116,7 +115,7 @@ func TestLongLineCollapseSelectionSearchAndNavigation(t *testing.T) {
 			switch action {
 			case "selection":
 				at := strings.Index(text, "HIDDEN_NEEDLE")
-				v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+				v.SetSelection(TextSelection{Anchor: at, Caret: at})
 			case "search":
 				v.SetSearch(SearchQuery{Text: "HIDDEN_NEEDLE"})
 				if _, ok := v.FindNext(false); !ok {
@@ -137,14 +136,14 @@ func TestLongLineCollapseSelectionSearchAndNavigation(t *testing.T) {
 func TestLongLineCollapseEditAnchorsAndReset(t *testing.T) {
 	v, _ := collapsedLineFixture(t, "prefix\n"+strings.Repeat("wrapped words ", 500)+"\ntail")
 	v.CollapseLine(1)
-	if err := v.Document().Model().Replace(textedit.Range{}, "new prefix\n"); err != nil {
+	if err := v.Document().Replace(TextRange{}, "new prefix\n"); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(v.CollapsedLines(), []int{2}) {
 		t.Fatal("edit before a collapsed line lost its byte anchor", v.CollapsedLines())
 	}
-	r, _ := v.Document().Model().LineRange(2)
-	if err := v.Document().Model().Replace(textedit.Range{Start: r.Start + 5, End: r.Start + 5}, "x"); err != nil {
+	r, _ := v.Document().LineRange(2)
+	if err := v.Document().Replace(TextRange{Start: r.Start + 5, End: r.Start + 5}, "x"); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.CollapsedLines()) != 0 {
@@ -154,7 +153,7 @@ func TestLongLineCollapseEditAnchorsAndReset(t *testing.T) {
 	if !v.CollapseLine(2) {
 		t.Fatal("edited line could not be collapsed again")
 	}
-	v.Document().Model().SetText(strings.Repeat("replacement words ", 400))
+	v.Document().SetText(strings.Repeat("replacement words ", 400))
 	if len(v.CollapsedLines()) != 0 {
 		t.Fatal("reset retained stale collapse state")
 	}
@@ -180,7 +179,7 @@ func TestLongLineCollapseCachedHitSnapshotAndEligibility(t *testing.T) {
 		t.Fatal("visible expand badge is not interactive")
 	}
 	info := v.Snapshot()
-	if info.TextEditing.VisibleRange.End >= len(v.Document().Model().Text()) || len(info.Children) != 1 || info.Children[0].Role != gui.RoleButton || len(info.Children[0].Actions) != 1 {
+	if info.TextEditing.VisibleRange.End >= len(v.Document().Text()) || len(info.Children) != 1 || info.Children[0].Role != gui.RoleButton || len(info.Children[0].Actions) != 1 {
 		t.Fatal("snapshot included hidden content or omitted the visible expand control", info)
 	}
 	if ctx.created != before {
@@ -245,8 +244,8 @@ func TestLongLineCollapsePagedText(t *testing.T) {
 	if v.paragraphTop(1) != height || p.GeometryY != 0 || v.Snapshot().TextEditing.VisibleRange.End > 1024 {
 		t.Fatal("paged preview used distant geometry or exposed its hidden suffix")
 	}
-	v.SetSelection(textedit.Selection{Anchor: 100000, Caret: 100000})
-	if len(v.CollapsedLines()) != 0 || v.Selection().Caret != 100000 || v.Document().Model().Text() != text {
+	v.SetSelection(TextSelection{Anchor: 100000, Caret: 100000})
+	if len(v.CollapsedLines()) != 0 || v.Selection().Caret != 100000 || v.Document().Text() != text {
 		t.Fatal("navigation into a distant page failed to expand or changed source")
 	}
 }
@@ -292,7 +291,7 @@ func TestLongLineCollapseUpFromFollowingParagraph(t *testing.T) {
 	text := strings.Repeat("paged words ", 10000) + "\ntail"
 	v, _ := collapsedLineFixture(t, text)
 	v.CollapseLine(0)
-	v.SetSelection(textedit.Selection{Anchor: len(text) - 1, Caret: len(text) - 1})
+	v.SetSelection(TextSelection{Anchor: len(text) - 1, Caret: len(text) - 1})
 	v.navigate(events.KeyArrowUp, false)
 	if len(v.CollapsedLines()) != 0 || v.Selection().Caret < len(text)-256 || v.Selection().Caret >= len(text)-4 {
 		t.Fatal("Up into a collapsed paged line did not reach its last display line", v.Selection())
@@ -314,11 +313,11 @@ func TestLongLineCollapseCompositionAndReentry(t *testing.T) {
 				t.Fatal("composition retained collapsed content")
 			}
 			if reenter {
-				if v.projection != nil || v.Document().Model().Text() != "other" {
+				if v.projection != nil || v.Document().Text() != "other" {
 					t.Fatal("composition continued after its document was replaced")
 				}
 			} else {
-				if v.projection == nil || v.Document().Model().Text() != text {
+				if v.projection == nil || v.Document().Text() != text {
 					t.Fatal("preedit changed committed text or did not create a projection")
 				}
 				v.cancelPreedit()
@@ -332,7 +331,7 @@ func TestLongLineCollapseSurvivesOtherParagraphComposition(t *testing.T) {
 	v, _ := collapsedLineFixture(t, text)
 	focusBracketFixture(t, v)
 	v.CollapseLine(1)
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.applyPreedit("中\n文", 7)
 	v.Arrange(v.Rect())
 	if !v.lineCollapsed(2) || !slices.Equal(v.CollapsedLines(), []int{1}) {
@@ -351,7 +350,7 @@ func TestLongLineCollapseSurvivesOtherParagraphComposition(t *testing.T) {
 	}
 	v.cancelPreedit()
 	v.Arrange(v.Rect())
-	if !v.lineCollapsed(1) || v.Document().Model().Text() != text {
+	if !v.lineCollapsed(1) || v.Document().Text() != text {
 		t.Fatal("composition cancellation changed collapse intent or source")
 	}
 }

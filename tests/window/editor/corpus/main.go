@@ -36,11 +36,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -136,7 +136,7 @@ func main() {
 	data, err := os.ReadFile(*file)
 	must(err)
 	check(utf8.Valid(data), "corpus must be valid UTF-8")
-	original := textedit.Normalize(string(data))
+	original := textcore.Normalize(string(data))
 	digest := sha256.Sum256(data)
 	checksum := hex.EncodeToString(digest[:])
 	longest := 0
@@ -251,7 +251,7 @@ func main() {
 		check func()
 	}
 	actions := []action{
-		{"load", func() { v.Document().Model().SetText(original) }, func() { check(v.Selection().Caret == 0, "load moved caret") }},
+		{"load", func() { v.Document().SetText(original) }, func() { check(v.Selection().Caret == 0, "load moved caret") }},
 		{"end", func() { edge(true) }, func() { check(v.Selection().Caret == len(want), "end key missed document end") }},
 		{"home", func() { edge(false) }, func() { check(v.Selection().Caret == 0, "home key missed document start") }},
 		{"wheel", func() {
@@ -340,11 +340,11 @@ func main() {
 			return
 		}
 		actions[stage].check()
-		model := v.Document().Model()
+		model := v.Document()
 		check(model.EqualText(want), "model bytes differ at "+actions[stage].name)
 		editing := info.TextEditing
 		check(editing != nil, "missing text snapshot")
-		visible, err := model.Slice(textedit.Range{Start: editing.VisibleRange.Start, End: editing.VisibleRange.End})
+		visible, err := model.Slice(source.TextRange{Start: editing.VisibleRange.Start, End: editing.VisibleRange.End})
 		must(err)
 		check(visible == editing.VisibleText, "visible excerpt differs from original model bytes")
 		img, err := gui.RenderWidget(v, 0)

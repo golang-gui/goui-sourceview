@@ -18,15 +18,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	source "github.com/golang-gui/goui-sourceview/sourceview"
-	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
-	"github.com/golang-gui/goui/platform/events"
-	"github.com/golang-gui/goui/platform/typography"
-	"github.com/golang-gui/goui/style"
-	"github.com/golang-gui/goui/theme/basic"
-	"github.com/golang-gui/goui/theme/modern"
 	"image"
 	"image/png"
 	"log"
@@ -35,6 +26,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
+
+	source "github.com/golang-gui/goui-sourceview/sourceview"
+	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/platform/typography"
+	"github.com/golang-gui/goui/style"
+	"github.com/golang-gui/goui/theme/basic"
+	"github.com/golang-gui/goui/theme/modern"
 )
 
 func must(e error) {
@@ -95,7 +95,7 @@ func main() {
 	}
 	var steps []func()
 	steps = append(steps, func() {
-		v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+		v.SetSelection(source.TextSelection{Anchor: 6, Caret: 6})
 		key(events.KeyHome, 0)
 		check(v.Selection().Caret == 4, "smart Home")
 		key(events.KeyHome, 0)
@@ -104,11 +104,11 @@ func main() {
 		check(v.Selection().Anchor == 0 && v.Selection().Caret == 8, "smart Shift End")
 	})
 	steps = append(steps, func() {
-		v.SetSelection(textedit.Selection{Anchor: 4, Caret: 4})
+		v.SetSelection(source.TextSelection{Anchor: 4, Caret: 4})
 		key(events.KeyBackspace, 0)
-		check(doc.Model().Text() == "word  \n中e\u0301x\n\t  value", "indent Backspace")
+		check(doc.Text() == "word  \n中e\u0301x\n\t  value", "indent Backspace")
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "    word  \n中e\u0301x\n\t  value", "indent Undo")
+		check(doc.Text() == "    word  \n中e\u0301x\n\t  value", "indent Undo")
 	})
 	steps = append(steps, func() {
 		key(events.KeyG, control)
@@ -260,7 +260,7 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView,
 		var out bytes.Buffer
 		_, err := v.Document().WriteTo(&out)
 		must(err)
-		check(out.String() == text+"\r\n" && !v.Document().Model().CanUndo(), "display changed output or undo")
+		check(out.String() == text+"\r\n" && !v.Document().CanUndo(), "display changed output or undo")
 		log.Printf("PASS native whitespace cells, modes, selection and CRLF/EOF; scale=%g backend=%s", scale, app.Typography().Name())
 	}}
 }

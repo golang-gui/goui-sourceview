@@ -27,7 +27,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/basic"
@@ -116,13 +115,13 @@ func main() {
 	}
 	var doc *source.Document
 	caret := func(row int, end bool) {
-		r, err := doc.Model().LineRange(row)
+		r, err := doc.LineRange(row)
 		must(err)
 		at := r.Start
 		if end {
 			at = r.End
 		}
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 	}
 	matches := func(editor *source.SourceView, want []language.FoldRange) bool {
 		got := editor.FoldingRegions()
@@ -160,7 +159,7 @@ func main() {
 			caret(sample.keyRow, false)
 			key(events.KeyBracketLeft, foldMods)
 			check(collapsed(v, sample.keyHeader) && !collapsed(mirror, sample.keyHeader), "keyboard fold/view isolation")
-			check(doc.Model().Text() == sample.text && !doc.Model().CanUndo(), "fold changed source/history")
+			check(doc.Text() == sample.text && !doc.CanUndo(), "fold changed source/history")
 			key(events.KeyBracketRight, foldMods)
 			check(!collapsed(v, sample.keyHeader), "keyboard unfold")
 			caret(0, false)
@@ -185,18 +184,18 @@ func main() {
 			win.SetFocusedWidget(v)
 			v.SetSearch(source.SearchQuery{Text: "needle"})
 			key(events.KeyF3, 0)
-			text, err := doc.Model().Slice(v.Selection().Range())
+			text, err := doc.Slice(v.Selection().Range())
 			must(err)
 			check(text == "needle" && !collapsed(v, sample.pointerRow), "search lost functional source coordinates")
 			caret(0, true)
 			key(events.KeyBracketLeft, foldMods)
 			check(collapsed(v, 0), "outer functional fold")
 			key(events.KeyDelete, 0)
-			check(!collapsed(v, 0) && doc.Model().Text() == sample.text, "first Delete removed hidden functional text")
+			check(!collapsed(v, 0) && doc.Text() == sample.text, "first Delete removed hidden functional text")
 			key(events.KeyDelete, 0)
-			check(doc.Model().Text() != sample.text, "second Delete did not edit")
+			check(doc.Text() != sample.text, "second Delete did not edit")
 			key(events.KeyZ, primary)
-			check(doc.Model().Text() == sample.text, "functional boundary undo")
+			check(doc.Text() == sample.text, "functional boundary undo")
 		})
 		steps = append(steps, func() bool { return matches(v, sample.want) && matches(mirror, sample.want) })
 		next(func() {
@@ -204,16 +203,16 @@ func main() {
 			check(collapsed(mirror, 0), "read-only folding")
 		})
 		next(func() {
-			r, err := doc.Model().LineRange(sample.editRow)
+			r, err := doc.LineRange(sample.editRow)
 			must(err)
-			v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.End})
+			v.SetSelection(source.TextSelection{Anchor: r.Start, Caret: r.End})
 			key(events.KeyDelete, 0)
 			lines := strings.Split(sample.text, "\n")
 			lines[sample.editRow] = ""
-			check(doc.Model().Text() == strings.Join(lines, "\n"), "closing token edit")
+			check(doc.Text() == strings.Join(lines, "\n"), "closing token edit")
 		})
 		steps = append(steps, func() bool { return matches(v, sample.after) && matches(mirror, sample.after) })
-		next(func() { key(events.KeyZ, primary); check(doc.Model().Text() == sample.text, "closing token undo") })
+		next(func() { key(events.KeyZ, primary); check(doc.Text() == sample.text, "closing token undo") })
 		steps = append(steps, func() bool { return matches(v, sample.want) && matches(mirror, sample.want) })
 		next(func() {
 			log.Printf("PASS %s closing row %d: functional ranges, keyboard/pointer, deletion, undo, search, reanalysis and isolation", sample.id, sample.editRow)

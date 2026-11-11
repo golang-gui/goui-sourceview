@@ -118,11 +118,11 @@ func run() error {
 	status.SetStyleName(modern.MutedText)
 	undo, redo := button("Undo", func() { editor.Undo(); win.SetFocusedWidget(editor) }), button("Redo", func() { editor.Redo(); win.SetFocusedWidget(editor) })
 	update := func() {
-		m := current.document.Model()
+		m := current.document
 		s := editor.Selection()
 		row := m.LineAt(s.Caret)
 		line, _ := m.LineRange(row)
-		prefix, _ := m.Slice(gui.TextRange{Start: line.Start, End: s.Caret})
+		prefix, _ := m.Slice(source.TextRange{Start: line.Start, End: s.Caret})
 		mode := "Editable"
 		if editor.ReadOnly() {
 			mode = "Read only"
@@ -307,8 +307,8 @@ func run() error {
 		content.AddChild(child)
 	}
 	win.SetWidget(content)
-	editor.ConnectSelection(func(gui.TextSelection) { update() })
-	editor.ConnectChange(func(gui.TextChange) { update() })
+	editor.ConnectSelection(func(source.TextSelection) { update() })
+	editor.ConnectChange(func(source.TextChange) { update() })
 	editor.ConnectError(func(err error) { status.SetText(err.Error()) })
 	show(current)
 	if err := win.Show(); err != nil {

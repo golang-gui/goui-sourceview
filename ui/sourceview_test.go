@@ -224,7 +224,7 @@ func TestExternalHighlightsAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := d.SetHighlights(d.Model().Revision(), h); !ok || err != nil {
+	if ok, err := d.SetHighlights(d.Revision(), h); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
 }

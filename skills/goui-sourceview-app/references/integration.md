@@ -9,7 +9,7 @@
 | --- | --- |
 | 命令式控件、属性和信号 | `sourceview` 核心包（`…/sourceview`）的 SourceView、Document；example/editor |
 | 声明式接入 | ui.SourceView；example/declarative |
-| 文档修改及选区事务 | Document.Model、SourceView.ApplyEdits；sourceview/commands.go |
+| 文档修改及选区事务 | Document、Document.ApplyEdits、SourceView.ApplyEdits；sourceview/commands.go |
 | 查找、替换和浮层 | SourceView.SetSearch、FindNext、ReplaceCurrent、ReplaceAll；ShowFind、ShowReplace、ShowGoTo、HidePanel |
 | 代码配色 | scheme、SourceView.SetScheme，以及 sourceview/styles.go 的公开样式部件 |
 | 应用定义语言和补全 | language、CompletionProvider；example/markdown |
@@ -76,7 +76,8 @@ Integrated 采用 GOUI 的平台支持与降级规则。自定义窗口装饰不
 声明式配置、事件与补全类型使用 `sourceui.IndentOptions`、`TextSelection`、`TextChange`、
 `SearchQuery`、`CompletionProvider`、`KeyBindings` 等；文档与默认快捷键通过
 `sourceui.NewDocument`、`sourceui.DefaultKeyBindings` 创建。按键常量使用 GOUI ui。
-这些入口与命令式类型是别名；语言和配色仍从对应资源包创建。先用 `go doc` 核对实际
+这些入口与 SourceView 命令式类型是别名，与 GOUI 的文本类型不同；只在普通输入控件或
+语义快照边界显式转换。语言和配色仍从对应资源包创建。先用 `go doc` 核对实际
 SourceView 版本是否提供这些声明式入口，不把较新的 main API 用到旧版模块。
 
 
@@ -108,11 +109,12 @@ HidePanel；同步调用处理返回错误，用户操作失败通过 ConnectErr
   其选区和滚动独立。SetDocument 切换会重置当前视图的选择等状态；保留各文件的光标/滚动
   需要应用自己的标签状态，不能仅凭共享文档推断会自动恢复。
 - NewDocument 在归一化 UTF-8/LF 前识别 LF/CRLF/CR 输出格式。需要按文档格式保存时用
-  Document.WriteTo(writer)，处理其返回的写入量与错误；Model.Text 仍是规范化文本。
+  Document.WriteTo(writer)，处理其返回的写入量与错误；Document.Text 仍是规范化文本。
   DetectLineEnding 返回主格式和混用标志；混合换行导出会统一格式，不逐行保真。
-  NewDocumentWithModel 默认 LF，已知原格式时显式 SetLineEnding。该 setter 是输出配置，
+  当前检出不再提供 Model()、NewDocumentWithModel 或 ui.TextModel；改用同一个 Document
+  共享内容及历史。已知原格式时显式 SetLineEnding。该 setter 是输出配置，
   不进入文本撤销栈；变化通过 ConnectLineEndingChanged 通知。
-  Model.SetText 是重载，会清历史、归一化文本并保留当前输出配置，不应在普通编辑回调中使用。
+  Document.SetText 是重载，会清历史、归一化文本并保留当前输出配置，不应在普通编辑回调中使用。
   文件编码、路径、脏标记、文件冲突和原子保存仍由应用处理。
 - 内置语言通过 SetLanguage 设置；文件识别可使用 language.Guess(filename, sample)，
   再显式绑定结果。不要把文件扩展名或任意字符串直接当作已注册的语言。
@@ -120,7 +122,7 @@ HidePanel；同步调用处理返回错误，用户操作失败通过 ConnectErr
   edits 使用同一原始文档坐标，afterSelection 使用应用结果的坐标；它们是字节位置。
   该入口校验文档身份和修订，并把修改及前后选区作为一个撤销事务。
   后台结果通过 GUI 投递时仍需核对身份/修订；过期结果应丢弃或重新计算。
-- ReadOnly 限制视图的用户编辑；应用直接持有模型时仍能同步内容。不要把只读视图当作
+- ReadOnly 限制视图的用户编辑；应用直接持有 Document 时仍能同步内容。不要把只读视图当作
   文档不可修改的访问控制。同步检查所调用 API 的错误、预算及生命周期约定。
 
 ## 主题与覆盖

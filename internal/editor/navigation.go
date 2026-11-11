@@ -6,10 +6,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
-func GoToOffset(m *textedit.Model, query string) (int, error) {
+func GoToOffset(m *textcore.Model, query string) (int, error) {
 	parts := strings.Split(strings.TrimSpace(query), ":")
 	if len(parts) < 1 || len(parts) > 2 {
 		return 0, fmt.Errorf("sourceview: invalid line/column")

@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -155,7 +155,7 @@ func (v *SourceView) estimateWrappedHeight(width float32) {
 	for !v.document.model.IsRuneBoundary(end) {
 		end--
 	}
-	text, err := v.document.model.Slice(textedit.Range{End: end})
+	text, err := v.document.model.Slice(TextRange{End: end})
 	if err != nil {
 		return
 	}
@@ -388,7 +388,7 @@ func (v *SourceView) caretRect() (geometry.Rectangle, bool) {
 	if p == nil {
 		return geometry.Rectangle{}, false
 	}
-	return v.paragraphCaret(row, p, textedit.Position{Offset: caret - r.Start, Upstream: v.upstream}, false)
+	return v.paragraphCaret(row, p, textcore.Position{Offset: caret - r.Start, Upstream: v.upstream}, false)
 }
 
 // Paint and IME updates must not shape an offscreen caret during scrolling.
@@ -401,7 +401,7 @@ func (v *SourceView) cachedCaretRect() (geometry.Rectangle, bool) {
 		return geometry.Rectangle{}, false
 	}
 	r := v.displayRange(row)
-	return v.paragraphCaret(row, p, textedit.Position{Offset: caret - r.Start, Upstream: v.upstream}, true)
+	return v.paragraphCaret(row, p, textcore.Position{Offset: caret - r.Start, Upstream: v.upstream}, true)
 }
 
 func (v *SourceView) updateIMCaret() {
@@ -496,19 +496,19 @@ func (v *SourceView) revealBounds(rect geometry.Rectangle) geometry.Rectangle {
 	return geometry.Rect(left, top, view.CeilCoordinate(right-float64(left)), view.CeilCoordinate(bottom-float64(top)))
 }
 
-func (v *SourceView) hit(point geometry.Point) textedit.Position {
+func (v *SourceView) hit(point geometry.Point) textcore.Position {
 	pos, _, _ := v.hitCaret(point)
 	return pos
 }
 
 // Hit and its scroll target must use one measured snapshot and local origin.
-func (v *SourceView) hitCaret(point geometry.Point) (textedit.Position, geometry.Rectangle, bool) {
+func (v *SourceView) hitCaret(point geometry.Point) (textcore.Position, geometry.Rectangle, bool) {
 	if pos, caret, ok := v.inlineVirtualHit(point); ok {
 		return pos, caret, true
 	}
 	row := v.paragraphAt(max(0, point.Y+v.offset.Y-padding))
 	r := v.displayRange(row)
-	pos := textedit.Position{Offset: r.Start}
+	pos := textcore.Position{Offset: r.Start}
 	var caret geometry.Rectangle
 	measured := false
 	if p := v.paragraph(row); p != nil {

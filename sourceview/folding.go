@@ -13,12 +13,12 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/style"
 )
@@ -140,7 +140,7 @@ func (v *SourceView) finishFoldCommand() {
 		a, b := v.document.model.LineAt(s.Anchor), v.document.model.LineAt(s.Caret)
 		if a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine {
 			header, _ := v.document.model.LineRange(r.StartLine)
-			s = textedit.Selection{Anchor: header.End, Caret: header.End}
+			s = TextSelection{Anchor: header.End, Caret: header.End}
 			break
 		}
 	}
@@ -151,11 +151,11 @@ func (v *SourceView) finishFoldCommand() {
 		p := v.cachedParagraph(row)
 		if v.collapsedOffsetHidden(row, p, at, false) {
 			header, _ := v.document.model.LineRange(row)
-			pos := textedit.Position{}
+			pos := textcore.Position{}
 			if g, _ := v.linePreview(p); g != nil {
 				pos = g.HitLine(0, 0)
 			}
-			s = textedit.Selection{Anchor: header.Start + pos.Offset, Caret: header.Start + pos.Offset}
+			s = TextSelection{Anchor: header.Start + pos.Offset, Caret: header.Start + pos.Offset}
 			upstream = pos.Upstream
 			break
 		}
@@ -187,10 +187,10 @@ func (v *SourceView) refreshFoldGeometry() {
 }
 
 func (v *SourceView) indexCollapsedFolds() {
-	v.collapsedFolds = make(map[int]textedit.Range)
+	v.collapsedFolds = make(map[int]TextRange)
 	for _, r := range v.folds {
 		if r.Collapsed {
-			v.collapsedFolds[r.StartLine] = textedit.Range{Start: r.Start, End: r.End}
+			v.collapsedFolds[r.StartLine] = TextRange{Start: r.Start, End: r.End}
 		}
 	}
 }
@@ -243,7 +243,7 @@ func (v *SourceView) clearFolds() {
 	v.refreshFoldGeometry()
 }
 
-func (v *SourceView) mapFolds(c textedit.Change, splices []highlight.Splice) {
+func (v *SourceView) mapFolds(c TextChange, splices []highlight.Splice) {
 	if c.Reset {
 		v.clearFolds()
 		return
@@ -268,7 +268,7 @@ func (v *SourceView) mapFolds(c textedit.Change, splices []highlight.Splice) {
 	}
 }
 
-func (v *SourceView) expandFoldRange(r textedit.Range) bool {
+func (v *SourceView) expandFoldRange(r TextRange) bool {
 	lineChanged := v.expandCollapsedRange(r)
 	changed := false
 	for i := range v.folds {
@@ -292,9 +292,9 @@ func (v *SourceView) expandFoldRange(r textedit.Range) bool {
 	return changed || lineChanged
 }
 
-func (v *SourceView) unfoldSelection(s textedit.Selection) bool {
-	a := v.expandFoldRange(textedit.Range{Start: s.Anchor, End: s.Anchor})
-	b := v.expandFoldRange(textedit.Range{Start: s.Caret, End: s.Caret})
+func (v *SourceView) unfoldSelection(s TextSelection) bool {
+	a := v.expandFoldRange(TextRange{Start: s.Anchor, End: s.Anchor})
+	b := v.expandFoldRange(TextRange{Start: s.Caret, End: s.Caret})
 	return a || b
 }
 
@@ -328,7 +328,7 @@ func (v *SourceView) unfoldDeleteBoundary(forward bool) bool {
 	}
 	at := v.adjacent(s.Caret, forward)
 	a, b := min(at, s.Caret), max(at, s.Caret)
-	if v.expandFoldRange(textedit.Range{Start: a, End: b}) {
+	if v.expandFoldRange(TextRange{Start: a, End: b}) {
 		v.foldingSignal.Emit()
 		return true
 	}
@@ -415,9 +415,9 @@ func (d *Document) hasFolding() bool { return d.externalFolds || d.definition.Fo
 type foldIntake struct {
 	snapshot                    *Folds
 	generation, revision, state uint64
-	old                         map[textedit.Range]bool
+	old                         map[TextRange]bool
 	entries                     []folding.Entry
-	collapsed                   map[int]textedit.Range
+	collapsed                   map[int]TextRange
 	hidden                      []folding.Interval
 	selection                   uint64
 	restore                     *viewRestore
@@ -429,7 +429,7 @@ func (v *SourceView) queueFolds(f *Folds) {
 		return
 	}
 	q := &foldIntake{snapshot: f, generation: v.document.foldGeneration, revision: v.document.model.Revision(), state: v.foldState,
-		selection: v.selectionEpoch, old: make(map[textedit.Range]bool), collapsed: make(map[int]textedit.Range)}
+		selection: v.selectionEpoch, old: make(map[TextRange]bool), collapsed: make(map[int]TextRange)}
 	if r := v.viewRestore; r != nil && r.foldsPending && r.snapshot.language == v.document.languageEpoch && v.foldingEnabled {
 		q.restore, q.old = r, r.wanted
 	} else {
@@ -460,7 +460,7 @@ func (v *SourceView) foldingIntakeStep() {
 			break
 		}
 		r := q.snapshot.entries[q.at]
-		key := textedit.Range{Start: r.Start, End: r.End}
+		key := TextRange{Start: r.Start, End: r.End}
 		r.Collapsed = v.foldingEnabled && q.old[key] && !(a > r.StartLine && a <= r.EndLine || b > r.StartLine && b <= r.EndLine)
 		if r.Collapsed {
 			q.collapsed[r.StartLine] = key
@@ -561,7 +561,7 @@ func (d *Document) foldingStep() {
 	for !d.model.IsRuneBoundary(end) {
 		end--
 	}
-	chunk, _ := d.model.Slice(textedit.Range{Start: job.copied, End: end})
+	chunk, _ := d.model.Slice(TextRange{Start: job.copied, End: end})
 	job.chunks = append(job.chunks, chunk)
 	job.copied = end
 	if end < d.model.Len() {
@@ -651,7 +651,7 @@ func (v *SourceView) foldBadgeRect(row int, p *paragraph) geometry.Rectangle {
 	if i := v.foldHeader(row); i < 0 || !v.folds[i].Collapsed || v.projection != nil || v.lineCollapsed(row) {
 		return geometry.Rectangle{}
 	}
-	edge := p.Geometry.Caret(textedit.Position{Offset: len(p.text), Upstream: true})
+	edge := p.Geometry.Caret(textcore.Position{Offset: len(p.text), Upstream: true})
 	r := geometry.Rect(v.gutter+padding-v.offset.X+edge.X+5, padding+v.paragraphTop(row)-v.offset.Y+edge.Y, 16, edge.Height)
 	if v.showLineEndings {
 		r.X += 12
@@ -757,7 +757,7 @@ func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 	if v.projection != nil {
 		if len(v.hiddenLines) > 0 {
 			at := v.projection.Replacement().Start
-			info.TextEditing.VisibleRange = textedit.Range{Start: at, End: at}
+			info.TextEditing.VisibleRange = gui.TextRange{Start: at, End: at}
 			info.TextEditing.VisibleText = ""
 		}
 		return
@@ -774,7 +774,7 @@ func (v *SourceView) snapshotFolding(info *gui.WidgetInfo, first, last int) {
 		budget -= len(text)
 		spans = append(spans, map[string]any{"range": r, "text": text})
 		if len(v.hiddenLines) > 0 && len(spans) == 1 {
-			info.TextEditing.VisibleRange = r
+			info.TextEditing.VisibleRange = gui.TextRange(r)
 			info.TextEditing.VisibleText = text
 		}
 		if collapsed, ok := v.gutterFold(row); ok {

@@ -4,7 +4,7 @@
 // Optional -file reads an existing UTF-8 single-line JSON file without modifying
 // it. Default data is an original 160 KiB single-line JSON string.
 // Initial state: Modern, integrated window, empty editor inside ScrollView.
-// The first allocated frame loads the JSON through Document.Model().SetText.
+// The first allocated frame loads the JSON through Document.SetText.
 // Normal Window.DispatchEvent/CommitText checks document start/end, insertion,
 // undo, horizontal scrolling, repeated paints and gutter changes. Optional -wrap
 // also probes wrapping the same very long word; native shaping may take much
@@ -32,7 +32,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/theme/modern"
@@ -153,7 +152,7 @@ func main() {
 		check(info != nil, "missing text snapshot")
 		caret := v.Selection().Caret
 		check(info.VisibleRange.Start <= caret && info.VisibleRange.End >= caret, "caret outside visible excerpt")
-		actual, err := v.Document().Model().Slice(textedit.Range{Start: info.VisibleRange.Start, End: info.VisibleRange.End})
+		actual, err := v.Document().Slice(source.TextRange{Start: info.VisibleRange.Start, End: info.VisibleRange.End})
 		must(err)
 		check(actual == info.VisibleText, "visible excerpt differs from model")
 		img, err := gui.RenderWidget(v, 0)
@@ -185,7 +184,7 @@ func main() {
 			return
 		}
 		if !loaded {
-			v.Document().Model().SetText(text)
+			v.Document().SetText(text)
 			loaded = true
 			deadline = time.Now().Add(30 * time.Second)
 			return
@@ -203,13 +202,13 @@ func main() {
 			}
 			must(win.CommitText(" "))
 		case 2:
-			check(v.Document().Model().Text() == text+" ", "tail insertion lost text")
+			check(v.Document().Text() == text+" ", "tail insertion lost text")
 			if !assertView() {
 				return
 			}
 			key(events.KeyZ, primary)
 		case 3:
-			check(v.Document().Model().Text() == text, "undo lost text")
+			check(v.Document().Text() == text, "undo lost text")
 			if !assertView() {
 				return
 			}

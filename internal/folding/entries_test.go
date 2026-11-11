@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func TestSnapshotUsesNormalizedByteBoundaries(t *testing.T) {
@@ -35,20 +35,20 @@ func TestEntryMappingKeepsSequentialCoordinatesAndBoundaries(t *testing.T) {
 	lineAdded := highlight.Splice{Removed: 1, Added: 2}
 	for _, tc := range []struct {
 		name    string
-		edits   []textedit.Edit
+		edits   []textcore.Edit
 		splices []highlight.Splice
 		want    []Entry
 	}{
-		{"before", []textedit.Edit{{Text: "\n"}}, []highlight.Splice{lineAdded}, []Entry{shifted}},
-		{"newline-at-header", []textedit.Edit{{Range: textedit.Range{Start: 10, End: 10}, Text: "\n"}}, []highlight.Splice{lineAdded}, []Entry{shifted}},
-		{"text-at-header", []textedit.Edit{{Range: textedit.Range{Start: 10, End: 10}, Text: "x"}}, []highlight.Splice{{}}, nil},
-		{"end-boundary", []textedit.Edit{{Range: textedit.Range{Start: 20, End: 21}}}, []highlight.Splice{{}}, nil},
-		{"descending-batch", []textedit.Edit{{Range: textedit.Range{Start: 50, End: 50}, Text: "x"}, {Text: "\n"}}, []highlight.Splice{{}, lineAdded}, []Entry{shifted}},
-		{"ascending-sequential-batch", []textedit.Edit{{Text: "\n"}, {Range: textedit.Range{Start: 51, End: 51}, Text: "x"}}, []highlight.Splice{lineAdded, {}}, []Entry{shifted}},
-		{"arbitrary-order-fallback", []textedit.Edit{{Range: textedit.Range{Start: 30, End: 30}, Text: "x"}, {Text: "\n"}, {Range: textedit.Range{Start: 50, End: 50}, Text: "y"}}, []highlight.Splice{{}, lineAdded, {}}, []Entry{shifted}},
+		{"before", []textcore.Edit{{Text: "\n"}}, []highlight.Splice{lineAdded}, []Entry{shifted}},
+		{"newline-at-header", []textcore.Edit{{Range: textcore.Range{Start: 10, End: 10}, Text: "\n"}}, []highlight.Splice{lineAdded}, []Entry{shifted}},
+		{"text-at-header", []textcore.Edit{{Range: textcore.Range{Start: 10, End: 10}, Text: "x"}}, []highlight.Splice{{}}, nil},
+		{"end-boundary", []textcore.Edit{{Range: textcore.Range{Start: 20, End: 21}}}, []highlight.Splice{{}}, nil},
+		{"descending-batch", []textcore.Edit{{Range: textcore.Range{Start: 50, End: 50}, Text: "x"}, {Text: "\n"}}, []highlight.Splice{{}, lineAdded}, []Entry{shifted}},
+		{"ascending-sequential-batch", []textcore.Edit{{Text: "\n"}, {Range: textcore.Range{Start: 51, End: 51}, Text: "x"}}, []highlight.Splice{lineAdded, {}}, []Entry{shifted}},
+		{"arbitrary-order-fallback", []textcore.Edit{{Range: textcore.Range{Start: 30, End: 30}, Text: "x"}, {Text: "\n"}, {Range: textcore.Range{Start: 50, End: 50}, Text: "y"}}, []highlight.Splice{{}, lineAdded, {}}, []Entry{shifted}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := MapEntries([]Entry{initial}, textedit.Change{Edits: tc.edits}, tc.splices, true, func(int) int {
+			got := MapEntries([]Entry{initial}, textcore.Change{Edits: tc.edits}, tc.splices, true, func(int) int {
 				t.Fatal("incremental mapping unexpectedly queried model rows")
 				return 0
 			})
@@ -60,13 +60,13 @@ func TestEntryMappingKeepsSequentialCoordinatesAndBoundaries(t *testing.T) {
 }
 
 func TestMappingWithoutSplicesUsesCurrentModelRows(t *testing.T) {
-	m := textedit.NewModel("0\n1\n2\n3\n4\n5")
+	m := textcore.NewModel("0\n1\n2\n3\n4\n5")
 	initial := Entry{Region: Region{StartLine: 2, EndLine: 4, Collapsed: true}, Start: 4, End: 9}
-	edit := textedit.Edit{Text: "X\n"}
+	edit := textcore.Edit{Text: "X\n"}
 	if err := m.Replace(edit.Range, edit.Text); err != nil {
 		t.Fatal(err)
 	}
-	got := MapEntries([]Entry{initial}, textedit.Change{Edits: []textedit.Edit{edit}}, nil, false, m.LineAt)
+	got := MapEntries([]Entry{initial}, textcore.Change{Edits: []textcore.Edit{edit}}, nil, false, m.LineAt)
 	want := []Entry{{Region: Region{StartLine: 3, EndLine: 5, Collapsed: true}, Start: 6, End: 11}}
 	if !slices.Equal(got, want) {
 		t.Fatalf("mapped %+v, want %+v", got, want)
@@ -74,7 +74,7 @@ func TestMappingWithoutSplicesUsesCurrentModelRows(t *testing.T) {
 }
 
 func TestReconcileKeepsIntentWithoutSharingMutableEntries(t *testing.T) {
-	m := textedit.NewModel("a\nb\nc\nd")
+	m := textcore.NewModel("a\nb\nc\nd")
 	old := []Entry{{Region: Region{StartLine: 0, EndLine: 2, Collapsed: true}, Start: 0, End: 5}}
 	got := Reconcile(old, []language.FoldRange{{StartLine: 0, EndLine: 2}}, m.LineRange)
 	if !slices.Equal(got, old) {

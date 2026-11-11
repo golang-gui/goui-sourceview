@@ -1,7 +1,7 @@
 # 编辑核心、输入与查找设计
 
 > 状态：已实现的基础行为与后续约束。实施和验证边界见 [实施记录](Implementation.md)。
-> 公共入口见 [总设计](DesignSourceView.md)，GOUI 所需提交见 [接入设计](DesignGOUIIntegration.md)。
+> 公共入口见 [总设计](DesignSourceView.md)，自有模型与布局边界见 [独立编辑内核](DesignEditorCore.md)。
 
 实现边界：核心包持有编辑作业、文档身份、修订、选区和语言回调后的有效性检查；
 `internal/editor` 根据已捕获的文本生成重新缩进、合并行、尾空白和大小写计划，
@@ -15,7 +15,7 @@
 1. 检查控件未销毁、文档身份、Enabled、ReadOnly，以及命令是否需要挂载。
 2. 取消或按 IME 契约结束不相容的预编辑；规范化插入文本。
 3. 从当前修订与选区生成不可变 EditPlan：编辑列表、来源、Before/AfterSelection、历史策略、reveal 策略。
-4. 再检查捕获的修订与视图 epoch；在 GUI 线程调用 Model.Apply 或提案 ApplyBatch。
+4. 再检查捕获的修订与视图 epoch；在 GUI 线程调用自有模型的 Apply 或 ApplyBatch。
 5. 模型通知更新共享行元数据，各视图映射自己的选区、取消过期操作并使相关布局失效。
 6. 调用返回后，仅当对象、文档和修订仍对应这次操作时，应用计划中的最终选区和 reveal。
 7. 发必要的视图状态信号；外部回调后不继续使用未重新核验的对象。
@@ -27,7 +27,7 @@ EditPlan 保持内部；应用通过 ApplyEdits(document, revision, edits, after
 已销毁控件的修改入口返回 ErrDisabled，不能因对象仍有 Go 引用而继续修改原共享文档。
 
 简单插入和连续删除使用现有 Apply；粘贴、IME 提交、换行等形成独立撤销单元；
-不相邻修改或需自定义 redo 选区的命令使用 G1。
+不相邻修改或需自定义 redo 选区的命令使用自有原子批量事务。
 批次通知期间不反复将活动选区移动到每个子编辑末尾。
 
 ## 2. 选区与外部变更
@@ -36,7 +36,7 @@ EditPlan 保持内部；应用通过 ApplyEdits(document, revision, edits, after
 对外的 UTF-8 选区不包含视觉状态；程序设置后清除 preferredX。
 拖动、左右/Home/End、鼠标点击、历史跳转和编辑来源变化会中断普通打字合并。
 
-外部编辑与非发起视图逐项映射端点。首版沿用 textedit.MapOffset 的端点粘性：
+外部编辑与非发起视图逐项映射端点。首版沿用 internal/text.MapOffset 的端点粘性：
 落在替换范围内（含端点）的旧位置移到插入末尾；前方不动，后方加长度差。
 映射必须顺着 Change.Edits 的执行顺序，最终再校正 Cluster。
 该策略不承担未来多光标、书签或装饰锚点的通用 stickiness。

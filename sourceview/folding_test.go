@@ -9,9 +9,10 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
+	"github.com/golang-gui/goui/gui"
 )
 
 func TestFoldWorkerDiscardsStaleAndDetachedResults(t *testing.T) {
@@ -21,7 +22,7 @@ func TestFoldWorkerDiscardsStaleAndDetachedResults(t *testing.T) {
 	job := &foldingJob{revision: d.model.Revision(), epoch: d.foldGeneration, definition: d.definition, cancel: cancel}
 	q := &foldingQueue{owner: d, busy: true, active: job}
 	d.folding = q
-	if err := d.model.Replace(textedit.Range{}, "x\n"); err != nil {
+	if err := d.model.Replace(TextRange{}, "x\n"); err != nil {
 		t.Fatal(err)
 	}
 	if ctx.Err() != context.Canceled || q.active != nil {
@@ -52,7 +53,7 @@ func TestFoldNotificationReentryPreservesNewDocument(t *testing.T) {
 func foldingFixture(t *testing.T) *SourceView {
 	t.Helper()
 	v := NewSourceView()
-	v.Document().Model().SetText("{\n \"a\": [\n 1,\n 2\n ]\n}\ntail")
+	v.Document().SetText("{\n \"a\": [\n 1,\n 2\n ]\n}\ntail")
 	if err := v.Document().SetLanguage(language.JSON); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestFoldOwnershipVisibilitySelectionAndHistory(t *testing.T) {
 		t.Fatal("nested intent lost")
 	}
 	r, _ := m.LineRange(3)
-	v.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+	v.SetSelection(TextSelection{Anchor: r.Start, Caret: r.Start})
 	if v.FoldingRegions()[1].Collapsed {
 		t.Fatal("program selection stayed hidden")
 	}
@@ -113,21 +114,21 @@ func TestFoldChangeMappingAndBoundaryDeletion(t *testing.T) {
 	v := foldingFixture(t)
 	m := v.document.model
 	v.Fold(1)
-	if err := m.Replace(textedit.Range{}, "before\n"); err != nil {
+	if err := m.Replace(TextRange{}, "before\n"); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.folds) != 2 || !v.folds[1].Collapsed || v.folds[1].StartLine != 2 {
 		t.Fatal("unrelated edit lost fold", v.FoldingRegions())
 	}
 	r, _ := m.LineRange(2)
-	v.SetSelection(textedit.Selection{Anchor: r.End, Caret: r.End})
+	v.SetSelection(TextSelection{Anchor: r.End, Caret: r.End})
 	text := m.Text()
 	if !v.unfoldDeleteBoundary(true) || m.Text() != text {
 		t.Fatal("delete boundary did not only unfold")
 	}
 	v.Fold(2)
 	r, _ = m.LineRange(3)
-	if err := m.Replace(textedit.Range{Start: r.Start, End: r.Start}, "x"); err != nil {
+	if err := m.Replace(TextRange{Start: r.Start, End: r.Start}, "x"); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.hiddenLines) != 0 {
@@ -140,7 +141,7 @@ func TestFoldSnapshotHasTrueDiscontinuousText(t *testing.T) {
 	v.Fold(0)
 	v.LayoutVisible(geometry.Size{Width: 500, Height: 200}, geometry.Point{})
 	info := v.Snapshot()
-	if info.TextEditing.VisibleText != "{" || info.TextEditing.VisibleRange != (textedit.Range{Start: 0, End: 1}) {
+	if info.TextEditing.VisibleText != "{" || info.TextEditing.VisibleRange != (gui.TextRange{Start: 0, End: 1}) {
 		t.Fatal("snapshot invented continuous text", info.TextEditing)
 	}
 	meta := info.Attributes["goui.sourceview"].(map[string]any)
@@ -153,7 +154,7 @@ func TestFoldSnapshotHasTrueDiscontinuousText(t *testing.T) {
 func TestFoldAnalysisPreservesUnchangedVisibleGeometry(t *testing.T) {
 	v, scroll := revealFixture(t)
 	at := v.document.model.Len() - 1
-	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	v.SetSelection(TextSelection{Anchor: at, Caret: at})
 	assertRevealed(t, v, scroll)
 	size, offset, epoch := v.ContentSize(), v.offset, v.layoutEpoch
 	v.acceptFolds([]language.FoldRange{{StartLine: 0, EndLine: 199}})
@@ -183,22 +184,22 @@ func TestFoldMappingUsesSequentialLineChanges(t *testing.T) {
 	const original = "prefix\nx\n{\n one\n two\n}\ntail\nz"
 	for _, tc := range []struct {
 		name  string
-		edits []textedit.Edit
+		edits []TextEdit
 		lines [2]int // Negative means the fold intersects an edit and is removed.
 	}{
-		{"prefix insertion", []textedit.Edit{{Text: "a\nb\n"}}, [2]int{4, 7}},
-		{"same line replacement", []textedit.Edit{{Range: textedit.Range{End: 6}, Text: "p"}}, [2]int{2, 5}},
-		{"prefix deletion", []textedit.Edit{{Range: textedit.Range{End: 7}}}, [2]int{1, 4}},
-		{"header boundary newline", []textedit.Edit{{Range: textedit.Range{Start: 9, End: 9}, Text: "new\n"}}, [2]int{3, 6}},
-		{"header boundary character", []textedit.Edit{{Range: textedit.Range{Start: 9, End: 9}, Text: "x"}}, [2]int{-1, -1}},
-		{"inside fold", []textedit.Edit{{Range: textedit.Range{Start: 12, End: 12}, Text: "\n"}}, [2]int{-1, -1}},
-		{"suffix insertion", []textedit.Edit{{Range: textedit.Range{Start: len(original), End: len(original)}, Text: "\na\nb"}}, [2]int{2, 5}},
-		{"sequential edits", []textedit.Edit{{Text: "a\nb\n"}, {Range: textedit.Range{Start: 4, End: 11}, Text: ""}}, [2]int{3, 6}},
+		{"prefix insertion", []TextEdit{{Text: "a\nb\n"}}, [2]int{4, 7}},
+		{"same line replacement", []TextEdit{{Range: TextRange{End: 6}, Text: "p"}}, [2]int{2, 5}},
+		{"prefix deletion", []TextEdit{{Range: TextRange{End: 7}}}, [2]int{1, 4}},
+		{"header boundary newline", []TextEdit{{Range: TextRange{Start: 9, End: 9}, Text: "new\n"}}, [2]int{3, 6}},
+		{"header boundary character", []TextEdit{{Range: TextRange{Start: 9, End: 9}, Text: "x"}}, [2]int{-1, -1}},
+		{"inside fold", []TextEdit{{Range: TextRange{Start: 12, End: 12}, Text: "\n"}}, [2]int{-1, -1}},
+		{"suffix insertion", []TextEdit{{Range: TextRange{Start: len(original), End: len(original)}, Text: "\na\nb"}}, [2]int{2, 5}},
+		{"sequential edits", []TextEdit{{Text: "a\nb\n"}, {Range: TextRange{Start: 4, End: 11}, Text: ""}}, [2]int{3, 6}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, incremental := range []bool{true, false} {
 				v := NewSourceView()
-				m := v.Document().Model()
+				m := v.Document()
 				m.SetText(original)
 				v.acceptFolds([]language.FoldRange{{StartLine: 2, EndLine: 5}})
 				var splices []highlight.Splice
@@ -215,7 +216,7 @@ func TestFoldMappingUsesSequentialLineChanges(t *testing.T) {
 				if !incremental {
 					splices = nil // Analysis was still rebuilding: use exact fallback.
 				}
-				v.mapFolds(textedit.Change{Revision: m.Revision(), Edits: tc.edits}, splices)
+				v.mapFolds(TextChange{Revision: m.Revision(), Edits: tc.edits}, splices)
 				if tc.lines[0] < 0 {
 					if len(v.folds) != 0 {
 						t.Fatal("intersected fold survived", v.folds)
@@ -226,7 +227,7 @@ func TestFoldMappingUsesSequentialLineChanges(t *testing.T) {
 					t.Fatalf("incremental=%v: wanted lines %v, got %v", incremental, tc.lines, v.folds)
 				}
 				r := v.folds[0]
-				text, err := m.Slice(textedit.Range{Start: r.Start, End: r.End})
+				text, err := m.Slice(TextRange{Start: r.Start, End: r.End})
 				if err != nil || text != "{\n one\n two\n}" || m.LineAt(r.Start) != r.StartLine || m.LineAt(r.End) != r.EndLine {
 					t.Fatal("mapped line and byte endpoints disagree", r, text, err)
 				}
@@ -238,13 +239,13 @@ func TestFoldMappingUsesSequentialLineChanges(t *testing.T) {
 func TestFoldMappingRetainsCollapsedStateThroughHistory(t *testing.T) {
 	v := foldingFixture(t)
 	m := v.document.model
-	if err := m.ReplaceAtomic(textedit.Range{}, "guard\n"); err != nil {
+	if err := m.ReplaceAtomic(TextRange{}, "guard\n"); err != nil {
 		t.Fatal(err)
 	}
 	v.document.engine.Advance(time.Time{})
 	v.Fold(2)
 	original := slices.Clone(v.folds)
-	if err := m.ReplaceAtomic(textedit.Range{}, "first\nsecond\n"); err != nil {
+	if err := m.ReplaceAtomic(TextRange{}, "first\nsecond\n"); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.folds) != 2 || v.folds[0].StartLine != 3 || v.folds[1].StartLine != 4 || !v.folds[1].Collapsed {
@@ -273,10 +274,10 @@ func BenchmarkFoldMapping(b *testing.B) {
 			for i := range folds {
 				folds[i] = folding.Entry{Region: folding.Region{StartLine: 1 + i*3, EndLine: 3 + i*3}, Start: 7 + i*10, End: 16 + i*10}
 			}
-			if err := m.ReplaceAtomic(textedit.Range{}, "new\n"); err != nil {
+			if err := m.ReplaceAtomic(TextRange{}, "new\n"); err != nil {
 				b.Fatal(err)
 			}
-			c := textedit.Change{Revision: m.Revision(), Edits: []textedit.Edit{{Text: "new\n"}}}
+			c := TextChange{Revision: m.Revision(), Edits: []TextEdit{{Text: "new\n"}}}
 			var splices []highlight.Splice
 			if incremental {
 				splices = []highlight.Splice{{Removed: 1, Added: 2}}
@@ -314,11 +315,11 @@ func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
 		t.Fatal(err)
 	}
 	ranges[0].EndLine = 1
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	if !v.Fold(1) {
 		t.Fatal("未折叠")
 	}
-	b.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+	b.SetSelection(TextSelection{Anchor: 10, Caret: 10})
 	revision, definition := d.model.Revision(), d.definition
 	if ok, err := d.SetFolds(revision, f); !ok || err != nil {
 		t.Fatal(ok, err)
@@ -338,7 +339,7 @@ func TestExternalFoldsIsolationAndLifetime(t *testing.T) {
 	if d.foldSnapshot != f {
 		t.Fatal("非法结果覆盖旧值")
 	}
-	if err := d.model.Replace(textedit.Range{}, "prefix\n"); err != nil {
+	if err := d.model.Replace(TextRange{}, "prefix\n"); err != nil {
 		t.Fatal(err)
 	}
 	if !d.externalFolds || len(v.folds) != 2 || v.folds[1].StartLine != 2 || !v.folds[1].Collapsed {
@@ -380,11 +381,11 @@ func TestNewFoldsCanonicalAndCrossing(t *testing.T) {
 func TestFoldIntakeCancelledAndSelectionProtected(t *testing.T) {
 	v := foldingFixture(t)
 	d := v.document
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.Fold(0)
 	f, _ := NewFolds(d.model.Text(), []FoldRange{{StartLine: 0, EndLine: 5}})
 	d.SetFolds(d.model.Revision(), f)
-	v.SetSelection(textedit.Selection{Anchor: 10, Caret: 10})
+	v.SetSelection(TextSelection{Anchor: 10, Caret: 10})
 	finishFoldIntake(t, v)
 	if v.folds[0].Collapsed {
 		t.Fatal("隐藏了新选区")
@@ -404,9 +405,9 @@ func TestFoldBatchMappingAndUndo(t *testing.T) {
 	d.model.SetText(original)
 	observe(t, v)
 	v.acceptFolds([]language.FoldRange{{StartLine: 2, EndLine: 4}})
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.Fold(2)
-	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "AA\nA"}, {Range: textedit.Range{Start: 2, End: 3}, Text: "B\nB"}}, textedit.BatchOptions{}); err != nil {
+	if err := d.model.ApplyBatch([]TextEdit{{Range: TextRange{Start: 0, End: 1}, Text: "AA\nA"}, {Range: TextRange{Start: 2, End: 3}, Text: "B\nB"}}, textcore.BatchOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.folds) != 1 || v.folds[0].StartLine != 4 || v.folds[0].EndLine != 6 || v.folds[0].Start != 9 || !v.folds[0].Collapsed {
@@ -416,7 +417,7 @@ func TestFoldBatchMappingAndUndo(t *testing.T) {
 	if d.model.Text() != original || len(v.folds) != 1 || v.folds[0].StartLine != 2 || v.folds[0].Start != 4 || !v.folds[0].Collapsed {
 		t.Fatal("批量撤销映射", v.folds)
 	}
-	if err := d.model.ApplyBatch([]textedit.Edit{{Range: textedit.Range{Start: 0, End: 1}, Text: "prefix"}, {Range: textedit.Range{Start: 6, End: 7}, Text: "body"}}, textedit.BatchOptions{}); err != nil {
+	if err := d.model.ApplyBatch([]TextEdit{{Range: TextRange{Start: 0, End: 1}, Text: "prefix"}, {Range: TextRange{Start: 6, End: 7}, Text: "body"}}, textcore.BatchOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.folds) != 0 {
@@ -427,12 +428,12 @@ func TestFoldBatchMappingAndUndo(t *testing.T) {
 func TestExternalFoldClearWaitsForPreedit(t *testing.T) {
 	v := foldingFixture(t)
 	d := v.document
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.Fold(1)
 	f, _ := NewFolds(d.model.Text(), []FoldRange{{StartLine: 0, EndLine: 5}, {StartLine: 1, EndLine: 4}})
 	d.SetFolds(d.model.Revision(), f)
 	finishFoldIntake(t, v)
-	v.projection = textedit.NewProjection(d.model, v.Selection())
+	v.projection = textcore.NewProjection(d.model, v.Selection())
 	d.SetFolds(d.model.Revision(), nil)
 	if len(v.hiddenLines) == 0 || !v.foldClear {
 		t.Fatal("预编辑期间改变了隐藏映射")

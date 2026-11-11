@@ -24,7 +24,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/style"
@@ -141,7 +140,7 @@ func main() {
 	done := false
 	deadline := time.Now().Add(30 * time.Second)
 	started := time.Now()
-	selected := textedit.Selection{Anchor: 1, Caret: 4}
+	selected := source.TextSelection{Anchor: 1, Caret: 4}
 	var oldWidth, oldHeight, beforeWheel float32
 	timer := app.NewTimer()
 	defer timer.Stop()
@@ -197,8 +196,8 @@ func main() {
 			check(!ok, "关闭后仍暴露地图")
 			v.SetShowMinimap(true)
 			v.SetWrapMode(source.WrapWordChar)
-			doc.Model().SetText(strings.Repeat("{\"name\":\"value\",\"n\":1234},", 20000))
-			v.SetSelection(textedit.Selection{Anchor: doc.Model().Len() / 2, Caret: doc.Model().Len() / 2})
+			doc.SetText(strings.Repeat("{\"name\":\"value\",\"n\":1234},", 20000))
+			v.SetSelection(source.TextSelection{Anchor: doc.Len() / 2, Caret: doc.Len() / 2})
 			v.RevealSelection()
 			win.SetFocusedWidget(v)
 		case 6:
@@ -208,7 +207,7 @@ func main() {
 			log.Printf("long-line CommitText: %s", time.Since(start))
 			selected = v.Selection()
 		case 7:
-			check(doc.Model().Len() == len(`{"name":"value","n":1234},`)*20000+1 && v.Selection() == selected, "长行编辑或选区异常")
+			check(doc.Len() == len(`{"name":"value","n":1234},`)*20000+1 && v.Selection() == selected, "长行编辑或选区异常")
 			click(geometry.Point{X: info.Bounds.X + 30, Y: info.Bounds.Y + info.Bounds.Height*.8})
 		case 8:
 			check(scroll.Snapshot().ScrollY > 0 && v.Selection() == selected, "长折行地图导航改变了选区")

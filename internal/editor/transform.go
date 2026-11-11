@@ -6,13 +6,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
-func ReindentPlan(ctx context.Context, text string, s textedit.Selection, first, last int, results []language.LineIndent) (Plan, error) {
+func ReindentPlan(ctx context.Context, text string, s textcore.Selection, first, last int, results []language.LineIndent) (Plan, error) {
 	p := Plan{Before: s, After: s}
-	m := textedit.NewModel(text)
+	m := textcore.NewModel(text)
 	previous := first - 1
 	for _, r := range results {
 		if err := ctx.Err(); err != nil {
@@ -25,16 +25,16 @@ func ReindentPlan(ctx context.Context, text string, s textedit.Selection, first,
 		line, _ := m.LineRange(r.Line)
 		n := len(text[line.Start:line.End]) - len(strings.TrimLeft(text[line.Start:line.End], " \t"))
 		if text[line.Start:line.Start+n] != r.Text {
-			p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: line.Start, End: line.Start + n}, Text: r.Text})
+			p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: line.Start, End: line.Start + n}, Text: r.Text})
 		}
 	}
-	p.After = textedit.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
+	p.After = textcore.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
 	return p, nil
 }
 
-func CleanupPlan(ctx context.Context, text string, s textedit.Selection, kind string) (Plan, error) {
+func CleanupPlan(ctx context.Context, text string, s textcore.Selection, kind string) (Plan, error) {
 	p := Plan{Before: s, After: s}
-	m := textedit.NewModel(text)
+	m := textcore.NewModel(text)
 	first, last, err := SelectedLines(m, s)
 	if err != nil {
 		return p, err
@@ -54,7 +54,7 @@ func CleanupPlan(ctx context.Context, text string, s textedit.Selection, kind st
 		if kind == "trim" {
 			n := len(strings.TrimRight(text[line.Start:line.End], " \t"))
 			if line.Start+n < line.End {
-				p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: line.Start + n, End: line.End}})
+				p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: line.Start + n, End: line.End}})
 			}
 		} else if row < last {
 			next, _ := m.LineRange(row + 1)
@@ -63,15 +63,15 @@ func CleanupPlan(ctx context.Context, text string, s textedit.Selection, kind st
 			if line.End > line.Start && next.Start+n < next.End && text[line.End-1] != ' ' && text[line.End-1] != '\t' {
 				sep = " "
 			}
-			p.Edits = append(p.Edits, textedit.Edit{Range: textedit.Range{Start: line.End, End: next.Start + n}, Text: sep})
+			p.Edits = append(p.Edits, textcore.Edit{Range: textcore.Range{Start: line.End, End: next.Start + n}, Text: sep})
 		}
 	}
-	p.After = textedit.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
+	p.After = textcore.Selection{Anchor: MapPosition(s.Anchor, p.Edits), Caret: MapPosition(s.Caret, p.Edits)}
 	return p, nil
 }
 
 func ShiftedPaste(text, prefix string, o IndentOptions) string {
-	text = textedit.Normalize(text)
+	text = textcore.Normalize(text)
 	lines := strings.Split(text, "\n")
 	if len(lines) < 2 {
 		return text
@@ -122,7 +122,7 @@ func ShiftedPaste(text, prefix string, o IndentOptions) string {
 }
 
 func ReindentedPaste(ctx context.Context, text, prefix string, o IndentOptions, l *language.Language) (string, error) {
-	text = textedit.Normalize(text)
+	text = textcore.Normalize(text)
 	t := l.Tokenizer()
 	if t == nil {
 		return text, nil
@@ -171,7 +171,7 @@ func ReindentedPaste(ctx context.Context, text, prefix string, o IndentOptions, 
 	return ShiftedPaste(text, prefix, o), nil
 }
 
-func CasePlan(ctx context.Context, text string, s textedit.Selection, r textedit.Range, upper bool) (Plan, error) {
+func CasePlan(ctx context.Context, text string, s textcore.Selection, r textcore.Range, upper bool) (Plan, error) {
 	p := Plan{Before: s, After: s}
 	convert := strings.ToUpper
 	if !upper {
@@ -181,15 +181,15 @@ func CasePlan(ctx context.Context, text string, s textedit.Selection, r textedit
 	if result == text {
 		return p, ctx.Err()
 	}
-	p.Edits = []textedit.Edit{{Range: r, Text: result}}
+	p.Edits = []textcore.Edit{{Range: r, Text: result}}
 	if s.Anchor != s.Caret {
-		p.After = textedit.Selection{Anchor: r.Start, Caret: r.Start + len(result)}
+		p.After = textcore.Selection{Anchor: r.Start, Caret: r.Start + len(result)}
 		if s.Anchor > s.Caret {
 			p.After.Anchor, p.After.Caret = p.After.Caret, p.After.Anchor
 		}
 	} else {
 		at := r.Start + len(convert(text[:s.Caret-r.Start]))
-		p.After = textedit.Selection{Anchor: at, Caret: at}
+		p.After = textcore.Selection{Anchor: at, Caret: at}
 	}
 	return p, ctx.Err()
 }

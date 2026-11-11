@@ -4,11 +4,11 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/resource"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/mlang"
 )
 
@@ -129,7 +129,7 @@ func (v *SourceView) runCommand(c Command) {
 	case CommandDeleteLines:
 		v.report(v.DeleteLines())
 	case CommandSelectAll:
-		v.SetSelection(textedit.Selection{Caret: v.document.model.Len()})
+		v.SetSelection(TextSelection{Caret: v.document.model.Len()})
 	}
 }
 
@@ -172,7 +172,7 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	if pointer {
 		if !v.selectionContains(point) {
 			pos := v.hit(point)
-			v.setSelection(textedit.Selection{Anchor: pos.Offset, Caret: pos.Offset}, pos.Upstream, false)
+			v.setSelection(TextSelection{Anchor: pos.Offset, Caret: pos.Offset}, pos.Upstream, false)
 		}
 	} else if caret, ok := v.caretRect(); ok {
 		point = geometry.Point{X: caret.X, Y: caret.Y + caret.Height}
@@ -265,13 +265,13 @@ func (v *SourceView) selectionContains(point geometry.Point) bool {
 		return false
 	}
 	local := geometry.Point{X: point.X - v.gutter - padding + v.offset.X, Y: point.Y + v.offset.Y - padding - v.paragraphTop(row)}
-	for _, rect := range p.Geometry.Selection(textedit.Range{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
+	for _, rect := range p.Geometry.Selection(TextRange{Start: max(s.Start, r.Start) - r.Start, End: min(s.End, r.End) - r.Start}) {
 		if view.ContainsPoint(rect, local) {
 			return true
 		}
 	}
 	if s.End > r.End && row+1 < v.document.model.LineCount() {
-		rect := p.Geometry.Caret(textedit.Position{Offset: r.End - r.Start, Upstream: true})
+		rect := p.Geometry.Caret(textcore.Position{Offset: r.End - r.Start, Upstream: true})
 		rect.Width = v.spaceWidth
 		return view.ContainsPoint(rect, local)
 	}

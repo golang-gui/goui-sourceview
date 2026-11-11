@@ -27,7 +27,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/style"
@@ -78,7 +77,7 @@ func main() {
 	var result analysis.Result
 	service := analysis.NewService(app.Post, func(r analysis.Result, err error) {
 		must(err)
-		check(r.Snapshot.DocumentID == doc.ID() && r.Snapshot.Revision == doc.Model().Revision(), "过期结果进入 GUI")
+		check(r.Snapshot.DocumentID == doc.ID() && r.Snapshot.Revision == doc.Revision(), "过期结果进入 GUI")
 		applied, err := doc.SetHighlights(r.Snapshot.Revision, r.Highlights)
 		must(err)
 		check(applied, "当前颜色快照未应用")
@@ -114,10 +113,10 @@ func main() {
 	v.SetCompletionProvider(provider)
 	v.ConnectError(func(err error) { panic(err) })
 	submit := func(delay time.Duration) {
-		service.Submit(analysis.Snapshot{DocumentID: doc.ID(), Revision: doc.Model().Revision(), Text: doc.Model().Text()}, delay)
+		service.Submit(analysis.Snapshot{DocumentID: doc.ID(), Revision: doc.Revision(), Text: doc.Text()}, delay)
 	}
 	analysisDelay := 150 * time.Millisecond
-	v.ConnectChange(func(textedit.Change) { submit(analysisDelay) })
+	v.ConnectChange(func(source.TextChange) { submit(analysisDelay) })
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
 	scroll.SetChild(v)
@@ -137,14 +136,14 @@ func main() {
 		must(win.DispatchEvent(events.KeyEvent{EventType: events.KeyUp, Key: k}))
 	}
 	replace := func(old, text string) {
-		at := strings.Index(doc.Model().Text(), old)
+		at := strings.Index(doc.Text(), old)
 		check(at >= 0, "找不到替换片段")
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at + len(old)})
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at + len(old)})
 		must(win.CommitText(text))
 	}
 	completeMember := func() {
-		at := strings.Index(doc.Model().Text(), "println(person.") + len("println(person.")
-		v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		at := strings.Index(doc.Text(), "println(person.") + len("println(person.")
+		v.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 		key(events.KeyF2)
 	}
 	labels := func() []string {
@@ -186,7 +185,7 @@ func main() {
 	if *dark {
 		pink, blue = color.NRGBA{0xf0, 0x7a, 0xc4, 255}, color.NRGBA{0x69, 0xa7, 0xff, 255}
 	}
-	ready := func() bool { return published > 0 && result.Snapshot.Revision == doc.Model().Revision() }
+	ready := func() bool { return published > 0 && result.Snapshot.Revision == doc.Revision() }
 	stage, targetPublications := 0, 0
 	var kept gui.Popover
 	done := false
@@ -217,7 +216,7 @@ func main() {
 			}
 			check(len(items) == 2 && items[0] == "Age" && items[1] == "Name", "成员补全不是类型检查结果")
 			key(events.KeyEnter)
-			check(strings.Contains(doc.Model().Text(), "println(person.Age)"), "确认补全没有替换整个标识符")
+			check(strings.Contains(doc.Text(), "println(person.Age)"), "确认补全没有替换整个标识符")
 		case 3:
 			if !ready() {
 				return
@@ -243,9 +242,9 @@ func main() {
 			must(v.RefreshCompletion())
 			must(v.RefreshCompletion()) // 合并取消中的请求，只保留最新一项。
 			check(role(kept.Widget().Snapshot(), "completion-list").Attributes["sourceview.completion.pending"] == true, "刷新未标记等待状态")
-			before := doc.Model().Text()
+			before := doc.Text()
 			key(events.KeyEnter)
-			check(doc.Model().Text() == before, "等待时提交了旧候选")
+			check(doc.Text() == before, "等待时提交了旧候选")
 			analysisDelay = 150 * time.Millisecond
 		case 6:
 			if len(labels()) == 0 {
@@ -254,7 +253,7 @@ func main() {
 			check(len(win.Popovers()) == 1 && win.Popovers()[0] == kept, "刷新重建了弹窗")
 			check(len(labels()) == 1 && labels()[0] == "Score", "外部索引更新没有替换候选")
 			key(events.KeyEnter)
-			check(strings.Contains(doc.Model().Text(), "println(person.Score)"), "刷新没有保留已选中的 Score")
+			check(strings.Contains(doc.Text(), "println(person.Score)"), "刷新没有保留已选中的 Score")
 			filtered.Store(false)
 			replace("42", `"done"`)
 			replace(`"done"`, "99")

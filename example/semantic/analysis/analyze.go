@@ -16,7 +16,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 const MaxBytes = 256 * 1024
@@ -160,7 +159,7 @@ func Analyze(ctx context.Context, s Snapshot) (Result, error) {
 	sort.Slice(out.Spans, func(i, j int) bool { return out.Spans[i].Start < out.Spans[j].Start })
 	spans := make([]source.HighlightSpan, len(out.Spans))
 	for i, s := range out.Spans {
-		spans[i] = source.HighlightSpan{Range: textedit.Range{Start: s.Start, End: s.End}, Kind: s.Kind}
+		spans[i] = source.HighlightSpan{Range: source.TextRange{Start: s.Start, End: s.End}, Kind: s.Kind}
 	}
 	var folds []source.FoldRange
 	if c.file != nil {

@@ -1,7 +1,7 @@
 # 文档换行格式与末尾换行
 
-本专题描述 `document.go` 的导入识别、输出格式和分块导出。文本编辑仍使用
-GOUI v0.3.0 的 UTF-8/LF 模型；没有修改 GOUI 或原生排版接口。
+本专题描述 `document.go` 的导入识别、输出格式和分块导出。文本编辑使用
+SourceView 自有的 UTF-8/LF 模型；所有权见 [独立编辑内核](DesignEditorCore.md)，原生排版接口不变。
 
 ## 模型与格式的边界
 
@@ -33,7 +33,7 @@ CR 作为独立格式保留，避免旧文本载入后必然改成 LF。
 
 ## 导入与混合换行
 
-NewDocument 在调用 textedit.NewModel 之前识别原文：
+NewDocument 在规范化正文、建立自有模型之前识别原文：
 
 - CRLF 算一次，不重复计入独立 LF 或 CR。
 - 选择出现次数最多的格式；最多次数相同时选择其中最先出现的格式。
@@ -44,8 +44,8 @@ NewDocument 在调用 textedit.NewModel 之前识别原文：
 - 模型继续替换非法 UTF-8 为 U+FFFD，CR/CRLF 归一成 LF；其他字符不因换行识别被删除。
   因此非法 UTF-8 输入也不承诺原始字节保真。
 
-NewDocumentWithModel 接收已经规范化的模型，原格式无法恢复，默认 LF。
-调用方知道原格式时显式 SetLineEnding。之后通过 Model.SetText 重新装载或插入原始文本，
+文档不接受外部模型。调用方只持有规范化文本、但知道原格式时显式 SetLineEnding。
+之后通过 Document.SetText 重新装载或插入原始文本，
 不会重新探测文档格式；需要重新识别时由应用在规范化前调用 DetectLineEnding 并设置。
 普通粘贴、输入和撤销继续使用当前输出格式，不被插入文本的局部换行习惯切换。
 
@@ -71,11 +71,11 @@ doc := sourceview.NewDocument("a\r\nb\r\n")
 var out bytes.Buffer
 n, err := doc.WriteTo(&out)
 // n == 6, err == nil, out.String() == "a\r\nb\r\n"
-// doc.Model().Text() == "a\nb\n"
+// doc.Text() == "a\nb\n"
 ```
 
 WriteTo 实现 io.WriterTo，逐块读取最多 32 KiB 的规范化文本，读取边界不拆 UTF-8 rune；
-CRLF 编码后的单块最多 64 KiB。不会先调用 Model.Text 再生成完整的 CRLF 副本。
+CRLF 编码后的单块最多 64 KiB。不会先调用 Document.Text 再生成完整的 CRLF 副本。
 返回值是实际写出的编码后字节数；空文档返回 `(0, nil)`，不调用 writer。
 短写且无底层错误返回 io.ErrShortWrite；底层错误原样返回，不重复发错误信号。
 
@@ -84,8 +84,8 @@ CRLF 编码后的单块最多 64 KiB。不会先调用 Model.Text 再生成完�
 writer 已写出的前缀不能撤回，WriteTo 不提供原子文件替换；应用负责文件打开、关闭、
 临时文件替换策略和错误处理。它是同步序列化，不承诺异步磁盘 I/O 或不可变快照。
 
-Model.Text/Slice 继续返回规范化内容。需要按文档格式保存时使用 WriteTo；
-不能把 Model.Text 当作自动保留原换行的保存接口。
+Document.Text/Slice 继续返回规范化内容。需要按文档格式保存时使用 WriteTo；
+不能把 Document.Text 当作自动保留原换行的保存接口。
 示例状态栏显示输出格式及编码后的 UTF-8 字节数，不新增保存按钮或自动写文件。
 
 ## 格式配置与编辑历史

@@ -27,7 +27,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/basic"
@@ -142,11 +141,11 @@ func main() {
 	}{{"ordinary", 0, 128, true}, {"paging boundary", 65530, 12, false}, {"paged", 80000, 16, true}} {
 		var doc *source.Document
 		var before string
-		var selection textedit.Selection
+		var selection source.TextSelection
 		var revision uint64
 		var undo bool
 		unchanged := func() {
-			check(v.Selection() == selection && doc.Model().Revision() == revision && doc.Model().Text() == before && doc.Model().CanUndo() == undo, "scroll changed source, selection or history")
+			check(v.Selection() == selection && doc.Revision() == revision && doc.Text() == before && doc.CanUndo() == undo, "scroll changed source, selection or history")
 		}
 		origin := func() {
 			unchanged()
@@ -158,7 +157,7 @@ func main() {
 			doc = source.NewDocument(strings.Repeat("x", sample.seed))
 			v.SetDocument(doc)
 			v.SetShowLineNumbers(sample.numbers)
-			v.SetSelection(textedit.Selection{Anchor: sample.seed, Caret: sample.seed})
+			v.SetSelection(source.TextSelection{Anchor: sample.seed, Caret: sample.seed})
 		})
 		// Every character is a separate normal text commit, with real frame
 		// work between commits. The first fixture crosses the viewport edge.
@@ -166,10 +165,10 @@ func main() {
 			next(func() { must(win.CommitText("x")) })
 		}
 		settle(func() {
-			before = doc.Model().Text()
+			before = doc.Text()
 			selection = v.Selection()
-			revision = doc.Model().Revision()
-			undo = doc.Model().CanUndo()
+			revision = doc.Revision()
+			undo = doc.CanUndo()
 			check(len(before) == sample.seed+sample.typed && selection.Caret == len(before), "typing did not reach line end")
 			check(hbar(scroll) != nil && scroll.ScrollX() > 0, "horizontal bar did not appear")
 		})
@@ -210,13 +209,13 @@ func main() {
 		settle(func() { unchanged(); check(scroll.ScrollX() > 0, "thumb did not scroll right") })
 		drag(true)
 		settle(origin)
-		next(func() { doc.Model().BreakUndoGroup(); must(win.CommitText("y")) })
+		next(func() { doc.BreakUndoGroup(); must(win.CommitText("y")) })
 		settle(func() {
-			check(scroll.ScrollX() > 0 && v.Selection().Caret == len(before)+1 && doc.Model().Text() == before+"y", "typing after manual scroll did not reveal current caret")
+			check(scroll.ScrollX() > 0 && v.Selection().Caret == len(before)+1 && doc.Text() == before+"y", "typing after manual scroll did not reveal current caret")
 			key(events.KeyZ, primary)
 		})
 		settle(func() {
-			check(doc.Model().Text() == before && v.Selection() == selection, "typed character undo changed selection/history")
+			check(doc.Text() == before && v.Selection() == selection, "typed character undo changed selection/history")
 			log.Printf("PASS horizontal %s: typing, real thumb drag left/right/left, stable origin, source/history and renewed reveal", sample.name)
 		})
 	}

@@ -7,23 +7,23 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func TestCleanupPlansAndUndo(t *testing.T) {
 	for _, tc := range []struct {
 		text, kind, want string
-		s                textedit.Selection
+		s                TextSelection
 	}{
-		{"one\n  two\nthree", "join", "one two\nthree", textedit.Selection{}},
-		{"one\n  two\nthree", "join", "one two three", textedit.Selection{Anchor: 15}},
-		{"one\n  two\nthree", "join", "one two\nthree", textedit.Selection{Caret: 10}},
-		{"a \t\nb\u00a0\t\n", "trim", "a\nb\u00a0\n", textedit.Selection{}},
-		{"a \nb \nc ", "trim", "a\nb \nc ", textedit.Selection{Caret: 3}},
-		{"one", "join", "one", textedit.Selection{}},
+		{"one\n  two\nthree", "join", "one two\nthree", TextSelection{}},
+		{"one\n  two\nthree", "join", "one two three", TextSelection{Anchor: 15}},
+		{"one\n  two\nthree", "join", "one two\nthree", TextSelection{Caret: 10}},
+		{"a \t\nb\u00a0\t\n", "trim", "a\nb\u00a0\n", TextSelection{}},
+		{"a \nb \nc ", "trim", "a\nb \nc ", TextSelection{Caret: 3}},
+		{"one", "join", "one", TextSelection{}},
 	} {
-		m := textedit.NewModel(tc.text)
+		m := textcore.NewModel(tc.text)
 		p, err := editor.CleanupPlan(context.Background(), tc.text, tc.s, tc.kind)
 		if err != nil {
 			t.Fatal(err)
@@ -46,7 +46,7 @@ func TestCleanupPlansAndUndo(t *testing.T) {
 }
 func TestReindentPlanValidatesBeforeMutation(t *testing.T) {
 	text := "{\n\"a\": 1\n}"
-	s := textedit.Selection{Anchor: len(text)}
+	s := TextSelection{Anchor: len(text)}
 	for _, bad := range [][]language.LineIndent{{{Line: 1, Text: "x"}}, {{Line: 1, Text: "\n"}}, {{Line: 1, Text: " "}, {Line: 1, Text: "  "}}, {{Line: 3, Text: " "}}, {{Line: -1, Text: " "}}} {
 		if _, err := editor.ReindentPlan(context.Background(), text, s, 0, 2, bad); err == nil {
 			t.Fatal("未拒绝非法结果", bad)
@@ -56,7 +56,7 @@ func TestReindentPlanValidatesBeforeMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := textedit.NewModel(text)
+	m := textcore.NewModel(text)
 	if err = p.Apply(m, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestStructuralSelectionRoundTrip(t *testing.T) {
 		d.engine.Advance(time.Time{})
 	}
 	at := strings.Index(text, "alpha") + 2
-	v.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+	v.SetSelection(TextSelection{Anchor: at, Caret: at})
 	original := v.Selection()
 	wants := []string{"alphaBeta", `"alphaBeta"`, `"alphaBeta", 2`, `["alphaBeta", 2]`, `"items": ["alphaBeta", 2]`, text}
 	for _, want := range wants {
@@ -140,7 +140,7 @@ func TestStructuralSelectionQuotedProperty(t *testing.T) {
 	for d.engine.Pending() {
 		d.engine.Advance(time.Time{})
 	}
-	v.SetSelection(textedit.Selection{Anchor: 4, Caret: 4})
+	v.SetSelection(TextSelection{Anchor: 4, Caret: 4})
 	for _, want := range []string{"alphaBeta", `"alphaBeta"`} {
 		if !v.ExpandSelection() {
 			t.Fatal("没有扩大属性选区")
@@ -162,7 +162,7 @@ func TestTagSelectionAndReverseTrail(t *testing.T) {
 	for d.engine.Pending() {
 		d.engine.Advance(time.Time{})
 	}
-	v.SetSelection(textedit.Selection{Anchor: 13, Caret: 10})
+	v.SetSelection(TextSelection{Anchor: 13, Caret: 10})
 	original := v.Selection()
 	for _, want := range []string{"hello", "<b>hello</b>", text} {
 		if !v.ExpandSelection() {
@@ -203,7 +203,7 @@ func TestBuiltinNewlineUsesLexicalState(t *testing.T) {
 			for d.engine.Pending() {
 				d.engine.Advance(time.Time{})
 			}
-			v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
+			v.SetSelection(TextSelection{Anchor: len(tc.text), Caret: len(tc.text)})
 			if err := v.newline(); err != nil {
 				t.Fatal(err)
 			}

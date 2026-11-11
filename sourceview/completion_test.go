@@ -11,36 +11,35 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // 只有调用方明确传入当前会话的词内键盘移动才能保留弹窗；旧结果在刷新前不能提交。
 func TestCompletionSelectionRetentionAndReentry(t *testing.T) {
 	for _, tc := range []struct {
 		name                    string
-		selection               textedit.Selection
+		selection               TextSelection
 		ordinary, reenter, keep bool
 	}{
-		{name: "left", selection: textedit.Selection{Anchor: 1, Caret: 1}, keep: true},
-		{name: "word start", selection: textedit.Selection{}, keep: true},
-		{name: "word end", selection: textedit.Selection{Anchor: 4, Caret: 4}, keep: true},
-		{name: "outside", selection: textedit.Selection{Anchor: 5, Caret: 5}},
-		{name: "selection", selection: textedit.Selection{Caret: 1}},
-		{name: "explicit setter", selection: textedit.Selection{Anchor: 1, Caret: 1}, ordinary: true},
-		{name: "callback setter", selection: textedit.Selection{Anchor: 1, Caret: 1}, reenter: true},
+		{name: "left", selection: TextSelection{Anchor: 1, Caret: 1}, keep: true},
+		{name: "word start", selection: TextSelection{}, keep: true},
+		{name: "word end", selection: TextSelection{Anchor: 4, Caret: 4}, keep: true},
+		{name: "outside", selection: TextSelection{Anchor: 5, Caret: 5}},
+		{name: "selection", selection: TextSelection{Caret: 1}},
+		{name: "explicit setter", selection: TextSelection{Anchor: 1, Caret: 1}, ordinary: true},
+		{name: "callback setter", selection: TextSelection{Anchor: 1, Caret: 1}, reenter: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := NewSourceView()
 			observe(t, v)
 			v.document.model.SetText("word tail")
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 			c, _ := v.completionContext(true)
 			closed := 0
 			s := &completionSession{state: v.operationState(), definition: c.Definition, explicit: true, range_: c.Range, items: []Completion{{Label: "worker", Text: "worker"}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() { closed++ }}}
 			v.completion = s
 			t.Cleanup(v.closeCompletion)
 			if tc.reenter {
-				v.ConnectSelection(func(textedit.Selection) { v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3}) })
+				v.ConnectSelection(func(TextSelection) { v.SetSelection(TextSelection{Anchor: 3, Caret: 3}) })
 			}
 			if tc.ordinary {
 				v.SetSelection(tc.selection)
@@ -81,7 +80,7 @@ func TestLanguageAndDocumentCompletions(t *testing.T) {
 			_ = v.document.SetLanguage(tt.id)
 			observe(t, v)
 			v.document.engine.Advance(time.Time{})
-			v.SetSelection(textedit.Selection{Anchor: tt.at, Caret: tt.at})
+			v.SetSelection(TextSelection{Anchor: tt.at, Caret: tt.at})
 			c, ok := v.completionContext(false)
 			if !ok || c.Prefix != tt.prefix {
 				t.Fatal(c, ok)
@@ -105,10 +104,10 @@ func TestCompletionCloseCallbackCannotApplyStaleRange(t *testing.T) {
 	v := NewSourceView()
 	observe(t, v)
 	v.document.model.SetText("tr")
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	original := v.document
 	replacement := NewDocument("keep")
-	s := &completionSession{state: v.operationState(), range_: textedit.Range{Start: 0, End: 2}, items: []Completion{{Text: "true"}}, list: &controls.CompletionList{}}
+	s := &completionSession{state: v.operationState(), range_: TextRange{Start: 0, End: 2}, items: []Completion{{Text: "true"}}, list: &controls.CompletionList{}}
 	s.popup = closingPopup{onClose: func() { v.SetDocument(replacement) }}
 	v.completion = s
 	if err := v.acceptCompletion(s, 0); err != ErrOperationChanged {
@@ -122,16 +121,16 @@ func TestCompletionCloseCallbackCannotApplyStaleRange(t *testing.T) {
 func TestCompletionReplacesWholeWordAndBoundsResults(t *testing.T) {
 	v := NewSourceView()
 	v.document.model.SetText("alpha tail")
-	v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 	c, ok := v.completionContext(true)
-	if !ok || c.Prefix != "al" || c.Range != (textedit.Range{Start: 0, End: 5}) {
+	if !ok || c.Prefix != "al" || c.Range != (TextRange{Start: 0, End: 5}) {
 		t.Fatal(c, ok)
 	}
 	items := normalizeCompletions([]Completion{{Label: "alpha"}, {Label: "alpha"}, {Label: "alpine"}, {Label: "al\nbad"}, {Label: "z"}}, c)
 	if len(items) != 2 || items[0].Text != "alpha" || items[1].Text != "alpine" {
 		t.Fatal(items)
 	}
-	v.SetSelection(textedit.Selection{Caret: 2})
+	v.SetSelection(TextSelection{Caret: 2})
 	if _, ok := v.completionContext(true); ok {
 		t.Fatal("selection offered completion")
 	}
@@ -162,7 +161,7 @@ func TestConfigurationAndShellCompletions(t *testing.T) {
 		_ = v.document.SetLanguage(tc.id)
 		observe(t, v)
 		v.document.engine.Advance(time.Time{})
-		v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
+		v.SetSelection(TextSelection{Anchor: len(tc.text), Caret: len(tc.text)})
 		c, ok := v.completionContext(true)
 		if !ok {
 			t.Fatal(tc)
@@ -183,7 +182,7 @@ func TestConfigurationAndShellCompletions(t *testing.T) {
 		_ = v.document.SetLanguage(tc.id)
 		observe(t, v)
 		v.document.engine.Advance(time.Time{})
-		v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
+		v.SetSelection(TextSelection{Anchor: len(tc.text), Caret: len(tc.text)})
 		c, ok := v.completionContext(true)
 		if !ok {
 			t.Fatal(tc)
@@ -217,11 +216,11 @@ func TestCompletionEditsAndHistory(t *testing.T) {
 	observe(t, v)
 	m := v.document.model
 	m.SetText("use\nfo tail")
-	before := textedit.Selection{Anchor: 6, Caret: 6}
+	before := TextSelection{Anchor: 6, Caret: 6}
 	v.SetSelection(before)
-	r := textedit.Range{Start: 4, End: 6}
+	r := TextRange{Start: 4, End: 6}
 	caret := 3
-	session := &completionSession{state: v.operationState(), range_: r, items: []Completion{{Text: "foo()", Range: &r, Caret: &caret, AdditionalEdits: []textedit.Edit{{Range: textedit.Range{}, Text: "import x\n"}}}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {}}}
+	session := &completionSession{state: v.operationState(), range_: r, items: []Completion{{Text: "foo()", Range: &r, Caret: &caret, AdditionalEdits: []TextEdit{{Range: TextRange{}, Text: "import x\n"}}}}, list: &controls.CompletionList{}, popup: closingPopup{onClose: func() {}}}
 	v.completion = session
 	if err := v.acceptCompletion(session, 0); err != nil {
 		t.Fatal(err)
@@ -327,7 +326,7 @@ func TestDefaultWordPolicyBelongsToDefinition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := CompletionContext{Language: language.Shell, Definition: l, Lexical: language.Context{Comment: true}, ContextKnown: true, NearbyText: "foobar fo", DocumentLength: 9, Caret: 9, Range: textedit.Range{Start: 7, End: 9}, Prefix: "fo"}
+	c := CompletionContext{Language: language.Shell, Definition: l, Lexical: language.Context{Comment: true}, ContextKnown: true, NearbyText: "foobar fo", DocumentLength: 9, Caret: 9, Range: TextRange{Start: 7, End: 9}, Prefix: "fo"}
 	if items := DefaultCompletions(c); len(items) != 1 || items[0].Text != "foobar" {
 		t.Fatal("inferred language policy from ID", items)
 	}

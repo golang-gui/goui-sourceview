@@ -7,20 +7,20 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 )
 
 func TestIndentHistory(t *testing.T) {
-	m := textedit.NewModel("a\nb")
-	s := textedit.Selection{Anchor: 3, Caret: 0}
+	m := textcore.NewModel("a\nb")
+	s := textcore.Selection{Anchor: 3, Caret: 0}
 	p, err := Indent(m, s, IndentOptions{TabWidth: 4, InsertSpaces: true}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = p.Apply(m, &textedit.EditSource{}); err != nil {
+	if err = p.Apply(m, &textcore.EditSource{}); err != nil {
 		t.Fatal(err)
 	}
-	if m.Text() != "    a\n    b" || p.After != (textedit.Selection{Anchor: 11, Caret: 4}) {
+	if m.Text() != "    a\n    b" || p.After != (textcore.Selection{Anchor: 11, Caret: 4}) {
 		t.Fatal(m.Text(), p.After)
 	}
 	r := m.UndoWithSelection()
@@ -32,7 +32,7 @@ func TestIndentHistory(t *testing.T) {
 		t.Fatal(r)
 	}
 	m.SetText("a\nb")
-	p, _ = Indent(m, textedit.Selection{Anchor: 0, Caret: 2}, IndentOptions{InsertSpaces: true}, false)
+	p, _ = Indent(m, textcore.Selection{Anchor: 0, Caret: 2}, IndentOptions{InsertSpaces: true}, false)
 	p.Apply(m, nil)
 	if m.Text() != "    a\nb" {
 		t.Fatal(m.Text())
@@ -40,8 +40,8 @@ func TestIndentHistory(t *testing.T) {
 }
 
 func TestOutdentPreservesContent(t *testing.T) {
-	m := textedit.NewModel("  a\n\tb\n c")
-	p, err := Indent(m, textedit.Selection{Anchor: 0, Caret: m.Len()}, IndentOptions{TabWidth: 4}, true)
+	m := textcore.NewModel("  a\n\tb\n c")
+	p, err := Indent(m, textcore.Selection{Anchor: 0, Caret: m.Len()}, IndentOptions{TabWidth: 4}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,12 +69,12 @@ func TestCodeWordBoundaries(t *testing.T) {
 		{"中文_name e\u0301", 0, true, false, 11}, {"中文_name e\u0301", 15, false, false, 12},
 		{"", 0, true, false, 0}, {"a", 0, false, true, 0}, {"a", 1, true, true, 1},
 	} {
-		m := textedit.NewModel(tt.text)
+		m := textcore.NewModel(tt.text)
 		if got := WordBoundary(m, tt.at, tt.right, tt.deleting); got != tt.want {
 			t.Errorf("%q at %d right=%v delete=%v: got %d want %d", tt.text, tt.at, tt.right, tt.deleting, got, tt.want)
 		}
 	}
-	m := textedit.NewModel(strings.Repeat("中", 5000) + " end")
+	m := textcore.NewModel(strings.Repeat("中", 5000) + " end")
 	if got := WordBoundary(m, 0, true, false); got != 15000 {
 		t.Fatal("chunked forward", got)
 	}
@@ -86,17 +86,17 @@ func TestCodeWordBoundaries(t *testing.T) {
 func TestInsertLineRetainsTextAndHistory(t *testing.T) {
 	for _, tt := range []struct {
 		text  string
-		s     textedit.Selection
+		s     textcore.Selection
 		below bool
 		want  string
 		caret int
 	}{
-		{"  alpha\nbeta", textedit.Selection{Anchor: 9, Caret: 4}, false, "  \n  alpha\nbeta", 2},
-		{"\talpha", textedit.Selection{Anchor: 3, Caret: 3}, true, "\talpha\n\t", 8},
-		{"a\n", textedit.Selection{Anchor: 2, Caret: 2}, true, "a\n\n", 3},
-		{"", textedit.Selection{}, false, "\n", 0},
+		{"  alpha\nbeta", textcore.Selection{Anchor: 9, Caret: 4}, false, "  \n  alpha\nbeta", 2},
+		{"\talpha", textcore.Selection{Anchor: 3, Caret: 3}, true, "\talpha\n\t", 8},
+		{"a\n", textcore.Selection{Anchor: 2, Caret: 2}, true, "a\n\n", 3},
+		{"", textcore.Selection{}, false, "\n", 0},
 	} {
-		m := textedit.NewModel(tt.text)
+		m := textcore.NewModel(tt.text)
 		p, err := InsertLine(m, tt.s, tt.below)
 		if err != nil {
 			t.Fatal(err)
@@ -104,7 +104,7 @@ func TestInsertLineRetainsTextAndHistory(t *testing.T) {
 		if err = p.Apply(m, nil); err != nil {
 			t.Fatal(err)
 		}
-		if m.Text() != tt.want || p.After != (textedit.Selection{Anchor: tt.caret, Caret: tt.caret}) {
+		if m.Text() != tt.want || p.After != (textcore.Selection{Anchor: tt.caret, Caret: tt.caret}) {
 			t.Fatal(m.Text(), p.After)
 		}
 		undo := m.UndoWithSelection()
@@ -120,51 +120,51 @@ func TestInsertLineRetainsTextAndHistory(t *testing.T) {
 
 type lineOperation struct {
 	name string
-	plan func(*textedit.Model, textedit.Selection) (Plan, error)
+	plan func(*textcore.Model, textcore.Selection) (Plan, error)
 }
 
 var lineOperations = []lineOperation{
-	{"up", func(m *textedit.Model, s textedit.Selection) (Plan, error) { return MoveLines(m, s, false) }},
-	{"down", func(m *textedit.Model, s textedit.Selection) (Plan, error) { return MoveLines(m, s, true) }},
-	{"copy up", func(m *textedit.Model, s textedit.Selection) (Plan, error) { return DuplicateLines(m, s, false) }},
-	{"copy down", func(m *textedit.Model, s textedit.Selection) (Plan, error) { return DuplicateLines(m, s, true) }},
+	{"up", func(m *textcore.Model, s textcore.Selection) (Plan, error) { return MoveLines(m, s, false) }},
+	{"down", func(m *textcore.Model, s textcore.Selection) (Plan, error) { return MoveLines(m, s, true) }},
+	{"copy up", func(m *textcore.Model, s textcore.Selection) (Plan, error) { return DuplicateLines(m, s, false) }},
+	{"copy down", func(m *textcore.Model, s textcore.Selection) (Plan, error) { return DuplicateLines(m, s, true) }},
 	{"delete", DeleteLines},
 }
 
 func TestLineOperationsLiteralBoundariesAndHistory(t *testing.T) {
 	cases := []struct {
 		name, op, text string
-		before         textedit.Selection
+		before         textcore.Selection
 		want           string
-		after          textedit.Selection
+		after          textcore.Selection
 		noop           bool
 	}{
-		{"move interior up", "up", "aa\n中x\nlast", textedit.Selection{Anchor: 6, Caret: 6}, "中x\naa\nlast", textedit.Selection{Anchor: 3, Caret: 3}, false},
-		{"move first down", "down", "a\nb", textedit.Selection{}, "b\na", textedit.Selection{Anchor: 2, Caret: 2}, false},
-		{"exclude next line reversed", "down", "a\nb\nc", textedit.Selection{Anchor: 2, Caret: 0}, "b\na\nc", textedit.Selection{Anchor: 4, Caret: 2}, false},
-		{"exclude final next line", "down", "a\nb", textedit.Selection{Caret: 2}, "b\na", textedit.Selection{Anchor: 2, Caret: 3}, false},
-		{"final empty up", "up", "a\nb\n", textedit.Selection{Anchor: 4, Caret: 4}, "a\n\nb", textedit.Selection{Anchor: 2, Caret: 2}, false},
-		{"empty down", "down", "\n中", textedit.Selection{}, "中\n", textedit.Selection{Anchor: 4, Caret: 4}, false},
-		{"identical empty down", "down", "\n", textedit.Selection{}, "\n", textedit.Selection{Anchor: 1, Caret: 1}, false},
-		{"identical empty up", "up", "\n", textedit.Selection{Anchor: 1, Caret: 1}, "\n", textedit.Selection{}, false},
-		{"top boundary", "up", "a\nb", textedit.Selection{Anchor: 1, Caret: 1}, "a\nb", textedit.Selection{Anchor: 1, Caret: 1}, true},
-		{"bottom boundary", "down", "a\nb", textedit.Selection{Anchor: 2, Caret: 2}, "a\nb", textedit.Selection{Anchor: 2, Caret: 2}, true},
-		{"all rows boundary", "down", "a\nb", textedit.Selection{Caret: 3}, "a\nb", textedit.Selection{Caret: 3}, true},
-		{"copy terminal below", "copy down", "a\nb", textedit.Selection{Anchor: 3, Caret: 3}, "a\nb\nb", textedit.Selection{Anchor: 5, Caret: 5}, false},
-		{"copy before newline", "copy down", "a\n", textedit.Selection{Caret: 2}, "a\na\n", textedit.Selection{Anchor: 2, Caret: 4}, false},
-		{"copy reversed above", "copy up", "a\nb\nc", textedit.Selection{Anchor: 4, Caret: 1}, "a\nb\na\nb\nc", textedit.Selection{Anchor: 4, Caret: 1}, false},
-		{"copy empty above", "copy up", "", textedit.Selection{}, "\n", textedit.Selection{}, false},
-		{"copy empty below", "copy down", "", textedit.Selection{}, "\n", textedit.Selection{Anchor: 1, Caret: 1}, false},
-		{"delete first", "delete", "aa\nbb\ncc", textedit.Selection{Anchor: 1, Caret: 1}, "bb\ncc", textedit.Selection{}, false},
-		{"delete final", "delete", "aa\nbb", textedit.Selection{Anchor: 4, Caret: 4}, "aa", textedit.Selection{Anchor: 2, Caret: 2}, false},
-		{"delete final empty", "delete", "a\n", textedit.Selection{Anchor: 2, Caret: 2}, "a", textedit.Selection{Anchor: 1, Caret: 1}, false},
-		{"delete excluded next", "delete", "a\nb\nc", textedit.Selection{Anchor: 4, Caret: 0}, "c", textedit.Selection{}, false},
-		{"delete all", "delete", "中\nlast", textedit.Selection{Caret: 8}, "", textedit.Selection{}, false},
-		{"delete empty", "delete", "", textedit.Selection{}, "", textedit.Selection{}, true},
+		{"move interior up", "up", "aa\n中x\nlast", textcore.Selection{Anchor: 6, Caret: 6}, "中x\naa\nlast", textcore.Selection{Anchor: 3, Caret: 3}, false},
+		{"move first down", "down", "a\nb", textcore.Selection{}, "b\na", textcore.Selection{Anchor: 2, Caret: 2}, false},
+		{"exclude next line reversed", "down", "a\nb\nc", textcore.Selection{Anchor: 2, Caret: 0}, "b\na\nc", textcore.Selection{Anchor: 4, Caret: 2}, false},
+		{"exclude final next line", "down", "a\nb", textcore.Selection{Caret: 2}, "b\na", textcore.Selection{Anchor: 2, Caret: 3}, false},
+		{"final empty up", "up", "a\nb\n", textcore.Selection{Anchor: 4, Caret: 4}, "a\n\nb", textcore.Selection{Anchor: 2, Caret: 2}, false},
+		{"empty down", "down", "\n中", textcore.Selection{}, "中\n", textcore.Selection{Anchor: 4, Caret: 4}, false},
+		{"identical empty down", "down", "\n", textcore.Selection{}, "\n", textcore.Selection{Anchor: 1, Caret: 1}, false},
+		{"identical empty up", "up", "\n", textcore.Selection{Anchor: 1, Caret: 1}, "\n", textcore.Selection{}, false},
+		{"top boundary", "up", "a\nb", textcore.Selection{Anchor: 1, Caret: 1}, "a\nb", textcore.Selection{Anchor: 1, Caret: 1}, true},
+		{"bottom boundary", "down", "a\nb", textcore.Selection{Anchor: 2, Caret: 2}, "a\nb", textcore.Selection{Anchor: 2, Caret: 2}, true},
+		{"all rows boundary", "down", "a\nb", textcore.Selection{Caret: 3}, "a\nb", textcore.Selection{Caret: 3}, true},
+		{"copy terminal below", "copy down", "a\nb", textcore.Selection{Anchor: 3, Caret: 3}, "a\nb\nb", textcore.Selection{Anchor: 5, Caret: 5}, false},
+		{"copy before newline", "copy down", "a\n", textcore.Selection{Caret: 2}, "a\na\n", textcore.Selection{Anchor: 2, Caret: 4}, false},
+		{"copy reversed above", "copy up", "a\nb\nc", textcore.Selection{Anchor: 4, Caret: 1}, "a\nb\na\nb\nc", textcore.Selection{Anchor: 4, Caret: 1}, false},
+		{"copy empty above", "copy up", "", textcore.Selection{}, "\n", textcore.Selection{}, false},
+		{"copy empty below", "copy down", "", textcore.Selection{}, "\n", textcore.Selection{Anchor: 1, Caret: 1}, false},
+		{"delete first", "delete", "aa\nbb\ncc", textcore.Selection{Anchor: 1, Caret: 1}, "bb\ncc", textcore.Selection{}, false},
+		{"delete final", "delete", "aa\nbb", textcore.Selection{Anchor: 4, Caret: 4}, "aa", textcore.Selection{Anchor: 2, Caret: 2}, false},
+		{"delete final empty", "delete", "a\n", textcore.Selection{Anchor: 2, Caret: 2}, "a", textcore.Selection{Anchor: 1, Caret: 1}, false},
+		{"delete excluded next", "delete", "a\nb\nc", textcore.Selection{Anchor: 4, Caret: 0}, "c", textcore.Selection{}, false},
+		{"delete all", "delete", "中\nlast", textcore.Selection{Caret: 8}, "", textcore.Selection{}, false},
+		{"delete empty", "delete", "", textcore.Selection{}, "", textcore.Selection{}, true},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			m := textedit.NewModel(tt.text)
+			m := textcore.NewModel(tt.text)
 			var operation lineOperation
 			for _, op := range lineOperations {
 				if op.name == tt.op {
@@ -179,8 +179,8 @@ func TestLineOperationsLiteralBoundariesAndHistory(t *testing.T) {
 				t.Fatalf("selection: %+v, want %+v", p, tt.after)
 			}
 			notifications := 0
-			m.ConnectChange(func(textedit.Change) { notifications++ })
-			if err := p.Apply(m, &textedit.EditSource{}); err != nil {
+			m.ConnectChange(func(textcore.Change) { notifications++ })
+			if err := p.Apply(m, &textcore.EditSource{}); err != nil {
 				t.Fatal(err)
 			}
 			if m.Text() != tt.want {
@@ -209,7 +209,7 @@ func TestLineOperationsLiteralBoundariesAndHistory(t *testing.T) {
 
 // This reference operates on slices of whole strings and reconstructs offsets
 // from line/byte-column pairs. It does not reuse the production edit algorithm.
-func referenceLineOperation(text string, s textedit.Selection, op string) (string, textedit.Selection) {
+func referenceLineOperation(text string, s textcore.Selection, op string) (string, textcore.Selection) {
 	rows := strings.Split(text, "\n")
 	r := s.Range()
 	first, last := strings.Count(text[:r.Start], "\n"), strings.Count(text[:r.End], "\n")
@@ -255,7 +255,7 @@ func referenceLineOperation(text string, s textedit.Selection, op string) (strin
 			at += len(result[i]) + 1
 		}
 		at = min(at, len(remaining))
-		return remaining, textedit.Selection{Anchor: at, Caret: at}
+		return remaining, textcore.Selection{Anchor: at, Caret: at}
 	}
 	value := strings.Join(result, "\n")
 	position := func(old int) int {
@@ -268,7 +268,7 @@ func referenceLineOperation(text string, s textedit.Selection, op string) (strin
 		}
 		return min(len(value), at+old-start)
 	}
-	return value, textedit.Selection{Anchor: position(s.Anchor), Caret: position(s.Caret)}
+	return value, textcore.Selection{Anchor: position(s.Anchor), Caret: position(s.Caret)}
 }
 
 func TestLineOperationsAgainstWholeLineReference(t *testing.T) {
@@ -285,9 +285,9 @@ func TestLineOperationsAgainstWholeLineReference(t *testing.T) {
 			boundaries = append(boundaries, at)
 		}
 		slices.Sort(boundaries)
-		s := textedit.Selection{Anchor: boundaries[rng.Intn(len(boundaries))], Caret: boundaries[rng.Intn(len(boundaries))]}
+		s := textcore.Selection{Anchor: boundaries[rng.Intn(len(boundaries))], Caret: boundaries[rng.Intn(len(boundaries))]}
 		for _, op := range lineOperations {
-			m := textedit.NewModel(text)
+			m := textcore.NewModel(text)
 			p, err := op.plan(m, s)
 			if err != nil {
 				t.Fatal(err)
@@ -304,19 +304,19 @@ func TestLineOperationsAgainstWholeLineReference(t *testing.T) {
 }
 
 func TestLineOperationValidationAndInsertBudget(t *testing.T) {
-	m := textedit.NewModel("中\nx")
-	for _, s := range []textedit.Selection{{Anchor: -1}, {Caret: 9}, {Anchor: 1, Caret: 3}} {
+	m := textcore.NewModel("中\nx")
+	for _, s := range []textcore.Selection{{Anchor: -1}, {Caret: 9}, {Anchor: 1, Caret: 3}} {
 		for _, op := range lineOperations {
 			if _, err := op.plan(m, s); err == nil {
 				t.Fatal("accepted invalid selection", op.name, s)
 			}
 		}
 	}
-	huge := textedit.NewModel(strings.Repeat("x", 32<<20) + "\nz")
+	huge := textcore.NewModel(strings.Repeat("x", 32<<20) + "\nz")
 	for _, plan := range []func() (Plan, error){
-		func() (Plan, error) { return DuplicateLines(huge, textedit.Selection{}, true) },
+		func() (Plan, error) { return DuplicateLines(huge, textcore.Selection{}, true) },
 		func() (Plan, error) {
-			return MoveLines(huge, textedit.Selection{Anchor: huge.Len(), Caret: huge.Len()}, false)
+			return MoveLines(huge, textcore.Selection{Anchor: huge.Len(), Caret: huge.Len()}, false)
 		},
 	} {
 		if _, err := plan(); err != ErrOperationLimit {
@@ -331,7 +331,7 @@ func TestLineOperationValidationAndInsertBudget(t *testing.T) {
 // 输入位于代码长行中部时，只需读取真实前导缩进，不能复制数 MB 的代码前缀。
 func TestLeadingIndentOnLongLine(t *testing.T) {
 	for _, prefix := range []string{"", " \t  ", strings.Repeat(" ", 9000)} {
-		m := textedit.NewModel(prefix + strings.Repeat("word ", 400000))
+		m := textcore.NewModel(prefix + strings.Repeat("word ", 400000))
 		if got := LeadingIndent(m, m.Len()/2); got != prefix {
 			t.Fatalf("缩进长度=%d want=%d", len(got), len(prefix))
 		}
@@ -339,7 +339,7 @@ func TestLeadingIndentOnLongLine(t *testing.T) {
 }
 
 func BenchmarkLeadingIndentOnLongLine(b *testing.B) {
-	m := textedit.NewModel("    " + strings.Repeat("word ", 400000))
+	m := textcore.NewModel("    " + strings.Repeat("word ", 400000))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -354,7 +354,7 @@ func TestWordPartBoundaries(t *testing.T) {
 		{"get", "HTTP", "Response", "2"}, {"XML", "Parser"}, {"foo", "__", "bar"}, {"中文", "_", "name"}, {"e\u0301", "Value", "12"}, {strings.Repeat("a", 9000), "B"},
 	} {
 		text := strings.Join(parts, "")
-		m := textedit.NewModel(text)
+		m := textcore.NewModel(text)
 		at := 0
 		for _, part := range parts {
 			want := at + len(part)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // Fixed 10-DIP glyph metrics: the last text stop is exactly length*10. Keep
@@ -18,7 +17,7 @@ func TestHorizontalScrollAfterTypingAtEnd(t *testing.T) {
 		for _, width := range []float32{400, 401.5} {
 			t.Run(fmt.Sprintf("%d/%g", length, width), func(t *testing.T) {
 				v := NewSourceView()
-				v.Document().Model().SetText(strings.Repeat("x", length))
+				v.Document().SetText(strings.Repeat("x", length))
 				v.SetShowLineNumbers(false)
 				v.SetFoldingEnabled(false)
 				v.SetWrapMode(WrapNone)
@@ -35,7 +34,7 @@ func TestHorizontalScrollAfterTypingAtEnd(t *testing.T) {
 				scroll := gui.NewScrollView()
 				scroll.SetChild(v)
 				scroll.Arrange(geometry.Rect(0, 0, width, 120))
-				v.SetSelection(textedit.Selection{Anchor: length, Caret: length})
+				v.SetSelection(TextSelection{Anchor: length, Caret: length})
 				// Input uses the same Model.Apply/selection/reveal transaction as an
 				// ordinary commit, without requiring a desktop just for these metrics.
 				if err := v.replace(v.Selection().Range(), strings.Repeat("y", 12), false); err != nil {
@@ -60,7 +59,7 @@ func TestHorizontalScrollAfterTypingAtEnd(t *testing.T) {
 				if scroll.ScrollX() != 0 || v.Selection() != end {
 					t.Fatalf("manual scroll was pulled back: offset=%g selection=%v", scroll.ScrollX(), v.Selection())
 				}
-				text := v.Document().Model().Text()
+				text := v.Document().Text()
 				scroll.SetScrollX(scroll.Snapshot().MaxScrollX / 2)
 				for range 4 {
 					v.layoutStep(time.Time{})
@@ -71,7 +70,7 @@ func TestHorizontalScrollAfterTypingAtEnd(t *testing.T) {
 					v.layoutStep(time.Time{})
 					scroll.Arrange(scroll.Rect())
 				}
-				if scroll.ScrollX() != 0 || v.Selection() != end || v.Document().Model().Text() != text {
+				if scroll.ScrollX() != 0 || v.Selection() != end || v.Document().Text() != text {
 					t.Fatal("repeated scroll changed source/selection or failed to return")
 				}
 			})

@@ -6,12 +6,11 @@ import (
 	"strings"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
 )
 
@@ -31,12 +30,12 @@ type paragraph struct {
 	view.ParagraphResources
 
 	pageVersion uint64
-	colorRange  textedit.Range
+	colorRange  TextRange
 	textStart   int
-	sourceRange textedit.Range
+	sourceRange TextRange
 
 	whitespace    *view.WhitespaceLayout
-	fragment      textedit.Fragment
+	fragment      textcore.Fragment
 	text          string
 	width, height float32
 	style         paragraphStyle
@@ -67,7 +66,7 @@ type paragraphStyle struct {
 	tokenVersion                        uint64
 	languageEpoch                       uint64
 	tokenValid                          bool
-	selection                           textedit.Range
+	selection                           TextRange
 	focused                             bool
 }
 
@@ -169,12 +168,12 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		}
 	}
 	focus := activeFocus(v)
-	sel := textedit.Range{}
+	sel := TextRange{}
 	if v.colors.SelectionForeground.A == 255 && focus && v.projection == nil {
 		selection := v.Selection().Range()
-		sel = textedit.Range{Start: max(0, min(r.End, selection.Start)-r.Start), End: max(0, min(r.End, selection.End)-r.Start)}
+		sel = TextRange{Start: max(0, min(r.End, selection.Start)-r.Start), End: max(0, min(r.End, selection.End)-r.Start)}
 		if sel.Start == sel.End {
-			sel = textedit.Range{}
+			sel = TextRange{}
 		}
 	}
 	// Selection geometry is painted independently. Only an actual foreground
@@ -274,13 +273,13 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 	w, h := native.MeasureSize()
 	lines, clusters := native.MeasureMetrics()
 	p.whitespace = view.NewWhitespaceLayout(text, lines, clusters)
-	var g textedit.Geometry
-	fragment, fragmentErr := textedit.NewFragment(textedit.Range{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
+	var g textcore.Geometry
+	fragment, fragmentErr := textcore.NewFragment(TextRange{End: len(text)}, geometry.Size{Width: w, Height: h}, lines, clusters)
 	if fragmentErr == nil {
 		g = fragment.Geometry(v.lineHeight)
 	} else {
 		// Preserve Geometry's general semantics for nonpartitioning metrics.
-		g = textedit.NewGeometry(lines, clusters, len(text), v.lineHeight)
+		g = textcore.NewGeometry(lines, clusters, len(text), v.lineHeight)
 	}
 	p.fragment = fragment
 	p.Geometry, p.width, p.height = g, w, max(v.lineHeight, h)
@@ -315,11 +314,11 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 		length = v.displayRange(p.row).End - v.displayRange(p.row).Start
 	}
 	r := v.displayRange(p.row)
-	local := textedit.Range{End: length}
+	local := TextRange{End: length}
 	if p.Paged != nil {
 		local = p.Paged.VisibleRange()
 	}
-	spans := v.displayHighlights(textedit.Range{Start: r.Start + local.Start, End: r.Start + local.End})
+	spans := v.displayHighlights(TextRange{Start: r.Start + local.Start, End: r.Start + local.End})
 	for i := range spans {
 		spans[i].Range.Start -= r.Start
 		spans[i].Range.End -= r.Start
@@ -341,7 +340,7 @@ func (v *SourceView) colorParagraph(key layoutKey, p *paragraph, style paragraph
 				return false
 			}
 			for _, c := range colors {
-				p.Paged.SetTextColor(textedit.Range{Start: c.start, End: c.end}, c.color)
+				p.Paged.SetTextColor(TextRange{Start: c.start, End: c.end}, c.color)
 				if !valid() {
 					return false
 				}
@@ -391,7 +390,7 @@ func (v *SourceView) paragraphColors(length int, style paragraphStyle, tokens []
 			out = append(out, paragraphColor{start, end, c})
 		}
 	}
-	sel := textedit.Range{}
+	sel := TextRange{}
 	if v.colors.SelectionForeground.A == 255 && style.focused {
 		sel = style.selection
 	}
@@ -534,7 +533,7 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 		format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
 		r := v.displayRange(row)
 		p.sourceRange = r
-		p.Paged = gui.NewParagraphLayout(v.context, format, key.width, r.End-r.Start, func(local textedit.Range) (string, error) {
+		p.Paged = view.NewParagraphLayout(v.context, format, key.width, r.End-r.Start, func(local TextRange) (string, error) {
 			r := v.displayRange(p.row)
 			local.Start += r.Start
 			local.End += r.Start
@@ -618,18 +617,18 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 }
 
 // Byte ranges remain model-relative even when the native working set is small.
-func (v *SourceView) changeLongParagraphs(c textedit.Change) {
+func (v *SourceView) changeLongParagraphs(c TextChange) {
 	for key, p := range v.layouts {
 		if p.Paged == nil || c.Reset {
 			continue
 		}
 		r := p.sourceRange
-		var local []textedit.Edit
+		var local []TextEdit
 		invalid := false
 		for _, e := range c.Edits {
 			if e.Range.End <= r.Start && e.Range.Start < r.Start {
-				r.Start = textedit.MapOffset(r.Start, e)
-				r.End = textedit.MapOffset(r.End, e)
+				r.Start = textcore.MapOffset(r.Start, e)
+				r.End = textcore.MapOffset(r.End, e)
 				continue
 			}
 			if e.Range.Start > r.End {
@@ -672,10 +671,10 @@ func (v *SourceView) geometryOrigin(row int, x, y float64) geometry.Point {
 func (v *SourceView) paragraphOrigin(row int, p *paragraph) geometry.Point {
 	return v.geometryOrigin(row, p.GeometryX, p.GeometryY)
 }
-func (v *SourceView) paragraphCaret(row int, p *paragraph, pos textedit.Position, cached bool) (geometry.Rectangle, bool) {
+func (v *SourceView) paragraphCaret(row int, p *paragraph, pos textcore.Position, cached bool) (geometry.Rectangle, bool) {
 	g, origin := &p.Geometry, v.paragraphOrigin(row, p)
 	if p.Paged != nil {
-		var frame *gui.ParagraphGeometry
+		var frame *view.ParagraphGeometry
 		if cached {
 			frame = p.Paged.CachedGeometryAt(pos.Offset)
 		} else {

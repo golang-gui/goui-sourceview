@@ -28,7 +28,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
@@ -195,7 +194,7 @@ func main() {
 			d := source.NewDocument(tc.text)
 			bind(d, tc.id)
 			v.SetDocument(d)
-			v.SetSelection(textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)})
+			v.SetSelection(source.TextSelection{Anchor: len(tc.text), Caret: len(tc.text)})
 			win.SetFocusedWidget(v)
 		})
 		steps = append(steps, func() {
@@ -222,9 +221,9 @@ func main() {
 				key(events.KeyArrowDown, 0)
 			}
 			key(events.KeyEnter, 0)
-			check(v.Document().Model().Text() == tc.want, "wrong completion for "+string(tc.id))
+			check(v.Document().Text() == tc.want, "wrong completion for "+string(tc.id))
 			key(events.KeyZ, primary)
-			check(v.Document().Model().Text() == tc.text, "completion undo failed")
+			check(v.Document().Text() == tc.text, "completion undo failed")
 			log.Printf("PASS %s completion and undo", tc.id)
 		})
 	}
@@ -320,13 +319,13 @@ func main() {
 			d := source.NewDocument(tc.prefix)
 			bind(d, tc.id)
 			v.SetDocument(d)
-			v.SetSelection(textedit.Selection{Anchor: len(tc.prefix), Caret: len(tc.prefix)})
+			v.SetSelection(source.TextSelection{Anchor: len(tc.prefix), Caret: len(tc.prefix)})
 		})
 		for _, r := range tc.typed {
 			steps = append(steps, func() { must(win.CommitText(string(r))) })
 		}
 		steps = append(steps, func() {
-			check(v.Document().Model().Text() == tc.want && v.Selection().Caret == len(tc.want), "quote typing failed: "+string(tc.id))
+			check(v.Document().Text() == tc.want && v.Selection().Caret == len(tc.want), "quote typing failed: "+string(tc.id))
 			log.Printf("PASS %s quote typing", tc.id)
 		})
 	}
@@ -335,26 +334,26 @@ func main() {
 		d := source.NewDocument("")
 		must(d.SetLanguage(language.PowerShell))
 		v.SetDocument(d)
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 	})
 	steps = append(steps, func() {
 		must(win.CommitText(`"`))
 		must(win.CommitText("a`"))
 		must(win.CommitText(`"`))
-		check(v.Document().Model().Text() == "\"a`\"\"" && v.Selection().Caret == 4, "escaped PowerShell quote consumed generated closer")
+		check(v.Document().Text() == "\"a`\"\"" && v.Selection().Caret == 4, "escaped PowerShell quote consumed generated closer")
 	})
 	steps = append(steps, func() {
 		d := source.NewDocument("")
 		must(d.SetLanguage(language.Shell))
 		v.SetDocument(d)
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 	})
 	steps = append(steps, func() {
 		must(win.CommitText("{"))
-		check(v.Document().Model().Text() == "{}" && v.Selection().Caret == 1, "bracket insertion failed")
+		check(v.Document().Text() == "{}" && v.Selection().Caret == 1, "bracket insertion failed")
 		v.SetReadOnly(true)
 		check(win.CommitText("x") != nil, "readonly accepted text commit")
-		check(v.Document().Model().Text() == "{}", "readonly edited text")
+		check(v.Document().Text() == "{}", "readonly edited text")
 		v.SetReadOnly(false)
 		check(v.Snapshot().TextEditing != nil, "missing editing semantics")
 	})

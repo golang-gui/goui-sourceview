@@ -29,7 +29,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
@@ -153,11 +152,11 @@ func main() {
 	win.SetWidget(box)
 	must(win.Show())
 	win.SetFocusedWidget(v)
-	caretEnd := func() { at := v.Document().Model().Len(); v.SetSelection(textedit.Selection{Anchor: at, Caret: at}) }
+	caretEnd := func() { at := v.Document().Len(); v.SetSelection(source.TextSelection{Anchor: at, Caret: at}) }
 	caretEnd()
 	suffix := `intln("hello")`
 	publish := func(text string) {
-		ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), source.InlineSuggestion{Position: v.Selection().Caret, Text: text})
+		ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), source.InlineSuggestion{Position: v.Selection().Caret, Text: text})
 		must(err)
 		check(ok, "host result was rejected")
 	}
@@ -196,12 +195,12 @@ func main() {
 	}
 	visible := func() { check(meta(v) != nil && meta(v)["visible"] == true, "ghost preview not visible") }
 	unchanged := func() {
-		check(doc.Model().Text() == "fmt.Pr" && !doc.Model().CanUndo(), "preview changed source/history")
+		check(doc.Text() == "fmt.Pr" && !doc.CanUndo(), "preview changed source/history")
 		check(other.Snapshot().Attributes["goui.sourceview"].(map[string]any)["inlineSuggestion"] == nil, "ghost leaked to shared view")
 	}
 	settle(func() {
 		check(!v.InlineSuggestionsEnabled(), "inline feature should default off")
-		ok, err := v.SetInlineSuggestion(doc, doc.Model().Revision(), source.InlineSuggestion{Position: 6, Text: suffix})
+		ok, err := v.SetInlineSuggestion(doc, doc.Revision(), source.InlineSuggestion{Position: 6, Text: suffix})
 		must(err)
 		check(!ok, "default-off feature accepted text")
 		v.SetInlineSuggestionsEnabled(true)
@@ -219,13 +218,13 @@ func main() {
 		phase = "accepted"
 	})
 	settle(func() {
-		check(doc.Model().Text() == `fmt.Println("hello")` && meta(v) == nil, "Tab failed exact accept")
+		check(doc.Text() == `fmt.Println("hello")` && meta(v) == nil, "Tab failed exact accept")
 		key(events.KeyZ, events.ModifierControl)
 		phase = "undo"
 	})
 	settle(func() { unchanged(); key(events.KeyZ, events.ModifierControl|events.ModifierShift); phase = "redo" })
 	settle(func() {
-		check(doc.Model().Text() == `fmt.Println("hello")`, "redo failed")
+		check(doc.Text() == `fmt.Println("hello")`, "redo failed")
 		key(events.KeyZ, events.ModifierControl)
 		phase = "restore"
 	})
@@ -238,16 +237,16 @@ func main() {
 		phase = "ordinary-tab"
 	})
 	settle(func() {
-		check(doc.Model().Text() == "fmt.Pr  ", fmt.Sprintf("ordinary Tab did not reach the next tab stop: %q", doc.Model().Text()))
+		check(doc.Text() == "fmt.Pr  ", fmt.Sprintf("ordinary Tab did not reach the next tab stop: %q", doc.Text()))
 		key(events.KeyZ, events.ModifierControl)
 		phase = "before-input"
 	})
 	settle(func() { publish(suffix); phase = "before-typing" })
 	settle(func() { must(win.CommitText("i")); phase = "typed" })
 	settle(func() {
-		check(doc.Model().Text() == "fmt.Pri" && meta(v) == nil, "typed input retained stale ghost")
-		old := doc.Model().Revision()
-		doc.Model().SetText("fmt.Pr")
+		check(doc.Text() == "fmt.Pri" && meta(v) == nil, "typed input retained stale ghost")
+		old := doc.Revision()
+		doc.SetText("fmt.Pr")
 		caretEnd()
 		ok, err := v.SetInlineSuggestion(doc, old, source.InlineSuggestion{Position: 6, Text: suffix})
 		must(err)
@@ -274,20 +273,20 @@ func main() {
 	settle(func() {
 		check(meta(v) == nil, "blur retained ghost")
 		win.SetFocusedWidget(v)
-		doc.Model().SetText("变量")
+		doc.SetText("变量")
 		caretEnd()
 		publish("名称")
 		phase = "cjk"
 	})
 	settle(func() {
 		visible()
-		check(doc.Model().Text() == "变量", "CJK preview changed source")
+		check(doc.Text() == "变量", "CJK preview changed source")
 		key(events.KeyTab, 0)
 		phase = "cjk-accepted"
 	})
 	settle(func() {
-		check(doc.Model().Text() == "变量名称" && v.Selection().Caret == len("变量名称"), "CJK literal accept failed")
-		doc.Model().SetText("fmt.Pr")
+		check(doc.Text() == "变量名称" && v.Selection().Caret == len("变量名称"), "CJK literal accept failed")
+		doc.SetText("fmt.Pr")
 		caretEnd()
 		publish(strings.Repeat("中文e\u0301", 120))
 		phase = "truncated"
@@ -324,9 +323,9 @@ func main() {
 		return true
 	})
 	settle(func() {
-		check(doc.Model().Text() == "fmt.Println", "Tab accepted ghost instead of list item")
+		check(doc.Text() == "fmt.Println", "Tab accepted ghost instead of list item")
 		v.SetCompletionProvider(nil)
-		doc.Model().SetText("fmt.Pr")
+		doc.SetText("fmt.Pr")
 		caretEnd()
 		publish(suffix)
 		phase = "before-detach"
@@ -345,7 +344,7 @@ func main() {
 		next := source.NewDocument("fmt.Pr")
 		v.SetDocument(next)
 		caretEnd()
-		ok, err := v.SetInlineSuggestion(old, old.Model().Revision(), source.InlineSuggestion{Position: 6, Text: suffix})
+		ok, err := v.SetInlineSuggestion(old, old.Revision(), source.InlineSuggestion{Position: 6, Text: suffix})
 		must(err)
 		check(!ok && meta(v) == nil, "foreign document result accepted")
 		phase = "foreign-rejected"

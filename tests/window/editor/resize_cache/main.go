@@ -26,7 +26,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -167,7 +166,7 @@ func main() {
 		}
 		if !loaded {
 			loaded = true
-			v.Document().Model().SetText(strings.Repeat("a", 8192))
+			v.Document().SetText(strings.Repeat("a", 8192))
 			return
 		}
 		if frame > previousFrame && ctx.created > 0 && previous.sameLayoutWork(ctx.counters) {
@@ -198,7 +197,7 @@ func main() {
 			r := v.Snapshot().Bounds
 			click(geometry.Point{X: r.X + 6 + 3*advance, Y: r.Y + 6 + height/2})
 		case 3:
-			check(v.Selection() == (textedit.Selection{Anchor: 3, Caret: 3}), "cached geometry did not place caret at byte 3")
+			check(v.Selection() == (source.TextSelection{Anchor: 3, Caret: 3}), "cached geometry did not place caret at byte 3")
 			check(ctx.counters.sameLayoutWork(baseline), "caret click repeated native layout work")
 			check(ctx.created-ctx.destroyed <= 2, "more than two measured widths retained")
 			complete = true

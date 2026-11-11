@@ -44,7 +44,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -168,6 +167,13 @@ func stableTailCaret(widget gui.Widget, scroll *gui.ScrollView, previous *tailCa
 	return current, *stable >= 3
 }
 
+type paragraphText interface {
+	Len() int
+	Revision() uint64
+	SetText(string)
+	IsRuneBoundary(int) bool
+}
+
 func main() {
 	runtime.LockOSThread()
 	windowWidth := flag.Float64("width", 1000, "initial window width in DIP")
@@ -204,22 +210,25 @@ func main() {
 	must(err)
 	defer win.Destroy()
 	must(win.SetTitle("GOUI Long Paragraph"))
-	model := gui.NewTextModel("")
+	var model paragraphText
+	var slice func(source.TextRange) (string, error)
 	var widget gui.Widget
-	var setSelection func(textedit.Selection)
+	var setSelection func(source.TextSelection)
 	if *textview {
 		v := gui.NewTextView()
-		v.SetModel(model)
+		model = v.Model()
+		slice = func(r source.TextRange) (string, error) { return v.Model().Slice(gui.TextRange(r)) }
 		v.SetWrapMode(gui.WrapWordChar)
 		if *nowrap {
 			v.SetWrapMode(gui.WrapNone)
 		}
 
 		widget = v
-		setSelection = v.SetSelection
+		setSelection = func(s source.TextSelection) { v.SetSelection(gui.TextSelection(s)) }
 	} else {
 		v := source.NewSourceView()
-		v.SetDocument(source.NewDocumentWithModel(model))
+		model = v.Document()
+		slice = v.Document().Slice
 		v.SetWrapMode(source.WrapWordChar)
 		if *nowrap {
 			v.SetWrapMode(source.WrapNone)
@@ -273,10 +282,10 @@ func main() {
 			for !model.IsRuneBoundary(b) {
 				b--
 			}
-			context.target, _ = model.Slice(textedit.Range{Start: a, End: b})
+			context.target, _ = slice(source.TextRange{Start: a, End: b})
 			context.targetPaint = time.Time{}
 			issued = time.Now()
-			setSelection(textedit.Selection{Anchor: requested, Caret: requested})
+			setSelection(source.TextSelection{Anchor: requested, Caret: requested})
 			win.SetFocusedWidget(widget)
 			fmt.Printf("SELECT at=%d handled=%s\n", requested, time.Since(issued))
 		})
@@ -311,9 +320,9 @@ func main() {
 	last := time.Now()
 	largest := time.Duration(0)
 	lastRevision := uint64(0)
-	lastSelection := textedit.Selection{}
+	lastSelection := gui.TextSelection{}
 	lastRect := geometry.Rectangle{}
-	lastVisible := textedit.Range{}
+	lastVisible := gui.TextRange{}
 	lastScroll := geometry.Point{}
 	verified := false
 	var verify func()
@@ -324,7 +333,7 @@ func main() {
 	} else if *verifyPointer {
 		verify = pointerVerification(win, widget, scroll, model, &verified)
 	} else if *verifyInput {
-		verify = inputVerification(win, widget.(*source.SourceView), model, func() string { return original }, *clipboard, *nowrap, &verified)
+		verify = inputVerification(win, widget.(*source.SourceView), widget.(*source.SourceView).Document(), func() string { return original }, *clipboard, *nowrap, &verified)
 	}
 	heartbeat := app.NewTimer()
 	defer heartbeat.Stop()
@@ -391,7 +400,7 @@ func main() {
 }
 
 // 验证通过正常 Window 事件分发执行，不直接调用导航或改变模型。
-func endVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
+func endVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model paragraphText, complete *bool) func() {
 	keys := []events.Key{events.KeyEnd, events.KeyArrowLeft, events.KeyArrowLeft, events.KeyArrowLeft, events.KeyArrowRight, events.KeyArrowRight, events.KeyArrowRight}
 	states := []gui.WindowState{gui.WindowStateNormal, gui.WindowStateMaximized, gui.WindowStateNormal}
 	var previousSize geometry.Size
@@ -469,7 +478,7 @@ func endVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, 
 }
 
 // 连续输入在同一事件循环回调中发出，不能靠等待排版掩盖旧片段导航。
-func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Model, original func() string, clipboard, nowrap bool, complete *bool) func() {
+func inputVerification(win gui.Window, v *source.SourceView, model *source.Document, original func() string, clipboard, nowrap bool, complete *bool) func() {
 	primary, _ := gui.ModPrimary.Resolve()
 	key := func(k events.Key, mods events.Modifiers) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
@@ -484,7 +493,7 @@ func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Mod
 		if model.Len() != length {
 			return false
 		}
-		text, err := model.Slice(textedit.Range{Start: length - len(suffix), End: length})
+		text, err := model.Slice(source.TextRange{Start: length - len(suffix), End: length})
 		must(err)
 		return text == suffix
 	}
@@ -532,7 +541,7 @@ func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Mod
 			if !matches(n+1, "Z"+tail) {
 				return
 			}
-			if v.Selection().Range() != (textedit.Range{Start: n - 1, End: n}) {
+			if v.Selection().Range() != (source.TextRange{Start: n - 1, End: n}) {
 				panic("replacement undo lost its selection")
 			}
 			key(events.KeyZ, primary|events.ModifierShift)
@@ -617,7 +626,7 @@ func inputVerification(win gui.Window, v *source.SourceView, model *textedit.Mod
 }
 
 // 从真实光标像素取得局部停靠点，再走正常按下／拖动／释放路径。
-func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
+func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model paragraphText, complete *bool) func() {
 	stage := 0
 	deadline := time.Now().Add(30 * time.Second)
 	var end, previous geometry.Point
@@ -736,7 +745,7 @@ func pointerVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollVi
 }
 
 // 冷 End 后先从左向右拖选多个字符，每个事件循环只推进一个鼠标位置。
-func forwardVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model *textedit.Model, complete *bool) func() {
+func forwardVerification(win gui.Window, widget gui.Widget, scroll *gui.ScrollView, model paragraphText, complete *bool) func() {
 	stage := 0
 	deadline := time.Now().Add(30 * time.Second)
 	var start, end, point geometry.Point

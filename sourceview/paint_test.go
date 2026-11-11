@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
@@ -108,11 +108,11 @@ func TestBracketDecorationSuppressionAndLayering(t *testing.T) {
 	}
 	for _, tt := range []struct {
 		name, text string
-		selection  textedit.Selection
+		selection  TextSelection
 	}{
-		{"unmatched", "{[}]", textedit.Selection{}},
-		{"selected", "{}", textedit.Selection{Caret: 2}},
-		{"string", `{"x":"[]"}`, textedit.Selection{Anchor: 6, Caret: 6}},
+		{"unmatched", "{[}]", TextSelection{}},
+		{"selected", "{}", TextSelection{Caret: 2}},
+		{"string", `{"x":"[]"}`, TextSelection{Anchor: 6, Caret: 6}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			v.document.model.SetText(tt.text)
@@ -126,7 +126,7 @@ func TestBracketDecorationSuppressionAndLayering(t *testing.T) {
 		})
 	}
 	v.document.model.SetText("{}")
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.document.engine.Reset(language.JSON)
 	p = paint()
 	if len(p.borders) != 0 {
@@ -171,18 +171,18 @@ func TestBracketDecorationSuppressionAndLayering(t *testing.T) {
 func TestBracketRectanglesFollowWrappedAndBidiGeometry(t *testing.T) {
 	lines := []typography.TextLine{{Start: 0, Length: 1, Height: 20}, {Start: 1, Length: 1, Y: 20, Height: 20}}
 	clusters := []typography.TextCluster{{Start: 0, Length: 1, X: 0, Width: 10, Height: 20}, {Start: 1, Length: 1, X: 30, Y: 20, Width: 10, Height: 20, LineIndex: 1, Direction: typography.TextRightToLeft}}
-	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, 2, 20)}}
-	pair := []textedit.Range{{Start: 10, End: 11}, {Start: 11, End: 12}}
-	got := view.BracketRectangles(&p.Geometry, textedit.Range{Start: 10, End: 12}, geometry.Point{X: -5, Y: 6}, pair)
+	p := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textcore.NewGeometry(lines, clusters, 2, 20)}}
+	pair := []TextRange{{Start: 10, End: 11}, {Start: 11, End: 12}}
+	got := view.BracketRectangles(&p.Geometry, TextRange{Start: 10, End: 12}, geometry.Point{X: -5, Y: 6}, pair)
 	want := []geometry.Rectangle{geometry.Rect(-5, 7, 10, 18), geometry.Rect(25, 27, 10, 18)}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal(got, want)
 	}
-	if got := view.BracketRectangles(&p.Geometry, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair[:1]); len(got) != 0 {
+	if got := view.BracketRectangles(&p.Geometry, TextRange{Start: 10, End: 12}, geometry.Point{}, pair[:1]); len(got) != 0 {
 		t.Fatal("lone candidate decorated", got)
 	}
-	p.Geometry = textedit.NewGeometry([]typography.TextLine{{Length: 2, Height: 20}}, []typography.TextCluster{{Length: 2, Width: 20, Height: 20}}, 2, 20)
-	got = view.BracketRectangles(&p.Geometry, textedit.Range{Start: 10, End: 12}, geometry.Point{}, pair)
+	p.Geometry = textcore.NewGeometry([]typography.TextLine{{Length: 2, Height: 20}}, []typography.TextCluster{{Length: 2, Width: 20, Height: 20}}, 2, 20)
+	got = view.BracketRectangles(&p.Geometry, TextRange{Start: 10, End: 12}, geometry.Point{}, pair)
 	if !reflect.DeepEqual(got, []geometry.Rectangle{geometry.Rect(0, 1, 20, 18)}) {
 		t.Fatal("shared shaping cluster painted twice", got)
 	}
@@ -196,15 +196,15 @@ func TestPaintRangeCullsWrappedLines(t *testing.T) {
 		lines[i] = typography.TextLine{Start: i, Length: 1, Y: float32(i * 20), Height: 20}
 		clusters[i] = typography.TextCluster{Start: i, Length: 1, Width: 10, LineIndex: i}
 	}
-	item := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textedit.NewGeometry(lines, clusters, count, 20)}}
+	item := &paragraph{ParagraphResources: view.ParagraphResources{Geometry: textcore.NewGeometry(lines, clusters, count, 20)}}
 	v := NewSourceView()
 	v.viewport = geometry.Size{Width: 200, Height: 38}
 	p := &recordingPainter{}
 	// A huge selection includes the whole logical paragraph, but only two
 	// visual lines intersect the viewport. Keep full rectangle heights for
 	// underlines and let the Painter perform the final pixel clipping.
-	v.paintRange(p, item, textedit.Range{End: count}, geometry.Point{Y: -10001},
-		textedit.Range{End: count}, color.NRGBA{A: 255})
+	v.paintRange(p, item, TextRange{End: count}, geometry.Point{Y: -10001},
+		TextRange{End: count}, color.NRGBA{A: 255})
 	if len(p.fills) != 2 {
 		t.Fatalf("painted %d selection rectangles, want 2", len(p.fills))
 	}
@@ -218,7 +218,7 @@ func TestPaintRangeCullsWrappedLines(t *testing.T) {
 
 func TestSnapshotLongLineFollowsViewportWithoutShaping(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("界a", 20000)) // 80,000 bytes; 40,000 clusters.
+	v.Document().SetText(strings.Repeat("界a", 20000)) // 80,000 bytes; 40,000 clusters.
 	observe(t, v)
 	ctx := &shapedContext{}
 	v.context = ctx
@@ -230,8 +230,8 @@ func TestSnapshotLongLineFollowsViewportWithoutShaping(t *testing.T) {
 	if info == nil || info.VisibleRange.Start <= 64*1024 || info.VisibleRange.Start > 70000 || info.VisibleRange.End < 70000 || len(info.VisibleText) > 64*1024 {
 		t.Fatalf("snapshot stayed at line start: %+v", info)
 	}
-	want, err := v.Document().Model().Slice(textedit.Range{Start: info.VisibleRange.Start, End: info.VisibleRange.End})
-	if err != nil || want != info.VisibleText || !v.Document().Model().IsRuneBoundary(info.VisibleRange.Start) || !v.Document().Model().IsRuneBoundary(info.VisibleRange.End) {
+	want, err := v.Document().Slice(TextRange{Start: info.VisibleRange.Start, End: info.VisibleRange.End})
+	if err != nil || want != info.VisibleText || !v.Document().IsRuneBoundary(info.VisibleRange.Start) || !v.Document().IsRuneBoundary(info.VisibleRange.End) {
 		t.Fatal("snapshot bytes or UTF-8 boundaries are invalid")
 	}
 	if v.Selection().Caret != 0 || ctx.created != created {
@@ -250,7 +250,7 @@ func TestSnapshotLongLineFollowsViewportWithoutShaping(t *testing.T) {
 
 func TestSnapshotLongLinePreservesUTF8Start(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("界ab", 20000))
+	v.Document().SetText(strings.Repeat("界ab", 20000))
 	observe(t, v)
 	v.context = &shapedContext{}
 	t.Cleanup(v.dropLayouts)
@@ -258,14 +258,14 @@ func TestSnapshotLongLinePreservesUTF8Start(t *testing.T) {
 	// Rune 45000 is byte 75000. The 1024-byte prefix lands two bytes inside
 	// a three-byte rune; start must advance to 73978, never split that rune.
 	info := v.Snapshot().TextEditing
-	if info == nil || info.VisibleRange.Start != 73978 || !v.Document().Model().IsRuneBoundary(info.VisibleRange.End) {
+	if info == nil || info.VisibleRange.Start != 73978 || !v.Document().IsRuneBoundary(info.VisibleRange.End) {
 		t.Fatalf("invalid UTF-8 excerpt boundary: %+v", info)
 	}
 }
 
 func TestSnapshotLongLineWithMissingCacheDoesNotShape(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText(strings.Repeat("x", 80000))
+	v.Document().SetText(strings.Repeat("x", 80000))
 	observe(t, v)
 	ctx := &shapedContext{}
 	v.context = ctx

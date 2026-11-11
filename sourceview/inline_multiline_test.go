@@ -10,7 +10,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -18,12 +17,12 @@ import (
 func multilineFixture(t *testing.T) (*SourceView, *countedNativeContext) {
 	t.Helper()
 	v, ctx := inlineFixture(t, "prefix\nTAIL")
-	v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+	v.SetSelection(TextSelection{Anchor: 6, Caret: 6})
 	return v, ctx
 }
 func TestInlineMultilineExtentIsViewLocalAndAcceptIsAtomic(t *testing.T) {
 	v, ctx := multilineFixture(t)
-	model := v.Document().Model()
+	model := v.Document()
 	original, revision := model.Text(), model.Revision()
 	top, size := v.paragraphTop(1), v.ContentSize()
 	showInline(t, v, "\n\treturn value\n}")
@@ -73,18 +72,18 @@ func TestInlineMultilineClearAndExternalEditRestoreExtent(t *testing.T) {
 			case "escape":
 				v.applyKey(events.KeyEvent{Key: events.KeyEscape})
 			case "selection":
-				v.SetSelection(textedit.Selection{})
+				v.SetSelection(TextSelection{})
 			case "external-before":
-				if err := v.Document().Model().Replace(textedit.Range{}, "X"); err != nil {
+				if err := v.Document().Replace(TextRange{}, "X"); err != nil {
 					t.Fatal(err)
 				}
 			case "external-after":
-				at := v.Document().Model().Len()
-				if err := v.Document().Model().Replace(textedit.Range{Start: at, End: at}, "X"); err != nil {
+				at := v.Document().Len()
+				if err := v.Document().Replace(TextRange{Start: at, End: at}, "X"); err != nil {
 					t.Fatal(err)
 				}
 			case "reset":
-				v.Document().Model().SetText("other\nTAIL")
+				v.Document().SetText("other\nTAIL")
 			case "replace":
 				showInline(t, v, "suffix")
 				v.ClearInlineSuggestion()
@@ -123,7 +122,7 @@ func TestInlineMultilineHitUsesCommittedCoordinates(t *testing.T) {
 	if !ok || pos.Offset < 7 || pos.Offset > 11 {
 		t.Fatal("following source hit ignored virtual height", pos)
 	}
-	v.SetSelection(textedit.Selection{Anchor: pos.Offset, Caret: pos.Offset})
+	v.SetSelection(TextSelection{Anchor: pos.Offset, Caret: pos.Offset})
 	if v.inlineSuggestion != nil || v.Selection().Caret < 7 {
 		t.Fatal("selection did not retain committed target after virtual extent removal")
 	}
@@ -163,13 +162,13 @@ func TestInlineMultilineNormalizedLimitsAndTabs(t *testing.T) {
 	if suggestion.Text != "\n\treturn x\n}" {
 		t.Fatal("line endings not normalized")
 	}
-	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Model().Text() != "prefix\n\treturn x\n}\nTAIL" {
+	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Text() != "prefix\n\treturn x\n}\nTAIL" {
 		t.Fatal("normalized literal did not commit", err)
 	}
 	v.Undo()
-	v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+	v.SetSelection(TextSelection{Anchor: 6, Caret: 6})
 	for _, text := range []string{strings.Repeat("x", (64<<10)+1), "a" + strings.Repeat("\n", 256), "a\t\nrest", "a\n\x00b"} {
-		if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{6, text}); ok || err == nil {
+		if ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{6, text}); ok || err == nil {
 			t.Fatal("invalid multiline limit/control accepted", len(text), err)
 		}
 	}
@@ -189,7 +188,7 @@ func TestInlineMultilineVisibleWhenCaretIsAboveViewport(t *testing.T) {
 	if !ok || pos.Offset != 6 {
 		t.Fatal("scrolled virtual line has a source offset", pos)
 	}
-	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().Model().LineCount() < 32 {
+	if err := v.AcceptInlineSuggestion(); err != nil || v.Document().LineCount() < 32 {
 		t.Fatal("visible continuation could not be accepted", err)
 	}
 }
@@ -260,7 +259,7 @@ func TestInlineMultilineNativeFailureAndReentryReleaseBothLayouts(t *testing.T) 
 				probe := &multilineProbeContext{Context: ctx, target: target, phase: phase, fail: phase == "failure"}
 				probe.callback = func() { v.ClearInlineSuggestion() }
 				v.context = probe
-				ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Model().Revision(), InlineSuggestion{6, "head\ntail\nend"})
+				ok, err := v.SetInlineSuggestion(v.Document(), v.Document().Revision(), InlineSuggestion{6, "head\ntail\nend"})
 				if ok || (err != nil) != (phase == "failure") || v.inlineSuggestion != nil {
 					t.Fatal("native failure/reentry retained request", ok, err)
 				}
@@ -313,7 +312,7 @@ func TestInlineMultilinePointerReleaseRetainsPressTarget(t *testing.T) {
 			t.Fatal(err)
 		}
 		v.Arrange(v.Rect())
-		if v.Selection() != (textedit.Selection{Anchor: 6, Caret: 6}) || v.inlineSuggestion != nil {
+		if v.Selection() != (TextSelection{Anchor: 6, Caret: 6}) || v.inlineSuggestion != nil {
 			t.Fatal("stationary pointer re-hit after preview space disappeared", kind, v.Selection())
 		}
 		if v.dragging {
@@ -326,7 +325,7 @@ func TestInlineMultilinePagedSourceUsesCachedEndGeometry(t *testing.T) {
 	prefix := strings.Repeat("X", 70<<10)
 	v, _ := inlineFixture(t, prefix+"\nTAIL")
 	v.SetWrapMode(WrapNone)
-	v.SetSelection(textedit.Selection{Anchor: len(prefix), Caret: len(prefix)})
+	v.SetSelection(TextSelection{Anchor: len(prefix), Caret: len(prefix)})
 	v.Arrange(v.Rect())
 	p := v.paragraph(0)
 	if p == nil || p.Paged == nil || p.Paged.GeometryAt(len(prefix)) == nil {

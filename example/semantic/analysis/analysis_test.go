@@ -8,7 +8,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/language"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func analyze(t *testing.T, text string) Result {
@@ -69,7 +68,7 @@ func completion(t *testing.T, text string) []source.Completion {
 	for end < len(text) && isASCIIWord(text[end]) {
 		end++
 	}
-	c := source.CompletionContext{DocumentID: 1, Revision: 2, DocumentLength: len(text), Caret: at, Range: textedit.Range{Start: start, End: end}, Prefix: text[start:at]}
+	c := source.CompletionContext{DocumentID: 1, Revision: 2, DocumentLength: len(text), Caret: at, Range: source.TextRange{Start: start, End: end}, Prefix: text[start:at]}
 	out, err := Complete(context.Background(), Snapshot{DocumentID: 1, Revision: 2, Text: text}, c)
 	if err != nil {
 		t.Fatal(err)
@@ -107,11 +106,11 @@ func TestExternalHighlightsKeepLanguageAndUnicode(t *testing.T) {
 	if err := d.SetLanguage(language.Go); err != nil {
 		t.Fatal(err)
 	}
-	definition, revision := d.LanguageDefinition(), d.Model().Revision()
+	definition, revision := d.LanguageDefinition(), d.Revision()
 	if ok, err := d.SetHighlights(revision, r.Highlights); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	if d.LanguageDefinition() != definition || d.Model().Revision() != revision {
+	if d.LanguageDefinition() != definition || d.Revision() != revision {
 		t.Fatal("语义结果改变词法定义或修订")
 	}
 	seen := 0
@@ -145,7 +144,7 @@ func TestExternalHighlightsKeepLanguageAndUnicode(t *testing.T) {
 	if !found {
 		t.Fatal("丢失词法字符串角色")
 	}
-	d.Model().ReplaceAtomic(textedit.Range{}, "// changed\n")
+	d.ReplaceAtomic(source.TextRange{}, "// changed\n")
 	if ok, err := d.SetHighlights(revision, r.Highlights); ok || err != nil {
 		t.Fatal("接受过期的绝对坐标颜色")
 	}

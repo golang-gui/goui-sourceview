@@ -27,7 +27,6 @@ import (
 	sourceui "github.com/golang-gui/goui-sourceview/ui"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/style"
@@ -150,24 +149,24 @@ func main() {
 	var steps []step
 	add := func(name string, f func()) { steps = append(steps, step{name, func() bool { f(); return true }}) }
 	wait := func(name string, f func() bool) { steps = append(steps, step{name, f}) }
-	var expected textedit.Selection
+	var expected source.TextSelection
 	var top int
 	var y float32
 	var oldSize geometry.Size
 	var beforeRevision uint64
 	var visibleAt time.Time
 	add("prepare folds", func() {
-		f, err := source.NewFolds(doc.Model().Text(), []source.FoldRange{{StartLine: 10, EndLine: 15}, {StartLine: 1000, EndLine: 1005}})
+		f, err := source.NewFolds(doc.Text(), []source.FoldRange{{StartLine: 10, EndLine: 15}, {StartLine: 1000, EndLine: 1005}})
 		must(err)
-		_, err = doc.SetFolds(doc.Model().Revision(), f)
+		_, err = doc.SetFolds(doc.Revision(), f)
 		must(err)
 		win.SetFocusedWidget(left)
 	})
 	wait("candidates", func() bool { return len(left.FoldingRegions()) == 2 && ready(left) && ready(right) })
 	add("measure manual long line", func() {
-		r, err := doc.Model().LineRange(20)
+		r, err := doc.LineRange(20)
 		must(err)
-		left.SetSelection(textedit.Selection{Anchor: r.Start, Caret: r.Start})
+		left.SetSelection(source.TextSelection{Anchor: r.Start, Caret: r.Start})
 		left.RevealSelection()
 	})
 	wait("long line geometry", func() bool {
@@ -176,7 +175,7 @@ func main() {
 	add("save folds and viewport", func() {
 		check(left.CollapseLine(20), "manual collapse setup")
 		check(left.Fold(10) && left.Fold(1000), "structure collapse setup")
-		expected = textedit.Selection{Anchor: 6, Caret: 1}
+		expected = source.TextSelection{Anchor: 6, Caret: 1}
 		left.SetSelection(expected)
 	})
 	wait("selection revealed", func() bool { return ready(left) && left.Snapshot().TextEditing.VisibleRange.Start == 0 })
@@ -184,7 +183,7 @@ func main() {
 	wait("source viewport", func() bool { return ready(left) && upper.ScrollY() > 4000 })
 	add("save and restore by pointer", func() {
 		top, y = left.Snapshot().TextEditing.VisibleRange.Start, upper.ScrollY()
-		beforeRevision = doc.Model().Revision()
+		beforeRevision = doc.Revision()
 		click(save)
 		right.SetReadOnly(true)
 		click(restore)
@@ -194,7 +193,7 @@ func main() {
 			return false
 		}
 		check(right.Selection() == expected && collapsed(right, 10) && collapsed(right, 1000) && slices.Equal(right.CollapsedLines(), []int{20}), "selection/folds roundtrip")
-		check(doc.Model().Revision() == beforeRevision && !doc.Model().CanUndo(), "restore changed history")
+		check(doc.Revision() == beforeRevision && !doc.CanUndo(), "restore changed history")
 		check(left.Unfold(10) && collapsed(right, 10), "fold isolation")
 		log.Printf("PASS initial viewport selection/folds/read-only; visible after %s, largest timer gap %s", time.Since(restoreStart), maxGap)
 		return true
@@ -225,18 +224,18 @@ func main() {
 		fontSize = 12
 		setStyle()
 		doc = source.NewDocument(strings.Repeat("word 0123456789 中文 אבג ", 350000))
-		check(doc.Model().Len() >= 10<<20, "large fixture too small")
+		check(doc.Len() >= 10<<20, "large fixture too small")
 		left.SetDocument(doc)
 		right.SetDocument(doc)
-		at := doc.Model().Len() / 2
-		for !doc.Model().IsRuneBoundary(at) {
+		at := doc.Len() / 2
+		for !doc.IsRuneBoundary(at) {
 			at++
 		}
-		left.SetSelection(textedit.Selection{Anchor: at, Caret: at})
+		left.SetSelection(source.TextSelection{Anchor: at, Caret: at})
 		left.RevealSelection()
 	})
 	wait("large source middle", func() bool {
-		return ready(left) && left.Snapshot().TextEditing.VisibleRange.Start > doc.Model().Len()/3
+		return ready(left) && left.Snapshot().TextEditing.VisibleRange.Start > doc.Len()/3
 	})
 	add("large source scroll", func() { wheel(left, 83) })
 	wait("large source stable", func() bool { return ready(left) })
@@ -250,8 +249,8 @@ func main() {
 		if frames < restoreFrame+2 || !ready(right) || right.Snapshot().TextEditing.VisibleRange.Start != top {
 			return false
 		}
-		check(right.Selection() == expected && doc.Model().Revision() == 0 && !doc.Model().CanUndo(), "large snapshot selection/history")
-		log.Printf("PASS large %d bytes midpoint viewport; visible after %s, largest timer gap %s; upper=%d lower=%d", doc.Model().Len(), time.Since(restoreStart), maxGap, top, right.Snapshot().TextEditing.VisibleRange.Start)
+		check(right.Selection() == expected && doc.Revision() == 0 && !doc.CanUndo(), "large snapshot selection/history")
+		log.Printf("PASS large %d bytes midpoint viewport; visible after %s, largest timer gap %s; upper=%d lower=%d", doc.Len(), time.Since(restoreStart), maxGap, top, right.Snapshot().TextEditing.VisibleRange.Start)
 		visibleAt = time.Now()
 		return true
 	})
@@ -306,9 +305,9 @@ func main() {
 		must(win.CommitText("x"))
 		check(errors.Is(left.RestoreState(saved), source.ErrOperationChanged), "stale state accepted after shared edit")
 	})
-	wait("input completed", func() bool { return ready(right) && doc.Model().Revision() == 1 })
+	wait("input completed", func() bool { return ready(right) && doc.Revision() == 1 })
 	add("final assertions", func() {
-		check(doc.Model().CanUndo(), "normal CommitText did not edit")
+		check(doc.CanUndo(), "normal CommitText did not edit")
 		log.Printf("PASS view state; OS=%s typography=%s scale=%s basic=%t dark=%t", runtime.GOOS, app.Typography().Name(), os.Getenv("GOUI_PLAT_SCALE"), *basicTheme, *dark)
 	})
 	index, complete, stable := 0, false, 0

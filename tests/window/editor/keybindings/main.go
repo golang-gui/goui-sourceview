@@ -25,7 +25,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
@@ -112,7 +111,7 @@ func main() {
 	steps := []func(){
 		func() {
 			check(v.Focused() && probe.scale > 0, "window not ready")
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 			key(events.KeySpace, events.ModifierControl)
 			check(space == 1 && len(win.Popovers()) == 0, "Ctrl+Space was still a default completion binding")
 			bindings := v.KeyBindings()
@@ -136,40 +135,40 @@ func main() {
 			check(len(win.Popovers()) == 1 && v.Focused(), "explicit completion did not open")
 			key(events.KeyArrowDown, 0)
 			key(events.KeyEnter, 0)
-			check(doc.Model().Text() == "true\nx", "completion popup input changed")
+			check(doc.Text() == "true\nx", "completion popup input changed")
 			key(events.KeyF7, 0)
-			check(doc.Model().Text() == "tr\nx", "remapped undo failed")
+			check(doc.Text() == "tr\nx", "remapped undo failed")
 			key(events.KeyArrowDown, alt)
-			check(oldMove == 1 && doc.Model().Text() == "tr\nx", "old move shortcut survived replacement")
+			check(oldMove == 1 && doc.Text() == "tr\nx", "old move shortcut survived replacement")
 			key(events.KeyF6, 0)
-			check(doc.Model().Text() == "x\ntr", "remapped line move failed")
+			check(doc.Text() == "x\ntr", "remapped line move failed")
 			v.SetReadOnly(true)
 			key(events.KeyF6, 0)
-			check(move == 0 && doc.Model().Text() == "x\ntr", "readonly remapped command leaked or edited")
+			check(move == 0 && doc.Text() == "x\ntr", "readonly remapped command leaked or edited")
 			v.SetReadOnly(false)
 			key(events.KeyF7, 0)
-			check(doc.Model().Text() == "tr\nx", "remapped history failed")
+			check(doc.Text() == "tr\nx", "remapped history failed")
 			bindings := v.KeyBindings()
 			delete(bindings, source.CommandMoveLinesDown)
 			must(v.SetKeyBindings(bindings))
 			key(events.KeyF6, 0)
-			check(move == 1 && doc.Model().Text() == "tr\nx", "removed key did not propagate")
+			check(move == 1 && doc.Text() == "tr\nx", "removed key did not propagate")
 		},
 		func() {
-			doc.Model().SetText("foo foo\nlast")
-			v.SetSelection(textedit.Selection{})
+			doc.SetText("foo foo\nlast")
+			v.SetSelection(source.TextSelection{})
 			v.SetSearch(source.SearchQuery{Text: "foo"})
 			key(events.KeyF, primary)
 			check(oldFind == 1 && !panelVisible(v, "sourceview-find-bar"), "old Find binding remained active")
 			key(events.KeyF4, 0)
 			check(panelVisible(v, "sourceview-find-bar") && panel(v, "sourceview-find-bar").ContainsFocus(), "remapped Find did not open")
 			key(events.KeyF8, 0)
-			check(v.Selection().Range() == (textedit.Range{Start: 0, End: 3}), "bar did not use remapped FindNext")
+			check(v.Selection().Range() == (source.TextRange{Start: 0, End: 3}), "bar did not use remapped FindNext")
 			key(events.KeyF8, events.ModifierShift)
-			check(v.Selection().Range() == (textedit.Range{Start: 4, End: 7}), "bar did not use remapped FindPrevious")
+			check(v.Selection().Range() == (source.TextRange{Start: 4, End: 7}), "bar did not use remapped FindPrevious")
 			key(events.KeyEscape, 0)
 			key(events.KeyF3, 0)
-			check(oldNext == 1 && v.Selection().Range() == (textedit.Range{Start: 4, End: 7}), "old FindNext survived replacement")
+			check(oldNext == 1 && v.Selection().Range() == (source.TextRange{Start: 4, End: 7}), "old FindNext survived replacement")
 			key(events.KeyG, events.ModifierControl)
 			check(oldGoTo == 1 && !panelVisible(v, "sourceview-goto-bar"), "old GoTo binding remained active")
 			key(events.KeyF5, 0)
@@ -199,13 +198,13 @@ func main() {
 			check(panelVisible(v, "sourceview-goto-bar") && !panelVisible(v, "sourceview-find-bar"), "direct companion activation was not exclusive")
 			v.HidePanel()
 			check(v.Focused() && !panelVisible(v, "sourceview-goto-bar"), "hiding direct companion did not restore focus")
-			doc.Model().SetText("")
+			doc.SetText("")
 			must(win.CommitText("a"))
 			key(events.KeyEnter, 0)
 			key(events.KeyBackspace, 0)
-			check(doc.Model().Text() == "a", "clearing command bindings disabled ordinary input")
+			check(doc.Text() == "a", "clearing command bindings disabled ordinary input")
 			must(v.InsertLine(true))
-			check(doc.Model().Text() == "a\n" && v.Undo() && doc.Model().Text() == "a", "direct methods depended on key bindings")
+			check(doc.Text() == "a\n" && v.Undo() && doc.Text() == "a", "direct methods depended on key bindings")
 		},
 		func() {
 			must(v.SetKeyBindings(source.DefaultKeyBindings()))
@@ -217,19 +216,19 @@ func main() {
 			key(events.KeyEscape, 0)
 			key(events.KeySpace, events.ModifierControl)
 			check(space == 2, "reset restored an implicit completion binding")
-			doc.Model().SetText("a\nb")
-			v.SetSelection(textedit.Selection{})
+			doc.SetText("a\nb")
+			v.SetSelection(source.TextSelection{})
 			must(v.SetKeyBindings(source.KeyBindings{source.CommandMoveLinesDown: {{Key: gui.KeyF6}}}))
-			h := v.ConnectChange(func(textedit.Change) { must(v.SetKeyBindings(nil)) })
+			h := v.ConnectChange(func(source.TextChange) { must(v.SetKeyBindings(nil)) })
 			key(events.KeyF6, 0)
 			h.Disconnect()
-			check(doc.Model().Text() == "b\na" && len(v.KeyBindings()) == 0 && move == 1, "reentrant replacement reused or leaked the same event")
+			check(doc.Text() == "b\na" && len(v.KeyBindings()) == 0 && move == 1, "reentrant replacement reused or leaked the same event")
 			key(events.KeyF6, 0)
 			check(move == 2, "replacement did not apply to the next event")
 		},
 		func() {
-			doc.Model().SetText("tr\nx")
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			doc.SetText("tr\nx")
+			v.SetSelection(source.TextSelection{Anchor: 2, Caret: 2})
 			must(v.SetKeyBindings(source.KeyBindings{
 				source.CommandComplete: {{Key: gui.KeyF2}}, source.CommandMoveLinesDown: {{Key: gui.KeyF6}},
 			}))
@@ -242,15 +241,15 @@ func main() {
 			})
 			key(events.KeyF6, 0)
 			h.Disconnect()
-			check(doc.Model().Text() == "tr\nx" && move == 2, "popup close reentry executed the same event on a new binding table")
+			check(doc.Text() == "tr\nx" && move == 2, "popup close reentry executed the same event on a new binding table")
 			key(events.KeyF6, 0)
-			check(doc.Model().Text() == "tr\n\nx", "replacement binding was not active on the following event")
+			check(doc.Text() == "tr\n\nx", "replacement binding was not active on the following event")
 		},
 		func() {
 			// 准备可滚动正文；后续打开和滚动都走正常按键、滚轮事件。
 			must(v.SetKeyBindings(source.DefaultKeyBindings()))
-			doc.Model().SetText(strings.Repeat("source line\n", 200))
-			v.SetSelection(textedit.Selection{})
+			doc.SetText(strings.Repeat("source line\n", 200))
+			v.SetSelection(source.TextSelection{})
 		},
 		func() {
 			closedExtent = v.ContentSize()

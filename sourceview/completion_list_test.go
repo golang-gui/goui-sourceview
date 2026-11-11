@@ -6,7 +6,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/controls"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 )
 
@@ -47,12 +46,12 @@ func TestCompletionUnicodePrefixAndWordAnchor(t *testing.T) {
 	v, _ := colorFixture(t)
 	v.SetShowLineNumbers(false)
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 200}, geometry.Point{})
-	v.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+	v.SetSelection(TextSelection{Anchor: 5, Caret: 5})
 	caret, ok := v.caretRect()
 	if !ok {
 		t.Fatal("missing caret")
 	}
-	c := CompletionContext{Range: textedit.Range{Start: 1, End: 5}}
+	c := CompletionContext{Range: TextRange{Start: 1, End: 5}}
 	position := v.completionPosition(c, caret)
 	if position != (geometry.Point{X: v.gutter + 4, Y: caret.Y + caret.Height + 2}) {
 		t.Fatal("list text did not align with word start", position)
@@ -65,7 +64,7 @@ func TestCompletionUnicodePrefixAndWordAnchor(t *testing.T) {
 	if p := v.completionPosition(c, caret); p.X != caret.X-12 {
 		t.Fatal("hidden start displaced popup", p)
 	}
-	if v.Selection() != (textedit.Selection{Anchor: 5, Caret: 5}) {
+	if v.Selection() != (TextSelection{Anchor: 5, Caret: 5}) {
 		t.Fatal("anchoring changed selection")
 	}
 }

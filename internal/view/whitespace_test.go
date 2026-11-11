@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/core/geometry"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/typography"
 )
 
@@ -111,14 +111,14 @@ func TestWhitespaceNativeMetrics(t *testing.T) {
 			for w.Pending(true) {
 				w.Advance(time.Time{}, true)
 			}
-			g := textedit.NewGeometry(lines, clusters, len(text), 20)
+			g := textcore.NewGeometry(lines, clusters, len(text), 20)
 			seen := 0
 			w.Visit(geometry.Rect(-10000, -10000, 20000, 20000), func(c typography.TextCluster, r geometry.Rectangle) {
 				if WhitespaceKind([]rune(text[c.Start : c.Start+c.Length])[0]) == 0 {
 					return
 				}
 				seen++
-				rects := g.Selection(textedit.Range{Start: c.Start, End: c.Start + c.Length})
+				rects := g.Selection(textcore.Range{Start: c.Start, End: c.Start + c.Length})
 				if len(rects) != 1 || rects[0] != r {
 					t.Fatalf("native blank geometry %q: %v vs %v", text[c.Start:c.Start+c.Length], r, rects)
 				}

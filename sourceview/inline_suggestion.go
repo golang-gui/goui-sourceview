@@ -7,10 +7,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
@@ -29,7 +29,7 @@ type inlineSuggestionState struct {
 	request    InlineSuggestion
 	state      operationState
 	layout     typography.TextLayout
-	geometry   textedit.Geometry
+	geometry   textcore.Geometry
 	font       typography.FontInfo
 	color      color.NRGBA
 	multi      *view.InlineLayout
@@ -63,7 +63,7 @@ func (v *SourceView) SetInlineSuggestion(document *Document, revision uint64, su
 	if !utf8.ValidString(suggestion.Text) || len(suggestion.Text) > 64<<10 {
 		return false, fmt.Errorf("sourceview: invalid or oversized inline suggestion")
 	}
-	suggestion.Text = textedit.Normalize(suggestion.Text)
+	suggestion.Text = textcore.Normalize(suggestion.Text)
 	head, _, _ := strings.Cut(suggestion.Text, "\n")
 	if strings.TrimSpace(suggestion.Text) == "" || strings.Count(suggestion.Text, "\n") >= 256 || strings.ContainsRune(head, '\t') || strings.ContainsFunc(suggestion.Text, func(r rune) bool {
 		return unicode.IsControl(r) && r != '\n' && r != '\t' || r == '\u2028' || r == '\u2029'
@@ -126,7 +126,7 @@ func (v *SourceView) inlineSuggestionAvailable() bool {
 
 func (v *SourceView) inlineSuggestionCurrent() bool {
 	s := v.inlineSuggestion
-	return s != nil && s.state.valid(v) && v.inlineSuggestionAvailable() && v.Selection() == (textedit.Selection{Anchor: s.request.Position, Caret: s.request.Position})
+	return s != nil && s.state.valid(v) && v.inlineSuggestionAvailable() && v.Selection() == (TextSelection{Anchor: s.request.Position, Caret: s.request.Position})
 }
 
 // Native preparation stays outside Paint/Snapshot: one layout for a single-line
@@ -176,7 +176,7 @@ func (v *SourceView) prepareInlineSuggestion() error {
 		return nil
 	}
 	s.layout, s.font, s.color = l, font, c
-	s.geometry = textedit.NewGeometry(lines, clusters, len(s.request.Text), v.lineHeight)
+	s.geometry = textcore.NewGeometry(lines, clusters, len(s.request.Text), v.lineHeight)
 	return nil
 }
 
@@ -205,7 +205,7 @@ func (v *SourceView) inlinePreview() (inlinePreview, bool) {
 		return inlinePreview{}, false
 	}
 	r, _ := v.document.model.LineRange(row)
-	pos := textedit.Position{Offset: s.request.Position - r.Start, Upstream: true}
+	pos := textcore.Position{Offset: s.request.Position - r.Start, Upstream: true}
 	g, origin := &p.Geometry, v.paragraphOrigin(row, p)
 	if p.Paged != nil {
 		frame := p.Paged.CachedGeometryAt(pos.Offset)
@@ -285,7 +285,7 @@ func (v *SourceView) AcceptInlineSuggestion() error {
 		return ErrOperationChanged
 	}
 	end := at + len(text)
-	return v.ApplyEdits(s.state.document, s.state.revision, []textedit.Edit{{Range: textedit.Range{Start: at, End: at}, Text: text}}, textedit.Selection{Anchor: end, Caret: end})
+	return v.ApplyEdits(s.state.document, s.state.revision, []TextEdit{{Range: TextRange{Start: at, End: at}, Text: text}}, TextSelection{Anchor: end, Caret: end})
 }
 
 func (v *SourceView) inlineSuggestionKey(event events.KeyEvent) bool {
@@ -329,7 +329,7 @@ func (v *SourceView) inlineAnchor(s *inlineSuggestionState) (*paragraph, geometr
 		return nil, geometry.Point{}, typography.TextLine{}, geometry.Rectangle{}, false
 	}
 	r, _ := v.document.model.LineRange(s.row)
-	pos := textedit.Position{Offset: s.request.Position - r.Start, Upstream: true}
+	pos := textcore.Position{Offset: s.request.Position - r.Start, Upstream: true}
 	g, origin := &p.Geometry, v.paragraphOrigin(s.row, p)
 	if p.Paged != nil {
 		frame := p.Paged.CachedGeometryAt(pos.Offset)
@@ -511,20 +511,20 @@ func (v *SourceView) paintMultilineInline(p gui.Painter, s *inlineSuggestionStat
 
 // Virtual-only space maps to the real insertion point. Following source rows
 // still use the same measured row index; selection APIs never see ghost bytes.
-func (v *SourceView) inlineVirtualHit(point geometry.Point) (textedit.Position, geometry.Rectangle, bool) {
+func (v *SourceView) inlineVirtualHit(point geometry.Point) (textcore.Position, geometry.Rectangle, bool) {
 	s := v.inlineSuggestion
 	if s == nil || s.multi == nil || !v.inlineSuggestionCurrent() {
-		return textedit.Position{}, geometry.Rectangle{}, false
+		return textcore.Position{}, geometry.Rectangle{}, false
 	}
 	p := v.cachedParagraph(s.row)
 	if p == nil {
-		return textedit.Position{}, geometry.Rectangle{}, false
+		return textcore.Position{}, geometry.Rectangle{}, false
 	}
 	top := padding + v.paragraphTop(s.row) + p.height - v.offset.Y
 	if point.Y < top || point.Y >= top+s.multi.Extra {
-		return textedit.Position{}, geometry.Rectangle{}, false
+		return textcore.Position{}, geometry.Rectangle{}, false
 	}
 	r, _ := v.document.model.LineRange(s.row)
-	caret, ok := v.paragraphCaret(s.row, p, textedit.Position{Offset: r.End - r.Start, Upstream: true}, true)
-	return textedit.Position{Offset: s.request.Position, Upstream: true}, caret, ok
+	caret, ok := v.paragraphCaret(s.row, p, textcore.Position{Offset: r.End - r.Start, Upstream: true}, true)
+	return textcore.Position{Offset: s.request.Position, Upstream: true}, caret, ok
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/language"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 type tagMatchState struct {
@@ -26,16 +25,16 @@ func (v *SourceView) definitionAt(at int) *language.Language {
 // current document; embedded regions require analyzed boundaries.
 // embeddedSpan finds a fully analyzed contiguous child region. Unresolved
 // boundaries fail closed; no language ID has special treatment here.
-func (v *SourceView) embeddedSpan(at int) (textedit.Range, bool) {
+func (v *SourceView) embeddedSpan(at int) (TextRange, bool) {
 	m := v.document.model
 	ctx, ok := v.lexicalContext(at)
 	if !ok || ctx.Embedded == nil {
-		return textedit.Range{}, false
+		return TextRange{}, false
 	}
 	first, last := m.LineAt(at), m.LineAt(at)
 	for first > 0 {
 		if r, _ := m.LineRange(first); at-r.Start > 64<<10 {
-			return textedit.Range{}, false
+			return TextRange{}, false
 		}
 		r, _ := m.LineRange(first - 1)
 		c, known := v.lexicalContext(r.End)
@@ -46,7 +45,7 @@ func (v *SourceView) embeddedSpan(at int) (textedit.Range, bool) {
 	}
 	for last+1 < m.LineCount() {
 		if r, _ := m.LineRange(last); r.End-at > 64<<10 {
-			return textedit.Range{}, false
+			return TextRange{}, false
 		}
 		r, _ := m.LineRange(last + 1)
 		c, known := v.lexicalContext(r.End)
@@ -57,14 +56,14 @@ func (v *SourceView) embeddedSpan(at int) (textedit.Range, bool) {
 	}
 	a, _ := m.LineRange(first)
 	b, _ := m.LineRange(last)
-	return textedit.Range{Start: a.Start, End: b.End}, true
+	return TextRange{Start: a.Start, End: b.End}, true
 }
 func (v *SourceView) tagText() (string, *language.TagRules, int) {
 	rules := v.definitionAt(v.Selection().Caret).Editing().Tags
 	if rules == nil {
 		return "", nil, 0
 	}
-	r := textedit.Range{End: v.document.model.Len()}
+	r := TextRange{End: v.document.model.Len()}
 	if ctx, ok := v.lexicalContext(v.Selection().Caret); ok && ctx.Embedded != nil {
 		var valid bool
 		r, valid = v.embeddedSpan(v.Selection().Caret)
@@ -75,7 +74,7 @@ func (v *SourceView) tagText() (string, *language.TagRules, int) {
 	text, _ := v.document.model.Slice(r)
 	return text, rules, r.Start
 }
-func (v *SourceView) matchingTags() []textedit.Range {
+func (v *SourceView) matchingTags() []TextRange {
 	definition := v.definitionAt(v.Selection().Caret)
 	cache := v.tagMatches
 	m := v.document.model
@@ -89,7 +88,7 @@ func (v *SourceView) matchingTags() []textedit.Range {
 	result := tagMatchState{bracketState: bracketState{document: v.document, revision: m.Revision(), caret: v.Selection().Caret, language: v.document.languageEpoch, valid: true}, definition: definition}
 	match, ok := rules.Match(text, v.Selection().Caret-base)
 	if ok {
-		result.ranges = []textedit.Range{{Start: base + match.Opening.Start, End: base + match.Opening.End}, {Start: base + match.Closing.Start, End: base + match.Closing.End}}
+		result.ranges = []TextRange{{Start: base + match.Opening.Start, End: base + match.Opening.End}, {Start: base + match.Closing.Start, End: base + match.Closing.End}}
 	}
 	// A negative markup result is independent of the bracket scanner's lexical
 	// readiness. Keep it while that scanner waits, rather than parsing the whole
@@ -97,7 +96,7 @@ func (v *SourceView) matchingTags() []textedit.Range {
 	v.tagMatches = result
 	return result.ranges
 }
-func (v *SourceView) closeTag(r textedit.Range, typed string) (bool, error) {
+func (v *SourceView) closeTag(r TextRange, typed string) (bool, error) {
 	if !v.autoPairs || typed != ">" || r.Start != r.End {
 		return false, nil
 	}
@@ -117,12 +116,12 @@ func (v *SourceView) closeTag(r textedit.Range, typed string) (bool, error) {
 		}
 	}
 	at := r.Start + 1
-	return true, v.applyPlan(editor.Plan{Before: v.Selection(), After: textedit.Selection{Anchor: at, Caret: at}, Edits: []textedit.Edit{{Range: r, Text: ">" + close}}})
+	return true, v.applyPlan(editor.Plan{Before: v.Selection(), After: TextSelection{Anchor: at, Caret: at}, Edits: []TextEdit{{Range: r, Text: ">" + close}}})
 }
 
 // Linked name edits revalidate both ranges against the original revision and
 // make one ApplyBatch. External edits, paste and IME never trigger a mirror edit.
-func (v *SourceView) linkedTag(r textedit.Range, insert string) (bool, error) {
+func (v *SourceView) linkedTag(r TextRange, insert string) (bool, error) {
 	if !v.linkedTags {
 		return false, nil
 	}
@@ -149,14 +148,14 @@ func (v *SourceView) linkedTag(r textedit.Range, insert string) (bool, error) {
 	if !rules.ValidName(name) {
 		return false, nil
 	}
-	mirror := textedit.Edit{Range: textedit.Range{Start: b.Start, End: b.End}, Text: name}
-	edits := []textedit.Edit{{Range: r, Text: insert}, mirror}
+	mirror := TextEdit{Range: TextRange{Start: b.Start, End: b.End}, Text: name}
+	edits := []TextEdit{{Range: r, Text: insert}, mirror}
 	sort.Slice(edits, func(i, j int) bool { return edits[i].Range.Start < edits[j].Range.Start })
 	caret := r.Start + len(insert)
 	if b.End <= r.Start {
 		caret += len(name) - (b.End - b.Start)
 	}
-	return true, v.applyPlan(editor.Plan{Before: v.Selection(), After: textedit.Selection{Anchor: caret, Caret: caret}, Edits: edits})
+	return true, v.applyPlan(editor.Plan{Before: v.Selection(), After: TextSelection{Anchor: caret, Caret: caret}, Edits: edits})
 }
 
 // LinkedTags controls typed/deleted name mirroring on confirmed markup pairs.

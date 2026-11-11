@@ -6,45 +6,45 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 func TestEditingCommandsAndSelectionHistory(t *testing.T) {
 	v := NewSourceView()
 	observe(t, v)
 	v.document.model.SetText("  foo.bar\nlast")
-	v.SetSelection(textedit.Selection{Anchor: 5, Caret: 5})
+	v.SetSelection(TextSelection{Anchor: 5, Caret: 5})
 	if err := v.InsertLine(true); err != nil {
 		t.Fatal(err)
 	}
-	if v.document.model.Text() != "  foo.bar\n  \nlast" || v.Selection() != (textedit.Selection{Anchor: 12, Caret: 12}) {
+	if v.document.model.Text() != "  foo.bar\n  \nlast" || v.Selection() != (TextSelection{Anchor: 12, Caret: 12}) {
 		t.Fatal(v.document.model.Text(), v.Selection())
 	}
-	if !v.Undo() || v.Selection() != (textedit.Selection{Anchor: 5, Caret: 5}) {
+	if !v.Undo() || v.Selection() != (TextSelection{Anchor: 5, Caret: 5}) {
 		t.Fatal("insert line history")
 	}
 	v.MoveWord(true, false)
-	if v.Selection() != (textedit.Selection{Anchor: 9, Caret: 9}) {
+	if v.Selection() != (TextSelection{Anchor: 9, Caret: 9}) {
 		t.Fatal("forward fast word", v.Selection())
 	}
 	v.MoveWord(false, true)
-	if v.Selection() != (textedit.Selection{Anchor: 9, Caret: 6}) {
+	if v.Selection() != (TextSelection{Anchor: 9, Caret: 6}) {
 		t.Fatal("extend word", v.Selection())
 	}
 	if err := v.DeleteWord(false); err != nil {
 		t.Fatal(err)
 	}
-	if v.document.model.Text() != "  foo.\nlast" || !v.Undo() || v.Selection() != (textedit.Selection{Anchor: 9, Caret: 6}) {
+	if v.document.model.Text() != "  foo.\nlast" || !v.Undo() || v.Selection() != (TextSelection{Anchor: 9, Caret: 6}) {
 		t.Fatal("selected word delete or history")
 	}
 	v.SelectLine()
-	if v.Selection() != (textedit.Selection{Caret: 10}) {
+	if v.Selection() != (TextSelection{Caret: 10}) {
 		t.Fatal("line selection", v.Selection())
 	}
 	v.SelectLine()
-	if v.Selection() != (textedit.Selection{Caret: 14}) {
+	if v.Selection() != (TextSelection{Caret: 14}) {
 		t.Fatal("line expansion", v.Selection())
 	}
 }
@@ -54,7 +54,7 @@ func TestNewEditingCommandsRespectModesAndReentry(t *testing.T) {
 		v := NewSourceView()
 		observe(t, v)
 		v.document.model.SetText("foo")
-		v.SetSelection(textedit.Selection{Anchor: 3, Caret: 3})
+		v.SetSelection(TextSelection{Anchor: 3, Caret: 3})
 		v.SetReadOnly(true)
 		if err := run(v); !errors.Is(err, ErrReadOnly) {
 			t.Fatal(err)
@@ -67,7 +67,7 @@ func TestNewEditingCommandsRespectModesAndReentry(t *testing.T) {
 		v.SetEnabled(true)
 		old := v.Document()
 		replacement := NewDocument("keep")
-		v.projection = textedit.NewProjection(old.model, v.Selection())
+		v.projection = textcore.NewProjection(old.model, v.Selection())
 		v.im = &resetContext{reset: func() { v.SetDocument(replacement) }}
 		if err := run(v); !errors.Is(err, ErrOperationChanged) || old.model.Text() != "foo" || replacement.model.Text() != "keep" {
 			t.Fatal("reentrant edit", err)
@@ -91,36 +91,36 @@ func TestLineCommandsShareHistoryAndMapOtherView(t *testing.T) {
 	b.SetDocument(d)
 	observe(t, a)
 	observe(t, b)
-	a.SetSelection(textedit.Selection{Anchor: 6, Caret: 9})
-	b.SetSelection(textedit.Selection{Anchor: 7, Caret: 7})
+	a.SetSelection(TextSelection{Anchor: 6, Caret: 9})
+	b.SetSelection(TextSelection{Anchor: 7, Caret: 7})
 	if err := a.MoveLines(false); err != nil {
 		t.Fatal(err)
 	}
-	if d.model.Text() != "alpha\nprev\nomega" || a.Selection() != (textedit.Selection{Anchor: 1, Caret: 4}) || b.Selection() != (textedit.Selection{Anchor: 2, Caret: 2}) {
+	if d.model.Text() != "alpha\nprev\nomega" || a.Selection() != (TextSelection{Anchor: 1, Caret: 4}) || b.Selection() != (TextSelection{Anchor: 2, Caret: 2}) {
 		t.Fatal("move lost view-local selections", d.model.Text(), a.Selection(), b.Selection())
 	}
-	if !a.Undo() || d.model.Text() != "prev\nalpha\nomega" || a.Selection() != (textedit.Selection{Anchor: 6, Caret: 9}) || b.Selection() != (textedit.Selection{Anchor: 7, Caret: 7}) {
+	if !a.Undo() || d.model.Text() != "prev\nalpha\nomega" || a.Selection() != (TextSelection{Anchor: 6, Caret: 9}) || b.Selection() != (TextSelection{Anchor: 7, Caret: 7}) {
 		t.Fatal("move history or sibling mapping", a.Selection(), b.Selection())
 	}
-	if !a.Redo() || a.Selection() != (textedit.Selection{Anchor: 1, Caret: 4}) {
+	if !a.Redo() || a.Selection() != (TextSelection{Anchor: 1, Caret: 4}) {
 		t.Fatal("move redo")
 	}
 	if err := a.DuplicateLines(true); err != nil {
 		t.Fatal(err)
 	}
-	if d.model.Text() != "alpha\nalpha\nprev\nomega" || a.Selection() != (textedit.Selection{Anchor: 7, Caret: 10}) {
+	if d.model.Text() != "alpha\nalpha\nprev\nomega" || a.Selection() != (TextSelection{Anchor: 7, Caret: 10}) {
 		t.Fatal("copy did not follow new block", d.model.Text(), a.Selection())
 	}
-	if !a.Undo() || d.model.Text() != "alpha\nprev\nomega" || a.Selection() != (textedit.Selection{Anchor: 1, Caret: 4}) {
+	if !a.Undo() || d.model.Text() != "alpha\nprev\nomega" || a.Selection() != (TextSelection{Anchor: 1, Caret: 4}) {
 		t.Fatal("copy history")
 	}
 	if err := a.DeleteLines(); err != nil {
 		t.Fatal(err)
 	}
-	if d.model.Text() != "prev\nomega" || a.Selection() != (textedit.Selection{}) {
+	if d.model.Text() != "prev\nomega" || a.Selection() != (TextSelection{}) {
 		t.Fatal("delete line boundary")
 	}
-	if !a.Undo() || d.model.Text() != "alpha\nprev\nomega" || a.Selection() != (textedit.Selection{Anchor: 1, Caret: 4}) {
+	if !a.Undo() || d.model.Text() != "alpha\nprev\nomega" || a.Selection() != (TextSelection{Anchor: 1, Caret: 4}) {
 		t.Fatal("delete history")
 	}
 }
@@ -131,7 +131,7 @@ func TestLineCommandsRespectRestrictionsAndResetReentry(t *testing.T) {
 			v := NewSourceView()
 			v.document.model.SetText("a\nb")
 			observe(t, v)
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 			v.SetReadOnly(true)
 			if err := command.run(v); !errors.Is(err, ErrReadOnly) {
 				t.Fatal("read-only", err)
@@ -144,7 +144,7 @@ func TestLineCommandsRespectRestrictionsAndResetReentry(t *testing.T) {
 			v.SetEnabled(true)
 			old := v.Document()
 			replacement := NewDocument("keep")
-			v.projection = textedit.NewProjection(old.model, v.Selection())
+			v.projection = textcore.NewProjection(old.model, v.Selection())
 			v.im = &resetContext{reset: func() { v.SetDocument(replacement) }}
 			if err := command.run(v); !errors.Is(err, ErrOperationChanged) {
 				t.Fatal("preedit reentry applied old plan", err)
@@ -162,17 +162,17 @@ func TestLineCommandCallbacksKeepNewDocumentAndSelection(t *testing.T) {
 			v := NewSourceView()
 			v.document.model.SetText("a\nb")
 			observe(t, v)
-			v.SetSelection(textedit.Selection{Anchor: 2, Caret: 2})
+			v.SetSelection(TextSelection{Anchor: 2, Caret: 2})
 			replacement := NewDocument("new document")
-			h := v.ConnectChange(func(textedit.Change) {
+			h := v.ConnectChange(func(TextChange) {
 				v.SetDocument(replacement)
-				v.SetSelection(textedit.Selection{Anchor: 1, Caret: 1})
+				v.SetSelection(TextSelection{Anchor: 1, Caret: 1})
 			})
 			defer h.Disconnect()
 			if err := command.run(v); err != nil {
 				t.Fatal(err)
 			}
-			if v.Document() != replacement || replacement.model.Text() != "new document" || v.Selection() != (textedit.Selection{Anchor: 1, Caret: 1}) {
+			if v.Document() != replacement || replacement.model.Text() != "new document" || v.Selection() != (TextSelection{Anchor: 1, Caret: 1}) {
 				t.Fatal("post-commit callback state overwritten")
 			}
 		})
@@ -220,29 +220,29 @@ func clipboardFixture(t *testing.T) (*SourceView, *fakeClipboard) {
 	gui.App = clipboardApplication{clipboard: clip}
 	t.Cleanup(func() { gui.App = previous })
 	v := NewSourceView()
-	v.Document().Model().SetText("abc")
+	v.Document().SetText("abc")
 	observe(t, v)
-	v.SetSelection(textedit.Selection{Caret: 2})
+	v.SetSelection(TextSelection{Caret: 2})
 	return v, clip
 }
 
 func TestCutPreservesTextOnWriteFailureAndReentry(t *testing.T) {
 	v, c := clipboardFixture(t)
 	c.err = errors.New("native clipboard unavailable")
-	if err := v.Cut(); !errors.Is(err, c.err) || v.Document().Model().Text() != "abc" {
+	if err := v.Cut(); !errors.Is(err, c.err) || v.Document().Text() != "abc" {
 		t.Fatal("failed cut deleted text", err)
 	}
 	c.err = nil
-	c.write = func() { v.SetSelection(textedit.Selection{Caret: 1}) }
-	if err := v.Cut(); err != nil || v.Document().Model().Text() != "abc" {
+	c.write = func() { v.SetSelection(TextSelection{Caret: 1}) }
+	if err := v.Cut(); err != nil || v.Document().Text() != "abc" {
 		t.Fatal("reentrant copy deleted stale range")
 	}
 	c.write = nil
-	v.SetSelection(textedit.Selection{Caret: 2})
-	if err := v.Cut(); err != nil || c.text != "ab" || v.Document().Model().Text() != "c" {
+	v.SetSelection(TextSelection{Caret: 2})
+	if err := v.Cut(); err != nil || c.text != "ab" || v.Document().Text() != "c" {
 		t.Fatal("cut", err, c.text)
 	}
-	if !v.Undo() || v.Document().Model().Text() != "abc" {
+	if !v.Undo() || v.Document().Text() != "abc" {
 		t.Fatal("cut history")
 	}
 }
@@ -254,17 +254,17 @@ func TestPasteIdentityErrorsAndSynchronousCompletion(t *testing.T) {
 	if err := v.Paste(); err != nil {
 		t.Fatal(err)
 	}
-	v.SetSelection(textedit.Selection{Caret: 1})
+	v.SetSelection(TextSelection{Caret: 1})
 	c.pending("stale", nil)
-	if v.Document().Model().Text() != "abc" {
+	if v.Document().Text() != "abc" {
 		t.Fatal("stale selection pasted")
 	}
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 2})
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 2})
 	if err := v.Paste(); err != nil {
 		t.Fatal(err)
 	}
 	c.pending("", nil)
-	if v.Document().Model().Text() != "abc" || v.Selection() != (textedit.Selection{Anchor: 1, Caret: 2}) || v.pendingPaste != nil {
+	if v.Document().Text() != "abc" || v.Selection() != (TextSelection{Anchor: 1, Caret: 2}) || v.pendingPaste != nil {
 		t.Fatal("empty paste changed document/selection or retained pending state")
 	}
 	if reported != 0 {
@@ -279,9 +279,9 @@ func TestPasteIdentityErrorsAndSynchronousCompletion(t *testing.T) {
 	}
 	c.immediate = true
 	c.text = "Ω"
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 2})
-	if err := v.Paste(); err != nil || v.Document().Model().Text() != "aΩc" {
-		t.Fatal("synchronous callback", err, v.Document().Model().Text())
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 2})
+	if err := v.Paste(); err != nil || v.Document().Text() != "aΩc" {
+		t.Fatal("synchronous callback", err, v.Document().Text())
 	}
 	c.immediate = false
 	_ = v.Paste()
@@ -291,7 +291,7 @@ func TestPasteIdentityErrorsAndSynchronousCompletion(t *testing.T) {
 		t.Fatal("cancelled callback retains a widget or document")
 	}
 	c.pending("stale", nil)
-	if v.Document().Model().Text() != "aΩc" {
+	if v.Document().Text() != "aΩc" {
 		t.Fatal("unmounted view pasted")
 	}
 }
@@ -311,20 +311,20 @@ func TestCustomWordAndPairs(t *testing.T) {
 	observe(t, v)
 	m := v.document.model
 	m.SetText("hello-world rest")
-	if r := editor.WordRange(m, 4, v.document.definition.IsWord); r != (textedit.Range{Start: 0, End: 11}) {
+	if r := editor.WordRange(m, 4, v.document.definition.IsWord); r != (TextRange{Start: 0, End: 11}) {
 		t.Fatal(r)
 	}
-	v.SetSelection(textedit.Selection{})
+	v.SetSelection(TextSelection{})
 	v.MoveWord(true, false)
 	if v.Selection().Caret != 11 {
 		t.Fatal(v.Selection())
 	}
 	m.SetText("<")
-	v.SetSelection(textedit.Selection{Anchor: 1, Caret: 1})
+	v.SetSelection(TextSelection{Anchor: 1, Caret: 1})
 	if handled, err := v.pairText(v.Selection().Range(), "<"); !handled || err != nil || m.Text() != "<<>>" || v.Selection().Caret != 2 {
 		t.Fatal(handled, err, m.Text(), v.Selection())
 	}
-	if ranges := v.matchingBrackets(); len(ranges) != 2 || ranges[0] != (textedit.Range{Start: 2, End: 4}) || ranges[1] != (textedit.Range{Start: 0, End: 2}) {
+	if ranges := v.matchingBrackets(); len(ranges) != 2 || ranges[0] != (TextRange{Start: 2, End: 4}) || ranges[1] != (TextRange{Start: 0, End: 2}) {
 		t.Fatal(ranges)
 	}
 	if ok, err := v.deletePair(); !ok || err != nil || m.Text() != "" {
@@ -335,11 +335,11 @@ func TestCustomWordAndPairs(t *testing.T) {
 	}
 	// Ownership must be lost if an external edit splits a generated delimiter.
 	m.SetText("")
-	v.SetSelection(textedit.Selection{})
-	if ok, err := v.pairText(textedit.Range{}, "<<"); !ok || err != nil {
+	v.SetSelection(TextSelection{})
+	if ok, err := v.pairText(TextRange{}, "<<"); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	if err := m.Replace(textedit.Range{Start: 3, End: 3}, "x"); err != nil {
+	if err := m.Replace(TextRange{Start: 3, End: 3}, "x"); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.pairs) != 0 {
@@ -358,7 +358,7 @@ func TestCustomNewlineAndReentry(t *testing.T) {
 	}}
 	v.document.SetLanguageDefinition(extensionLanguage(t, rules))
 	v.document.model.SetText("- item")
-	v.SetSelection(textedit.Selection{Anchor: 6, Caret: 6})
+	v.SetSelection(TextSelection{Anchor: 6, Caret: 6})
 	if err := v.newline(); err != nil || v.document.model.Text() != "- item\n- " {
 		t.Fatal(err, v.document.model.Text())
 	}
@@ -380,13 +380,13 @@ func TestPublicEditsValidateBeforeMutation(t *testing.T) {
 	m := v.document.model
 	m.SetText("é tail")
 	rev := m.Revision()
-	if err := v.ApplyEdits(v.document, rev, []textedit.Edit{{Range: textedit.Range{Start: 1, End: 2}, Text: "bad"}}, textedit.Selection{}); err == nil || m.Text() != "é tail" || m.Revision() != rev {
+	if err := v.ApplyEdits(v.document, rev, []TextEdit{{Range: TextRange{Start: 1, End: 2}, Text: "bad"}}, TextSelection{}); err == nil || m.Text() != "é tail" || m.Revision() != rev {
 		t.Fatal("invalid UTF-8 edit mutated document", err)
 	}
-	if err := v.ApplyEdits(v.document, rev-1, nil, textedit.Selection{}); err != ErrOperationChanged {
+	if err := v.ApplyEdits(v.document, rev-1, nil, TextSelection{}); err != ErrOperationChanged {
 		t.Fatal(err)
 	}
-	if err := v.ApplyEdits(v.document, rev, []textedit.Edit{{Range: textedit.Range{Start: 0, End: 2}, Text: "中"}}, textedit.Selection{Caret: 1}); err == nil || m.Revision() != rev {
+	if err := v.ApplyEdits(v.document, rev, []TextEdit{{Range: TextRange{Start: 0, End: 2}, Text: "中"}}, TextSelection{Caret: 1}); err == nil || m.Revision() != rev {
 		t.Fatal("invalid final selection accepted", err)
 	}
 }
@@ -397,7 +397,7 @@ func TestLanguageCommentsAndHistory(t *testing.T) {
 	v.document.SetLanguageDefinition(extensionLanguage(t, language.EditingRules{Comments: language.Comments{Line: "#", Block: language.Pair{Open: "<!--", Close: "-->"}}}))
 	m := v.document.model
 	m.SetText("  a\n  b\nlast")
-	s := textedit.Selection{Anchor: 0, Caret: 8}
+	s := TextSelection{Anchor: 0, Caret: 8}
 	v.SetSelection(s)
 	if err := v.ToggleLineComment(); err != nil || m.Text() != "  # a\n  # b\nlast" {
 		t.Fatal(err, m.Text())
@@ -409,8 +409,8 @@ func TestLanguageCommentsAndHistory(t *testing.T) {
 		t.Fatal("comment undo")
 	}
 	m.SetText("text")
-	v.SetSelection(textedit.Selection{Anchor: 4, Caret: 0})
-	if err := v.ToggleBlockComment(); err != nil || m.Text() != "<!--text-->" || v.Selection() != (textedit.Selection{Anchor: 8, Caret: 4}) {
+	v.SetSelection(TextSelection{Anchor: 4, Caret: 0})
+	if err := v.ToggleBlockComment(); err != nil || m.Text() != "<!--text-->" || v.Selection() != (TextSelection{Anchor: 8, Caret: 4}) {
 		t.Fatal(err, m.Text(), v.Selection())
 	}
 }
@@ -423,7 +423,7 @@ func TestPublicEditsRejectAnotherDocumentAtSameRevision(t *testing.T) {
 		t.Fatal("invalid fixture")
 	}
 	v.SetDocument(other)
-	if err := v.ApplyEdits(first, first.model.Revision(), []textedit.Edit{{Text: "wrong file"}}, textedit.Selection{Caret: 10}); err != ErrOperationChanged || other.model.Text() != "" {
+	if err := v.ApplyEdits(first, first.model.Revision(), []TextEdit{{Text: "wrong file"}}, TextSelection{Caret: 10}); err != ErrOperationChanged || other.model.Text() != "" {
 		t.Fatal("applied to different document", err)
 	}
 }

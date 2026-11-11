@@ -35,12 +35,12 @@ import (
 	"strings"
 	"time"
 
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui-sourceview/scheme"
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -254,8 +254,8 @@ func main() {
 	assertBackground := func(active, search bool) {
 		text := current().text()
 		lines, clusters := cached.MeasureMetrics()
-		g := textedit.NewGeometry(lines, clusters, len(text), 22)
-		r := g.Selection(textedit.Range{Start: len(text) - 3, End: len(text) - 2})[0]
+		g := textcore.NewGeometry(lines, clusters, len(text), 22)
+		r := g.Selection(source.TextRange{Start: len(text) - 3, End: len(text) - 2})[0]
 		img, err := gui.RenderWidget(v, 0)
 		must(err)
 		scale = float32(img.Bounds().Dx()) / v.Rect().Width
@@ -309,7 +309,7 @@ func main() {
 			}
 			v.SetScheme(nil)
 			v.SetSearch(source.SearchQuery{})
-			v.Document().Model().SetText(text)
+			v.Document().SetText(text)
 			must(v.Document().SetLanguage(s.id))
 			win.SetFocusedWidget(v)
 			key(events.KeyA, primary)

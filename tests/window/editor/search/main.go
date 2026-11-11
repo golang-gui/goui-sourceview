@@ -21,7 +21,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
 	"github.com/golang-gui/goui/widgets"
@@ -94,13 +93,13 @@ func main() {
 	}
 	var steps []func()
 	steps = append(steps, func() {
-		doc.Model().SetText("a=1\na=2\na=3")
-		v.SetSelection(textedit.Selection{})
+		doc.SetText("a=1\na=2\na=3")
+		v.SetSelection(source.TextSelection{})
 		key(events.KeyF, primary)
 		must(win.CommitText("a=1\na=2"))
 		check(v.Search().Text == "a=1\na=2", "multiline query flattened")
 		key(events.KeyEnter, 0)
-		check(v.Selection().Range() == (textedit.Range{Start: 0, End: 7}), "multiline result")
+		check(v.Selection().Range() == (source.TextRange{Start: 0, End: 7}), "multiline result")
 	})
 	steps = append(steps, func() {
 		key(events.KeyA, primary)
@@ -109,7 +108,7 @@ func main() {
 		must(win.CommitText("中"))
 		check(v.Search().Text == "a=\n中", "Alt Enter newline")
 		v.HidePanel()
-		v.SetSelection(textedit.Selection{Anchor: 4, Caret: 7})
+		v.SetSelection(source.TextSelection{Anchor: 4, Caret: 7})
 		must(v.ShowReplace())
 		bar = panel(v, "sourceview-find-bar")
 	})
@@ -120,9 +119,9 @@ func main() {
 		key(events.KeyA, primary)
 		must(win.CommitText(`a=(\d)`))
 		key(events.KeyEnter, 0)
-		check(v.Selection().Range() == (textedit.Range{Start: 4, End: 7}), "scoped regex result")
+		check(v.Selection().Range() == (source.TextRange{Start: 4, End: 7}), "scoped regex result")
 		r, ok := v.SearchRange()
-		check(ok && r == (textedit.Range{Start: 4, End: 7}), "scope changed with result selection")
+		check(ok && r == (source.TextRange{Start: 4, End: 7}), "scope changed with result selection")
 		win.SetFocusedWidget(named(bar, "Replacement"))
 		must(win.CommitText("<$1>"))
 	})
@@ -130,10 +129,10 @@ func main() {
 		state := bar.Snapshot().Attributes["sourceview.find"].(map[string]any)
 		check(state["countComplete"] == true && state["count"] == 1, "canonical scoped count")
 		click("Replace all")
-		check(doc.Model().Text() == "a=1\n<2>\na=3", "capture replacement")
+		check(doc.Text() == "a=1\n<2>\na=3", "capture replacement")
 		win.SetFocusedWidget(v)
 		key(events.KeyZ, primary)
-		check(doc.Model().Text() == "a=1\na=2\na=3", "atomic replace Undo")
+		check(doc.Text() == "a=1\na=2\na=3", "atomic replace Undo")
 		must(v.SetSearchRange(nil))
 		v.SetSearch(source.SearchQuery{Text: "[", Regex: true})
 	})
@@ -142,7 +141,7 @@ func main() {
 		check(v.SearchError() != nil && !gui.IsEnabled(named(bar, "Replace all")), "invalid regex not disabled")
 		check(v.Search().Text == "[", "invalid query discarded")
 		v.SetSearch(source.SearchQuery{Text: `(?m)^`, Regex: true})
-		v.SetSelection(textedit.Selection{})
+		v.SetSelection(source.TextSelection{})
 		win.SetFocusedWidget(v)
 		key(events.KeyF3, 0)
 		check(v.Selection().Caret == 0, "first zero match")
@@ -160,8 +159,8 @@ func main() {
 	for _, regex := range []bool{false, true} {
 		steps = append(steps, func() {
 			v.HidePanel()
-			doc.Model().SetText("foo bar foo bar foo")
-			v.SetSelection(textedit.Selection{})
+			doc.SetText("foo bar foo bar foo")
+			v.SetSelection(source.TextSelection{})
 			v.SetSearch(source.SearchQuery{Text: "foo", Regex: regex})
 			win.SetFocusedWidget(v)
 			key(events.KeyF, primary)
@@ -171,33 +170,33 @@ func main() {
 			check(!limited && !checked(), "disabled scope button changed search range")
 		})
 		steps = append(steps, func() {
-			v.SetSelection(textedit.Selection{Anchor: 4, Caret: 19})
+			v.SetSelection(source.TextSelection{Anchor: 4, Caret: 19})
 			check(gui.IsEnabled(named(bar, "Find in selection")), "selection did not enable scope synchronously")
 			v.SetReadOnly(true)
 			click("Find in selection")
 			r, limited := v.SearchRange()
-			check(limited && checked() && r == (textedit.Range{Start: 4, End: 19}), "captured scope lost")
-			check(v.Selection().Range() == (textedit.Range{Start: 8, End: 11}), "scope activation did not select its first match")
+			check(limited && checked() && r == (source.TextRange{Start: 4, End: 19}), "captured scope lost")
+			check(v.Selection().Range() == (source.TextRange{Start: 8, End: 11}), "scope activation did not select its first match")
 			count(2, true)
 			v.SetReadOnly(false)
 		})
 		steps = append(steps, func() {
-			v.SetSelection(textedit.Selection{})
+			v.SetSelection(source.TextSelection{})
 			r, limited := v.SearchRange()
-			check(limited && r == (textedit.Range{Start: 4, End: 19}), "result selection replaced captured scope")
+			check(limited && r == (source.TextRange{Start: 4, End: 19}), "result selection replaced captured scope")
 			check(gui.IsEnabled(named(bar, "Find in selection")), "active scope cannot be turned off without a selection")
 			click("Find in selection")
 			_, limited = v.SearchRange()
-			check(!limited && !checked() && v.Selection().Range() == (textedit.Range{Start: 0, End: 3}), "scope deactivation did not update result")
+			check(!limited && !checked() && v.Selection().Range() == (source.TextRange{Start: 0, End: 3}), "scope deactivation did not update result")
 			count(3, true)
 		})
 		steps = append(steps, func() {
-			v.SetSelection(textedit.Selection{Anchor: 4, Caret: 7})
+			v.SetSelection(source.TextSelection{Anchor: 4, Caret: 7})
 			click("Find in selection")
-			check(v.Selection().Range() == (textedit.Range{Start: 4, End: 7}), "empty result replaced user selection")
+			check(v.Selection().Range() == (source.TextRange{Start: 4, End: 7}), "empty result replaced user selection")
 			count(0, true)
 			click("Find in selection")
-			check(v.Selection().Range() == (textedit.Range{Start: 8, End: 11}), "removing empty scope kept stale result")
+			check(v.Selection().Range() == (source.TextRange{Start: 8, End: 11}), "removing empty scope kept stale result")
 			count(3, true)
 		})
 		steps = append(steps, func() {
@@ -210,8 +209,8 @@ func main() {
 			check(!panelVisible(v, "sourceview-find-bar") && !limited && !v.HighlightSearchMatches(), "close left search scope/decorations")
 			check(v.Focused() && v.Selection() == selection && v.Search() == query && named(bar, "Replacement").(*gui.TextView).Model().Text() == replacement, "close lost focus/selection/query/replacement")
 			key(events.KeyF3, 0)
-			check(v.Selection().Range() == (textedit.Range{Start: 16, End: 19}) && !v.HighlightSearchMatches(), "closed F3 search restored decorations or kept scope")
-			v.SetSelection(textedit.Selection{})
+			check(v.Selection().Range() == (source.TextRange{Start: 16, End: 19}) && !v.HighlightSearchMatches(), "closed F3 search restored decorations or kept scope")
+			v.SetSelection(source.TextSelection{})
 			key(events.KeyF, primary)
 			check(panelVisible(v, "sourceview-find-bar") && v.HighlightSearchMatches() && v.Search() == query && !checked(), "reopening failed to restore whole-document search")
 		})
@@ -219,38 +218,38 @@ func main() {
 	steps = append(steps, func() {
 		// Keep this a chunked-count scenario. A single enormous paragraph with
 		// whole-word/whitespace decorations exercises a separate rendering cost.
-		doc.Model().SetText(strings.Repeat("foo\n", 20000))
+		doc.SetText(strings.Repeat("foo\n", 20000))
 		v.SetSearch(source.SearchQuery{Text: "foo"})
-		v.SetSelection(textedit.Selection{Anchor: 40000, Caret: 40007})
+		v.SetSelection(source.TextSelection{Anchor: 40000, Caret: 40007})
 		click("Find in selection")
 		count(2, false)
 	})
 	steps = append(steps, func() {
 		count(2, true)
 		v.HidePanel()
-		doc.Model().SetText("foo bar foo bar foo")
-		v.SetSelection(textedit.Selection{})
+		doc.SetText("foo bar foo bar foo")
+		v.SetSelection(source.TextSelection{})
 		must(v.ShowFind())
 		bar = panel(v, "sourceview-find-bar")
-		v.SetSelection(textedit.Selection{Anchor: 4, Caret: 19})
+		v.SetSelection(source.TextSelection{Anchor: 4, Caret: 19})
 		replacement := source.NewDocument("keep")
-		h := v.ConnectSelection(func(s textedit.Selection) {
-			if s.Range() == (textedit.Range{Start: 8, End: 11}) {
+		h := v.ConnectSelection(func(s source.TextSelection) {
+			if s.Range() == (source.TextRange{Start: 8, End: 11}) {
 				v.SetDocument(replacement)
 				v.HidePanel()
 			}
 		})
 		click("Find in selection")
 		h.Disconnect()
-		check(v.Document() == replacement && v.Selection() == (textedit.Selection{}) && !panelVisible(v, "sourceview-find-bar") && !v.HighlightSearchMatches(), "scope navigation overwrote reentrant document/close")
+		check(v.Document() == replacement && v.Selection() == (source.TextSelection{}) && !panelVisible(v, "sourceview-find-bar") && !v.HighlightSearchMatches(), "scope navigation overwrote reentrant document/close")
 	})
 	steps = append(steps, func() {
 		must(v.ShowFind())
 		bar = panel(v, "sourceview-find-bar")
 		foreign := source.NewSourceView()
-		foreign.Document().Model().SetText("foo")
+		foreign.Document().SetText("foo")
 		foreign.SetSearch(source.SearchQuery{Text: "foo"})
-		scope := textedit.Range{Start: 0, End: 3}
+		scope := source.TextRange{Start: 0, End: 3}
 		must(foreign.SetSearchRange(&scope))
 		// The independent view has never owned this UI.
 		v.HidePanel()

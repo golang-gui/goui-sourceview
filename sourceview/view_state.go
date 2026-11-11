@@ -8,9 +8,9 @@ import (
 	"sort"
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -20,10 +20,10 @@ import (
 type ViewState struct {
 	document, revision uint64
 	language           uint64
-	selection          textedit.Selection
+	selection          TextSelection
 	upstream           bool
 	anchor             viewportAnchor
-	folds, lines       []textedit.Range
+	folds, lines       []TextRange
 }
 
 const maxSavedFolds = 4096
@@ -32,7 +32,7 @@ type viewRestore struct {
 	snapshot     *ViewState
 	host         gui.Widget
 	input        *restoreInput
-	wanted       map[textedit.Range]bool
+	wanted       map[TextRange]bool
 	foldsPending bool
 }
 
@@ -120,7 +120,7 @@ func (v *SourceView) RestoreState(s *ViewState) error {
 	v.preferredSet = false
 	v.reveal = nil
 	v.anchor, v.anchorRevision, v.pendingAnchor = s.anchor, s.revision, true
-	lines := make(map[int]textedit.Range, len(s.lines))
+	lines := make(map[int]TextRange, len(s.lines))
 	v.collapsedRevision = s.revision
 	for _, r := range s.lines {
 		lines[v.document.model.LineAt(r.Start)] = r
@@ -221,7 +221,7 @@ func (v *SourceView) startFoldRestore(q *viewRestore) {
 	if !v.foldingEnabled || q.snapshot.language != d.languageEpoch {
 		return
 	}
-	q.wanted = make(map[textedit.Range]bool, len(q.snapshot.folds))
+	q.wanted = make(map[TextRange]bool, len(q.snapshot.folds))
 	for _, r := range q.snapshot.folds {
 		q.wanted[r] = true
 	}
@@ -365,7 +365,7 @@ func (v *SourceView) resolveViewportAnchor() {
 		v.requestLayoutWork()
 		return
 	}
-	pos := textedit.Position{Offset: at - r.Start, Upstream: a.upstream}
+	pos := textcore.Position{Offset: at - r.Start, Upstream: a.upstream}
 	rect := g.Caret(pos)
 	inset := a.inset
 	if v.viewRestore != nil {

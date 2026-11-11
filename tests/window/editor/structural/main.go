@@ -27,7 +27,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/theme/modern"
@@ -113,37 +112,37 @@ func main() {
 		must(v.SetKeyBindings(source.KeyBindings{c: {{Key: gui.KeyF4}}}))
 		key(events.KeyF4)
 	}
-	caret := func(at int) { v.SetSelection(textedit.Selection{Anchor: at, Caret: at}) }
-	setup := func(text string, id language.ID, s textedit.Selection) {
+	caret := func(at int) { v.SetSelection(source.TextSelection{Anchor: at, Caret: at}) }
+	setup := func(text string, id language.ID, s source.TextSelection) {
 		v.SetDocument(doc)
 		mirror.SetDocument(doc)
-		doc.Model().SetText(text)
+		doc.SetText(text)
 		must(doc.SetLanguage(id))
 		v.SetSelection(s)
 		win.SetFocusedWidget(v)
 	}
 	var steps []step
 	add := func(name string, run func(), ready func() bool) { steps = append(steps, step{name, run, ready}) }
-	textIs := func(want string) func() bool { return func() bool { return v.Document().Model().Text() == want } }
+	textIs := func(want string) func() bool { return func() bool { return v.Document().Text() == want } }
 	add("subword", func() {
-		setup("getHTTPResponse2", language.Go, textedit.Selection{})
+		setup("getHTTPResponse2", language.Go, source.TextSelection{})
 		invoke(source.CommandMoveWordPartRight)
 		check(v.Selection().Caret == 3, "subword move")
 		invoke(source.CommandSelectWordPartRight)
-		check(v.Selection() == (textedit.Selection{Anchor: 3, Caret: 7}), "subword select")
+		check(v.Selection() == (source.TextSelection{Anchor: 3, Caret: 7}), "subword select")
 		invoke(source.CommandDeleteWordPartRight)
-		check(doc.Model().Text() == "getResponse2", "subword delete")
+		check(doc.Text() == "getResponse2", "subword delete")
 		invoke(source.CommandUndo)
-		check(doc.Model().Text() == "getHTTPResponse2", "subword undo")
+		check(doc.Text() == "getHTTPResponse2", "subword undo")
 	}, nil)
-	add("selection setup", func() { setup(`{"a": ["alphaBeta",2]}`, language.JSON, textedit.Selection{Anchor: 10, Caret: 10}) }, nil)
+	add("selection setup", func() { setup(`{"a": ["alphaBeta",2]}`, language.JSON, source.TextSelection{Anchor: 10, Caret: 10}) }, nil)
 	add("structural roundtrip", func() {
 		before := v.Selection()
 		invoke(source.CommandExpandSelection)
-		got, _ := doc.Model().Slice(v.Selection().Range())
+		got, _ := doc.Slice(v.Selection().Range())
 		check(got == "alphaBeta", "selection word: "+got)
 		invoke(source.CommandExpandSelection)
-		got, _ = doc.Model().Slice(v.Selection().Range())
+		got, _ = doc.Slice(v.Selection().Range())
 		check(got == `"alphaBeta"`, "selection literal: "+got)
 		invoke(source.CommandShrinkSelection)
 		invoke(source.CommandShrinkSelection)
@@ -153,28 +152,28 @@ func main() {
 		id         language.ID
 		text, want string
 	}{{language.Python, "if ready:", "if ready:\n    "}, {language.YAML, "- item", "- item\n- "}, {language.TOML, "[table]", "[table]\n"}, {language.JSON, "{", "{\n    "}, {language.XML, "<node>", "<node>\n    "}, {language.YAML, "- key:", "- key:\n    "}, {language.YAML, "text: |2", "text: |2\n    "}} {
-		add("newline setup "+string(tc.id), func() { setup(tc.text, tc.id, textedit.Selection{Anchor: len(tc.text), Caret: len(tc.text)}) }, nil)
+		add("newline setup "+string(tc.id), func() { setup(tc.text, tc.id, source.TextSelection{Anchor: len(tc.text), Caret: len(tc.text)}) }, nil)
 		add("newline "+string(tc.id), func() {
 			key(events.KeyEnter)
-			check(doc.Model().Text() == tc.want, fmt.Sprintf("newline %s: %q", tc.id, doc.Model().Text()))
+			check(doc.Text() == tc.want, fmt.Sprintf("newline %s: %q", tc.id, doc.Text()))
 			invoke(source.CommandUndo)
-			check(doc.Model().Text() == tc.text, "newline undo")
+			check(doc.Text() == tc.text, "newline undo")
 		}, nil)
 	}
 	original := "{\n\"items\": [\n1,\n2\n]\n}"
 	indented := "{\n    \"items\": [\n        1,\n        2\n    ]\n}"
-	add("reindent setup", func() { setup(original, language.JSON, textedit.Selection{Anchor: len(original)}) }, nil)
+	add("reindent setup", func() { setup(original, language.JSON, source.TextSelection{Anchor: len(original)}) }, nil)
 	add("reindent", func() { invoke(source.CommandReindentSelection) }, textIs(indented))
 	add("reindent undo", func() {
 		invoke(source.CommandUndo)
-		check(doc.Model().Text() == original && v.Selection() == (textedit.Selection{Anchor: len(original)}), "reindent transaction")
+		check(doc.Text() == original && v.Selection() == (source.TextSelection{Anchor: len(original)}), "reindent transaction")
 		invoke(source.CommandRedo)
-		check(doc.Model().Text() == indented, "reindent redo")
+		check(doc.Text() == indented, "reindent redo")
 	}, nil)
 	customStarted := make(chan struct{}, 1)
 	customDone := make(chan struct{}, 1)
 	add("custom reindent setup", func() {
-		setup(original, language.JSON, textedit.Selection{Anchor: len(original)})
+		setup(original, language.JSON, source.TextSelection{Anchor: len(original)})
 		base, _ := language.Builtin(language.JSON)
 		definition := base.Definition()
 		definition.Editing.Reindent = func(ctx context.Context, c language.ReindentContext) ([]language.LineIndent, error) {
@@ -189,7 +188,7 @@ func main() {
 	}, nil)
 	add("custom reindent", func() { invoke(source.CommandReindentSelection) }, textIs("{\n  \"items\": [\n1,\n2\n]\n}"))
 	add("custom worker setup", func() {
-		setup(original, language.JSON, textedit.Selection{Anchor: len(original)})
+		setup(original, language.JSON, source.TextSelection{Anchor: len(original)})
 		base, _ := language.Builtin(language.JSON)
 		definition := base.Definition()
 		definition.Editing.Reindent = func(ctx context.Context, c language.ReindentContext) ([]language.LineIndent, error) {
@@ -204,56 +203,56 @@ func main() {
 	}, nil)
 	add("custom worker running", func() { invoke(source.CommandReindentSelection) }, func() bool { return len(customStarted) == 1 })
 	add("custom worker cancellation", func() { caret(0) }, func() bool { return len(customDone) == 1 })
-	add("custom cancellation result", func() { check(doc.Model().Text() == original, "custom stale result applied") }, nil)
+	add("custom cancellation result", func() { check(doc.Text() == original, "custom stale result applied") }, nil)
 	add("reindent cancellation", func() {
-		setup(original, language.JSON, textedit.Selection{Caret: len(original)})
+		setup(original, language.JSON, source.TextSelection{Caret: len(original)})
 		invoke(source.CommandReindentSelection)
 		caret(0)
 		must(win.CommitText("x"))
 	}, textIs("x"+original))
-	add("cancel stayed cancelled", func() { check(doc.Model().Text() == "x"+original, "late reindent applied") }, nil)
+	add("cancel stayed cancelled", func() { check(doc.Text() == "x"+original, "late reindent applied") }, nil)
 	for _, tc := range []struct {
 		name, text, want string
 		command          source.Command
-		s                textedit.Selection
+		s                source.TextSelection
 	}{
-		{"join", "one\n  two", "one two", source.CommandJoinLines, textedit.Selection{}},
-		{"trim", "a \t\nb\u00a0\t\n", "a\nb\u00a0\n", source.CommandTrimTrailingWhitespace, textedit.Selection{}},
-		{"upper", "café", "CAFÉ", source.CommandUpperCase, textedit.Selection{Anchor: 5}},
-		{"lower", "İABC", "iabc", source.CommandLowerCase, textedit.Selection{Caret: 5}},
+		{"join", "one\n  two", "one two", source.CommandJoinLines, source.TextSelection{}},
+		{"trim", "a \t\nb\u00a0\t\n", "a\nb\u00a0\n", source.CommandTrimTrailingWhitespace, source.TextSelection{}},
+		{"upper", "café", "CAFÉ", source.CommandUpperCase, source.TextSelection{Anchor: 5}},
+		{"lower", "İABC", "iabc", source.CommandLowerCase, source.TextSelection{Caret: 5}},
 	} {
 		add(tc.name+" setup", func() { setup(tc.text, language.Plain, tc.s) }, nil)
 		add(tc.name, func() { invoke(tc.command) }, textIs(tc.want))
 		add(tc.name+" undo", func() {
 			invoke(source.CommandUndo)
-			check(doc.Model().Text() == tc.text && v.Selection() == tc.s, tc.name+" undo selection")
+			check(doc.Text() == tc.text && v.Selection() == tc.s, tc.name+" undo selection")
 		}, nil)
 	}
 	add("paste setup", func() {
-		setup("  ", language.JSON, textedit.Selection{Anchor: 2, Caret: 2})
+		setup("  ", language.JSON, source.TextSelection{Anchor: 2, Caret: 2})
 		must(app.Clipboard().SetText("    {\n      \"x\": 1\n    }"))
 	}, nil)
 	add("paste indent", func() { invoke(source.CommandPasteReindented) }, textIs("  {\n    \"x\": 1\n  }"))
 	add("paste undo", func() {
 		invoke(source.CommandUndo)
-		check(doc.Model().Text() == "  " && v.Selection().Caret == 2, "paste undo")
+		check(doc.Text() == "  " && v.Selection().Caret == 2, "paste undo")
 	}, nil)
 	add("literal paste setup", func() {
-		setup("  ", language.Go, textedit.Selection{Anchor: 2, Caret: 2})
+		setup("  ", language.Go, source.TextSelection{Anchor: 2, Caret: 2})
 		must(app.Clipboard().SetText("s := `a\n  literal`"))
 	}, nil)
 	add("literal paste", func() { invoke(source.CommandPasteReindented) }, textIs("  s := `a\n  literal`"))
 	var smallFolds *source.Folds
 	add("external folds setup", func() {
-		setup(original, language.JSON, textedit.Selection{})
+		setup(original, language.JSON, source.TextSelection{})
 		smallFolds, err = source.NewFolds(original, []source.FoldRange{{StartLine: 0, EndLine: 5}, {StartLine: 1, EndLine: 4}})
 		must(err)
-		_, err = doc.SetFolds(doc.Model().Revision(), smallFolds)
+		_, err = doc.SetFolds(doc.Revision(), smallFolds)
 		must(err)
 	}, func() bool { return len(v.FoldingRegions()) == 2 && len(mirror.FoldingRegions()) == 2 })
 	add("external folds republish", func() {
 		check(v.Fold(1), "fold child")
-		_, err = doc.SetFolds(doc.Model().Revision(), smallFolds)
+		_, err = doc.SetFolds(doc.Revision(), smallFolds)
 		must(err)
 	}, func() bool {
 		a, b := v.FoldingRegions(), mirror.FoldingRegions()
@@ -265,7 +264,7 @@ func main() {
 		v.SetWrapMode(source.WrapNone)
 		caret(0)
 	}, nil)
-	add("large fold publication", func() { _, err = large.SetFolds(large.Model().Revision(), largeFolds); must(err) }, func() bool {
+	add("large fold publication", func() { _, err = large.SetFolds(large.Revision(), largeFolds); must(err) }, func() bool {
 		return v.Snapshot().Attributes["goui.sourceview"].(map[string]any)["foldRegionCount"] == 100000
 	})
 	add("large folded edit", func() {
@@ -275,9 +274,9 @@ func main() {
 		f := v.FoldingRegions()
 		check(len(f) == 99999 && f[49999].StartLine == 100000 && f[49999].Collapsed, "large edit mapping")
 	}, nil)
-	add("large undo", func() { invoke(source.CommandUndo); check(large.Model().Len() == len(largeText), "large undo") }, nil)
+	add("large undo", func() { invoke(source.CommandUndo); check(large.Len() == len(largeText), "large undo") }, nil)
 	add("large cancel publication", func() {
-		_, err = large.SetFolds(large.Model().Revision(), largeFolds)
+		_, err = large.SetFolds(large.Revision(), largeFolds)
 		must(err)
 		must(win.CommitText("y"))
 	}, nil)
@@ -285,8 +284,8 @@ func main() {
 	record := "{\n  \"text\": \"" + strings.Repeat("a", 10400) + "\"\n}"
 	largeJSON := "[\n" + strings.Repeat(record+",\n", 999) + record + "\n]"
 	add("large builtin JSON setup", func() {
-		setup(largeJSON, language.JSON, textedit.Selection{})
-		_, err = doc.SetFolds(doc.Model().Revision(), nil)
+		setup(largeJSON, language.JSON, source.TextSelection{})
+		_, err = doc.SetFolds(doc.Revision(), nil)
 		must(err)
 		mirror.SetDocument(source.NewDocument("Built-in JSON folding · 10 MiB"))
 		v.SetWrapMode(source.WrapNone)
@@ -296,28 +295,31 @@ func main() {
 	})
 	add("large builtin JSON edit", func() {
 		must(win.CommitText(" "))
-		check(doc.Model().Len() == len(largeJSON)+1, "large JSON input")
+		check(doc.Len() == len(largeJSON)+1, "large JSON input")
 		invoke(source.CommandUndo)
-		check(doc.Model().Len() == len(largeJSON), "large JSON undo")
+		check(doc.Len() == len(largeJSON), "large JSON undo")
 	}, nil)
 	largeTrim := strings.Repeat(strings.Repeat("x", 2500)+" \n", 4096)
-	add("large trim setup", func() { setup(largeTrim, language.Plain, textedit.Selection{}); v.SetWrapMode(source.WrapNone) }, nil)
-	add("large trim 4096 edits", func() { invoke(source.CommandTrimTrailingWhitespace) }, func() bool { return doc.Model().Len() == len(largeTrim)-4096 })
-	add("large trim undo", func() { invoke(source.CommandUndo); check(doc.Model().Len() == len(largeTrim), "large trim undo") }, nil)
-	add("batch limit setup", func() { setup(strings.Repeat("x \n", 4097), language.Plain, textedit.Selection{}); expectLimit = true }, nil)
+	add("large trim setup", func() { setup(largeTrim, language.Plain, source.TextSelection{}); v.SetWrapMode(source.WrapNone) }, nil)
+	add("large trim 4096 edits", func() { invoke(source.CommandTrimTrailingWhitespace) }, func() bool { return doc.Len() == len(largeTrim)-4096 })
+	add("large trim undo", func() { invoke(source.CommandUndo); check(doc.Len() == len(largeTrim), "large trim undo") }, nil)
+	add("batch limit setup", func() {
+		setup(strings.Repeat("x \n", 4097), language.Plain, source.TextSelection{})
+		expectLimit = true
+	}, nil)
 	add("batch limit", func() { invoke(source.CommandTrimTrailingWhitespace) }, func() bool { return limitErrors == 1 })
 	add("batch limit atomic", func() {
-		check(doc.Model().Len() == 4097*3 && !doc.Model().CanUndo(), "over-limit operation changed text/history")
+		check(doc.Len() == 4097*3 && !doc.CanUndo(), "over-limit operation changed text/history")
 		expectLimit = false
 	}, nil)
 	add("long line setup", func() {
-		setup(strings.Repeat("alpha ", 1800000), language.Plain, textedit.Selection{Anchor: 4, Caret: 0})
+		setup(strings.Repeat("alpha ", 1800000), language.Plain, source.TextSelection{Anchor: 4, Caret: 0})
 		v.SetWrapMode(source.WrapWordChar)
 	}, nil)
-	add("long line case", func() { invoke(source.CommandUpperCase) }, func() bool { s, _ := doc.Model().Slice(textedit.Range{End: 6}); return s == "ALPHa " })
+	add("long line case", func() { invoke(source.CommandUpperCase) }, func() bool { s, _ := doc.Slice(source.TextRange{End: 6}); return s == "ALPHa " })
 	add("long line undo", func() {
 		invoke(source.CommandUndo)
-		s, _ := doc.Model().Slice(textedit.Range{End: 6})
+		s, _ := doc.Slice(source.TextRange{End: 6})
 		check(s == "alpha ", "long-line undo")
 	}, nil)
 	complete := false

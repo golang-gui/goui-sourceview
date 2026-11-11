@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/highlight"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/signal"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 var nextDocumentID atomic.Uint64
@@ -22,7 +22,7 @@ var nextDocumentID atomic.Uint64
 // lexical analysis between views. It owns no native resources and needs no Destroy.
 type Document struct {
 	id                           uint64
-	model                        *textedit.Model
+	model                        *textcore.Model
 	lineEnding                   LineEnding
 	lineEndingEpoch              uint64
 	lineEndingChanged            signal.Signal2[LineEnding, uint64]
@@ -55,19 +55,9 @@ type Document struct {
 // first encountered kind. A document without line breaks defaults to LF.
 func NewDocument(text string) *Document {
 	ending, _ := DetectLineEnding(text)
-	d := NewDocumentWithModel(textedit.NewModel(text))
-	d.lineEnding = ending
-	return d
-}
-
-// NewDocumentWithModel borrows a normalized model and defaults to LF output.
-// Its original line endings cannot be recovered; use SetLineEnding when known.
-func NewDocumentWithModel(model *textedit.Model) *Document {
-	if model == nil {
-		model = textedit.NewModel("")
-	}
+	model := textcore.NewModel(text)
 	plain, _ := language.Builtin(language.Plain)
-	return &Document{id: nextDocumentID.Add(1), definition: plain, model: model, views: make(map[*SourceView]struct{}), observed: model.Revision()}
+	return &Document{id: nextDocumentID.Add(1), definition: plain, model: model, lineEnding: ending, views: make(map[*SourceView]struct{}), observed: model.Revision()}
 }
 
 // LineEnding specifies the UTF-8 sequence used to serialize logical newlines.
@@ -135,7 +125,7 @@ func DetectLineEnding(text string) (ending LineEnding, mixed bool) {
 	return ending, kinds > 1
 }
 
-// LineEnding returns the document's serialization format. Model always uses LF.
+// LineEnding returns the document's serialization format. The document text always uses LF.
 func (d *Document) LineEnding() LineEnding { return d.lineEnding }
 
 // SetLineEnding configures serialization only. It changes neither text,
@@ -167,7 +157,7 @@ const documentWriteChunk = 32 << 10
 // WriteTo writes UTF-8 using LineEnding, preserving every logical newline,
 // including their absence or repetition at EOF. It uses bounded chunks and
 // returns bytes actually written. Output is not an atomic file replacement.
-// Access is sequential like Model. If a writer callback changes the model or
+// Access is sequential like all Document operations. If a writer callback changes the model or
 // line-ending configuration, it stops with ErrOperationChanged after that write.
 func (d *Document) WriteTo(w io.Writer) (int64, error) {
 	model, revision, epoch := d.model, d.model.Revision(), d.lineEndingEpoch
@@ -183,7 +173,7 @@ func (d *Document) WriteTo(w io.Writer) (int64, error) {
 		for !model.IsRuneBoundary(end) {
 			end--
 		}
-		text, err := model.Slice(textedit.Range{Start: at, End: end})
+		text, err := model.Slice(TextRange{Start: at, End: end})
 		if err != nil {
 			return written, err
 		}
@@ -209,9 +199,8 @@ func (d *Document) WriteTo(w io.Writer) (int64, error) {
 var _ io.WriterTo = (*Document)(nil)
 
 // ID is stable for this document lifetime and unique within this process.
-func (d *Document) ID() uint64             { return d.id }
-func (d *Document) Model() *textedit.Model { return d.model }
-func (d *Document) Language() language.ID  { return d.language }
+func (d *Document) ID() uint64            { return d.id }
+func (d *Document) Language() language.ID { return d.language }
 func (d *Document) SetLanguage(id language.ID) error {
 	l, ok := language.Builtin(id)
 	if !ok {
@@ -330,7 +319,7 @@ func (d *Document) requestWork() {
 		_ = d.driver.RequestPaint()
 	}
 }
-func (d *Document) changed(c textedit.Change) {
+func (d *Document) changed(c TextChange) {
 	if d.engine == nil {
 		return
 	}

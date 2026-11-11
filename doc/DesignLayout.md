@@ -1,6 +1,10 @@
 # SourceView 布局、滚动与呈现设计
 
-> 状态：首版实现规格。独立 SourceView 复用 typography 与文本几何，
+> 2026-11-11 所有权更新：[独立编辑内核](DesignEditorCore.md) 已替代下文早期复用模型、
+> 投影、几何、片段和 GOUI ParagraphLayout 的方案。当前对应实现位于本仓 internal/text、
+> internal/view；下文带日期的 GOUI 源码与版本记录保留为历史依据，不能作为继续调用旧实现的契约。
+
+> 状态：首版实现规格。独立 SourceView 复用 typography，自有文本几何，
 > 不使用 TextView 的布局或私有缓存。原生 Tab 配置依赖 [G2](DesignGOUIIntegration.md)。
 
 实现入口：`layout.go` 管理测量、估计、可见行映射、命中、光标和滚动定位；
@@ -34,7 +38,7 @@ SourceView 继续独立管理语法、折叠投影和装饰；不等待后端增
 也不退回同步整段。允许文字和着色延迟，Paint、命中与快照不强制补齐整段。
 同步 SetSelection 的 cluster 校正需明确处理，不能隐藏阻塞回退。
 
-当前已接入 `textedit.Geometry.LineAtY`／`SelectionLines`，选择、搜索、词出现
+当前使用自有 `internal/text.Geometry.LineAtY`／`SelectionLines`，选择、搜索、词出现
 及预编辑装饰只为可视行及相邻边界候选生成矩形。保留完整矩形高度，避免因
 提前裁剪而改变预编辑下划线位置；最终像素裁剪仍由 Painter 完成。
 短范围的配对装饰也受益于 Geometry 的逻辑行索引。
@@ -613,8 +617,8 @@ Context.NewTextLayout 创建布局，通过 MeasureMetrics 保存普通值 Fragm
 
 ## 16. 超长单逻辑行的局部测量（2026-10-24）
 
-超过 64 KiB 的显示段落使用 GOUI 的 `gui.ParagraphLayout`。这一具体 GUI helper
-由 TextView 与 SourceView 共同使用，负责原生窗口、普通值 Geometry、前缀方向
+超过 64 KiB 的显示段落使用自有 `internal/view.ParagraphLayout`。这一内部 helper
+由 SourceView 独立拥有，负责原生窗口、普通值 Geometry、前缀方向
 上下文和估计高度；不修改 typography，不要求各后端实现新的排版接口。
 本节更新第 15 节中“长段落仍完整送测”的实施状态。
 

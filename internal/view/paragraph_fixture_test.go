@@ -1,3 +1,8 @@
+// Copyright (c) 2026 xuges@qq.com
+// SPDX-License-Identifier: MIT
+//
+// Fixed-metric fixture adapted from GOUI v0.7.0 tests; maintained by SourceView.
+
 package view
 
 import (

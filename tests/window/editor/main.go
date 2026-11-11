@@ -39,7 +39,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
@@ -99,8 +98,8 @@ func main() {
 			}
 			primary, _ := gui.ModPrimary.Resolve()
 			// Recolor the already displayed line without changing its text/font.
-			probe, _ := document.Model().LineRange(2)
-			probeText, err := document.Model().Slice(probe)
+			probe, _ := document.LineRange(2)
+			probeText, err := document.Slice(probe)
 			must(err)
 			original := observed.last[probeText]
 			check(original != nil && win.Focused(), "recolor probe has no active native window/layout")
@@ -108,24 +107,24 @@ func main() {
 			runInput := func() {
 				editor.SetScheme(nil)
 				log.Print("PASS native recolor reuse and active selection foreground")
-				document.Model().SetText("a\nb\n")
-				editor.SetSelection(textedit.Selection{})
+				document.SetText("a\nb\n")
+				editor.SetSelection(source.TextSelection{})
 				must(win.CommitText("x"))
-				check(document.Model().Text() == "xa\nb\n", "ordinary commit: %q", document.Model().Text())
+				check(document.Text() == "xa\nb\n", "ordinary commit: %q", document.Text())
 				key(events.KeyZ, primary)
-				check(document.Model().Text() == "a\nb\n", "undo")
+				check(document.Text() == "a\nb\n", "undo")
 				key(events.KeyZ, primary|events.ModifierShift)
-				check(document.Model().Text() == "xa\nb\n", "redo")
+				check(document.Text() == "xa\nb\n", "redo")
 				editor.SetReadOnly(true)
 				check(win.CommitText("bad") != nil, "read-only exposed text input")
 				key(events.KeyBackspace, 0)
-				check(document.Model().Text() == "xa\nb\n", "read only changed")
+				check(document.Text() == "xa\nb\n", "read only changed")
 				editor.SetReadOnly(false)
 				key(events.KeyA, primary)
 				key(events.KeyTab, 0)
-				check(document.Model().Text() == "    xa\n    b\n", "multiline indent %q", document.Model().Text())
+				check(document.Text() == "    xa\n    b\n", "multiline indent %q", document.Text())
 				key(events.KeyZ, primary)
-				check(document.Model().Text() == "xa\nb\n", "atomic indent undo")
+				check(document.Text() == "xa\nb\n", "atomic indent undo")
 				key(events.KeyEscape, 0)
 				key(events.KeyTab, 0)
 				check(win.FocusedWidget() == after, "Escape/Tab did not leave editor")
@@ -140,10 +139,10 @@ func main() {
 				}
 				editor.SetSearch(source.SearchQuery{Text: "b"})
 				r, ok := editor.FindNext(false)
-				check(ok && r == (textedit.Range{Start: 3, End: 4}), "find %v %v", r, ok)
+				check(ok && r == (source.TextRange{Start: 3, End: 4}), "find %v %v", r, ok)
 				replaced, err := editor.ReplaceCurrent("β")
 				must(err)
-				check(replaced && document.Model().Text() == "xa\nβ\n", "replace")
+				check(replaced && document.Text() == "xa\nβ\n", "replace")
 				// Snapshot and view lifetime use the same public document.
 				info := editor.Snapshot()
 				check(info.TextEditing != nil && info.TextEditing.VisibleText == "xa\nβ\n", "snapshot %+v", info)
@@ -152,7 +151,7 @@ func main() {
 				for row := 0; row < 2000; row++ {
 					fmt.Fprintf(&numbered, "<p>line %04d</p>\n", row)
 				}
-				document.Model().SetText(numbered.String())
+				document.SetText(numbered.String())
 				scroll.SetChild(editor)
 				// Bind a second native view briefly; unloading it must not stop the first.
 				otherScroll := gui.NewScrollView()
@@ -160,8 +159,8 @@ func main() {
 				otherScroll.SetChild(second)
 				box.AddChild(otherScroll)
 				box.RemoveChild(otherScroll)
-				end := document.Model().Len()
-				editor.SetSelection(textedit.Selection{Anchor: end, Caret: end})
+				end := document.Len()
+				editor.SetSelection(source.TextSelection{Anchor: end, Caret: end})
 				editor.RevealSelection()
 				timer2 := app.NewTimer()
 				timer2.ConnectTimeout(func() {
@@ -179,7 +178,7 @@ func main() {
 					timer3.ConnectTimeout(func() {
 						old := editor.Snapshot().TextEditing
 						inserted := "<!-- inserted -->\n"
-						must(document.Model().Replace(textedit.Range{}, inserted))
+						must(document.Replace(source.TextRange{}, inserted))
 						timer4 := app.NewTimer()
 						timer4.ConnectTimeout(func() {
 							current := editor.Snapshot().TextEditing
@@ -187,13 +186,13 @@ func main() {
 							check(strings.HasPrefix(current.VisibleText, strings.Split(old.VisibleText, "\n")[0]), "anchor text changed")
 
 							if *clipboardTest {
-								document.Model().SetText("sourceview clipboard")
+								document.SetText("sourceview clipboard")
 								win.SetFocusedWidget(editor)
 								key(events.KeyA, primary)
 								key(events.KeyX, primary)
-								cutOK := document.Model().Text() == ""
+								cutOK := document.Text() == ""
 								key(events.KeyV, primary)
-								pasteOK := document.Model().Text() == "sourceview clipboard"
+								pasteOK := document.Text() == "sourceview clipboard"
 								check(cutOK && pasteOK, "native clipboard cut=%v paste=%v", cutOK, pasteOK)
 								log.Print("PASS native clipboard cut/paste with disposable test text")
 							}
@@ -227,7 +226,7 @@ func main() {
 					current, err = scheme.New(def)
 					must(err)
 					editor.SetScheme(current)
-					editor.SetSelection(textedit.Selection{Anchor: probe.Start, Caret: probe.End})
+					editor.SetSelection(source.TextSelection{Anchor: probe.Start, Caret: probe.End})
 					editor.RevealSelection()
 					issued, waiting = frames, true
 					must(win.RequestPaint())

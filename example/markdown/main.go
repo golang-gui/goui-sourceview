@@ -17,7 +17,6 @@ import (
 	source "github.com/golang-gui/goui-sourceview/sourceview"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/modern"
@@ -65,11 +64,11 @@ func main() {
 	status := gui.NewLabel("")
 	status.SetStyleName(modern.MutedText)
 	update := func() {
-		m := doc.Model()
+		m := doc
 		status.SetText(fmt.Sprintf("Markdown · Ln %d · %d lines · %d bytes", m.LineAt(editor.Selection().Caret)+1, m.LineCount(), m.Len()))
 	}
-	editor.ConnectSelection(func(textedit.Selection) { update() })
-	editor.ConnectChange(func(textedit.Change) { update() })
+	editor.ConnectSelection(func(source.TextSelection) { update() })
+	editor.ConnectChange(func(source.TextChange) { update() })
 	report := func(err error) {
 		if err != nil {
 			status.SetText(err.Error())
@@ -91,12 +90,12 @@ func main() {
 	tools.AddChild(button("Bold", func() {
 		s := editor.Selection()
 		r := s.Range()
-		text, err := doc.Model().Slice(r)
+		text, err := doc.Slice(r)
 		if err != nil {
 			report(err)
 			return
 		}
-		report(editor.ApplyEdits(doc, doc.Model().Revision(), []textedit.Edit{{Range: r, Text: "**" + text + "**"}}, textedit.Selection{Anchor: s.Anchor + 2, Caret: s.Caret + 2}))
+		report(editor.ApplyEdits(doc, doc.Revision(), []source.TextEdit{{Range: r, Text: "**" + text + "**"}}, source.TextSelection{Anchor: s.Anchor + 2, Caret: s.Caret + 2}))
 	}))
 	tools.AddChild(button("Comment", func() { report(editor.ToggleBlockComment()) }))
 	tools.AddChild(button("Complete", func() { report(editor.ShowCompletion()) }))

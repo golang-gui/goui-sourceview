@@ -1,8 +1,7 @@
 package view
 
 import (
-	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/platform/typography"
 )
 
@@ -11,12 +10,12 @@ import (
 // The root editor controls cache membership, revisions, eviction and pinning.
 type ParagraphResources struct {
 	Layout, Number       typography.TextLayout
-	Paged                *gui.ParagraphLayout
-	Geometry             textedit.Geometry
+	Paged                *ParagraphLayout
+	Geometry             textcore.Geometry
 	GeometryX, GeometryY float64
 }
 
-func (p *ParagraphResources) GeometryAt(offset int) *textedit.Geometry {
+func (p *ParagraphResources) GeometryAt(offset int) *textcore.Geometry {
 	if p.Paged != nil {
 		if g := p.Paged.GeometryAt(offset); g != nil {
 			return &g.Geometry
@@ -27,7 +26,7 @@ func (p *ParagraphResources) GeometryAt(offset int) *textedit.Geometry {
 
 // PreviewGeometry borrows the first measured line without preparing missing
 // pages. Paint and snapshots must not trigger native layout to show a preview.
-func (p *ParagraphResources) PreviewGeometry(lineHeight float32) (*textedit.Geometry, float32) {
+func (p *ParagraphResources) PreviewGeometry(lineHeight float32) (*textcore.Geometry, float32) {
 	if p == nil {
 		return nil, lineHeight
 	}

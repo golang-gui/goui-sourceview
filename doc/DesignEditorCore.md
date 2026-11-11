@@ -1,7 +1,7 @@
 # 独立编辑内核
 
-状态：2026-11-11 在 feature/editor-core 迁移，完整回归前不作为已交付能力。
-先完成依赖脱离与回归；多光标和列编辑在后续任务单独实施。
+状态：2026-11-11 在 feature/editor-core 完成独立化与本机回归，尚未发布。
+多光标和列编辑在后续任务单独实施；平台验证边界见验收记录。
 本设计更新此前复用 GOUI 文本模型与段落设施的方案。验证记录见 [验收](PlanEditorCore.md)。
 
 ## 所有权与依赖
@@ -31,6 +31,11 @@ GOUI 自身的控件会传递依赖其文本包；不以整个应用的传递依
 [gui.ParagraphLayout](https://github.com/golang-gui/goui/blob/v0.7.0/gui/paragraph_layout.go)
 为迁移基线，形成在本仓独立维护的实现。来源采用 MIT，版权为 2026 xuges@qq.com，
 与本仓 [LICENSE](../LICENSE) 相同，迁入文件保留来源、版权与 SPDX 声明。
+分词与字素边界使用既有版本 uniseg v0.4.7（MIT、Go 1.18、Unicode 15.0.0），
+从间接依赖改为直接依赖；双向上下文沿用 x/text v0.22.0（BSD-3-Clause、Go 1.18）。
+两者是纯 Go、无附带字体或语言资源，不增加原生编辑器或平台后端依赖；分发保留各自许可。
+Unicode 数据表及分词不替代原生 cluster 度量，版本升级仍需核验边界与资源开销。
+
 仅迁入实际使用的模型、位置、投影、几何、片段、高度索引及段落缓存，不引入密码显示、
 输入过滤或候选换行等无关设施。不改变 GOUI 仓库，不访问其私有 textEditor。
 
@@ -47,6 +52,20 @@ CanUndo、CanRedo、BreakUndoGroup、ClearHistory 和 ConnectChange。
 移除 Model() 和 NewDocumentWithModel，使用方共享同一个 Document；创建时 NewDocument
 检测原始换行格式。SetText 规范化正文并重置历史，保留已经选择的输出换行格式。
 范围是规范化 UTF-8/LF 正文中的半开字节区间。空文档保留一个逻辑行。
+
+使用当前检出的应用需要同步迁移，移除的入口不保留依赖 GOUI 的兼容包装：
+
+| 原入口 | 当前入口 |
+| --- | --- |
+| `doc.Model().Text/SetText/Slice/Revision/...` | `doc.Text/SetText/Slice/Revision/...` |
+| `NewDocumentWithModel(model)` | `NewDocument(text)`；跨视图共享同一个 Document |
+| `textedit.Range/Selection/Edit/Change` | `source.TextRange/TextSelection/TextEdit/TextChange` |
+| `ui.TextModel`、GOUI `ui.TextSelection` 绑定 | `sourceui.Document`、`State[sourceui.TextSelection]` |
+| 文档 `ApplyBatch` | `Document.ApplyEdits`；需要历史选区时用 `SourceView.ApplyEdits` |
+
+Document.Undo/Redo 修改共享历史，不主动恢复某个视图的历史选区；需要恢复选区时调用
+SourceView.Undo/Redo。Document.ConnectChange 的 Edits 切片供观察者只读，修改前自行复制。
+
 
 TextRange、TextSelection、TextEdit、TextChange 由 SourceView 定义并通过 ui 提供同名别名。
 内部模型和原生几何类型不公开。原有单选区、修订和事务语义在本次迁移中保持不变。

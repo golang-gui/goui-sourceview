@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 	"github.com/golang-gui/goui/platform/events"
 )
 
@@ -113,7 +113,7 @@ func (v *SourceView) installInput() {
 		if mods&events.ModifierShift != 0 {
 			s.Caret = pos.Offset
 		} else {
-			s = textedit.Selection{Anchor: pos.Offset, Caret: pos.Offset}
+			s = TextSelection{Anchor: pos.Offset, Caret: pos.Offset}
 		}
 		now := time.Now()
 		twice := now.Sub(v.lastClick) < 400*time.Millisecond && math.Abs(float64(point.X-v.lastClickPoint.X)) < 4 && math.Abs(float64(point.Y-v.lastClickPoint.Y)) < 4
@@ -130,7 +130,7 @@ func (v *SourceView) installInput() {
 			if mods&events.ModifierShift == 0 {
 				s.Anchor = r.Start
 			} else {
-				v.dragRange = textedit.Range{Start: s.Anchor, End: s.Anchor}
+				v.dragRange = TextRange{Start: s.Anchor, End: s.Anchor}
 			}
 			s.Caret = r.End
 		} else if v.clickCount > 1 {
@@ -141,7 +141,7 @@ func (v *SourceView) installInput() {
 				r = v.lineSelection(pos.Offset)
 			}
 			v.dragRange = r
-			s = textedit.Selection{Anchor: r.Start, Caret: r.End}
+			s = TextSelection{Anchor: r.Start, Caret: r.End}
 		}
 		v.setSelection(s, pos.Upstream, false)
 	})
@@ -270,7 +270,7 @@ func (v *SourceView) dragSelection(point geometry.Point) {
 	v.setSelection(s, pos.Upstream, false)
 }
 
-func (v *SourceView) lineSelection(at int) textedit.Range {
+func (v *SourceView) lineSelection(at int) TextRange {
 	m := v.document.model
 	row := m.LineAt(at)
 	r, _ := m.LineRange(row)
@@ -282,7 +282,7 @@ func (v *SourceView) lineSelection(at int) textedit.Range {
 
 // Select the cluster under the pointer, including its trailing half. Nearest
 // caret hit testing alone would select the following punctuation/word there.
-func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
+func (v *SourceView) wordSelection(point geometry.Point) TextRange {
 	pos := v.hit(point)
 	row := v.document.model.LineAt(pos.Offset)
 	r, _ := v.document.model.LineRange(row)
@@ -290,7 +290,7 @@ func (v *SourceView) wordSelection(point geometry.Point) textedit.Range {
 		previous := p.Geometry.Adjacent(pos.Offset-r.Start, false)
 		origin := v.paragraphOrigin(row, p)
 		local := geometry.Point{X: point.X - origin.X, Y: point.Y - origin.Y}
-		for _, rect := range p.Geometry.Selection(textedit.Range{Start: previous, End: pos.Offset - r.Start}) {
+		for _, rect := range p.Geometry.Selection(TextRange{Start: previous, End: pos.Offset - r.Start}) {
 			if view.ContainsPoint(rect, local) {
 				pos.Offset = r.Start + previous
 				break
@@ -503,7 +503,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 		}
 	}
 	p := v.paragraph(row)
-	pos := textedit.Position{Offset: caret - r.Start, Upstream: v.upstream}
+	pos := textcore.Position{Offset: caret - r.Start, Upstream: v.upstream}
 	if !extend && s.Anchor != s.Caret && (key == events.KeyArrowLeft || key == events.KeyArrowRight) {
 		at := s.Range().Start
 		if key == events.KeyArrowRight {
@@ -678,7 +678,7 @@ func (v *SourceView) inputGeometryReady() bool {
 
 // An explicit model offset may have been clamped while its shaping window
 // was unavailable. Normalize it before the next measured editing operation.
-func (v *SourceView) inputSelection() textedit.Selection {
+func (v *SourceView) inputSelection() TextSelection {
 	s := v.Selection()
 	if v.projection != nil {
 		return s

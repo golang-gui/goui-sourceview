@@ -5,9 +5,9 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/editor"
 	"github.com/golang-gui/goui-sourceview/internal/folding"
+	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/gui/textedit"
 )
 
 // 未挂载文档也必须跟踪；删除失效与业务状态不同，撤销不猜测恢复。
@@ -19,7 +19,7 @@ func TestLineMarksTrackDetachedDocument(t *testing.T) {
 	}
 	apply := func(start, end int, text string) {
 		t.Helper()
-		if err := d.Model().Apply(textedit.Edit{Range: textedit.Range{Start: start, End: end}, Text: text}, textedit.EditOptions{Atomic: true}); err != nil {
+		if err := d.model.Apply(TextEdit{Range: TextRange{Start: start, End: end}, Text: text}, textcore.EditOptions{Atomic: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -32,19 +32,19 @@ func TestLineMarksTrackDetachedDocument(t *testing.T) {
 	}
 	apply(4, 4, "new\n") // 锚点右重力，跟随原来的 b。
 	check(2, true)
-	d.Model().Undo()
+	d.Undo()
 	check(1, true)
-	d.Model().Redo()
+	d.Redo()
 	check(2, true)
 	apply(8, 10, "")
 	check(-1, false)
-	d.Model().Undo()
+	d.Undo()
 	check(-1, false)
 	if err := d.UpdateLineMark(id, LineMark{Line: 2, Kind: MarkLogpoint, State: MarkPending}); err != nil {
 		t.Fatal(err)
 	}
 	check(2, true)
-	d.Model().SetText("new file")
+	d.SetText("new file")
 	check(-1, false)
 	if !d.RemoveLineMark(id) || d.RemoveLineMark(id) || d.markConnection != nil {
 		t.Fatal("remove did not release subscription")
@@ -59,15 +59,15 @@ func TestLineMarksTrackDetachedDocument(t *testing.T) {
 func TestLineMarksReentrantChanges(t *testing.T) {
 	d := NewDocument("a\nb\nc")
 	var created LineMarkID
-	h := d.Model().ConnectChange(func(c textedit.Change) {
+	h := d.ConnectChange(func(c TextChange) {
 		if c.Revision == 1 {
-			_ = d.Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "y\n"}, textedit.EditOptions{})
+			_ = d.model.Apply(TextEdit{Range: TextRange{}, Text: "y\n"}, textcore.EditOptions{})
 			created, _ = d.AddLineMark(LineMark{Line: 3})
 		}
 	})
 	defer h.Disconnect()
 	id, _ := d.AddLineMark(LineMark{Line: 1})
-	_ = d.Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "x\n"}, textedit.EditOptions{})
+	_ = d.model.Apply(TextEdit{Range: TextRange{}, Text: "x\n"}, textcore.EditOptions{})
 	for _, got := range d.LineMarks() {
 		if !got.Valid || got.Line != 3 || got.ID != id && got.ID != created {
 			t.Fatalf("bad reentrant mark %+v", got)
@@ -89,7 +89,7 @@ func TestLineMarksReentrantChanges(t *testing.T) {
 
 func TestLineMarkValidationAndSnapshots(t *testing.T) {
 	d := NewDocument("one\ntwo")
-	before := d.Model().Revision()
+	before := d.Revision()
 	for _, mark := range []LineMark{{Line: -1}, {Line: 2}, {Kind: 255}, {State: 255}} {
 		if _, err := d.AddLineMark(mark); err == nil {
 			t.Fatalf("accepted %+v", mark)
@@ -104,16 +104,16 @@ func TestLineMarkValidationAndSnapshots(t *testing.T) {
 	}
 	a := d.LineMarks()
 	a[0].Line = 0
-	if d.LineMarks()[0].Line != 1 || d.Model().Revision() != before || d.Model().CanUndo() {
+	if d.LineMarks()[0].Line != 1 || d.Revision() != before || d.CanUndo() {
 		t.Fatal("snapshot or history polluted")
 	}
 }
 
 // 批处理坐标按顺序变化；覆盖终点不属于删除区间。
 func TestLineAnchorSequentialEdits(t *testing.T) {
-	c := textedit.Change{Edits: []textedit.Edit{
-		{Range: textedit.Range{Start: 0, End: 2}, Text: ""},
-		{Range: textedit.Range{Start: 0, End: 0}, Text: "abc"},
+	c := TextChange{Edits: []TextEdit{
+		{Range: TextRange{Start: 0, End: 2}, Text: ""},
+		{Range: TextRange{Start: 0, End: 0}, Text: "abc"},
 	}}
 	if offset, valid := editor.MapLineAnchor(2, true, c); offset != 3 || !valid {
 		t.Fatalf("got %d %t", offset, valid)
@@ -146,7 +146,7 @@ func TestLineMarkViewsAndExecution(t *testing.T) {
 	if _, ok := b.ExecutionLine(); ok {
 		t.Fatal("execution leaked")
 	}
-	_ = d.Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "x\n"}, textedit.EditOptions{})
+	_ = d.model.Apply(TextEdit{Range: TextRange{}, Text: "x\n"}, textcore.EditOptions{})
 	if line, ok := a.ExecutionLine(); !ok || line != 2 {
 		t.Fatal("execution anchor", line, ok)
 	}
@@ -184,11 +184,11 @@ func TestLineMarkViewsAndExecution(t *testing.T) {
 // 无窗口期间错过的变更不能在下一次通知中错误复活执行位置。
 func TestExecutionAnchorMissedRevision(t *testing.T) {
 	v := NewSourceView()
-	v.Document().Model().SetText("a\nb")
+	v.Document().SetText("a\nb")
 	_ = v.SetExecutionLine(1)
-	_ = v.Document().Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "x\n"}, textedit.EditOptions{})
+	_ = v.document.model.Apply(TextEdit{Range: TextRange{}, Text: "x\n"}, textcore.EditOptions{})
 	observe(t, v)
-	_ = v.Document().Model().Apply(textedit.Edit{Range: textedit.Range{}, Text: "y\n"}, textedit.EditOptions{})
+	_ = v.document.model.Apply(TextEdit{Range: TextRange{}, Text: "y\n"}, textcore.EditOptions{})
 	if _, ok := v.ExecutionLine(); ok {
 		t.Fatal("revived stale anchor")
 	}
