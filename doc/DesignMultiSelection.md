@@ -65,6 +65,16 @@ ui 增加 Selections/BindSelections/OnSelections，复用 BindState 和局部协
 验证逻辑、事务、历史、重入、共享文档、异步取消、Unicode、IME、折叠、缓存页数以外的分散光标；
 独立 X11 正常事件路径覆盖主题/缩放、鼠标和键盘，测试结果与平台缺口单列。
 
+## 示例与测试入口
+
+`example/editor` 的 Selection 菜单调用控件的公开添加光标、匹配选择和拆行方法；只保留主选区使用
+SetSelection。示例不保存另一份光标集合；状态栏监听 ConnectSelections，并显示完整数量与主位置。
+界面提示从当前 KeyBindings/SelectionModifiers 生成，键盘列扩展等说明放在提示和菜单按钮的 tooltip。
+`multicursor.go` 提供重复字段、对齐数字、Tab、中文与组合字符的可编辑演示，初始仍显示既有 JSON 样本。
+
+窗口多选区验收须分别运行默认和 `-clipboard` 两条路径。各场景独立构建临时快捷键表，不依赖可选场景
+清除上一场景的绑定。`go test ./...` 负责包测试和程序编译，不能替代这两条真实窗口入口的运行验收。
+
 ## 参考与取舍
 
 2026-11-11 已核对官方文档及固定版本源码，没有运行参考编辑器：

@@ -4,6 +4,7 @@
 // setter 仅准备场景；中文输入、删除、导航、剪切/粘贴、撤销重做经 Window 的正常事件路径。
 // 第三批额外检查连续输入合并、配对/跳过/删除和后台大小写/清理/重缩进。
 // 断言完整正文、主/附加选区、视图隔离、历史、快照恢复和超过缓存页数的分散输入。
+// 默认与 -clipboard 是两条独立验收路径，临时快捷键不依赖此前场景。
 // -clipboard 额外覆盖该显示的临时剪贴板，只在独立桌面启用。默认不访问剪贴板。
 // 每步有明确条件与超时，成功自动关闭；提前退出或失败返回非零。不写文件或系统设置。
 // 真实 IME 服务、物理键及 Windows/macOS 必须另验；重启恢复初态，关闭窗口退出。
@@ -104,6 +105,14 @@ func main() {
 		}
 	}
 	set := func(v *source.SourceView, s []source.TextSelection) { must(v.SetSelections(s)) }
+	// Every scene owns its temporary F8 binding. Optional clipboard scenes must
+	// not be responsible for removing the preceding scene's command.
+	bindScene := func(command source.Command) {
+		bindings := source.DefaultKeyBindings()
+		bindings[command] = []gui.KeyGesture{{Key: gui.KeyF8}}
+		must(a.SetKeyBindings(bindings))
+	}
+
 	pending := func(v *source.SourceView) bool {
 		m := v.Snapshot().Attributes["goui.sourceview"].(map[string]any)
 		return m["inputPending"] == true
@@ -231,9 +240,7 @@ func main() {
 		step{"multiple case", func() {
 			d.SetText("ab\ncd")
 			set(a, []source.TextSelection{{Anchor: 2, Caret: 0}, {Anchor: 3, Caret: 5}})
-			bindings := a.KeyBindings()
-			bindings[source.CommandUpperCase] = []gui.KeyGesture{{Key: gui.KeyF8}}
-			must(a.SetKeyBindings(bindings))
+			bindScene(source.CommandUpperCase)
 			key(events.KeyF8, 0)
 		}, func() bool {
 			return d.Text() == "AB\nCD" && slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 2, Caret: 0}, {Anchor: 3, Caret: 5}})
@@ -241,19 +248,13 @@ func main() {
 		step{"multiple cleanup", func() {
 			d.SetText("a \nb \nc ")
 			set(a, []source.TextSelection{{}, {Anchor: 3, Caret: 3}})
-			bindings := a.KeyBindings()
-			delete(bindings, source.CommandUpperCase)
-			bindings[source.CommandTrimTrailingWhitespace] = []gui.KeyGesture{{Key: gui.KeyF8}}
-			must(a.SetKeyBindings(bindings))
+			bindScene(source.CommandTrimTrailingWhitespace)
 			key(events.KeyF8, 0)
 		}, func() bool { return d.Text() == "a\nb\nc" && len(a.Selections()) == 2 }},
 		step{"multiple join", func() {
 			d.SetText("one\n two\nthree\n four")
 			set(a, []source.TextSelection{{}, {Anchor: 9, Caret: 9}})
-			bindings := a.KeyBindings()
-			delete(bindings, source.CommandTrimTrailingWhitespace)
-			bindings[source.CommandJoinLines] = []gui.KeyGesture{{Key: gui.KeyF8}}
-			must(a.SetKeyBindings(bindings))
+			bindScene(source.CommandJoinLines)
 			key(events.KeyF8, 0)
 		}, func() bool { return d.Text() == "one two\nthree four" && len(a.Selections()) == 2 }},
 		step{"multiple reindent", func() {
@@ -268,10 +269,7 @@ func main() {
 			d.SetLanguageDefinition(definition)
 			d.SetText("aa\nbb\ncc")
 			set(a, []source.TextSelection{{}, {Anchor: 6, Caret: 6}})
-			bindings := a.KeyBindings()
-			delete(bindings, source.CommandJoinLines)
-			bindings[source.CommandReindentSelection] = []gui.KeyGesture{{Key: gui.KeyF8}}
-			must(a.SetKeyBindings(bindings))
+			bindScene(source.CommandReindentSelection)
 			key(events.KeyF8, 0)
 		}, func() bool { return d.Text() == "  aa\nbb\n  cc" && len(a.Selections()) == 2 }},
 		step{"prepare reindented paste", func() {
@@ -295,19 +293,13 @@ func main() {
 				return
 			}
 			must(app.Clipboard().SetText("{\n  \"a\":1\n}"))
-			bindings := a.KeyBindings()
-			delete(bindings, source.CommandReindentSelection)
-			bindings[source.CommandPasteReindented] = []gui.KeyGesture{{Key: gui.KeyF8}}
-			must(a.SetKeyBindings(bindings))
+			bindScene(source.CommandPasteReindented)
 			key(events.KeyF8, 0)
 		}, func() bool { return !*clipboard || d.Text() == "  {\n    \"a\":1\n  }\n    {\n      \"a\":1\n    }" }},
 		step{"cancel background set", func() {
 			d.SetText("one\n two")
 			set(a, []source.TextSelection{{Anchor: 0, Caret: 3}, {Anchor: 5, Caret: 8}})
-			bindings := a.KeyBindings()
-			delete(bindings, source.CommandPasteReindented)
-			bindings[source.CommandUpperCase] = []gui.KeyGesture{{Key: gui.KeyF8}}
-			must(a.SetKeyBindings(bindings))
+			bindScene(source.CommandUpperCase)
 			key(events.KeyF8, 0)
 			a.SetSelection(source.TextSelection{})
 			cancellationAt = time.Now()

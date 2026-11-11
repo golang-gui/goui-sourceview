@@ -2,6 +2,8 @@
 // Requires a desktop and native typography; Linux Integrated needs a compositor.
 // Embedded language samples are editable and retain changes when switched.
 // An optional UTF-8 file is read once; edits stay in memory and are never saved.
+// Selection exposes multiple cursors, literal matches and line splitting.
+// Choose multicursor.go for a walkthrough; the footer shows the complete set count.
 // Use the toolbar, editor context menu and standard editing shortcuts. Restart
 // to reset the samples; close the main window to exit. No development server.
 package main
@@ -116,6 +118,8 @@ func run() error {
 	current := documents[0]
 	status := gui.NewLabel("")
 	status.SetStyleName(modern.MutedText)
+	status.SetWrapMode(gui.WrapWordChar)
+	status.SetMainWeight(1)
 	undo, redo := button("Undo", func() { editor.Undo(); win.SetFocusedWidget(editor) }), button("Redo", func() { editor.Redo(); win.SetFocusedWidget(editor) })
 	update := func() {
 		m := current.document
@@ -131,7 +135,11 @@ func run() error {
 		if current.document.LineEnding() == source.LineEndingCRLF {
 			byteCount += int64(m.LineCount() - 1)
 		}
-		status.SetText(fmt.Sprintf("%s  ·  %s  ·  %s  ·  Ln %d, Col %d  ·  %d lines  ·  %d bytes  ·  %s", current.name, current.document.Language(), current.document.LineEnding(), row+1, utf8.RuneCountInString(prefix)+1, m.LineCount(), byteCount, mode))
+		selections := fmt.Sprintf("%d selections", len(editor.Selections()))
+		if len(editor.Selections()) == 1 {
+			selections = "1 selection"
+		}
+		status.SetText(fmt.Sprintf("%s  ·  %s  ·  %s  ·  %s\nPrimary: Ln %d, Col %d  ·  %d lines  ·  %d bytes  ·  %s", current.name, current.document.Language(), current.document.LineEnding(), selections, row+1, utf8.RuneCountInString(prefix)+1, m.LineCount(), byteCount, mode))
 		undo.SetEnabled(!editor.ReadOnly() && m.CanUndo())
 		redo.SetEnabled(!editor.ReadOnly() && m.CanRedo())
 	}
@@ -273,10 +281,56 @@ func run() error {
 		}
 	})
 	tools.AddChild(editOptions)
+
+	selectionOptions := gui.NewButton()
+	selectionOptions.SetChild(gui.NewLabel("Selection"))
+	selectionMenu := gui.NewPopoverMenu(selectionOptions)
+	var selectionActions menuActions
+	defer selectionActions.clear()
+	defer selectionMenu.Hide()
+	selectionOptions.ConnectClicked(func() {
+		selectionActions.clear()
+		menu := gui.NewMenu()
+		bindings := editor.KeyBindings()
+		for _, action := range []struct {
+			label   string
+			command source.Command
+			run     func() error
+		}{
+			{"Add cursor above", source.CommandAddCursorAbove, func() error { return editor.AddCursor(false) }},
+			{"Add cursor below", source.CommandAddCursorBelow, func() error { return editor.AddCursor(true) }},
+			{"Select next occurrence", source.CommandSelectNextOccurrence, editor.SelectNextOccurrence},
+			{"Select all occurrences", source.CommandSelectAllOccurrences, editor.SelectAllOccurrences},
+			{"Split selection into lines", source.CommandSplitSelectionLines, editor.SplitSelectionLines},
+		} {
+			selectionActions.append(menu, action.label, bindings[action.command], true, func() {
+				win.SetFocusedWidget(editor)
+				if err := action.run(); err != nil {
+					status.SetText(err.Error())
+				}
+			})
+		}
+		menu.AppendSeparator()
+		selectionActions.append(menu, "Keep primary selection", []gui.KeyGesture{{Key: gui.KeyEscape}}, len(editor.Selections()) > 1, func() {
+			win.SetFocusedWidget(editor)
+			editor.SetSelection(editor.Selection())
+		})
+		selectionMenu.SetMenu(menu)
+		if err := selectionMenu.ShowAt(geometry.Point{Y: selectionOptions.Rect().Height}); err != nil {
+			status.SetText(err.Error())
+		}
+	})
+	tools.AddChild(selectionOptions)
 	tools.AddChild(spacer())
-	hint := gui.NewLabel("F2: complete  ·  F3: next match")
+	mouseHint, keyboardHint := selectionHints(editor)
+	selectionOptions.SetTooltip(keyboardHint)
+	help := row(0, 8)
+	hint := gui.NewLabel(mouseHint)
 	hint.SetStyleName(modern.MutedText)
-	tools.AddChild(hint)
+	hint.SetWrapMode(gui.WrapWordChar)
+	hint.SetMainWeight(1)
+	hint.SetTooltip(keyboardHint)
+	help.AddChild(hint)
 
 	header := gui.NewHeaderBar()
 	header.SetPadding(geometry.UniformInsets(8))
@@ -303,11 +357,11 @@ func run() error {
 	footer.AddChild(status)
 	content := gui.NewLinearBox(layout.DirectionVertical)
 	content.SetCrossAlign(layout.CrossStretch)
-	for _, child := range []gui.Widget{header, files, tools, viewport, footer} {
+	for _, child := range []gui.Widget{header, files, tools, help, viewport, footer} {
 		content.AddChild(child)
 	}
 	win.SetWidget(content)
-	editor.ConnectSelection(func(source.TextSelection) { update() })
+	editor.ConnectSelections(func([]source.TextSelection) { update() })
 	editor.ConnectChange(func(source.TextChange) { update() })
 	editor.ConnectError(func(err error) { status.SetText(err.Error()) })
 	show(current)

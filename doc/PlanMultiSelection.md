@@ -99,3 +99,45 @@ view_state、lines、structural、两种 assistance、completion typing/navigati
 全 internal race 在 /tmp/sourceview-phase3-delivery-race.log，交叉编译在 /tmp/sourceview-phase3-cross/。
 未执行：Windows/macOS 原生窗口、真实 IME 服务及物理键盘；未作性能结论。
 桌面与剪贴板副作用仅发生在专用显示，未写回样本或操作用户已有桌面。
+
+## 后续修正：示例接入与默认窗口入口
+
+用户回报后，在 c5205b8 稳定复现不带 `-clipboard` 的窗口启动失败：可选粘贴场景未执行，
+先前 ReindentSelection 的 F8 绑定仍存在；取消后台编辑场景又将 F8 绑定给 UpperCase，
+SetKeyBindings 正确拒绝冲突，测试程序 panic。默认入口的六组主题/缩放均失败，日志保留在
+/tmp/sourceview-reported-default-vkalpnbf/。此前四十四组通过记录只覆盖了本用例的 `-clipboard`
+路径，不能扩展为默认入口也通过。
+
+修复后，各场景从 DefaultKeyBindings 独立配置临时 F8，不依赖其他场景清理绑定；
+保留原有正文、完整选区、撤销、取消及超时断言，没有放宽 skip、条件或测试预算。
+`example/editor` 增加 Selection 菜单、随完整集合更新的选区计数、当前配置对应的鼠标/快捷键提示，
+并加入 `Go — multicursor.go` 演示样本。状态栏经 ConnectSelections 更新，只移除附加选区也立即刷新；
+菜单复用控件公开方法，示例没有额外光标状态或输入捷径。
+
+通过：go test ./...、GOWORK=off go test ./...、GOWORK=off go vet ./...；
+Windows amd64、macOS arm64 在 CGO_ENABLED=0 下构建 example/editor 与 multiselection 窗口程序。
+核心日志 /tmp/sourceview-example-fix-delivery-*.log，交叉编译日志 /tmp/sourceview-example-fix-windows.log
+与 /tmp/sourceview-example-fix-darwin.log。
+Ubuntu 22.04.5 amd64 / Go 1.25.8 / GOUI v0.7.0；独立 TigerVNC / Xfwm4 / Pango / Software：
+Basic、Modern Light/Dark ×100%/150% ×默认/`-clipboard` 共十二组全部通过，
+日志 /tmp/sourceview-example-fix-o6jvvkn2/。命令分别为：
+
+```sh
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/multiselection
+XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/multiselection -clipboard
+```
+
+第二条会覆盖测试显示的真实剪贴板，仅在专用桌面运行；`-basic`/`-dark` 和 GOUI_PLAT_SCALE
+按上述矩阵分别组合，不将单个配置或包测试当作窗口矩阵通过。
+
+示例以真实 XTest 键鼠输入实操并查看截图（Modern 亮/暗、100%）：从 Sample 选择新样本，
+菜单添加上下光标、下一个/全部匹配、按行拆分、只保留主选区均可用。全部匹配显示 4 个选区，
+将 product 同时改成 x 后减少 24 字节，一次撤销恢复；数字列选显示 3 个选区，
+三组数字替换成 9 后减少 6 字节，一次撤销恢复。只保留主选区时主范围不动、计数降为 1。
+只读模式可添加选区，输入不改正文；860×540 最小窗口的工具栏、操作提示和状态栏可见。
+这部分为截图人工核验，不冒充程序断言或像素金图；截图和应用日志在
+/tmp/sourceview-example-interaction-36gqbmfl/。外部合成状态查询脚本首次漏设 XAUTHORITY 导致空连接退出，
+纠正后确认合成选择所有者是该专用显示的 xfwm4；该脚本失败与编辑器断言分开记录。
+
+专用窗口、桌面与后台进程均已退出。没有写回样本、使用用户已有桌面或覆盖其剪贴板。
+未执行其他平台原生窗口、真实 IME 或物理键盘；本轮不作性能结论。

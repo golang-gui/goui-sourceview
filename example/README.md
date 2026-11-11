@@ -48,13 +48,13 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 
 ## Editor
 
-`editor` embeds 94 original language samples, so the binary can run from any
+`editor` embeds 95 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and becomes the first option in the Sample dropdown. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目 94 份原创语言样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目 95 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并作为 Sample 下拉列表的首项，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
@@ -92,6 +92,22 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
 - Right-click for the editor menu. F2 opens completion; type brackets,
   quotes, or select text and type an opening bracket. Try line movement shortcuts.
   右键打开菜单；F2 请求补全，输入括号/引号或包裹选区，尝试按快捷键移动整行。
+- Open Selection to add a cursor above/below, select the next/all literal occurrences,
+  split a range into lines, or keep only the primary selection. Choose `Go — multicursor.go`
+  for a walkthrough: click `product`, select all occurrences, type `x`, and Undo once.
+  The footer shows the complete selection count even when the primary range is unchanged.
+  打开 Selection 菜单添加上下光标、选择下一个/全部相同文本、按行拆分或只保留主选区。
+  选择 `Go — multicursor.go`，点击 `product` 并选中全部匹配，输入 `x` 后一次撤销。
+  底部显示完整选区数量；只增减附加选区时也会更新。
+- The hint below the toolbar shows the configured mouse modifiers and next/all shortcuts.
+  Linux defaults to Ctrl+click to add a cursor and Ctrl+Shift+drag for columns;
+  Windows/macOS use Alt+click and Alt+Shift+drag. Hover Selection or the hint for keyboard
+  column-selection and line-splitting shortcuts. Short rows clamp; Tabs and combining clusters
+  remain whole. Completion and inline suggestions currently require one selection.
+  工具栏下方提示对应配置的鼠标修饰键及匹配快捷键；Linux 默认为 Ctrl+点击添加光标、
+  Ctrl+Shift+拖动列选，Windows/macOS 为 Alt+点击、Alt+Shift+拖动。
+  悬停 Selection 或提示可查看键盘列扩展与按行拆分快捷键。短行钳制行尾，不拆 Tab 或组合字符。
+  当前补全与影子建议限单选区使用；Esc 先关闭临时界面，再清除附加选区。
 - The header button switches light/dark. `-theme system` follows system appearance
   until you choose a theme; settings connections end with the application.
   标题栏按钮切换亮暗；`-theme system` 在手动切换前跟随系统外观，订阅随应用结束释放。
