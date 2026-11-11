@@ -17,6 +17,67 @@ SaveState / RestoreState 及 ui.ViewState 别名已接入。快照只保留文�
 - 显式选择、显露、按键、换文档和卸载取消，控制器按生命周期释放。
 - 补全关闭回调启动新恢复时保留最新请求；预编辑捕获不提交投影内容。
 
-第一批结构折叠与手动长行收起恢复尚待接入；原生窗口与跨平台验证在完整功能后执行。
+第一批完成时结构折叠与手动长行收起尚未接入；完整实现与验收见下面第二、三批。
 `go test ./...`、`GOWORK=off go test ./...` 通过（Linux amd64 / Go 1.25.8）；
 第一批日志为 `/tmp/sourceview-state-first-all.log`、`/tmp/sourceview-state-first-module.log`。
+
+## 第二批：折叠与长行收起
+
+按已折叠索引捕获结构意图，快照与手动长行收起合计最多 4096 项；超限明确失败。
+RestoreState 通过既有 foldIntake 分批匹配精确文本端点，随匹配建立隐藏区间，
+不在调用或发布时扫描全部候选。选区端点需要当前宽度的预览几何时在布局队列准备，
+必要时展开预览，保持选区；不新建原生排版接口。
+
+包测试另覆盖：
+
+- 延迟外部分析、缺失/变化端点、未记录区域展开、等待期间再次保存、两视图隔离。
+- 语言定义改变与禁用折叠、编辑映射与候选清空后的索引一致性；外部分析失效后，
+  空折叠意图仍能展开映射后保留的区域。
+- 普通输入及无变化 Unfold 取消恢复，迟到结果不覆盖用户；不隐藏选区端点。
+- 手动长行收起、目标宽度变窄后展开、空文档、横向偏移恢复及钳制。
+- 10 万候选只保存一个折叠，恢复调用不执行匹配，每步不超过 256 个候选。
+- 4096 项成功与超限拒绝；回调重入及调用方重置快照变量不改变已接受请求。
+
+## 第三批：原生窗口验收（2026-11-11）
+
+入口 `tests/window/editor/view_state/main.go`，含环境、步骤、逐项断言和退出说明，
+同时演示 `*ui.ViewState` 存储与命令式恢复。依赖为发布的 GOUI v0.7.0，未改 GOUI。
+
+环境：Linux amd64、Go 1.25.8、Pango、软件绘制；独立 Xvnc 1920×1440、Xfwm4 compositor，
+关闭该会话的输入法连接，物理指针移到独立屏幕边缘。所有程序、认证、日志和截图在 `/tmp`，
+未访问用户文件/剪贴板/桌面设置，结束后关闭本次创建的会话与进程。
+
+Basic、Modern 亮色、Modern 暗色 × GOUI_PLAT_SCALE=1/1.5，六组全部通过：
+
+- 正常 Window.DispatchEvent 点击应用保存/恢复按钮；检查反向选区、屏外 caret、
+  文本顶部与滚动位置、结构折叠/手动长行收起、只读恢复、视图隔离和历史不变。
+- 卸载后重建同文档视图，原生最大化/还原改变宽高，同时切换字体大小，检查文本锚点。
+- 10,500,000 字节的自动换行单行，中英/RTL 文本；在中段滚动后恢复到另一视图，
+  比较实际可见文本端点，并至少等待两个窗口 frame，非仅测 RestoreState 返回。
+- 请求后立即滚轮/拖动滚动条，确认滚动实际发生且未被迟到恢复覆盖；正常 CommitText
+  输入后，另一视图拒绝旧修订快照。观察真实桌面截图，不采用跨平台像素金图。
+
+功能矩阵日志和六张桌面截图：`/tmp/sourceview-state-matrix-td1vbjjb/`。
+在这次矩阵中，大单行到目标首屏的观测时间为约 0.53–2.79 秒，40 ms 验收 timer 的
+最大相邻回调间隔为约 90–269 ms。该值包含软件绘制/桌面合成与检测等待，且部分运行与
+测试或跨平台编译并行，不用于性能对比或宣称排版策略加速；没有新增同步全文测量。
+
+验收准备阶段修正了测试顺序：先显露并测量长行，再收起；选区显露完成后再滚动离开。
+原生窗口尺寸变化改为最大化/还原并核验实际分配，未把布局约束当作已发生的窗口调整。
+初次失败记录保留在 `/tmp/sourceview-state-native-*/`，完整矩阵无失败或跳过。
+
+最终检查均通过：
+
+```bash
+go test ./...
+GOWORK=off go test ./...
+go test -race ./sourceview ./ui
+GOWORK=off GOOS=windows GOARCH=amd64 go build ./...
+GOWORK=off GOOS=darwin GOARCH=arm64 go build ./...
+GOWORK=off GOOS=darwin GOARCH=amd64 go build ./...
+git diff --check
+```
+
+测试日志为 `/tmp/sourceview-state-final-all.log`、`/tmp/sourceview-state-final-module.log`、
+`/tmp/sourceview-state-final-race.log`。Windows/macOS 本轮仅交叉编译，未做原生窗口验收；
+真实 IME 与物理输入、混合 DPI 未验收。快照仅支持同一文档与修订，不承诺序列化或跨修订映射。
