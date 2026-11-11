@@ -12,11 +12,12 @@ import (
 )
 
 type SourceViewView struct {
-	keyBindings    KeyBindings
-	keyBindingsSet bool
-	searchRange    *TextRange
-	searchRangeSet bool
-	linkedTags     *bool
+	selectionModifiers *SelectionModifiers
+	keyBindings        KeyBindings
+	keyBindingsSet     bool
+	searchRange        *TextRange
+	searchRangeSet     bool
+	linkedTags         *bool
 	base.ViewBase[SourceViewView]
 	document                                                             *Document
 	readOnly, acceptsTab                                                 bool
@@ -328,6 +329,11 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	}
 	w.SetShowLineNumbers(lines)
 	w.SetScheme(v.colors)
+	if v.selectionModifiers != nil {
+		if err := w.SetSelectionModifiers(*v.selectionModifiers); err != nil {
+			panic(err)
+		}
+	}
 	if v.keyBindingsSet {
 		if err := w.SetKeyBindings(v.keyBindings); err != nil {
 			panic(err)

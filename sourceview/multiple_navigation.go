@@ -83,7 +83,7 @@ func (v *SourceView) navigateCursor(c cursorState, key events.Key, extend bool) 
 				return c, errSelectionGeometry
 			}
 			if !c.preferredSet {
-				c.preferredX = rect.X - v.gutter - padding + v.offset.X
+				c.preferredX = float64(rect.X) - float64(v.gutter) - float64(padding) + float64(v.offset.X)
 			}
 			delta := max(v.lineHeight, rect.Height)
 			if key == events.KeyPageUp || key == events.KeyPageDown {
@@ -92,7 +92,7 @@ func (v *SourceView) navigateCursor(c cursorState, key events.Key, extend bool) 
 			if key == events.KeyArrowUp || key == events.KeyPageUp {
 				delta = -delta
 			}
-			point := geometry.Point{X: v.gutter + padding + c.preferredX - v.offset.X, Y: rect.Y + rect.Height/2 + delta}
+			point := geometry.Point{X: float32(float64(v.gutter+padding) + c.preferredX - float64(v.offset.X)), Y: rect.Y + rect.Height/2 + delta}
 			// Hit may prepare the destination in bounded steps. Require its resulting
 			// logical row to have measured geometry before accepting the cursor result.
 			next := v.hit(point)
@@ -218,6 +218,10 @@ func replacementPlan(c cursorState, text string) editor.Plan {
 func (v *SourceView) configureMultipleKey(a *deferredInput, event events.KeyEvent) {
 	if command, bound := v.keyCommand(event); bound {
 		switch command {
+		case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
+			a.selectionCommand = command
+			a.geometry = false
+			return
 		case CommandMoveLineStart, CommandMoveLineEnd, CommandSelectLineStart, CommandSelectLineEnd:
 			key := events.KeyHome
 			if command == CommandMoveLineEnd || command == CommandSelectLineEnd {

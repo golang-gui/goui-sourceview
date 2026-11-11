@@ -79,6 +79,15 @@ const (
 	// Long wrapped lines are a view operation, independent of language folding.
 	CommandCollapseLine
 	CommandExpandLine
+	CommandAddCursorAbove
+	CommandAddCursorBelow
+	CommandSelectNextOccurrence
+	CommandSelectAllOccurrences
+	CommandSplitSelectionLines
+	CommandColumnSelectLeft
+	CommandColumnSelectRight
+	CommandColumnSelectUp
+	CommandColumnSelectDown
 	commandLimit
 )
 
@@ -101,6 +110,16 @@ func DefaultKeyBindings() KeyBindings {
 		duplicate |= gui.ModControl
 	}
 	b := KeyBindings{
+		CommandAddCursorAbove:       {{Key: gui.KeyArrowUp, Modifiers: p | gui.ModAlt}},
+		CommandAddCursorBelow:       {{Key: gui.KeyArrowDown, Modifiers: p | gui.ModAlt}},
+		CommandSelectNextOccurrence: {{Key: gui.KeyD, Modifiers: p}},
+		CommandSelectAllOccurrences: {{Key: gui.KeyL, Modifiers: p | gui.ModShift}},
+		CommandSplitSelectionLines:  {{Key: gui.KeyI, Modifiers: gui.ModAlt | gui.ModShift}},
+		CommandColumnSelectLeft:     {{Key: gui.KeyArrowLeft, Modifiers: p | gui.ModAlt | gui.ModShift}},
+		CommandColumnSelectRight:    {{Key: gui.KeyArrowRight, Modifiers: p | gui.ModAlt | gui.ModShift}},
+		CommandColumnSelectUp:       {{Key: gui.KeyArrowUp, Modifiers: gui.ModControl | gui.ModShift}},
+		CommandColumnSelectDown:     {{Key: gui.KeyArrowDown, Modifiers: gui.ModControl | gui.ModShift}},
+
 		CommandUndo:                {{Key: gui.KeyZ, Modifiers: p}},
 		CommandRedo:                {{Key: gui.KeyZ, Modifiers: p | gui.ModShift}},
 		CommandCut:                 {{Key: gui.KeyX, Modifiers: p}},
@@ -219,6 +238,8 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		}
 	}
 	switch command {
+	case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
+		v.report(v.queueSelectionCommand(command))
 	case CommandMoveWordPartLeft, CommandMoveWordPartRight, CommandSelectWordPartLeft, CommandSelectWordPartRight:
 		v.MoveWordPart(command == CommandMoveWordPartRight || command == CommandSelectWordPartRight, command == CommandSelectWordPartLeft || command == CommandSelectWordPartRight)
 	case CommandDeleteWordPartLeft, CommandDeleteWordPartRight:

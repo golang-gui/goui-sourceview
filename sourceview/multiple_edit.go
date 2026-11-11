@@ -30,6 +30,7 @@ func (v *SourceView) ApplyEditsWithSelections(document *Document, revision uint6
 }
 
 func (v *SourceView) applyMultiple(edits []TextEdit, after []cursorState) error {
+	v.columnSelection = nil
 	if err := v.editable(); err != nil {
 		return err
 	}
@@ -292,6 +293,8 @@ func (v *SourceView) cutMultiple() error {
 
 func multipleCommandReady(c Command) bool {
 	switch c {
+	case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
+		return true
 	case CommandUndo, CommandRedo, CommandCopy, CommandCut, CommandPaste, CommandDeleteSelection, CommandSelectAll, CommandIndent, CommandOutdent, CommandFind, CommandReplace, CommandGoTo, CommandFindNext, CommandFindPrevious, CommandFold, CommandUnfold, CommandFoldAll, CommandUnfoldAll, CommandCollapseLine, CommandExpandLine, CommandMoveLineStart, CommandMoveLineEnd, CommandSelectLineStart, CommandSelectLineEnd, CommandMoveDocumentStart, CommandMoveDocumentEnd, CommandSelectDocumentStart, CommandSelectDocumentEnd:
 		return true
 	}

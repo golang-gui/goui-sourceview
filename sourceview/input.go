@@ -104,6 +104,32 @@ func (v *SourceView) installInput() {
 			return
 		}
 		pos := v.hit(point)
+		if point.X >= v.gutter {
+			switch v.selectionGesture(mods) {
+			case 1:
+				v.additiveDrag = true
+				v.dragBase = v.cursors()
+				v.dragRange = TextRange{Start: pos.Offset, End: pos.Offset}
+				v.dragging = true
+				v.dragPoint = point
+				v.dragUnit = 0
+				v.dragGutter = false
+				states := append([]cursorState{{selection: TextSelection{Anchor: pos.Offset, Caret: pos.Offset}, upstream: pos.Upstream}}, v.dragBase...)
+				v.setCursorStatesKeepingCompletion(normalizeCursors(states), false, nil)
+				return
+			case 2:
+				v.additiveDrag = false
+				v.dragging = true
+				v.dragPoint = point
+				v.dragUnit = 0
+				v.dragGutter = false
+				v.beginColumn(point, pos)
+				return
+			}
+		}
+		v.additiveDrag = false
+		v.dragBase = nil
+
 		v.dragInline = v.inlineSuggestion != nil && v.inlineSuggestion.multi != nil
 		s := v.Selection()
 		v.dragGutter = point.X < v.gutter
@@ -169,8 +195,16 @@ func (v *SourceView) installInput() {
 		}
 		v.dragging = false
 		v.dragInline = false
+		v.additiveDrag = false
+		v.dragBase = nil
 	})
-	drag.ConnectCancel(func() { v.dragging = false; v.endMinimapDrag() })
+	drag.ConnectCancel(func() {
+		v.dragging = false
+		v.additiveDrag = false
+		v.dragBase = nil
+		v.columnSelection = nil
+		v.endMinimapDrag()
+	})
 	v.AddEventController(drag)
 }
 
@@ -251,7 +285,16 @@ func (v *SourceView) dragSelection(point geometry.Point) {
 			return
 		}
 	}
+	if v.columnSelection != nil && v.columnSelection.mouse {
+		v.updateColumn(point)
+		return
+	}
 	if !measured {
+		return
+	}
+	if v.additiveDrag {
+		states := append([]cursorState{{selection: TextSelection{Anchor: v.dragRange.Start, Caret: pos.Offset}, upstream: pos.Upstream}}, v.dragBase...)
+		v.setCursorStatesKeepingCompletion(normalizeCursors(states), false, nil)
 		return
 	}
 	s := v.Selection()
@@ -318,6 +361,7 @@ func (v *SourceView) inputKey(event events.KeyEvent) bool {
 	v.cancelViewRestore()
 	if event.Key == events.KeyEscape && event.Modifiers == 0 {
 		v.pendingInput = nil
+		v.columnSelection = nil
 	}
 	event.Handled = nil // The native dispatch response must never escape this event.
 	command, bound := v.keyCommand(event)
@@ -560,7 +604,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 	case events.KeyArrowUp, events.KeyArrowDown, events.KeyPageUp, events.KeyPageDown:
 		vertical = true
 		if !v.preferredSet {
-			x = g.Caret(pos).X
+			x = float64(g.Caret(pos).X)
 		}
 		if p.Paged != nil {
 			rect, ok := v.paragraphCaret(row, p, pos, false)
@@ -593,7 +637,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 				g = &p.Geometry
 			}
 			if p != nil {
-				pos = g.Hit(geometry.Point{X: x, Y: target - v.paragraphTop(row)})
+				pos = g.Hit(geometry.Point{X: float32(x), Y: target - v.paragraphTop(row)})
 				caret = r.Start + pos.Offset
 			}
 		} else {
@@ -633,7 +677,7 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 				}
 			}
 			if p != nil {
-				pos = g.HitLine(index, x)
+				pos = g.HitLine(index, float32(x))
 				caret = r.Start + pos.Offset
 			}
 		}
@@ -652,21 +696,25 @@ func (v *SourceView) navigateKeepingCompletion(key events.Key, extend bool, keep
 // It retains operations after normal input dispatch, never an EventContext or
 // native Handled pointer. Existing frame work prepares their measured stops.
 type deferredInput struct {
+	selectionCommand  Command
+	finishColumn      bool
 	plan              func(cursorState) (editor.Plan, error)
 	navigate          func(cursorState) (cursorState, error)
 	apply             func()
 	geometry, mutates bool
 }
 type inputBatch struct {
-	multiple *multipleInput
-	state    operationState
-	bindings uint64
-	readOnly bool
-	actions  []deferredInput
+	direct    bool
+	selecting *selectionQuery
+	multiple  *multipleInput
+	state     operationState
+	bindings  uint64
+	readOnly  bool
+	actions   []deferredInput
 }
 
 func (q *inputBatch) valid(v *SourceView) bool {
-	return q.state.valid(v) && q.bindings == v.keyBindingsEpoch && q.readOnly == v.readOnly && v.mounted && v.Focused() && gui.IsEnabled(v) && visible(v) && !v.Destroyed()
+	return q.state.valid(v) && q.bindings == v.keyBindingsEpoch && q.readOnly == v.readOnly && v.mounted && (q.direct || v.Focused()) && gui.IsEnabled(v) && visible(v) && !v.Destroyed()
 }
 
 func (v *SourceView) inputGeometryReady() bool {
@@ -723,6 +771,12 @@ func (v *SourceView) delayInput(action deferredInput) bool {
 	if v.pendingInput != nil && !v.pendingInput.valid(v) {
 		v.pendingInput = nil
 	}
+	if v.pendingInput == nil && v.columnSelection != nil && v.columnSelection.pending {
+		v.pendingInput = &inputBatch{state: v.operationState(), bindings: v.keyBindingsEpoch, readOnly: v.readOnly, actions: []deferredInput{{finishColumn: true}}}
+	}
+	if v.pendingInput == nil && action.selectionCommand != 0 {
+		v.pendingInput = &inputBatch{state: v.operationState(), bindings: v.keyBindingsEpoch, readOnly: v.readOnly}
+	}
 	if v.pendingInput == nil {
 		if len(v.additional) > 0 && (action.plan != nil || action.navigate != nil) {
 			v.pendingInput = &inputBatch{state: v.operationState(), bindings: v.keyBindingsEpoch, readOnly: v.readOnly}
@@ -766,6 +820,45 @@ func (v *SourceView) inputStep(deadline time.Time) {
 			return
 		}
 		action := q.actions[0]
+		if action.selectionCommand != 0 || action.finishColumn {
+			before := v.operationState()
+			done := false
+			var err error
+			if action.finishColumn {
+				if column := v.columnSelection; column != nil && column.pending {
+					done, err = v.advanceColumn(column, deadline)
+				} else {
+					done = true
+				}
+			} else {
+				done, err = v.advanceSelectionCommand(q, action.selectionCommand, deadline)
+			}
+			if err != nil && err != errSelectionGeometry {
+				v.pendingInput = nil
+				if err != ErrOperationChanged && err != errSelectionLayoutFailed {
+					v.report(err)
+				}
+				return
+			}
+			if !done {
+				v.RequestPaint()
+				return
+			}
+			q.selecting = nil
+			if v.pendingInput != q || !q.advance(v, before, false) {
+				if v.pendingInput == q {
+					v.pendingInput = nil
+				}
+				return
+			}
+			q.actions[0] = deferredInput{}
+			q.actions = q.actions[1:]
+			if len(q.actions) == 0 {
+				v.pendingInput = nil
+				return
+			}
+			continue
+		}
 		if len(v.additional) > 0 && (action.plan != nil || action.navigate != nil) {
 			before := v.operationState()
 			done, err := v.advanceMultipleInput(q, action, deadline)

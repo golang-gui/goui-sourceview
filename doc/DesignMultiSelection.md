@@ -30,7 +30,11 @@ SetSelections 严格校验 UTF-8 范围及数量，错误不修改旧状态；Se
 矩形是选区集合的生成操作。按实际显示行/cluster 命中，支持自动换行、Tab、中文、组合字符和比例字体。
 短行钳制行尾，不补空格或拆 Tab，跳过折叠隐藏行。不能用每行单逻辑范围表达的双向矩形整次拒绝。
 矩形拖动/键盘扩展保留起点与 X 意图；完成后选区固定到文本，不因改宽重新选中文字。
-鼠标修饰键单独配置，键盘命令接入 KeyBindings，普通点击单选区，Escape 取消临时界面后清除附加选区。
+鼠标修饰键通过 SelectionModifiers 单独配置（零禁用；普通和仅 Shift 手势保留）。
+Linux 默认 Ctrl 添加、Ctrl+Shift 矩形；其他系统默认 Alt、Alt+Shift。键盘命令接入 KeyBindings，
+AddCursor/SelectNextOccurrence/SelectAllOccurrences/SplitSelectionLines 接受挂载视图的分帧请求；
+匹配按字面、区分大小写，最多 64 KiB 查询和 4096 项，超限保持原集合。
+拆分保持方向，以原主活动端所在的有效行为主。普通点击单选区，Escape 取消临时界面后清除附加选区。
 
 ## 声明式与验证
 

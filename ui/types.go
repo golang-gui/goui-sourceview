@@ -9,6 +9,7 @@ import (
 // Aliases preserve identity, methods and ownership; they add no parallel state.
 type (
 	CaseMode           = source.CaseMode
+	SelectionModifiers = source.SelectionModifiers
 	Folds              = source.Folds
 	FoldRange          = source.FoldRange
 	Highlights         = source.Highlights
@@ -169,3 +170,15 @@ func NewHighlights(text string, spans []HighlightSpan) (*Highlights, error) {
 
 // NewFolds creates an immutable external folding snapshot.
 func NewFolds(text string, ranges []FoldRange) (*Folds, error) { return source.NewFolds(text, ranges) }
+
+const (
+	CommandAddCursorAbove       = source.CommandAddCursorAbove
+	CommandAddCursorBelow       = source.CommandAddCursorBelow
+	CommandSelectNextOccurrence = source.CommandSelectNextOccurrence
+	CommandSelectAllOccurrences = source.CommandSelectAllOccurrences
+	CommandSplitSelectionLines  = source.CommandSplitSelectionLines
+	CommandColumnSelectLeft     = source.CommandColumnSelectLeft
+	CommandColumnSelectRight    = source.CommandColumnSelectRight
+	CommandColumnSelectUp       = source.CommandColumnSelectUp
+	CommandColumnSelectDown     = source.CommandColumnSelectDown
+)

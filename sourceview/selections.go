@@ -15,7 +15,7 @@ const maxSelections = 4096
 type cursorState struct {
 	selection    TextSelection
 	upstream     bool
-	preferredX   float32
+	preferredX   float64
 	preferredSet bool
 }
 
@@ -147,6 +147,7 @@ func (v *SourceView) orderedSelections() []TextSelection {
 	return out
 }
 func (v *SourceView) setCursorStatesKeepingCompletion(cursors []cursorState, reveal bool, keep *completionSession) {
+	v.columnSelection = nil
 	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	defer v.searchState.Emit()

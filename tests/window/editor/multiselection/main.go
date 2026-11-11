@@ -23,6 +23,7 @@ import (
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
 	"github.com/golang-gui/goui/theme/modern"
@@ -50,6 +51,7 @@ func main() {
 	if *basicTheme {
 		rules = basic.Rules()
 	}
+	rules = append(rules, style.Name("source-view").FontFamily("monospace").FontSize(12))
 	app.SetStyleSheet(style.Sheet(rules...))
 	win, err := app.NewWindow(&gui.WindowOptions{Size: geometry.Size{Width: 1000, Height: 800}, Chrome: gui.WindowChromeIntegrated})
 	must(err)
@@ -86,6 +88,21 @@ func main() {
 	pending := func(v *source.SourceView) bool {
 		m := v.Snapshot().Attributes["goui.sourceview"].(map[string]any)
 		return m["inputPending"] == true
+	}
+	ref, err := app.Typography().NewTextLayout("abcdef", typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}}, 1000, 1000)
+	must(err)
+	lines, clusters := ref.MeasureMetrics()
+	advance, lineHeight := clusters[0].Width, lines[0].Height
+	ref.Destroy()
+	pointer := func(kind events.EventType, column, row int, mods events.Modifiers) {
+		bounds := a.Snapshot().Bounds
+		event := events.PointerEvent{EventType: kind, Position: geometry.Point{X: bounds.X + 6 + float32(column)*advance, Y: bounds.Y + 6 + (float32(row)+.5)*lineHeight}, Modifiers: mods}
+		if kind == events.PointerMove {
+			event.Buttons = events.PointerButtonLeftDown
+		} else {
+			event.Button = events.PointerButtonLeft
+		}
+		must(win.DispatchEvent(event))
 	}
 	original := d.Text()
 	before := []source.TextSelection{{Anchor: 13, Caret: 8}, {Anchor: 0, Caret: 3}}
@@ -130,6 +147,45 @@ func main() {
 		)
 	}
 	steps = append(steps,
+		step{"prepare rectangle", func() {
+			a.SetWrapMode(source.WrapNone)
+			a.SetFoldingEnabled(false)
+			a.SetShowLineNumbers(false)
+			d.SetText("abcdef\nabcdef\nabcdef")
+			a.SetSelection(source.TextSelection{})
+		}, func() bool { return !pending(a) }},
+		step{"pointer rectangle", func() {
+			mods, _ := a.SelectionModifiers().Column.Resolve()
+			pointer(events.PointerDown, 1, 0, mods)
+			pointer(events.PointerMove, 3, 2, mods)
+			pointer(events.PointerUp, 3, 2, mods)
+		}, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 15, Caret: 17}, {Anchor: 1, Caret: 3}, {Anchor: 8, Caret: 10}})
+		}},
+		step{"rectangle input", func() { must(win.CommitText("Z")) }, func() bool { return d.Text() == "aZdef\naZdef\naZdef" && !pending(a) }},
+		step{"add pointer", func() {
+			a.SetSelection(source.TextSelection{})
+			mods, _ := a.SelectionModifiers().Add.Resolve()
+			pointer(events.PointerDown, 2, 1, mods)
+			pointer(events.PointerUp, 2, 1, mods)
+		}, func() bool { return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 8, Caret: 8}, {}}) }},
+		step{"keyboard column", func() {
+			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
+			key(events.KeyArrowRight, primary|events.ModifierAlt|events.ModifierShift)
+			key(events.KeyArrowDown, events.ModifierControl|events.ModifierShift)
+		}, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 7, Caret: 8}, {Anchor: 1, Caret: 2}}) && !pending(a)
+		}},
+		step{"occurrence", func() {
+			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 2})
+			key(events.KeyL, primary|events.ModifierShift)
+		}, func() bool { return len(a.Selections()) == 3 && !pending(a) }},
+		step{"add cursor", func() {
+			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
+			key(events.KeyArrowDown, primary|events.ModifierAlt)
+		}, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 7, Caret: 7}, {Anchor: 1, Caret: 1}}) && !pending(a)
+		}},
 		step{"dispersed long input", func() {
 			a.SetWrapMode(source.WrapNone)
 			a.SetFoldingEnabled(false)

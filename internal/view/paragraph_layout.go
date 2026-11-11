@@ -932,3 +932,18 @@ func (p *ParagraphLayout) Text(r textcore.Range) string {
 	}
 	return text
 }
+
+// ColumnGeometry measures a bounded horizontal selection window without
+// replacing the painting viewport. Returned metrics are ordinary owned values;
+// they remain valid if native pages are subsequently evicted.
+func (p *ParagraphLayout) ColumnGeometry(left, right float64) (ParagraphGeometry, bool, error) {
+	first, last := p.widthAt(max(0, min(left, right))), p.widthAt(max(left, right))
+	if last-first+1 > paragraphPageLimit {
+		return ParagraphGeometry{}, false, ErrColumnWindow
+	}
+	viewport := p.viewport
+	ready := p.Prepare(geometry.Rect(float32(min(left, right)), 0, max(1, float32(math.Abs(right-left))), p.lineHeight), true)
+	frame := p.geometry
+	p.Prepare(viewport, false)
+	return frame, ready, p.Err()
+}

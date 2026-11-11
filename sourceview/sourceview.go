@@ -67,12 +67,16 @@ type SourceView struct {
 	selectionTrail                                selectionTrail
 	selection                                     TextSelection
 	additional                                    []cursorState
+	columnSelection                               *columnSelection
+	selectionModifiers                            SelectionModifiers
+	additiveDrag                                  bool
+	dragBase                                      []cursorState
 	selectionRangesCache                          []TextRange
 	selectionRangesEpoch, selectionRangesRevision uint64
 	selectionCommit                               *selectionCommit
 	selectionRevision, selectionEpoch             uint64
 	upstream                                      bool
-	preferredX                                    float32
+	preferredX                                    float64
 	preferredSet                                  bool
 	readOnly, acceptsTab, escapeTab               bool
 	indent                                        IndentOptions
@@ -197,6 +201,7 @@ type SourceView struct {
 func NewSourceView() *SourceView {
 	d := NewDocument("")
 	v := &SourceView{linkedTags: true, document: d, private: d, showLineNumbers: true, autoPairs: true, indent: IndentOptions{4, 4, true}, lineHeight: 22, spaceWidth: 10, caretOn: true, layouts: make(map[layoutKey]*paragraph), font: typography.FontInfo{Family: "monospace", Size: 12}}
+	v.selectionModifiers = defaultSelectionModifiers()
 	v.indentGuides, v.smartHomeEnd, v.smartBackspace, v.highlightOccurrences = true, true, true, true
 	v.highlightSearchMatches = true
 	v.foldingEnabled = true
@@ -217,6 +222,9 @@ func NewSourceView() *SourceView {
 			v.closeCompletion()
 			v.cancelPreedit()
 			v.dragging = false
+			v.columnSelection = nil
+			v.dragBase = nil
+			v.additiveDrag = false
 		}
 		v.resetBlink()
 		v.RequestPaint()
@@ -256,6 +264,10 @@ func (v *SourceView) SetDocument(d *Document) {
 	if v.mounted {
 		v.document.release(v)
 	}
+	v.columnSelection = nil
+	v.dragBase = nil
+	v.additiveDrag = false
+	v.dragging = false
 	v.document = d
 	v.execution = nil
 	v.minimap = nil
@@ -537,6 +549,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 }
 
 func (v *SourceView) changed(c TextChange, splices []highlight.Splice, reset bool) {
+	v.columnSelection = nil
 	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
 	v.initialLayout = nil
@@ -710,6 +723,9 @@ func (v *SourceView) mount() {
 }
 
 func (v *SourceView) unmount() {
+	v.columnSelection = nil
+	v.dragBase = nil
+	v.additiveDrag = false
 	v.cancelViewRestore()
 	if v.editQueue != nil {
 		v.cancelEdit()

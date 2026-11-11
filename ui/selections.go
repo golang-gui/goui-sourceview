@@ -43,3 +43,8 @@ func (v *SourceViewView) OnSelections(fn func([]TextSelection)) *SourceViewView 
 	v.selectionsWrite = false
 	return v
 }
+
+func (v *SourceViewView) SelectionModifiers(value SelectionModifiers) *SourceViewView {
+	v.selectionModifiers = &value
+	return v
+}
