@@ -4,6 +4,7 @@
 // An optional UTF-8 file is read once; edits stay in memory and are never saved.
 // Selection exposes multiple cursors, literal matches and line splitting.
 // Choose multicursor.go for a walkthrough; the footer shows the complete set count.
+// Linux uses Ctrl+click/drag to add selections; Alt+Shift+drag selects columns.
 // Use the toolbar, editor context menu and standard editing shortcuts. Restart
 // to reset the samples; close the main window to exit. No development server.
 package main
@@ -98,6 +99,14 @@ func run() error {
 	defer chrome.Disconnect()
 
 	editor := source.NewSourceView()
+	if runtime.GOOS == "linux" {
+		// Xfwm4 commonly reserves Alt+button for window operations.
+		modifiers := editor.SelectionModifiers()
+		modifiers.Add = gui.ModControl
+		if err := editor.SetSelectionModifiers(modifiers); err != nil {
+			return err
+		}
+	}
 	bindings := editor.KeyBindings()
 	bindings[source.CommandComplete] = []gui.KeyGesture{{Key: gui.KeyF2}}
 	bindings[source.CommandExpandSelection] = []gui.KeyGesture{{Key: gui.KeyF4}}

@@ -186,3 +186,39 @@ FileNotFoundError；等待构建成功后重启并完成上述验证，该次编
 专用窗口、桌面、会话总线与后台进程均已退出，剪贴板只在矩阵的独立显示内覆盖，
 未写回样本或操作用户已有桌面。未执行 Windows/macOS 原生交互、真实 IME 或物理键鼠；
 本轮不作性能结论。
+
+## 后续修正：Linux 示例使用 Ctrl 添加选区（2026-11-12）
+
+用户确认在 Xfce4 保留 Alt 窗口操作，采用编辑器配置避让的方式。
+`example/editor` 在与键盘快捷键相邻的初始化处读取 SelectionModifiers，仅在 Linux 将 Add 覆盖为 Ctrl，
+Column 保留 Alt+Shift；经公开 SetSelectionModifiers 应用并处理错误。提示从控件配置生成，
+因此显示 Ctrl+点击添加光标，README 和专题设计同步说明 Ctrl+拖动追加范围与操作顺序。
+控件本身及 Windows/macOS 示例仍使用原默认值，无 GOUI 修改或窗口管理器设置写入。
+
+通过：go test ./...、GOWORK=off go test ./...、GOWORK=off go vet ./example/editor。
+核心日志 /tmp/sourceview-ctrl-example-tests.log、/tmp/sourceview-ctrl-example-independent.log、
+/tmp/sourceview-ctrl-example-vet.log。GOWORK=off、CGO_ENABLED=0 下，Windows amd64 与 macOS arm64
+的 example/editor 构建通过，产物最终置于仓库外临时目录；不计作其他平台原生交互通过。
+
+Ubuntu 22.04.5 amd64 / Go 1.25.8 / GOUI v0.7.0，无 go.work；
+独立 TigerVNC / Xfwm4 4.16.1 compositor on / Pango / Software，Modern Light 100% 与 Dark 150%
+两组均以真实 XTest 键鼠输入并人工查看截图验收。两次均从专用 WM 进程环境确认会话总线与配置目录，
+只读查询 easy_click=Alt，整个验证保留该设置：
+
+- Ctrl+点击从一个光标变为两个；输入 x 分别插入，正文 774 字节变为 776，
+  一次 Ctrl+Z 恢复正文和两个光标。
+- 保留这两个光标，Ctrl+拖动选中第三行的 300，形成两个光标和一个范围；输入 x 后两处插入、
+  一处替换，一次 Ctrl+Z 恢复正文及完整三个选区。
+- 先按住 Alt+Shift，再用左键拖动选中 100/200/300；输入 9 将三组数字替换为 9，
+  正文 774 字节变为 768，一次 Ctrl+Z 恢复正文与三个范围。
+- 界面提示分别显示 Ctrl+点击与 Alt+Shift+拖动，状态栏随两个/三个选区更新。
+
+以上是示例真实事件的截图人工核验，不冒充程序断言或像素金图；本轮未改动测试条件、skip 或超时。
+截图及应用日志 /tmp/sourceview-ctrl-example-fhs56xiz/、/tmp/sourceview-ctrl-example-dark-zv32johy/。
+保留外部编排问题：100% 场景已全部完成并截图，正常关闭应用时，桌面清理先于 xdotool 完成，
+关闭动作报 X connection broken；应用及桌面 runner 正常退出。150% runner 在应用退出后留出
+短暂清理间隔，全部场景与正常关闭返回零。第二组首次启动命令曾拼错临时目录，应用未启动，
+纠正路径后才执行并计入上述验收；不将这次脚本启动失败记作应用失败或通过。
+
+两组专用应用、窗口管理器、桌面与会话进程均已退出；没有操作用户已有桌面、修改其配置或剪贴板，
+没有写回样本。未执行 Windows/macOS 原生窗口、真实 IME 或物理键鼠；本轮不作性能结论。

@@ -54,7 +54,7 @@ SetSelections 严格校验 UTF-8 范围及数量，错误不修改旧状态；Se
 短行钳制行尾，不补空格或拆 Tab，跳过折叠隐藏行。不能用每行单逻辑范围表达的双向矩形整次拒绝。
 矩形拖动/键盘扩展保留起点与 X 意图；完成后选区固定到文本，不因改宽重新选中文字。
 鼠标修饰键通过 SelectionModifiers 单独配置（零禁用；普通和仅 Shift 手势保留）。
-所有平台默认 Alt+左键点击添加光标、Alt+左键拖动追加选区、Alt+Shift+左键拖动矩形选择。
+控件在所有平台默认 Alt+左键点击添加光标、Alt+左键拖动追加选区、Alt+Shift+左键拖动矩形选择。
 桌面可能抢占 Alt 鼠标手势；此时须释放窗口管理器的对应快捷操作，或由宿主通过 SetSelectionModifiers
 配置其他组合。控件不抢占系统全局手势，不修改桌面配置。键盘命令接入 KeyBindings，
 AddCursor/SelectNextOccurrence/SelectAllOccurrences/SplitSelectionLines 接受挂载视图的分帧请求；
@@ -72,6 +72,9 @@ ui 增加 Selections/BindSelections/OnSelections，复用 BindState 和局部协
 `example/editor` 的 Selection 菜单调用控件的公开添加光标、匹配选择和拆行方法；只保留主选区使用
 SetSelection。示例不保存另一份光标集合；状态栏监听 ConnectSelections，并显示完整数量与主位置。
 界面提示从当前 KeyBindings/SelectionModifiers 生成，键盘列扩展等说明放在提示和菜单按钮的 tooltip。
+Linux 示例在初始化输入配置处通过 SetSelectionModifiers 将 Add 覆盖为 Ctrl，Column 保留 Alt+Shift，
+使 Ctrl+点击/拖动添加选区与 Xfwm4 的 Alt 窗口操作共存；其他平台沿用控件默认鼠标手势。
+这属于示例宿主的配置选择，不检测或修改窗口管理器设置，不改变控件默认契约。
 `multicursor.go` 提供重复字段、对齐数字、Tab、中文与组合字符的可编辑演示，初始仍显示既有 JSON 样本。
 
 窗口多选区验收须分别运行默认和 `-clipboard` 两条路径。各场景独立构建临时快捷键表，不依赖可选场景
