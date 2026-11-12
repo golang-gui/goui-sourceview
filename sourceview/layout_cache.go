@@ -574,6 +574,24 @@ func (v *SourceView) resolveLongParagraph(row int, key layoutKey, p *paragraph, 
 		v.layouts[key] = p
 	}
 	p.Paged.SetWidth(key.width)
+	if q := v.viewRestore; q != nil && !q.pagesApplied && q.snapshot.pages != nil {
+		hint := q.snapshot.pages
+		if hint.range_ == p.sourceRange {
+			if !measure {
+				v.requestLayoutWork()
+				return nil
+			}
+			q.pagesApplied = true
+			if hint.width == key.width && hint.font == v.font && hint.wrap == v.wrap && hint.tab == float32(v.indent.TabWidth)*v.spaceWidth {
+				p.Paged.RestoreStarts(hint.starts)
+				if !state.valid(v) || epoch != v.layoutEpoch || v.layouts[key] != p || v.Destroyed() {
+					return nil
+				}
+				p.whitespace, p.special, p.text = nil, nil, ""
+				p.styled = false
+			}
+		}
+	}
 	if measure && v.reveal != nil {
 		r := v.displayRange(row)
 		if p.Paged.GeometryAt(v.displayCaret()-r.Start) == nil {

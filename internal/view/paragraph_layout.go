@@ -139,6 +139,51 @@ func (p *ParagraphLayout) clearPages() {
 // Version changes when cached native windows or their coordinates change.
 func (p *ParagraphLayout) Version() uint64 { return p.version }
 
+// PageStart is a paragraph-local source boundary, without native geometry.
+type PageStart struct{ Index, Offset int }
+
+// CaptureStarts copies the bounded working set's source boundaries. Reusing
+// them with the same text and measurement format preserves wrapping when a
+// different view prepares distant pages in a different order.
+func (p *ParagraphLayout) CaptureStarts(offset int) []PageStart {
+	starts := make(map[int]int, 2*paragraphPageLimit)
+	first := max(0, offset/paragraphBlockBytes-paragraphPageLimit/2)
+	last := min(p.blockCount()-1, first+paragraphPageLimit-1)
+	for index := first; index <= last; index++ {
+		page := p.pages[index]
+		if page == nil {
+			continue
+		}
+		starts[index] = page.range_.Start
+		starts[index+1] = page.range_.End
+	}
+	result := make([]PageStart, 0, len(starts))
+	for index, offset := range starts {
+		result = append(result, PageStart{Index: index, Offset: offset})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Index < result[j].Index })
+	return result
+}
+
+// RestoreStarts discards this consumer's native windows before seeding source
+// boundaries captured with the same text, width, font, wrap and Tab settings.
+// It does not measure text. The caller owns that identity check.
+func (p *ParagraphLayout) RestoreStarts(starts []PageStart) {
+	if p.destroyed {
+		return
+	}
+	p.version++
+	p.starts = map[int]int{0: 0}
+	for _, start := range starts {
+		if start.Index >= 0 && start.Index <= p.blockCount() && start.Offset >= 0 && start.Offset <= p.length {
+			p.starts[start.Index] = start.Offset
+		}
+	}
+	p.geometry = ParagraphGeometry{}
+	p.geometryVersion = 0
+	p.clearPages()
+}
+
 // Err returns the first failure for the current input. Change permits a retry.
 func (p *ParagraphLayout) Err() error { return p.err }
 

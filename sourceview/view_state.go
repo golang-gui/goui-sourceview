@@ -9,9 +9,11 @@ import (
 
 	"github.com/golang-gui/goui-sourceview/internal/folding"
 	textcore "github.com/golang-gui/goui-sourceview/internal/text"
+	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/platform/typography"
 )
 
 // ViewState is an immutable, process-local snapshot of a view. It belongs to
@@ -25,6 +27,15 @@ type ViewState struct {
 	upstream           bool
 	anchor             viewportAnchor
 	folds, lines       []TextRange
+	pages              *savedPageStarts
+}
+
+type savedPageStarts struct {
+	range_     TextRange
+	font       typography.FontInfo
+	width, tab float32
+	wrap       WrapMode
+	starts     []view.PageStart
 }
 
 const maxSavedFolds = 4096
@@ -35,6 +46,7 @@ type viewRestore struct {
 	input        *restoreInput
 	wanted       map[TextRange]bool
 	foldsPending bool
+	pagesApplied bool
 }
 
 // SaveState captures committed selection, viewport and collapse intent without
@@ -50,6 +62,13 @@ func (v *SourceView) SaveState() (*ViewState, error) {
 	}
 	s := &ViewState{document: v.document.ID(), revision: v.observed, language: v.document.languageEpoch,
 		selection: v.Selection(), upstream: v.upstream, anchor: v.savedViewportAnchor(), additional: cursorHistory(v.additional)}
+	if v.projection == nil && s.anchor.valid {
+		row := v.document.LineAt(s.anchor.offset)
+		if p := v.cachedParagraph(row); p != nil && p.Paged != nil {
+			s.pages = &savedPageStarts{range_: p.sourceRange, font: v.font, width: v.paragraphKey(row).width,
+				tab: float32(v.indent.TabWidth) * v.spaceWidth, wrap: v.wrap, starts: p.Paged.CaptureStarts(s.anchor.offset - p.sourceRange.Start)}
+		}
+	}
 	if q := v.viewRestore; q != nil && q.foldsPending && q.snapshot.language == s.language {
 		s.folds = slices.Clone(q.snapshot.folds)
 	} else if v.foldingEnabled {
@@ -383,8 +402,20 @@ func (v *SourceView) resolveViewportAnchor() {
 		v.cancelViewRestore()
 		return
 	}
-	v.pendingAnchor = false
+	previous := v.offset
 	v.offset = geometry.Point{X: x, Y: y}
+	if v.viewRestore != nil && p.Paged != nil && (!p.Paged.CachedOffset(at-r.Start) || v.layoutPending) {
+		// An editing window can resolve the first scroll request while the
+		// destination painting viewport is still unprepared. Its subsequent
+		// page/seam measurements may move this anchor in document coordinates.
+		// Retain the text anchor until the normal frame path settles that view.
+		v.requestLayoutWork()
+		if v.offset != previous {
+			v.scrollSignal.Emit(geometry.Rect(x, y, v.viewport.Width, v.viewport.Height))
+		}
+		return
+	}
+	v.pendingAnchor = false
 	v.releaseViewRestore()
 	v.scrollSignal.Emit(geometry.Rect(x, y, v.viewport.Width, v.viewport.Height))
 }

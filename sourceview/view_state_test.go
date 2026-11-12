@@ -3,6 +3,7 @@ package sourceview
 import (
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -23,6 +24,50 @@ func stateFixture(t *testing.T) (*SourceView, *shapedContext) {
 	v.context = ctx
 	t.Cleanup(v.dropLayouts)
 	return v, ctx
+}
+
+func TestViewStatePagedRestoreWaitsForViewportGeometry(t *testing.T) {
+	text := strings.Repeat("word 0123456789 中文 אבג ", 40000)
+	v, _ := collapsedLineFixture(t, text)
+	v.frameLayout = true
+	p := v.paragraph(0)
+	if p == nil || p.Paged == nil {
+		t.Fatal("fixture requires native pages")
+	}
+	at := len(text) / 2
+	var upstream bool
+	for !v.document.IsRuneBoundary(at) {
+		at++
+	}
+	for i := 0; i < 200; i++ {
+		if frame := p.Paged.GeometryAt(at); frame != nil {
+			edge := frame.Geometry.LineEdge(frame.Geometry.LineIndex(textcore.Position{Offset: at}), false)
+			at = edge.Offset
+			upstream = edge.Upstream
+			break
+		}
+	}
+	if p.Paged.CachedGeometryAt(at) == nil || p.Paged.CachedOffset(at) {
+		t.Fatal("fixture must cache an editing window outside the painting viewport")
+	}
+	s := saveView(t, v)
+	s.anchor = viewportAnchor{offset: at, upstream: upstream, inset: 5, valid: true}
+	if err := v.RestoreState(s); err != nil {
+		t.Fatal(err)
+	}
+	v.resolveViewportAnchor()
+	if v.viewRestore == nil || !v.pendingAnchor || v.anchor.offset != at {
+		t.Fatal("restore completed before the destination viewport was prepared")
+	}
+	for i := 0; i < 200 && v.viewRestore != nil; i++ {
+		v.layoutPending = false
+		v.paragraph(0)
+		v.LayoutVisible(v.viewport, v.offset)
+	}
+	got := v.savedViewportAnchor()
+	if v.viewRestore != nil || got.offset != at || math.Abs(float64(got.inset-5)) > .1 || v.document.Text() != text || v.document.CanUndo() {
+		t.Fatal("paged viewport did not settle on its saved text anchor", got, at)
+	}
 }
 
 func TestViewStateFoldingDelayedExactMatchAndIsolation(t *testing.T) {

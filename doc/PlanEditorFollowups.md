@@ -109,3 +109,6 @@ tooltip、语义开关、正文/修订/clean 不变、删除后消失和撤销�
 截图 /tmp/sourceview-special-native-2zwoeqkv/。专用应用、显示、WM 与 dbus 会话均已退出，
 未修改用户已有桌面、设置或样本文件；剪贴板回归只访问独立显示的剪贴板。
 Windows/macOS 仅构建，未执行原生窗口；未运行真实 IME 服务或物理键鼠，不作性能结论。
+
+本轮交付后的 Windows/macOS 真机补验、平台测试适配和发布准备另见 [v0.6.0 记录](PlanReleaseV060.md)，
+不将后续结果倒写为上述首次交付时已经运行。

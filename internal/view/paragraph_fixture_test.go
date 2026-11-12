@@ -6,6 +6,7 @@
 package view
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -54,6 +55,38 @@ func (p *paragraphFixtureLayout) MeasureMetrics() ([]typography.TextLine, []typo
 	return p.lines, p.clusters
 }
 func (p *paragraphFixtureLayout) Destroy() { p.destroyed = true }
+
+func TestParagraphStartSnapshotOwnsBoundedValuesAndReleasesOldWindows(t *testing.T) {
+	text := strings.Repeat("x", 12*paragraphBlockBytes)
+	read := func(r textcore.Range) (string, error) { return text[r.Start:r.End], nil }
+	format := typography.TextFormat{WrapMode: typography.WrapWordChar}
+	a := NewParagraphLayout(&paragraphFixtureContext{}, format, 100, len(text), read)
+	b := NewParagraphLayout(&paragraphFixtureContext{}, format, 100, len(text), read)
+	defer a.Destroy()
+	defer b.Destroy()
+	// Ten fixed-width glyphs per line: page zero retains 409 complete rows.
+	if !a.Prepare(geometry.Rect(0, 0, 100, 100), true) || !b.Prepare(geometry.Rect(0, 0, 100, 100), true) {
+		t.Fatal("initial geometry missing")
+	}
+	starts := a.CaptureStarts(0)
+	want := []PageStart{{Index: 0, Offset: 0}, {Index: 1, Offset: 4090}}
+	if !slices.Equal(starts, want) || len(starts) > 2*paragraphPageLimit {
+		t.Fatal("source boundary snapshot", starts)
+	}
+	old := b.pages[0].layout.(*paragraphFixtureLayout)
+	version := b.Version()
+	b.RestoreStarts(starts)
+	if !old.destroyed || b.Version() == version || len(b.pages) != 0 || b.Geometry().LineCount() != 0 {
+		t.Fatal("restoring boundaries retained native windows or allocated new ones")
+	}
+	starts[1].Offset = 3
+	if b.starts[1] != 4090 || !slices.Equal(a.CaptureStarts(0), want) {
+		t.Fatal("source or destination aliases the snapshot")
+	}
+	if g := b.GeometryAt(5000); g == nil || b.pages[1].range_.Start != 4090 {
+		t.Fatal("deferred window ignored the saved text boundary")
+	}
+}
 
 func TestParagraphLayoutViewIsolationAndRelease(t *testing.T) {
 	const size = 40 * paragraphBlockBytes
