@@ -160,6 +160,8 @@ func main() {
 		must(err)
 		check(ok, "host result was rejected")
 	}
+	primary, ok := gui.ModPrimary.Resolve()
+	check(ok, "platform primary modifier unavailable")
 	key := func(k events.Key, mods events.Modifiers) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
@@ -219,13 +221,13 @@ func main() {
 	})
 	settle(func() {
 		check(doc.Text() == `fmt.Println("hello")` && meta(v) == nil, "Tab failed exact accept")
-		key(events.KeyZ, events.ModifierControl)
+		key(events.KeyZ, primary)
 		phase = "undo"
 	})
-	settle(func() { unchanged(); key(events.KeyZ, events.ModifierControl|events.ModifierShift); phase = "redo" })
+	settle(func() { unchanged(); key(events.KeyZ, primary|events.ModifierShift); phase = "redo" })
 	settle(func() {
 		check(doc.Text() == `fmt.Println("hello")`, "redo failed")
-		key(events.KeyZ, events.ModifierControl)
+		key(events.KeyZ, primary)
 		phase = "restore"
 	})
 	settle(func() { publish(suffix); phase = "before-escape" })
@@ -238,7 +240,7 @@ func main() {
 	})
 	settle(func() {
 		check(doc.Text() == "fmt.Pr  ", fmt.Sprintf("ordinary Tab did not reach the next tab stop: %q", doc.Text()))
-		key(events.KeyZ, events.ModifierControl)
+		key(events.KeyZ, primary)
 		phase = "before-input"
 	})
 	settle(func() { publish(suffix); phase = "before-typing" })

@@ -31,6 +31,7 @@ import (
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/platform/events"
+	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
 	"github.com/golang-gui/goui/theme/basic"
@@ -46,6 +47,28 @@ func check(ok bool, message string) {
 	if !ok {
 		log.Fatal(message)
 	}
+}
+
+type circleRecord struct {
+	center geometry.Point
+	rx, ry float32
+}
+type observedView struct {
+	*source.SourceView
+	circles []circleRecord
+}
+type circlePainter struct {
+	gui.Painter
+	circles *[]circleRecord
+}
+
+func (p *circlePainter) FillEllipse(center geometry.Point, rx, ry float32, brush graphics.Brush) {
+	*p.circles = append(*p.circles, circleRecord{center, rx, ry})
+	p.Painter.FillEllipse(center, rx, ry, brush)
+}
+func (v *observedView) Paint(p gui.Painter) {
+	v.circles = nil
+	v.SourceView.Paint(&circlePainter{Painter: p, circles: &v.circles})
 }
 func main() {
 	runtime.LockOSThread()
@@ -80,7 +103,8 @@ func main() {
 	must(v.SetRulers([]int{40, 80}))
 	scroll := gui.NewScrollView()
 	scroll.SetStyleName("source-view")
-	scroll.SetChild(v)
+	observed := &observedView{SourceView: v}
+	scroll.SetChild(observed)
 	overlay := gui.NewOverlay()
 	overlay.SetChild(scroll)
 	win.SetWidget(overlay)
@@ -130,7 +154,7 @@ func main() {
 		key(events.KeyEscape, 0)
 		check(!panelVisible(v, "sourceview-goto-bar") && v.Focused(), "Escape focus")
 	})
-	steps = append(steps, whitespaceChecks(app, win, v, float32(*codeSize), *captureDir)...)
+	steps = append(steps, whitespaceChecks(app, win, v, observed, float32(*codeSize), *captureDir)...)
 	index := 0
 	complete := false
 	timer := app.NewTimer()
@@ -165,12 +189,12 @@ func panelVisible(v *source.SourceView, role string) bool {
 }
 
 // 通过实际窗口及正常键盘路径验证标记；不公开私有几何或添加测试控制协议。
-func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView, codeSize float32, captureDir string) []func() {
+func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView, observed *observedView, codeSize float32, captureDir string) []func() {
 	const text = "      \t\u00a0\u202f\u3000"
 	var plain, marked image.Image
 	var scale float32
 	var cells []geometry.Rectangle
-	capture := func() image.Image { img, err := gui.RenderWidget(v, 0); must(err); return img }
+	capture := func() image.Image { img, err := gui.RenderWidget(observed, 0); must(err); return img }
 	changed := func(a, b image.Image, r geometry.Rectangle) int {
 		x0, y0 := int(math.Floor(float64(r.X*scale))), int(math.Floor(float64(r.Y*scale)))
 		x1, y1 := int(math.Ceil(float64((r.X+r.Width)*scale))), int(math.Ceil(float64((r.Y+r.Height)*scale)))
@@ -226,7 +250,7 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView,
 			saveCapture(marked, filepath.Join(captureDir, "whitespace-all.png"))
 		}
 		for i := 1; i < 6; i++ {
-			checkDotShape(plain, marked, cells[i], sw, float64(scale))
+			checkDotShape(plain, marked, cells[i], sw, float64(scale), observed.circles)
 		}
 		must(v.SetWhitespaceMode(source.WhitespaceBoundary))
 	}, func() {
@@ -245,7 +269,7 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView,
 			check(changed(base, selected, r) > 0, "missing selected whitespace marker")
 		}
 		for i := 1; i < 6; i++ {
-			checkDotShape(base, selected, cells[i], cells[i].Width, float64(scale))
+			checkDotShape(base, selected, cells[i], cells[i].Width, float64(scale), observed.circles)
 		}
 		if captureDir != "" {
 			saveCapture(selected, filepath.Join(captureDir, "whitespace-selection.png"))
@@ -266,11 +290,28 @@ func whitespaceChecks(app gui.Application, win gui.Window, v *source.SourceView,
 }
 
 // 采样只包含实际空格单元，避开光标、字形、边框。比较同后端、不透明 sRGB 的
-// 前后 RGB 覆盖差（忽略 <=1 byte 的尾部量化），不依赖字体金图。圆点必须二维，
-// 包围盒宽高差最多 1 物理像素，中心距测量单元中心最多 1 像素；4×1 扁条必然失败。
+// 前后 RGB 覆盖差（忽略 <=1 byte 的尾部量化），不依赖字体金图。另核对实际绘制调用
+// 的等半径与原生单元中心。直径至少 2 物理像素时，包围盒必须二维且宽高差最多 1；
+// 亚像素圆的覆盖可为 2×1，仍须有正确椭圆调用、有限覆盖及居中；4×1 或矩形必然失败。
 // 水平方向只取完整落在单元中的像素。宽单元才各留 1 像素，避免边缘混入相邻
 // Tab；窄字体的空格可能只有两个完整像素，仍须保留它们来检查圆点。
-func checkDotShape(before, after image.Image, cell geometry.Rectangle, spaceWidth float32, scale float64) {
+func checkDotShape(before, after image.Image, cell geometry.Rectangle, spaceWidth float32, scale float64, circles []circleRecord) {
+	must(dotShapeError(before, after, cell, spaceWidth, scale, circles))
+}
+
+func dotShapeError(before, after image.Image, cell geometry.Rectangle, spaceWidth float32, scale float64, circles []circleRecord) error {
+	expectedCenter := geometry.Point{X: cell.X + cell.Width/2, Y: cell.Y + cell.Height/2}
+	expectedRadius := min(spaceWidth, cell.Width, cell.Height) / 7
+	found := false
+	for _, circle := range circles {
+		if math.Abs(float64(circle.center.X-expectedCenter.X)) < .001 && math.Abs(float64(circle.center.Y-expectedCenter.Y)) < .001 && math.Abs(float64(circle.rx-expectedRadius)) < .001 && math.Abs(float64(circle.ry-expectedRadius)) < .001 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("missing measured circular draw: center=%v radius=%g", expectedCenter, expectedRadius)
+	}
 	minX, minY, maxX, maxY := after.Bounds().Max.X, after.Bounds().Max.Y, -1, -1
 	left := int(math.Ceil(float64(cell.X) * scale))
 	right := int(math.Floor(float64(cell.X+cell.Width) * scale))
@@ -294,11 +335,22 @@ func checkDotShape(before, after image.Image, cell geometry.Rectangle, spaceWidt
 		}
 	}
 	width, height := maxX-minX+1, maxY-minY+1
-	check(width >= 2 && height >= 2 && abs(width-height) <= 1, fmt.Sprintf("whitespace is not round: %dx%d cell=%v scale=%g", width, height, cell, scale))
 	expectedDiameter := float64(spaceWidth) * 2 / 7 * scale
-	check(float64(max(width, height)) <= math.Ceil(expectedDiameter)+2 && float64(min(width, height)) >= math.Max(2, math.Floor(expectedDiameter)-1), fmt.Sprintf("whitespace diameter %dx%d, expected %g", width, height, expectedDiameter))
+	minimum := 2
+	if expectedDiameter < 2 {
+		minimum = 1
+	}
+	if width < minimum || height < minimum || abs(width-height) > 1 {
+		return fmt.Errorf("whitespace is not round: %dx%d cell=%v scale=%g", width, height, cell, scale)
+	}
+	if float64(max(width, height)) > math.Ceil(expectedDiameter)+2 || float64(min(width, height)) < math.Max(float64(minimum), math.Floor(expectedDiameter)-1) {
+		return fmt.Errorf("whitespace diameter %dx%d, expected %g", width, height, expectedDiameter)
+	}
 	cx, cy := float64(minX+maxX+1)/2, float64(minY+maxY+1)/2
-	check(math.Abs(cx-float64(cell.X+cell.Width/2)*scale) <= 1 && math.Abs(cy-float64(cell.Y+cell.Height/2)*scale) <= 1, fmt.Sprintf("whitespace center (%g,%g), cell=%v scale=%g", cx, cy, cell, scale))
+	if math.Abs(cx-float64(cell.X+cell.Width/2)*scale) > 1 || math.Abs(cy-float64(cell.Y+cell.Height/2)*scale) > 1 {
+		return fmt.Errorf("whitespace center (%g,%g), cell=%v scale=%g", cx, cy, cell, scale)
+	}
+	return nil
 }
 func abs(x int) int {
 	if x < 0 {

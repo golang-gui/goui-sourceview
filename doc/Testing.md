@@ -335,7 +335,7 @@ Selection 的实际像素，并检查特殊空格单元、CRLF/EOF、输出及�
 运行 `XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/special_characters`，
 用 `-basic` / `-dark` 与 `GOUI_PLAT_SCALE=1/1.5` 检查主题和缩放。
 需要独立桌面；正常事件点击开关、悬停和 Delete/Undo，成功自动退出，提前关闭失败。
-原生参考字母实测标记位置，再断言新增红色像素、另一视图不变、关闭逐像素恢复、
+独立原生 A+ZWSP+B 的 cluster 度量确定标记位置，再断言新增红色像素、另一视图不变、关闭逐像素恢复、
 码点 tooltip、正文/修订/保存身份不变及删除/撤销重建。采样和颜色判据见程序入口注释。
 包内另验原生 NUL 后缀、零宽合并、预算、分页滚动、长行收起/展开和预编辑隔离。
 该项默认关闭，不将普通非 ASCII 文本当异常；契约见 [特殊字符设计](DesignSpecialCharacters.md)，
@@ -391,7 +391,9 @@ GOUI 的原文件冷 End 正向拖选另由其 `tests/window/gui/text_caret -fil
 
 空白外观回归还需分别设置 `GOUI_PLAT_PAINTER=software` 和 `opengl`，并可用
 `-code-size 9|12|18` 验证字体变化。`-capture-dir DIR` 可将 None/All/Selection
-捕获写入仓库外现有目录。圆点断言使用单元内侧完整像素（另留 1 像素边距），
-排除相邻 Tab 的抗锯齿；允许最多 1 像素宽高/中心差，4×1 扁条必须失败。
+捕获写入仓库外现有目录。圆点同时核对实际 FillEllipse 的等半径、1/7 空格宽度和原生单元中心，
+再用单元内完整像素排除相邻 Tab 的抗锯齿。直径至少 2 物理像素时要求二维覆盖；
+更小的圆可呈 2×1 覆盖，仍要求正确绘制调用、有限像素范围与居中，4×1 扁条或矩形必须失败。
+纯逻辑负向回归另拒绝无椭圆调用、错误半径/中心和不可见标记；不依赖平台字体金图。
 程序不会声称 RenderWidget 等同桌面合成；实际后端需要单独记录，不能把请求 OpenGL
 后的静默降级算作 OpenGL 通过。

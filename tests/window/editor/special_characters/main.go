@@ -2,7 +2,7 @@
 // 启动：XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/special_characters
 // -basic/-dark 切换主题，GOUI_PLAT_SCALE=1/1.5；初态为同文档两个视图，标记均关闭。
 // 正常 Window.DispatchEvent 点击开关、移动鼠标、Delete/Undo；setter 仅准备选区。
-// RenderWidget 使用当前窗口 Painter：在独立原生 A 的 advance/行高推导的 ZWSP 位置
+// RenderWidget 使用当前窗口 Painter：用独立原生 A+ZWSP+B 的 cluster 度量推导标记位置
 // 检查至少 3 个新增红色像素。图片为同后端不透明 sRGB，比较 RGBA 转 8-bit 后的 RGB，
 // 红色判据 R>G+30 且 R>B+30；不依赖跨平台字体金图或放大抗锯齿容差。
 // 断言第二视图像素不变、关闭后逐像素恢复、tooltip 为安全码点名、正文/修订/保存状态不因开关改变；
@@ -117,11 +117,25 @@ func main() {
 	win.SetWidget(box)
 	must(win.Show())
 	win.SetFocusedWidget(toggle)
-	ref, err := app.Typography().NewTextLayout("A", typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}}, 1000, 1000)
+	ref, err := app.Typography().NewTextLayout("A\u200bB", typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}}, 1000, 1000)
 	must(err)
-	advance, height := ref.MeasureSize()
+	lines, clusters := ref.MeasureMetrics()
 	ref.Destroy()
-	cell := geometry.Rect(6+advance-3, 6+height-6, 8, 7)
+	check(len(lines) == 1, "native reference must be one display line")
+	var marked source.TextRange
+	var markerX float32
+	for _, c := range clusters {
+		if c.Start <= 1 && 1 < c.Start+c.Length {
+			check(c.Direction == typography.TextLeftToRight, "reference cluster must be LTR")
+			marked = source.TextRange{Start: c.Start, End: c.Start + c.Length}
+			markerX = c.X
+			break
+		}
+	}
+	check(marked.Start <= 1 && marked.End >= 4, "native reference omitted ZWSP cluster")
+	height := lines[0].Height
+	cell := geometry.Rect(6+markerX-3, 6+height-6, 8, 7)
+	deleted := text[:marked.Start] + text[marked.End:]
 	capture := func(v *source.SourceView) image.Image { img, err := gui.RenderWidget(v, 0); must(err); return img }
 	clickToggle := func() {
 		r := toggle.Snapshot().Bounds
@@ -164,16 +178,17 @@ func main() {
 		}},
 		{"normal pointer tooltip", func() {
 			r := a.Snapshot().Bounds
-			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: geometry.Point{X: r.X + 6 + advance, Y: r.Y + 6 + height/2}}))
+			must(win.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Position: geometry.Point{X: r.X + 6 + markerX, Y: r.Y + 6 + height/2}}))
 		}, func() bool { return strings.Contains(a.Tooltip(), "U+200B ZERO WIDTH SPACE") }},
 		{"disable restores pixels", clickToggle, func() bool { return !a.ShowSpecialCharacters() && samePixels(plain, capture(a)) && !d.Modified() }},
 		{"enable for edit", clickToggle, func() bool { return a.ShowSpecialCharacters() && redPixels(capture(a), cell, a.Rect().Width) >= 3 }},
-		{"delete original special character", func() {
+		{"delete original marked cluster", func() {
 			win.SetFocusedWidget(a)
-			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 4})
+			a.SetSelection(source.TextSelection{Anchor: marked.Start, Caret: marked.End})
+			check(a.Selection().Range() == marked, "selection disagreed with native reference cluster")
 			key(events.KeyDelete, 0)
 		}, func() bool {
-			return d.Text() == "AB"+text[5:] && d.Modified() && redPixels(capture(a), cell, a.Rect().Width) == 0
+			return d.Text() == deleted && d.Modified() && redPixels(capture(a), cell, a.Rect().Width) == 0
 		}},
 		{"undo restores marker and saved identity", func() { key(events.KeyZ, primary) }, func() bool {
 			return d.Text() == text && !d.Modified() && redPixels(capture(a), cell, a.Rect().Width) >= 3

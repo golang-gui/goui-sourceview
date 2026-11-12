@@ -4,7 +4,7 @@
 // setter 仅准备场景；中文输入、删除、导航、剪切/粘贴、撤销重做经 Window 的正常事件路径。
 // 第三批额外检查连续输入合并、配对/跳过/删除和后台大小写/清理/重缩进。
 // 断言完整正文、主/附加选区、视图隔离、历史、快照恢复和超过缓存页数的分散输入。
-// 鼠标用字面 Alt / Alt+Shift 经正常事件分发，检查默认值及追加拖选/矩形选择。
+// 鼠标用平台 Alt/Option / Alt+Shift 经正常事件分发，检查默认值及追加拖选/矩形选择。
 // 默认与 -clipboard 是两条独立验收路径，临时快捷键不依赖此前场景。
 // -clipboard 额外覆盖该显示的临时剪贴板，只在独立桌面启用。默认不访问剪贴板。
 // 每步有明确条件与超时，成功自动关闭；提前退出或失败返回非零。不写文件或系统设置。
@@ -100,6 +100,8 @@ func main() {
 	must(win.Show())
 	win.SetFocusedWidget(a)
 	primary, _ := gui.ModPrimary.Resolve()
+	alt, ok := gui.ModAlt.Resolve()
+	check(ok, "platform Alt/Option modifier unavailable")
 	key := func(k events.Key, mods events.Modifiers) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
@@ -120,12 +122,32 @@ func main() {
 	}
 	ref, err := app.Typography().NewTextLayout("abcdef", typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}}, 1000, 1000)
 	must(err)
-	lines, clusters := ref.MeasureMetrics()
-	advance, lineHeight := clusters[0].Width, lines[0].Height
+	lines, _ := ref.MeasureMetrics()
+	lineHeight := lines[0].Height
 	ref.Destroy()
 	pointer := func(kind events.EventType, column, row int, mods events.Modifiers) {
+		r, err := d.LineRange(row)
+		must(err)
+		text, err := d.Slice(r)
+		must(err)
+		ref, err := app.Typography().NewTextLayout(text, typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}}, 1000, 1000)
+		must(err)
+		_, clusters := ref.MeasureMetrics()
+		ref.Destroy()
+		var x float32
+		found := false
+		for _, c := range clusters {
+			if c.Start == column {
+				x, found = c.X, true
+				break
+			}
+			if c.Start+c.Length == column {
+				x, found = c.X+c.Width, true
+			}
+		}
+		check(found, "reference column missing")
 		bounds := a.Snapshot().Bounds
-		event := events.PointerEvent{EventType: kind, Position: geometry.Point{X: bounds.X + 6 + float32(column)*advance, Y: bounds.Y + 6 + (float32(row)+.5)*lineHeight}, Modifiers: mods}
+		event := events.PointerEvent{EventType: kind, Position: geometry.Point{X: bounds.X + 6 + x, Y: bounds.Y + 6 + (float32(row)+.5)*lineHeight}, Modifiers: mods}
 		if kind == events.PointerMove {
 			event.Buttons = events.PointerButtonLeftDown
 		} else {
@@ -187,7 +209,7 @@ func main() {
 			a.SetSelection(source.TextSelection{})
 		}, func() bool { return !pending(a) }},
 		step{"pointer rectangle", func() {
-			mods := events.ModifierAlt | events.ModifierShift
+			mods := alt | events.ModifierShift
 			pointer(events.PointerDown, 1, 0, mods)
 			pointer(events.PointerMove, 3, 2, mods)
 			pointer(events.PointerUp, 3, 2, mods)
@@ -197,21 +219,21 @@ func main() {
 		step{"rectangle input", func() { must(win.CommitText("Z")) }, func() bool { return d.Text() == "aZdef\naZdef\naZdef" && !pending(a) }},
 		step{"add pointer", func() {
 			a.SetSelection(source.TextSelection{})
-			mods := events.ModifierAlt
+			mods := alt
 			pointer(events.PointerDown, 2, 1, mods)
 			pointer(events.PointerUp, 2, 1, mods)
 		}, func() bool { return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 8, Caret: 8}, {}}) }},
 		step{"add pointer range", func() {
-			pointer(events.PointerDown, 1, 2, events.ModifierAlt)
-			pointer(events.PointerMove, 3, 2, events.ModifierAlt)
-			pointer(events.PointerUp, 3, 2, events.ModifierAlt)
+			pointer(events.PointerDown, 1, 2, alt)
+			pointer(events.PointerMove, 3, 2, alt)
+			pointer(events.PointerUp, 3, 2, alt)
 		}, func() bool {
 			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}, {Anchor: 8, Caret: 8}})
 		}},
 		step{"toggle existing cursor", func() {
-			pointer(events.PointerDown, 2, 1, events.ModifierAlt)
-			pointer(events.PointerMove, 2, 1, events.ModifierAlt)
-			pointer(events.PointerUp, 2, 1, events.ModifierAlt)
+			pointer(events.PointerDown, 2, 1, alt)
+			pointer(events.PointerMove, 2, 1, alt)
+			pointer(events.PointerUp, 2, 1, alt)
 		}, func() bool { return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}}) }},
 		step{"undo cursor toggle", func() { key(events.KeyU, primary) }, func() bool {
 			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}, {Anchor: 8, Caret: 8}})
@@ -241,7 +263,7 @@ func main() {
 		}, func() bool { return !pending(a) }},
 		step{"keyboard column", func() {
 			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
-			key(events.KeyArrowRight, primary|events.ModifierAlt|events.ModifierShift)
+			key(events.KeyArrowRight, primary|alt|events.ModifierShift)
 			key(events.KeyArrowDown, events.ModifierControl|events.ModifierShift)
 		}, func() bool {
 			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 7, Caret: 8}, {Anchor: 1, Caret: 2}}) && !pending(a)
@@ -252,7 +274,7 @@ func main() {
 		}, func() bool { return len(a.Selections()) == 3 && !pending(a) }},
 		step{"add cursor", func() {
 			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
-			key(events.KeyArrowDown, primary|events.ModifierAlt)
+			key(events.KeyArrowDown, primary|alt)
 		}, func() bool {
 			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 7, Caret: 7}, {Anchor: 1, Caret: 1}}) && !pending(a)
 		}},

@@ -194,6 +194,8 @@ func main() {
 		must(err)
 		check(ok, "host suggestion rejected")
 	}
+	primary, ok := gui.ModPrimary.Resolve()
+	check(ok, "platform primary modifier unavailable")
 	key := func(k events.Key, mods events.Modifiers) {
 		for _, kind := range []events.EventType{events.KeyDown, events.KeyUp} {
 			must(win.DispatchEvent(events.KeyEvent{EventType: kind, Key: k, Modifiers: mods}))
@@ -279,10 +281,10 @@ func main() {
 	settle(func() { visible(); key(events.KeyTab, 0); phase = "accepted" })
 	settle(func() {
 		check(doc.Text() == "func demo() {\n\treturn value\n}\nTAIL" && doc.LineCount() == 4 && meta(v) == nil, "Tab failed exact multiline insertion")
-		key(events.KeyZ, events.ModifierControl)
+		key(events.KeyZ, primary)
 		phase = "undo"
 	})
-	settle(func() { clean(); key(events.KeyZ, events.ModifierControl|events.ModifierShift); phase = "redo" })
+	settle(func() { clean(); key(events.KeyZ, primary|events.ModifierShift); phase = "redo" })
 	settle(func() {
 		check(doc.LineCount() == 4, "redo failed")
 		reset()
@@ -317,7 +319,7 @@ func main() {
 	})
 	settle(func() {
 		check(doc.LineCount() == 43 && meta(v) == nil, "visible continuation could not be accepted with caret above viewport")
-		key(events.KeyZ, events.ModifierControl)
+		key(events.KeyZ, primary)
 		phase = "scrolled-undo"
 	})
 	settle(func() {

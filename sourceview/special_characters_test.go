@@ -8,6 +8,7 @@ import (
 	textcore "github.com/golang-gui/goui-sourceview/internal/text"
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
+	"github.com/golang-gui/goui/platform/typography"
 )
 
 func TestSpecialCharactersNativeMarkersPreserveGeometryAndText(t *testing.T) {
@@ -103,8 +104,25 @@ func TestSpecialCharactersEditUndoPreeditAndViewIsolation(t *testing.T) {
 	if p.special == q.special {
 		t.Fatal("views share mutable marker cache")
 	}
-	v.SetSelection(TextSelection{Anchor: 1, Caret: 4})
-	if err := v.ReplaceSelection(""); err != nil || d.Text() != "AB" || !d.Modified() {
+	// CoreText may attach ZWSP to A. The independent native metrics define
+	// the indivisible source cluster; selecting it must not invent a stop.
+	_, clusters := p.Layout.MeasureMetrics()
+	var marked TextRange
+	for _, c := range clusters {
+		if c.Start <= 1 && 1 < c.Start+c.Length {
+			marked = TextRange{Start: c.Start, End: c.Start + c.Length}
+			break
+		}
+	}
+	if marked.Start > 1 || marked.End < 4 {
+		t.Fatal("native reference omitted ZWSP cluster", marked)
+	}
+	want := d.Text()[:marked.Start] + d.Text()[marked.End:]
+	v.SetSelection(TextSelection{Anchor: marked.Start, Caret: marked.End})
+	if v.Selection().Range() != marked {
+		t.Fatal("selection disagreed with native cluster", v.Selection(), marked)
+	}
+	if err := v.ReplaceSelection(""); err != nil || d.Text() != want || !d.Modified() {
 		t.Fatal("edit", err, d.Text())
 	}
 	p = v.paragraph(0)
@@ -137,7 +155,7 @@ func TestSpecialCharactersEditUndoPreeditAndViewIsolation(t *testing.T) {
 
 func TestSpecialCharactersLongPagedWindowAndScrollInvalidation(t *testing.T) {
 	const at = 80000
-	v, _ := collapsedLineFixture(t, strings.Repeat("x", at)+"\u200btail")
+	v, ctx := collapsedLineFixture(t, strings.Repeat("x", at)+"\u200btail")
 	v.SetWrapMode(WrapNone)
 	v.SetShowSpecialCharacters(true)
 	v.LayoutVisible(geometry.Size{Width: 400, Height: 180}, geometry.Point{})
@@ -155,7 +173,18 @@ func TestSpecialCharactersLongPagedWindowAndScrollInvalidation(t *testing.T) {
 	if count != 0 {
 		t.Fatal("offscreen marker retained")
 	}
-	offset := geometry.Point{X: float32(at)*v.spaceWidth - 100}
+	// Generic monospace can fall back to a proportional font. Measure x
+	// itself rather than assuming its advance equals the space advance.
+	ref, err := ctx.NewTextLayout("x", typography.TextFormat{Font: v.font}, 1000, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advance, _ := ref.MeasureSize()
+	ref.Destroy()
+	if advance <= 0 {
+		t.Fatal("native x advance is empty")
+	}
+	offset := geometry.Point{X: float32(float64(at)*float64(advance)) - 100}
 	for i := 0; i < 100; i++ {
 		v.LayoutVisible(geometry.Size{Width: 400, Height: 180}, offset)
 		v.specialCharacterStep(time.Time{})

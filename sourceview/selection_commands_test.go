@@ -226,6 +226,10 @@ func TestSelectAllOccurrencesKeepsOverlappingPrimaryMatch(t *testing.T) {
 
 func TestDefaultAltSelectionGesturesAndOverride(t *testing.T) {
 	v := NewSourceView()
+	alt, ok := gui.ModAlt.Resolve()
+	if !ok {
+		t.Fatal("platform Alt/Option modifier unavailable")
+	}
 	if got := v.SelectionModifiers(); got != (SelectionModifiers{Add: gui.ModAlt, Column: gui.ModAlt | gui.ModShift}) {
 		t.Fatalf("default mouse gestures: got %v, want Alt / Alt+Shift", got)
 	}
@@ -233,8 +237,8 @@ func TestDefaultAltSelectionGesturesAndOverride(t *testing.T) {
 		mods events.Modifiers
 		want int
 	}{
-		{events.ModifierAlt, 1}, {events.ModifierAlt | events.ModifierShift, 2},
-		{events.ModifierControl, 0}, {events.ModifierShift, 0}, {events.ModifierAlt | events.ModifierControl, 0},
+		{alt, 1}, {alt | events.ModifierShift, 2},
+		{events.ModifierControl, 0}, {events.ModifierShift, 0}, {alt | events.ModifierControl, 0},
 	} {
 		if got := v.selectionGesture(tc.mods); got != tc.want {
 			t.Fatalf("modifiers %v: got %d, want %d", tc.mods, got, tc.want)
@@ -243,7 +247,7 @@ func TestDefaultAltSelectionGesturesAndOverride(t *testing.T) {
 	if err := v.SetSelectionModifiers(SelectionModifiers{Add: gui.ModControl, Column: gui.ModControl | gui.ModShift}); err != nil {
 		t.Fatal(err)
 	}
-	if v.selectionGesture(events.ModifierAlt) != 0 || v.selectionGesture(events.ModifierControl) != 1 || v.selectionGesture(events.ModifierControl|events.ModifierShift) != 2 {
+	if v.selectionGesture(alt) != 0 || v.selectionGesture(events.ModifierControl) != 1 || v.selectionGesture(events.ModifierControl|events.ModifierShift) != 2 {
 		t.Fatal("custom pointer gestures did not replace defaults")
 	}
 }
