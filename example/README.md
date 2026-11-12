@@ -132,6 +132,13 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
   控件默认仍为 Alt 添加选区、Alt+Shift 列选；本示例通过 `SetSelectionModifiers` 仅覆盖 Linux
   的添加选区修饰键，以避开 Xfwm4 的 Alt 窗口操作。宿主可经同一 API 配置自己的组合；
   编辑器不修改桌面设置。
+- Known issue with GOUI v0.7.0: Windows client-area pointer events omit Alt, so the configured
+  Alt+click and Alt+Shift+drag gestures currently fail on the tested Windows desktop. Keyboard
+  multi-selection commands work. macOS Option mouse gestures over VNC remain unresolved.
+  Release is on hold; see the [native acceptance record](../doc/PlanReleaseV060.md).
+  GOUI v0.7.0 已知问题：Windows 客户区指针事件遗漏 Alt，实测 Alt+点击、Alt+Shift+拖动无效，
+  键盘多选区命令正常。macOS VNC 的 Option 鼠标手势也未通过，原因尚未定位。
+  当前暂缓发布，详见[原生验收记录](../doc/PlanReleaseV060.md)。
 - The header button switches light/dark. `-theme system` follows system appearance
   until you choose a theme; settings connections end with the application.
   标题栏按钮切换亮暗；`-theme system` 在手动切换前跟随系统外观，订阅随应用结束释放。
