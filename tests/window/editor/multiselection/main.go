@@ -208,6 +208,37 @@ func main() {
 		}, func() bool {
 			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}, {Anchor: 8, Caret: 8}})
 		}},
+		step{"toggle existing cursor", func() {
+			pointer(events.PointerDown, 2, 1, events.ModifierAlt)
+			pointer(events.PointerMove, 2, 1, events.ModifierAlt)
+			pointer(events.PointerUp, 2, 1, events.ModifierAlt)
+		}, func() bool { return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}}) }},
+		step{"undo cursor toggle", func() { key(events.KeyU, primary) }, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}, {Anchor: 8, Caret: 8}})
+		}},
+		step{"ordinary pointer drag", func() {
+			pointer(events.PointerDown, 0, 0, 0)
+			pointer(events.PointerMove, 1, 0, 0)
+			pointer(events.PointerMove, 2, 0, 0)
+			pointer(events.PointerUp, 3, 0, 0)
+		}, func() bool { return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 0, Caret: 3}}) }},
+		step{"undo complete pointer drag", func() { key(events.KeyU, primary) }, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 13, Caret: 15}, {}, {Anchor: 8, Caret: 8}})
+		}},
+		step{"prepare skip occurrence", func() {
+			d.SetText("foo foo foo foo")
+			set(a, []source.TextSelection{{Anchor: 4, Caret: 7}, {Anchor: 0, Caret: 3}})
+		}, func() bool { return !pending(a) }},
+		step{"skip primary occurrence", func() { key(events.KeyD, primary|events.ModifierShift) }, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 8, Caret: 11}, {Anchor: 0, Caret: 3}}) && !pending(a)
+		}},
+		step{"undo skip occurrence", func() { key(events.KeyU, primary) }, func() bool {
+			return slices.Equal(a.Selections(), []source.TextSelection{{Anchor: 4, Caret: 7}, {Anchor: 0, Caret: 3}})
+		}},
+		step{"restore rectangle text", func() {
+			d.SetText("aZdef\naZdef\naZdef")
+			a.SetSelection(source.TextSelection{})
+		}, func() bool { return !pending(a) }},
 		step{"keyboard column", func() {
 			a.SetSelection(source.TextSelection{Anchor: 1, Caret: 1})
 			key(events.KeyArrowRight, primary|events.ModifierAlt|events.ModifierShift)

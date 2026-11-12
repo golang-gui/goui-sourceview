@@ -61,11 +61,12 @@ type columnSelection struct {
 	targetStart, targetIndex   int
 	results                    []cursorState
 	initialized                bool
+	gesture                    uint64
 }
 
 func (v *SourceView) beginColumn(point geometry.Point, pos textcore.Position) {
 	v.pendingInput = nil
-	v.columnSelection = &columnSelection{state: v.operationState(), layout: v.layoutEpoch, anchor: pos, target: pos, left: float64(point.X-v.gutter-padding) + float64(v.offset.X), right: float64(point.X-v.gutter-padding) + float64(v.offset.X), before: v.cursors(), mouse: true, pending: true, point: point, pointY: float64(point.Y) + float64(v.offset.Y)}
+	v.columnSelection = &columnSelection{state: v.operationState(), layout: v.layoutEpoch, anchor: pos, target: pos, left: float64(point.X-v.gutter-padding) + float64(v.offset.X), right: float64(point.X-v.gutter-padding) + float64(v.offset.X), before: v.cursors(), mouse: true, pending: true, point: point, pointY: float64(point.Y) + float64(v.offset.Y), gesture: v.selectionGestureID}
 	v.requestLayoutWork()
 	v.RequestPaint()
 }
@@ -214,7 +215,7 @@ func (v *SourceView) advanceColumn(c *columnSelection, deadline time.Time) (bool
 	result = append(result, c.results[:target]...)
 	result = append(result, c.results[target+1:]...)
 	before := v.operationState()
-	v.setCursorStatesKeepingCompletion(normalizeCursors(result), false, nil)
+	v.setCursorStates(normalizeCursors(result), false, nil, c.gesture, true)
 	if v.Destroyed() || v.document != before.document || v.mountEpoch != before.mount || v.document.Revision() != before.revision || v.selectionEpoch != before.selection+1 {
 		return false, ErrOperationChanged
 	}

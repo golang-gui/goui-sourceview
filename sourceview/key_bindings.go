@@ -88,6 +88,9 @@ const (
 	CommandColumnSelectRight
 	CommandColumnSelectUp
 	CommandColumnSelectDown
+	CommandUndoSelection
+	CommandSkipNextOccurrence
+	CommandRemovePrimarySelection
 	commandLimit
 )
 
@@ -110,6 +113,8 @@ func DefaultKeyBindings() KeyBindings {
 		duplicate |= gui.ModControl
 	}
 	b := KeyBindings{
+		CommandUndoSelection:        {{Key: gui.KeyU, Modifiers: p}},
+		CommandSkipNextOccurrence:   {{Key: gui.KeyD, Modifiers: p | gui.ModShift}},
 		CommandAddCursorAbove:       {{Key: gui.KeyArrowUp, Modifiers: p | gui.ModAlt}},
 		CommandAddCursorBelow:       {{Key: gui.KeyArrowDown, Modifiers: p | gui.ModAlt}},
 		CommandSelectNextOccurrence: {{Key: gui.KeyD, Modifiers: p}},
@@ -238,7 +243,11 @@ func (v *SourceView) runBoundCommand(command Command) bool {
 		}
 	}
 	switch command {
-	case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
+	case CommandUndoSelection:
+		v.UndoSelection()
+	case CommandRemovePrimarySelection:
+		v.report(v.RemoveSelection(0))
+	case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSkipNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
 		v.report(v.queueSelectionCommand(command))
 	case CommandMoveWordPartLeft, CommandMoveWordPartRight, CommandSelectWordPartLeft, CommandSelectWordPartRight:
 		v.MoveWordPart(command == CommandMoveWordPartRight || command == CommandSelectWordPartRight, command == CommandSelectWordPartLeft || command == CommandSelectWordPartRight)

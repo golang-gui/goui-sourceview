@@ -104,6 +104,9 @@ func (v *SourceView) installInput() {
 			return
 		}
 		pos := v.hit(point)
+		v.selectionGestureID++
+		v.dragRemoveSelection = -1
+		v.dragStartPoint = point
 		if point.X >= v.gutter {
 			switch v.selectionGesture(mods) {
 			case 1:
@@ -114,6 +117,13 @@ func (v *SourceView) installInput() {
 				v.dragPoint = point
 				v.dragUnit = 0
 				v.dragGutter = false
+				for i, c := range v.dragBase {
+					r := c.selection.Range()
+					if pos.Offset >= r.Start && pos.Offset <= r.End {
+						v.dragRemoveSelection = i
+						return // Toggle only on release; movement remains an additive drag.
+					}
+				}
 				states := append([]cursorState{{selection: TextSelection{Anchor: pos.Offset, Caret: pos.Offset}, upstream: pos.Upstream}}, v.dragBase...)
 				v.setCursorStatesKeepingCompletion(normalizeCursors(states), false, nil)
 				return
@@ -191,12 +201,17 @@ func (v *SourceView) installInput() {
 			return
 		}
 		if v.dragging {
-			v.dragSelection(point)
+			if v.additiveDrag && v.dragRemoveSelection >= 0 && point == v.dragStartPoint {
+				v.report(v.RemoveSelection(v.dragRemoveSelection))
+			} else {
+				v.dragSelection(point)
+			}
 		}
 		v.dragging = false
 		v.dragInline = false
 		v.additiveDrag = false
 		v.dragBase = nil
+		v.dragRemoveSelection = -1
 	})
 	drag.ConnectCancel(func() {
 		v.dragging = false
@@ -252,6 +267,12 @@ func (v *SourceView) cursorAt(point geometry.Point) gui.Cursor {
 func (v *SourceView) dragSelection(point geometry.Point) {
 	if !v.mounted || !gui.IsEnabled(v) {
 		v.dragging = false
+		return
+	}
+	if point != v.dragStartPoint {
+		v.dragRemoveSelection = -1
+	}
+	if v.additiveDrag && v.dragRemoveSelection >= 0 && point == v.dragStartPoint {
 		return
 	}
 	// A stationary release/motion or blink must retain the initial hit while
@@ -369,7 +390,7 @@ func (v *SourceView) inputKey(event events.KeyEvent) bool {
 	if bound {
 		switch command {
 		case CommandMoveDocumentStart, CommandMoveDocumentEnd, CommandSelectDocumentStart, CommandSelectDocumentEnd,
-			CommandSelectAll, CommandFind, CommandReplace, CommandGoTo, CommandUndo, CommandRedo:
+			CommandSelectAll, CommandFind, CommandReplace, CommandGoTo, CommandUndo, CommandRedo, CommandUndoSelection, CommandRemovePrimarySelection:
 			geometry = false
 		}
 		switch command {

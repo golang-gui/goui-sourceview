@@ -65,6 +65,10 @@ type SourceView struct {
 
 	// Selection and editing options.
 	selectionTrail                                selectionTrail
+	cursorUndo                                    cursorUndo
+	selectionGestureID                            uint64
+	dragRemoveSelection                           int
+	dragStartPoint                                geometry.Point
 	selection                                     TextSelection
 	additional                                    []cursorState
 	columnSelection                               *columnSelection
@@ -247,6 +251,7 @@ func (v *SourceView) SetDocument(d *Document) {
 	if v.document == d {
 		return
 	}
+	v.cursorUndo = cursorUndo{}
 	v.cancelViewRestore()
 	defer v.searchState.Emit()
 	v.ClearInlineSuggestion()
@@ -554,6 +559,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 }
 
 func (v *SourceView) changed(c TextChange, splices []highlight.Splice, reset bool) {
+	v.cursorUndo = cursorUndo{}
 	v.columnSelection = nil
 	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
@@ -728,6 +734,7 @@ func (v *SourceView) mount() {
 }
 
 func (v *SourceView) unmount() {
+	v.cursorUndo = cursorUndo{}
 	v.columnSelection = nil
 	v.dragBase = nil
 	v.additiveDrag = false

@@ -147,6 +147,14 @@ func (v *SourceView) orderedSelections() []TextSelection {
 	return out
 }
 func (v *SourceView) setCursorStatesKeepingCompletion(cursors []cursorState, reveal bool, keep *completionSession) {
+	gesture := uint64(0)
+	if v.dragging {
+		gesture = v.selectionGestureID
+	}
+	v.setCursorStates(cursors, reveal, keep, gesture, true)
+}
+
+func (v *SourceView) setCursorStates(cursors []cursorState, reveal bool, keep *completionSession, gesture uint64, record bool) {
 	v.columnSelection = nil
 	v.cancelViewRestore()
 	v.ClearInlineSuggestion()
@@ -191,6 +199,9 @@ func (v *SourceView) setCursorStatesKeepingCompletion(cursors []cursorState, rev
 		v.anchor.valid = false
 	}
 	cursors[0].selection, cursors[0].upstream = s, upstream
+	if record {
+		v.rememberSelections(v.cursors(), cursors, gesture)
+	}
 	v.assignCursors(cursors)
 	v.selectionRevision = v.document.model.Revision()
 	v.selectionEpoch++

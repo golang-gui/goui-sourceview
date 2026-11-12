@@ -61,6 +61,22 @@ AddCursor/SelectNextOccurrence/SelectAllOccurrences/SplitSelectionLines 接受�
 匹配按字面、区分大小写，最多 64 KiB 查询和 4096 项，超限保持原集合；全部匹配保留原主范围，排除与它重叠的候选。
 拆分保持方向，以原主活动端所在的有效行为主。普通点击单选区，Escape 取消临时界面后清除附加选区。
 
+## 多光标交互收尾
+
+2026-11-12 增加 UndoSelection、SkipNextOccurrence 和 RemoveSelection(index)。
+默认 Ctrl/Cmd+U 撤销选区操作，Ctrl/Cmd+Shift+D 跳过当前匹配；移除主选区命令无默认键，
+均可通过 KeyBindings 配置。跳过用同一个有界字面扫描器替换主匹配，保留其他选区并回绕；
+无候选保持完整集合，空主选区先选中当前词。只读视图允许这些选区操作。
+
+选区撤销保存完整方向、主身份、折行亲和及垂直目标 X，独立于正文历史；每视图最多 64 步、
+合计 16384 个 cursorState。一次鼠标拖动（含分帧矩形）只保留开始前集合，不记录无变化状态；
+正文修订、文档切换与卸载清空历史，不映射过期历史，不恢复旧滚动坐标，恢复时显示主选区。
+预编辑中不执行选区撤销，直接调用会取消待处理输入。回调修改选区或文档后保留回调的新状态。
+
+添加选区修饰键+点击已有光标或范围时移除该项，最后一项保留；移除主项后提升文档顺序最前的一项。
+点击在释放时确认；静止移动/闪烁不提前改集合，实际拖动仍走追加范围，不把拖动起点误当作移除操作。
+示例 Selection 菜单提供选区撤销、跳过和移除主选区，提示从真实绑定生成。
+
 ## 声明式与验证
 
 ui 增加 Selections/BindSelections/OnSelections，复用 BindState 和局部协调，单/多选区声明与绑定互相替换。
@@ -87,6 +103,8 @@ Linux 示例在初始化输入配置处通过 SetSelectionModifiers 将 Add 覆�
 
 - [Monaco/VS Code 1.104.3 CursorCollection](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/common/cursor/cursorCollection.ts#L148)：主选区与重叠规范化；采用值集合，不复制对象体系。
 - [同版 editStack](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/common/model/editStack.ts#L21)：前后完整选区；在本仓历史维护。
+- [VS Code 1.104.3 cursorUndo](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/contrib/cursorUndo/browser/cursorUndo.ts#L62)（2026-11-12 核对源码）：文档内容变化清空选区历史，有界保存独立光标历史；采用修订隔离及容量限制，本项目恢复时揭示主选区，不保存原始滚动像素。
+- [同版 multicursor](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/contrib/multicursor/browser/multicursor.ts)：参照跳过当前匹配而不增加数量的交互。当前绑定只支持一次组合键，不为沿用 Ctrl+K Ctrl+D 扩展通用快捷键系统，选用可覆盖的 Ctrl/Cmd+Shift+D。
 - [同版列选择](https://github.com/microsoft/vscode/blob/1.104.3/src/vs/editor/common/cursor/cursorColumnSelection.ts)：保留矩形意图；本项目按原生几何，不使用字符平均宽度。
 - [VS Code 多光标](https://code.visualstudio.com/docs/editing/codebasics#multiple-selections-multi-cursor)及[矩形选择](https://code.visualstudio.com/docs/editing/codebasics#column-box-selection)（动态官方文档，2026-11-11 查阅）：文档默认 Alt+点击添加光标、Shift+Alt+拖动矩形，支持配置多光标修饰键。本项目按用户要求统一采用这组鼠标默认值，保留修饰键配置；不改变已有键盘列扩展绑定。
 - [Scintilla 多选区](https://scintilla.org/ScintillaDoc.html#MultipleSelection)（页面 2026-10-01）：矩形和虚拟空间分离；不承诺跨应用矩形格式。

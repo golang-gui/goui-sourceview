@@ -285,7 +285,7 @@ func replacementPlan(c cursorState, text string) editor.Plan {
 func (v *SourceView) configureMultipleKey(a *deferredInput, event events.KeyEvent) {
 	if command, bound := v.keyCommand(event); bound {
 		switch command {
-		case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
+		case CommandAddCursorAbove, CommandAddCursorBelow, CommandSelectNextOccurrence, CommandSkipNextOccurrence, CommandSelectAllOccurrences, CommandSplitSelectionLines, CommandColumnSelectLeft, CommandColumnSelectRight, CommandColumnSelectUp, CommandColumnSelectDown:
 			a.selectionCommand = command
 			a.geometry = false
 			return

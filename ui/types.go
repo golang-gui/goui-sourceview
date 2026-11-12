@@ -95,6 +95,9 @@ const (
 	CommandLowerCase              = source.CommandLowerCase
 	CommandTrimTrailingWhitespace = source.CommandTrimTrailingWhitespace
 	CommandUndo                   = source.CommandUndo
+	CommandUndoSelection          = source.CommandUndoSelection
+	CommandSkipNextOccurrence     = source.CommandSkipNextOccurrence
+	CommandRemovePrimarySelection = source.CommandRemovePrimarySelection
 	CommandRedo                   = source.CommandRedo
 	CommandCut                    = source.CommandCut
 	CommandCopy                   = source.CommandCopy

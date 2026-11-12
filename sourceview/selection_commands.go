@@ -23,6 +23,13 @@ func (v *SourceView) AddCursor(below bool) error {
 func (v *SourceView) SelectNextOccurrence() error {
 	return v.queueSelectionCommand(CommandSelectNextOccurrence)
 }
+
+// SkipNextOccurrence replaces the primary match with the next unselected literal
+// match, preserving other selections. No available match leaves the set unchanged.
+// An empty primary first selects its word, like SelectNextOccurrence.
+func (v *SourceView) SkipNextOccurrence() error {
+	return v.queueSelectionCommand(CommandSkipNextOccurrence)
+}
 func (v *SourceView) SelectAllOccurrences() error {
 	return v.queueSelectionCommand(CommandSelectAllOccurrences)
 }
@@ -144,7 +151,7 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 			if r.Start == r.End {
 				return true, nil
 			}
-			if c == CommandSelectNextOccurrence {
+			if c == CommandSelectNextOccurrence || c == CommandSkipNextOccurrence {
 				job.original[0].selection = TextSelection{Anchor: r.Start, Caret: r.End}
 				v.setCursorStatesKeepingCompletion(normalizeCursors(job.original), true, nil)
 				return true, nil
@@ -164,7 +171,7 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 		}
 		job.pattern = text
 		job.end = v.document.Len()
-		if c == CommandSelectNextOccurrence {
+		if c == CommandSelectNextOccurrence || c == CommandSkipNextOccurrence {
 			job.at = s.Range().End
 			job.results = job.original
 		} else {
@@ -178,7 +185,7 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 			return false, nil
 		}
 		if job.at >= job.end {
-			if c == CommandSelectNextOccurrence && job.phase == 0 {
+			if (c == CommandSelectNextOccurrence || c == CommandSkipNextOccurrence) && job.phase == 0 {
 				job.phase = 1
 				job.at = 0
 				job.end = job.original[0].selection.Range().Start
@@ -238,10 +245,14 @@ func (v *SourceView) advanceSelectionCommand(q *inputBatch, c Command, deadline 
 				index := sort.Search(len(ranges), func(i int) bool { return ranges[i].End > match.Anchor })
 				overlap := index < len(ranges) && ranges[index].Start < match.Caret
 				if !overlap {
-					if len(job.original) >= maxSelections {
+					if c != CommandSkipNextOccurrence && len(job.original) >= maxSelections {
 						return false, ErrOperationLimit
 					}
-					after := append([]cursorState{{selection: match}}, job.original...)
+					retained := job.original
+					if c == CommandSkipNextOccurrence {
+						retained = retained[1:]
+					}
+					after := append([]cursorState{{selection: match}}, retained...)
 					v.setCursorStatesKeepingCompletion(normalizeCursors(after), true, nil)
 					return true, nil
 				}

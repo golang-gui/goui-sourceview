@@ -55,6 +55,9 @@ func selectionHints(editor *source.SourceView) (string, string) {
 	}
 	mouse = append(mouse, shortcut(source.CommandSelectNextOccurrence)+": next", shortcut(source.CommandSelectAllOccurrences)+": all")
 	keyboard := strings.Join([]string{
+		"Undo selection: " + shortcut(source.CommandUndoSelection),
+		"Skip current occurrence: " + shortcut(source.CommandSkipNextOccurrence),
+		"Add-selection click on an existing cursor/range: remove it (last selection stays)",
 		"Add cursor: " + shortcut(source.CommandAddCursorAbove) + " / " + shortcut(source.CommandAddCursorBelow),
 		"Column horizontally: " + shortcut(source.CommandColumnSelectLeft) + " / " + shortcut(source.CommandColumnSelectRight),
 		"Column vertically: " + shortcut(source.CommandColumnSelectUp) + " / " + shortcut(source.CommandColumnSelectDown),

@@ -99,6 +99,14 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
   打开 Selection 菜单添加上下光标、选择下一个/全部相同文本、按行拆分或只保留主选区。
   选择 `Go — multicursor.go`，点击 `product` 并选中全部匹配，输入 `x` 后一次撤销。
   底部显示完整选区数量；只增减附加选区时也会更新。
+- Ctrl/Cmd+U undoes the last selection operation without undoing text; Ctrl/Cmd+Shift+D
+  skips the primary occurrence while keeping the other selections. Use the add-selection
+  modifier and click an existing cursor/range to remove it; the final selection stays.
+  Selection also offers Undo selection, Skip current occurrence and Remove primary selection.
+  Ctrl/Cmd+U 撤销上一次选区操作，Ctrl/Cmd+Shift+D 跳过当前主匹配并保留其他选区；
+  按添加选区修饰键点击已有光标/范围可单独移除，最后一个保留。Selection 菜单也提供对应操作。
+  Text edits clear selection history; one pointer drag is one selection undo step.
+  正文编辑会清空选区历史，一次鼠标拖动只记录一个选区撤销步骤。
 - The hint below the toolbar shows the configured mouse modifiers and next/all shortcuts.
   On Linux this example uses Ctrl+click to add a cursor and Ctrl+drag to add a range;
   Windows/macOS use Alt+click/drag. All platforms use Alt+Shift+drag for columns.

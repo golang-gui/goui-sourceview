@@ -309,6 +309,7 @@ func run() error {
 			{"Add cursor above", source.CommandAddCursorAbove, func() error { return editor.AddCursor(false) }},
 			{"Add cursor below", source.CommandAddCursorBelow, func() error { return editor.AddCursor(true) }},
 			{"Select next occurrence", source.CommandSelectNextOccurrence, editor.SelectNextOccurrence},
+			{"Skip current occurrence", source.CommandSkipNextOccurrence, editor.SkipNextOccurrence},
 			{"Select all occurrences", source.CommandSelectAllOccurrences, editor.SelectAllOccurrences},
 			{"Split selection into lines", source.CommandSplitSelectionLines, editor.SplitSelectionLines},
 		} {
@@ -320,6 +321,16 @@ func run() error {
 			})
 		}
 		menu.AppendSeparator()
+		selectionActions.append(menu, "Undo selection", bindings[source.CommandUndoSelection], true, func() {
+			win.SetFocusedWidget(editor)
+			editor.UndoSelection()
+		})
+		selectionActions.append(menu, "Remove primary selection", bindings[source.CommandRemovePrimarySelection], len(editor.Selections()) > 1, func() {
+			win.SetFocusedWidget(editor)
+			if err := editor.RemoveSelection(0); err != nil {
+				status.SetText(err.Error())
+			}
+		})
 		selectionActions.append(menu, "Keep primary selection", []gui.KeyGesture{{Key: gui.KeyEscape}}, len(editor.Selections()) > 1, func() {
 			win.SetFocusedWidget(editor)
 			editor.SetSelection(editor.Selection())
