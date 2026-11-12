@@ -26,6 +26,8 @@ type Document struct {
 	lineEnding                   LineEnding
 	lineEndingEpoch              uint64
 	lineEndingChanged            signal.Signal2[LineEnding, uint64]
+	savedPoint                   SavePoint
+	savedPointChanged            signal.Signal0
 	language                     language.ID
 	definition                   *language.Language
 	languageEpoch                uint64
@@ -57,7 +59,9 @@ func NewDocument(text string) *Document {
 	ending, _ := DetectLineEnding(text)
 	model := textcore.NewModel(text)
 	plain, _ := language.Builtin(language.Plain)
-	return &Document{id: nextDocumentID.Add(1), definition: plain, model: model, lineEnding: ending, views: make(map[*SourceView]struct{}), observed: model.Revision()}
+	d := &Document{id: nextDocumentID.Add(1), definition: plain, model: model, lineEnding: ending, views: make(map[*SourceView]struct{}), observed: model.Revision()}
+	d.savedPoint = d.currentSavePoint()
+	return d
 }
 
 // LineEnding specifies the UTF-8 sequence used to serialize logical newlines.

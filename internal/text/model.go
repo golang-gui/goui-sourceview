@@ -62,6 +62,8 @@ type Change struct {
 type Model struct {
 	tree       pieceTree
 	revision   uint64
+	stateID    uint64
+	nextState  uint64
 	change     signal.Signal1[Change]
 	undoSteps  []textStep
 	redoSteps  []textStep
@@ -98,6 +100,16 @@ func (m *Model) Len() int {
 // every change signal.
 func (m *Model) Revision() uint64 {
 	return m.revision
+}
+
+// StateID identifies the current history state within this model. Undo/Redo
+// restore it; new edits never reuse an identity, including on a new branch.
+// Unlike Revision it is suitable for comparing against a saved history state.
+func (m *Model) StateID() uint64 { return m.stateID }
+
+func (m *Model) advanceState() {
+	m.nextState++
+	m.stateID = m.nextState
 }
 
 // LineCount returns the number of logical lines. An empty document has one
@@ -150,6 +162,7 @@ func (m *Model) SetText(text string) {
 	m.undoSteps, m.redoSteps = nil, nil
 	m.groupOpen = false
 	m.revision++
+	m.advanceState()
 	m.notify(Change{Revision: m.revision, Reset: true})
 }
 
@@ -198,15 +211,18 @@ func (m *Model) UndoWithSelection() HistoryResult {
 	}
 	m.tree.insertPiecesAt(step.start, step.removed)
 	m.redoSteps = append(m.redoSteps, textStep{
-		start:     step.start,
-		oldEnd:    step.start + pieceRefsLen(step.removed),
-		removed:   step.removed,
-		inserted:  removedNow,
-		kind:      step.kind,
-		side:      step.side,
-		selection: step.selection,
+		start:       step.start,
+		oldEnd:      step.start + pieceRefsLen(step.removed),
+		removed:     step.removed,
+		inserted:    removedNow,
+		kind:        step.kind,
+		side:        step.side,
+		selection:   step.selection,
+		beforeState: step.beforeState,
+		afterState:  step.afterState,
 	})
 	m.revision++
+	m.stateID = step.beforeState
 	result := HistoryResult{Applied: true, Revision: m.revision}
 	if step.selection != nil {
 		selection := step.selection.before
@@ -243,15 +259,18 @@ func (m *Model) RedoWithSelection() HistoryResult {
 	}
 	m.tree.insertPiecesAt(step.start, step.inserted)
 	m.undoSteps = append(m.undoSteps, textStep{
-		start:     step.start,
-		oldEnd:    step.start + pieceRefsLen(step.inserted),
-		removed:   removedNow,
-		inserted:  step.inserted,
-		kind:      step.kind,
-		side:      step.side,
-		selection: step.selection,
+		start:       step.start,
+		oldEnd:      step.start + pieceRefsLen(step.inserted),
+		removed:     removedNow,
+		inserted:    step.inserted,
+		kind:        step.kind,
+		side:        step.side,
+		selection:   step.selection,
+		beforeState: step.beforeState,
+		afterState:  step.afterState,
 	})
 	m.revision++
+	m.stateID = step.afterState
 	result := HistoryResult{Applied: true, Revision: m.revision}
 	if step.selection != nil {
 		selection := step.selection.after
@@ -341,7 +360,9 @@ func (m *Model) replace(rng Range, replacement string, atomic bool, owner *EditS
 	case rng.Start == rng.End:
 		kind = stepInsert
 	}
-	step := textStep{start: rng.Start, oldEnd: rng.End, removed: removed, inserted: inserted, kind: kind}
+	beforeState := m.stateID
+	m.advanceState()
+	step := textStep{start: rng.Start, oldEnd: rng.End, removed: removed, inserted: inserted, kind: kind, beforeState: beforeState, afterState: m.stateID}
 	if selection != nil {
 		caret := rng.Start + len(text)
 		step.selection = &textStepSelection{before: *selection, after: Selection{caret, caret}}
@@ -467,6 +488,7 @@ func (m *Model) tryMergeStep(step *textStep) bool {
 	if top.selection != nil && step.selection != nil {
 		top.selection.after = step.selection.after
 	}
+	top.afterState = step.afterState
 	return true
 }
 
@@ -481,6 +503,7 @@ type textStepSelection struct{ before, after Selection }
 // [start, start+len(inserted)) afterwards. Piece references keep the content
 // alive in the immutable buffers; no document snapshot is stored.
 type textStep struct {
+	beforeState, afterState           uint64
 	beforeSelections, afterSelections []SelectionState
 	batch                             []textStep
 	merge                             BatchMerge

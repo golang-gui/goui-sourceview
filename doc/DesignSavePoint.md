@@ -1,7 +1,7 @@
 # 保存点设计
 
-状态：2026-11-11 更新所有权，尚未实现。本轮只完成[编辑内核独立化](DesignEditorCore.md)。
-后续在本仓自有历史增加状态身份；不再要求 GOUI 扩展，不在本轮加入保存点。
+状态：2026-11-12 已实现并验收自有历史身份、Document 保存基线与通知。
+在本仓自有历史增加状态身份，不要求 GOUI 扩展。验收见[后续三批](PlanEditorFollowups.md)。
 [视图状态恢复](DesignViewState.md) 已独立实现。
 
 ## 问题与所有权
@@ -21,9 +21,9 @@ Undo/Redo 回到保存历史状态才恢复 clean。不在输入时复制全文�
 clean 不证明磁盘文件存在；未命名文件是否需要保存由应用独立组合。
 影子建议不进入 Model，预览本身不改变 modified；正式接受才产生正文历史状态。
 
-## 自有历史的最小需求（尚未实现）
+## 自有历史的状态身份
 
-候选扩展只有一个只读能力，最终命名在本仓实施时确认：
+自有 internal/text.Model 提供只读能力，不提升为 Document 的公共历史标识：
 
 ```go
 func (m *Model) StateID() uint64
@@ -39,12 +39,10 @@ func (m *Model) StateID() uint64
 
 读取 StateID 不改变历史；保存前显式调用已有 BreakUndoGroup，避免保存位置被后续输入合并吞掉。
 该能力覆盖普通/原子/批量编辑与历史路径，不涉及 typography 或原生后端。
-2026-11-11 自有历史延续迁移基线的 model.go、batch.go，尚未提供此能力。
-本文不把规划接口当作可用契约。
-宿主可临时保守地提示“发生编辑后未保存”，成功保存后清除；该提示不能保证 Undo 回保存位置自动恢复 clean。
-这是有限绕过，不作为精确保存点实现；可靠能力缺失时先跳过，继续视图状态等工作。
+2026-11-12 已在 model.go、batch.go 为普通、合并及批量历史维护 before/after 身份；
+初始身份可以为零，新提交分配器不随 Undo 倒退。ClearHistory 不改变当前身份。
 
-## Document 接口提案
+## Document 接口
 
 ```go
 func (d *Document) CaptureSavePoint() SavePoint
@@ -75,6 +73,9 @@ SetText 不自动标记保存；应用完成加载后显式捕获并标记，避
 现有 WriteTo 支持分段输出与重入检查，不是后台快照，也不保证文件替换原子性。
 失败或 ErrOperationChanged 保留旧基线。
 
+`example/editor` 底部显示 Saved / Modified，并提供 Mark saved 按钮演示保存基线；
+按钮只标记内存状态，tooltip 明确说明不写磁盘。真实保存仍由应用在写入成功后发布对应点。
+
 大文本异步保存由应用在所属序列分段复制正文，并核验捕获时的 Revision/行尾代次。
 任何分段前后发现变化都取消整份快照，不能拼接不同修订；完整核验后 worker 只写不可变快照。
 成功后再发布对应点，后续编辑仍标记为 dirty。CaptureSavePoint 本身不是文本快照。
@@ -93,8 +94,7 @@ ui 只提供 SavePoint 别名，应用按已有生命周期连接 Document 信�
 
 ## 实施与验证
 
-先在本仓 internal/text 实现并验证历史身份，再接入 Document，按职责提交。
-保持 GOUI 依赖不变，不借独立化任务提前实施此项。
+实现在本仓 internal/text 与 Document，按已授权的第二批交付；保持 GOUI 依赖不变。
 重点测试：
 
 - 编辑、保存、继续输入、Undo 恰好回保存边界、Redo 离开；保存前后输入不可合并。

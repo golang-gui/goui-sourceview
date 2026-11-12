@@ -128,6 +128,11 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
 - The header button switches light/dark. `-theme system` follows system appearance
   until you choose a theme; settings connections end with the application.
   标题栏按钮切换亮暗；`-theme system` 在手动切换前跟随系统外观，订阅随应用结束释放。
+- The footer shows Saved/Modified. Mark saved establishes an in-memory save point;
+  this example does not write files. Edit, mark, edit again, then Undo back to the save point
+  to see Saved restored. Actual applications call `MarkSaved` only after a successful write.
+  底部显示 Saved/Modified；Mark saved 只设置内存保存基线，不写文件。可先编辑、标记、再编辑，
+  撤销回保存点后会恢复 Saved。实际应用应在写入成功后调用 `MarkSaved`。
 
 Clipboard commands change the real clipboard only when requested. File loading
 reads the explicitly supplied file; edits stay in memory. Check real IME and

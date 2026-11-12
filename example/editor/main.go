@@ -140,6 +140,10 @@ func run() error {
 		if editor.ReadOnly() {
 			mode = "Read only"
 		}
+		saveState := "Saved"
+		if m.Modified() {
+			saveState = "Modified"
+		}
 		byteCount := int64(m.Len())
 		if current.document.LineEnding() == source.LineEndingCRLF {
 			byteCount += int64(m.LineCount() - 1)
@@ -148,7 +152,7 @@ func run() error {
 		if len(editor.Selections()) == 1 {
 			selections = "1 selection"
 		}
-		status.SetText(fmt.Sprintf("%s  ·  %s  ·  %s  ·  %s\nPrimary: Ln %d, Col %d  ·  %d lines  ·  %d bytes  ·  %s", current.name, current.document.Language(), current.document.LineEnding(), selections, row+1, utf8.RuneCountInString(prefix)+1, m.LineCount(), byteCount, mode))
+		status.SetText(fmt.Sprintf("%s  ·  %s  ·  %s  ·  %s\nPrimary: Ln %d, Col %d  ·  %d lines  ·  %d bytes  ·  %s  ·  %s", current.name, current.document.Language(), current.document.LineEnding(), selections, row+1, utf8.RuneCountInString(prefix)+1, m.LineCount(), byteCount, mode, saveState))
 		undo.SetEnabled(!editor.ReadOnly() && m.CanUndo())
 		redo.SetEnabled(!editor.ReadOnly() && m.CanRedo())
 	}
@@ -159,6 +163,12 @@ func run() error {
 			}
 		})
 		defer h.Disconnect()
+		modified := d.document.ConnectModifiedChanged(func() {
+			if current.document == d.document {
+				update()
+			}
+		})
+		defer modified.Disconnect()
 	}
 	show := func(d exampleDocument) {
 		current = d
@@ -375,6 +385,15 @@ func run() error {
 	header.SetChild(title)
 	footer := row(0, 8)
 	footer.AddChild(status)
+	markSaved := button("Mark saved", func() {
+		point := current.document.CaptureSavePoint()
+		if err := current.document.MarkSaved(point); err != nil {
+			status.SetText(err.Error())
+		}
+		win.SetFocusedWidget(editor)
+	})
+	markSaved.SetTooltip("Mark the current in-memory state as saved; this example does not write files")
+	footer.AddChild(markSaved)
 	content := gui.NewLinearBox(layout.DirectionVertical)
 	content.SetCrossAlign(layout.CrossStretch)
 	for _, child := range []gui.Widget{header, files, tools, help, viewport, footer} {

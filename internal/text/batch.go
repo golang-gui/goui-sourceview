@@ -99,11 +99,14 @@ func (m *Model) ApplyBatch(edits []Edit, options BatchOptions) error {
 		return nil
 	}
 	step := textStep{
+		beforeState:      m.stateID,
 		batch:            make([]textStep, 0, len(work)),
 		beforeSelections: before,
 		merge:            m.batchMergeKind(work, before, after, options.Merge),
 		afterSelections:  after,
 	}
+	m.advanceState()
+	step.afterState = m.stateID
 	changes := make([]Edit, 0, len(work))
 	for i := len(work) - 1; i >= 0; i-- {
 		edit := work[i]
@@ -123,6 +126,7 @@ func (m *Model) ApplyBatch(edits []Edit, options BatchOptions) error {
 		if top.batch != nil && top.merge == step.merge && slices.Equal(top.afterSelections, step.beforeSelections) {
 			top.batch = append(top.batch, step.batch...)
 			top.afterSelections = step.afterSelections
+			top.afterState = step.afterState
 			merged = true
 		}
 	}
@@ -188,9 +192,11 @@ func (m *Model) applyBatchHistory(step textStep, undo bool) HistoryResult {
 	var selections []SelectionState
 	if undo {
 		m.redoSteps = append(m.redoSteps, step)
+		m.stateID = step.beforeState
 		selections = step.beforeSelections
 	} else {
 		m.undoSteps = append(m.undoSteps, step)
+		m.stateID = step.afterState
 		selections = step.afterSelections
 	}
 	if len(selections) > 0 {

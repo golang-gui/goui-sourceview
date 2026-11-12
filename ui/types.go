@@ -16,6 +16,7 @@ type (
 	HighlightSpan      = source.HighlightSpan
 	Document           = source.Document
 	ViewState          = source.ViewState
+	SavePoint          = source.SavePoint
 	IndentOptions      = source.IndentOptions
 	MinimapOptions     = source.MinimapOptions
 	WrapMode           = source.WrapMode

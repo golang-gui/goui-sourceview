@@ -31,7 +31,7 @@ SourceView 是供应用嵌入的基础代码编辑器。优先完整、稳定的
 
 | 能力 | 官方接口事实 | SourceView 的取舍与当前差距 |
 | --- | --- | --- |
-| 保存状态 | Scintilla 有保存点和进入/离开通知；Monaco alternative version 可在 Undo/Redo 时恢复相同值；GTK TextBuffer 有 modified 标记 | 缺可靠的文档保存点；GTK modified 页面本身不能证明与前两者完全相同的历史身份语义 |
+| 保存状态 | Scintilla 有保存点和进入/离开通知；Monaco alternative version 可在 Undo/Redo 时恢复相同值；GTK TextBuffer 有 modified 标记 | 已有自有历史身份与 Document 保存基线，撤销回保存位置恢复 clean；GTK modified 页面本身不能证明与前两者完全相同的历史身份语义 |
 | 视图状态 | Monaco 有 saveViewState/restoreViewState，快照区分光标、视口与贡献状态 | 已有 SaveState / RestoreState，支持同文档同修订的选区、视口与折叠；不据此声称 Scintilla/GTK 也提供同等的一体化快照 |
 | 补全呈现 | Monaco 区分 kind/detail/documentation/deprecated；GtkSourceView 有图标、正文、注释、详情列；Scintilla 可显示候选类型图像 | 当前只有 Label/Text/Detail 等编辑信息；先补类型、完整说明、弃用状态，不照搬全部 Provider 字段 |
 | 代码片段 | Monaco 支持 snippet 插入规则；GtkSourceView 有默认值、编号焦点、Tab/Shift+Tab 和引用 | 缺占位符会话；这是编辑能力，不要求语义解析，但此前已决定暂缓 |
@@ -64,13 +64,12 @@ SourceView 是供应用嵌入的基础代码编辑器。优先完整、稳定的
 不凭字符宽度估算覆盖原生几何，也不把普通中文或其他非 ASCII 文本默认标为问题。
 正式实现前单独细化契约；发现 GOUI 不能表达的排版需求先记录并评估绕过。
 
-### 保存点：后续在自有历史中实现
+### 保存点（已实现）
 
-Model.Revision 在编辑、Undo、Redo 时递增，不能直接作为保存身份。
-SourceView 自有 Model 尚无可随历史恢复的状态标识；已记录 [保存点设计](DesignSavePoint.md)。
-后续在本仓历史增加元数据，不另建历史栈或逐次复制/哈希全文。
-宿主可暂用保守的未保存提示，但不能把它宣称为精确的历史保存点。
-本轮只迁移内核；后续明确授权时在本仓实施，不再需要 GOUI 历史扩展。
+Model.Revision 在编辑、Undo、Redo 时递增，不作为保存身份。
+自有 Model 已有随历史恢复的 StateID，Document 组合输出行尾配置提供保存基线与 Modified 通知；
+见 [保存点设计](DesignSavePoint.md)与[验收](PlanEditorFollowups.md)。
+不另建历史栈或逐次复制/哈希全文，不需要 GOUI 历史扩展；实际文件写入仍由宿主负责。
 
 ## P2：按具体应用需求推进
 
