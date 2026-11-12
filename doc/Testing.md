@@ -330,6 +330,17 @@ Selection 的实际像素，并检查特殊空格单元、CRLF/EOF、输出及�
 逻辑包测试另外覆盖 Trailing、半开选区、长行索引预算/视口过滤、软换行、IME 映射和分片边界。
 物理输入法和混合 DPI 仍需单独验收，截图观察不替代这些断言。
 
+## 特殊字符显示
+
+运行 `XMODIFIERS=@im=none GOUI_PLAT_PAINTER=software go run ./tests/window/editor/special_characters`，
+用 `-basic` / `-dark` 与 `GOUI_PLAT_SCALE=1/1.5` 检查主题和缩放。
+需要独立桌面；正常事件点击开关、悬停和 Delete/Undo，成功自动退出，提前关闭失败。
+原生参考字母实测标记位置，再断言新增红色像素、另一视图不变、关闭逐像素恢复、
+码点 tooltip、正文/修订/保存身份不变及删除/撤销重建。采样和颜色判据见程序入口注释。
+包内另验原生 NUL 后缀、零宽合并、预算、分页滚动、长行收起/展开和预编辑隔离。
+该项默认关闭，不将普通非 ASCII 文本当异常；契约见 [特殊字符设计](DesignSpecialCharacters.md)，
+实际环境、结果及未执行平台见 [本轮验收](PlanEditorFollowups.md#第三批验收)。
+
 
 ## 全编辑功能回归
 

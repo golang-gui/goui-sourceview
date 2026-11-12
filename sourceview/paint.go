@@ -113,6 +113,7 @@ func (v *SourceView) Paint(p gui.Painter) {
 			p.DrawTextLayout(origin, item.Layout)
 		}
 		v.paintWhitespace(p, row, item, origin)
+		v.paintSpecialCharacters(p, row, item, origin)
 		v.paintFoldBadge(p, row, item)
 		if v.projection != nil {
 			start := v.projection.Replacement().Start

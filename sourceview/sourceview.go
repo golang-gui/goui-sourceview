@@ -144,6 +144,7 @@ type SourceView struct {
 	foldDefinition                                                                    *language.Language
 	whitespace                                                                        WhitespaceMode
 	showLineEndings, indentGuides, smartHomeEnd, smartBackspace, highlightOccurrences bool
+	showSpecialCharacters                                                             bool
 	rulers                                                                            []int
 	linkedTags                                                                        bool
 	tagMatches                                                                        tagMatchState
@@ -507,7 +508,7 @@ func (v *SourceView) Snapshot() gui.WidgetInfo {
 	info := v.WidgetBase.Snapshot()
 	info.Role = gui.Role("sourceview")
 	info.Text = ""
-	info.SetAttribute("goui.sourceview", map[string]any{"language": string(v.document.Language()), "revision": v.document.model.Revision(), "wrap": int(v.wrap), "lineNumbers": v.showLineNumbers, "layoutPending": v.layoutPending})
+	info.SetAttribute("goui.sourceview", map[string]any{"language": string(v.document.Language()), "revision": v.document.model.Revision(), "wrap": int(v.wrap), "lineNumbers": v.showLineNumbers, "layoutPending": v.layoutPending, "specialCharacters": v.showSpecialCharacters})
 	m := v.document.model
 	if v.mounted && v.observed != m.Revision() {
 		return info

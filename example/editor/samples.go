@@ -21,7 +21,7 @@ type exampleDocument struct {
 func sampleDocuments() []exampleDocument {
 	var documents []exampleDocument
 	for _, name := range []string{
-		"settings.json", "multicursor.go", "layout.xml", "index.html", "config.toml", "config.yaml", "script.sh", "guide.md",
+		"settings.json", "multicursor.go", "unicode.jsonc", "layout.xml", "index.html", "config.toml", "config.yaml", "script.sh", "guide.md",
 		"settings.jsonc", "requests.http", "service.proto", "Makefile", "CMakeLists.txt", "nginx.conf", "settings.ini",
 		"Dockerfile", "query.sql", "hello.go", "hello.py", "app.js", "app.ts", "theme.css", "events.jsonl",
 		"hello.c", "hello.cpp", "Hello.java", "hello.rs", "Hello.cs", "hello.lua",

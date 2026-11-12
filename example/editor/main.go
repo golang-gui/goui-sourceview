@@ -259,6 +259,10 @@ func run() error {
 			editor.SetShowLineEndings(!editor.ShowLineEndings())
 			win.SetFocusedWidget(editor)
 		})
+		menu.Append(label("Special characters", editor.ShowSpecialCharacters()), func() {
+			editor.SetShowSpecialCharacters(!editor.ShowSpecialCharacters())
+			win.SetFocusedWidget(editor)
+		})
 		viewMenu.SetMenu(menu)
 		if err := viewMenu.ShowAt(geometry.Point{Y: viewOptions.Rect().Height}); err != nil {
 			status.SetText(err.Error())

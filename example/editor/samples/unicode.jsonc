@@ -1,0 +1,20 @@
+// Special character walkthrough (original demonstration text)
+// Enable View > Special characters. Hover near a gold diamond for the code point.
+// Markers preserve the native cluster, text, copy and save contents.
+//
+// Zero width space: A​B
+// Word joiner: A⁠B
+// Soft hyphen: soft­hyphen
+// Non-joiner: A‌B
+// Joiner: A‍B
+// BOM inside text: A﻿B
+// Control ESC: AB
+// Control DEL: AB
+// Emoji with ZWJ: 👩‍💻
+// Directional marks: A‎B‏C؜D
+// Bidi isolate: abc ⁧אבג⁩ def
+// Bidi override: abc ‮DEF‬ ghi
+// Combining grapheme joiner: a͏́
+// Unicode line separator: A B
+//
+{}

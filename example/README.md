@@ -48,13 +48,13 @@ Both editor examples explicitly bind F2 for completion; the control has no defau
 
 ## Editor
 
-`editor` embeds 95 original language samples, so the binary can run from any
+`editor` embeds 96 original language samples, so the binary can run from any
 directory. Each sample has a separate Document. Switching preserves content and
 undo history; selection and scroll position belong to the current view. An optional
 UTF-8 file is read once and becomes the first option in the Sample dropdown. All edits stay in memory.
 Restart resets the samples. Closing the main window exits. No DevServer is started.
 
-`editor` 内嵌本项目 95 份原创语言样本，可从任意目录运行构建后的程序。
+`editor` 内嵌本项目 96 份原创语言样本，可从任意目录运行构建后的程序。
 每份样本拥有独立 Document，切换保留内容与撤销历史；选区和滚动属于当前视图。
 可选参数读取一个 UTF-8 文件并作为 Sample 下拉列表的首项，修改仅保存在内存中。
 重启恢复样本，关闭主窗口退出，不启动开发服务器。
@@ -89,6 +89,13 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
 - Open View to choose Off, Selection, Trailing, Boundary or All whitespace markers,
   and toggle logical line endings independently. These options change display only.
   从 View 菜单选择空白显示模式，独立切换逻辑换行标记；这些选项只改变显示。
+- Choose the third sample, `JSON with comments — unicode.jsonc`, and enable
+  View > Special characters (off by default). Small gold diamonds mark native cluster
+  positions; hover for code points and names. Try zero-width, bidi, joiner and control
+  examples, then disable the markers. Text, selection and save state stay unchanged.
+  选择第三项 `JSON with comments — unicode.jsonc`，开启默认关闭的 View > Special characters。
+  金色小菱形标记原生字符簇位置，悬停显示码点与名称；可试零宽、双向、连接和控制字符，再关闭对照。
+  开关不改变正文、选区或保存状态；NUL 仅在原生显示边界等字节适配为空白，复制/保存保留原值。
 - Right-click for the editor menu. F2 opens completion; type brackets,
   quotes, or select text and type an opening bracket. Try line movement shortcuts.
   右键打开菜单；F2 请求补全，输入括号/引号或包裹选区，尝试按快捷键移动整行。

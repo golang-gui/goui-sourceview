@@ -400,7 +400,7 @@ func (p *ParagraphLayout) page(index int, deadline time.Time) *paragraphPage {
 		}
 	}
 	version := p.version
-	native, err := p.context.NewTextLayout(prefix+text, p.format, p.width, 1<<20)
+	native, err := p.context.NewTextLayout(NativeLayoutText(prefix+text), p.format, p.width, 1<<20)
 	if err != nil {
 		p.err = err
 		return nil
@@ -540,7 +540,7 @@ func (p *ParagraphLayout) joinAdvance(previous, next *paragraphPage) (float32, e
 			prefix += string(state.strong)
 		}
 	}
-	layout, err := p.context.NewTextLayout(prefix+text, p.format, p.width, 1<<20)
+	layout, err := p.context.NewTextLayout(NativeLayoutText(prefix+text), p.format, p.width, 1<<20)
 	if err != nil {
 		return 0, err
 	}

@@ -13,6 +13,25 @@ type context struct {
 	value any
 }
 
+func TestSpecialCharacterConfigurationPreservesOmittedOption(t *testing.T) {
+	ctx := &context{}
+	v := SourceView().ShowSpecialCharacters(true)
+	w := v.Mount(ctx).(*source.SourceView)
+	defer v.Unmount(ctx, w)
+	v.Update(ctx, w)
+	if !w.ShowSpecialCharacters() {
+		t.Fatal("special character option not applied")
+	}
+	SourceView().Update(ctx, w)
+	if !w.ShowSpecialCharacters() {
+		t.Fatal("omitted option reset view state")
+	}
+	SourceView().ShowSpecialCharacters(false).Update(ctx, w)
+	if w.ShowSpecialCharacters() {
+		t.Fatal("explicit disable ignored")
+	}
+}
+
 // 标记/执行配置可完全使用 ui 类型；省略选项保留状态，-1 显式清除。
 func TestLineMarkConfiguration(t *testing.T) {
 	ctx := &context{}

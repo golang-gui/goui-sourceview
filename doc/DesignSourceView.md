@@ -21,6 +21,9 @@ GOUI 不反向依赖本模块。
 [视图状态](DesignViewState.md) 通过 SaveState / RestoreState 保存同一文档与修订的选区、滚动锚点及折叠；
 恢复复用事件循环中的排版调度，不保存正文、历史或原生资源。
 多光标和矩形选择见 [多选区设计](DesignMultiSelection.md)，三批验收见 [记录](PlanMultiSelection.md)。
+[保存点](DesignSavePoint.md) 以自有历史身份和输出行尾识别文档修改；
+[特殊字符](DesignSpecialCharacters.md) 提供默认关闭的原生 cluster 位置标记与码点说明。
+这两项与多光标交互收尾的验收见 [后续三批](PlanEditorFollowups.md)。
 语义补全等后续能力见 [Roadmap](Roadmap.md)。
 
 | 阅读顺序 | 文档 | 负责的问题 |

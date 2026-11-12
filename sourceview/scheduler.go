@@ -83,6 +83,7 @@ func (q *frameQueue) frame(_ time.Time) {
 		}
 		if v.mounted && !v.Destroyed() {
 			v.whitespaceStep(until)
+			v.specialCharacterStep(until)
 		}
 		if !v.mounted || v.Root() != q.root || v.Destroyed() {
 			continue

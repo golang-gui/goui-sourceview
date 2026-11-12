@@ -84,6 +84,7 @@ func CodeRules(d scheme.Definition) []style.Rule {
 		style.Name("source-view").Part("indent-guide").ForegroundColor(Tint(d.GutterForeground, 65)),
 		style.Name("source-view").Part("whitespace").ForegroundColor(whitespace),
 		style.Name("source-view").Part("selected-whitespace").ForegroundColor(whitespace),
+		style.Name("source-view").Part("special-character").ForegroundColor(RGB(0xb55d00)),
 		style.Name("source-view").Part("ruler").ForegroundColor(Tint(d.GutterForeground, 45)),
 		style.Name("source-view").Part("occurrence").ForegroundColor(Tint(d.SearchBackground, 55)),
 		style.Name("source-view").FontFamily("monospace").FontSize(12).BackgroundColor(d.Background).ForegroundColor(d.Foreground),

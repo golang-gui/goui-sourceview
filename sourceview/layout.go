@@ -161,7 +161,7 @@ func (v *SourceView) estimateWrappedHeight(width float32) {
 	}
 	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
 	state, epoch := v.operationState(), v.layoutEpoch
-	sample, err := v.context.NewTextLayout(text, format, width, 1<<24)
+	sample, err := v.context.NewTextLayout(view.NativeLayoutText(text), format, width, 1<<24)
 	if err != nil {
 		return // An optional estimate must not report a second layout failure.
 	}

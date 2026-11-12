@@ -36,6 +36,7 @@ type paragraph struct {
 	sourceRange TextRange
 
 	whitespace    *view.WhitespaceLayout
+	special       *view.SpecialLayout
 	fragment      textcore.Fragment
 	text          string
 	width, height float32
@@ -258,7 +259,7 @@ func (v *SourceView) resolveParagraph(row int, measure bool) *paragraph {
 		return nil
 	}
 	format := typography.TextFormat{Font: v.font, WrapMode: v.wrap, TextColor: v.colors.Foreground, TabWidth: float32(v.indent.TabWidth) * v.spaceWidth}
-	native, err := v.context.NewTextLayout(text, format, key.width, 1<<24)
+	native, err := v.context.NewTextLayout(view.NativeLayoutText(text), format, key.width, 1<<24)
 	if err != nil {
 		// A failed automatic request must not retry/report on every frame.
 		// Bound failures like retained resources; new input identities can retry.

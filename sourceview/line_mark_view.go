@@ -162,6 +162,9 @@ func (v *SourceView) Tooltip() string {
 		if row, ok := v.lineMarkHit(v.pointerPoint); ok {
 			return v.lineMarkLabel(row)
 		}
+		if text := v.specialCharacterTooltip(); text != "" {
+			return text
+		}
 	}
 	return v.WidgetBase.Tooltip()
 }

@@ -47,6 +47,7 @@ type SourceViewView struct {
 	autoPairs, automaticCompletion                                       *bool
 	completionProvider                                                   *CompletionProvider
 	whitespace                                                           *WhitespaceMode
+	specialCharacters                                                    *bool
 	lineEndings, indentGuides, smartHomeEnd, smartBackspace, occurrences *bool
 	rulers                                                               []int
 	foldingEnabled                                                       *bool
@@ -181,7 +182,13 @@ func (v *SourceViewView) WhitespaceMode(mode WhitespaceMode) *SourceViewView {
 }
 
 // ShowLineEndings explicitly controls logical newline markers; omission preserves the current setting.
-func (v *SourceViewView) ShowLineEndings(b bool) *SourceViewView      { v.lineEndings = &b; return v }
+func (v *SourceViewView) ShowLineEndings(b bool) *SourceViewView { v.lineEndings = &b; return v }
+
+// ShowSpecialCharacters explicitly controls special-character markers; omission preserves the setting.
+func (v *SourceViewView) ShowSpecialCharacters(b bool) *SourceViewView {
+	v.specialCharacters = &b
+	return v
+}
 func (v *SourceViewView) ShowIndentGuides(b bool) *SourceViewView     { v.indentGuides = &b; return v }
 func (v *SourceViewView) SmartHomeEnd(b bool) *SourceViewView         { v.smartHomeEnd = &b; return v }
 func (v *SourceViewView) SmartBackspace(b bool) *SourceViewView       { v.smartBackspace = &b; return v }
@@ -284,6 +291,9 @@ func (v *SourceViewView) Update(ctx base.BuildContext, widget gui.Widget) {
 	w.SetFoldingEnabled(enabled)
 	if v.lineEndings != nil {
 		w.SetShowLineEndings(*v.lineEndings)
+	}
+	if v.specialCharacters != nil {
+		w.SetShowSpecialCharacters(*v.specialCharacters)
 	}
 	w.SetShowIndentGuides(boolOption(v.indentGuides, true))
 	w.SetSmartHomeEnd(boolOption(v.smartHomeEnd, true))
