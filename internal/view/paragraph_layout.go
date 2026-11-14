@@ -356,6 +356,35 @@ func paragraphASCII(text string) bool {
 	return true
 }
 
+// Preserve the paragraph base when a bounded window's first strong character
+// would select the opposite native base direction. Ordinary LTR windows need
+// no prefix. The last strong character also supplies the preceding bidi context.
+func (s paragraphContext) layoutPrefix(text string) string {
+	needed := len(s.stack) > 0 || s.base == '\u200f'
+	if !needed && s.base == '\u200e' {
+		for _, r := range text {
+			props, _ := bidi.LookupRune(r)
+			class := props.Class()
+			if class == bidi.L || class == bidi.R || class == bidi.AL {
+				needed = class != bidi.L
+				break
+			}
+		}
+	}
+	if !needed {
+		return ""
+	}
+	base := s.base
+	if base == 0 {
+		base = '\u200e'
+	}
+	prefix := string(base) + string(s.stack)
+	if s.strong != 0 {
+		prefix += string(s.strong)
+	}
+	return prefix
+}
+
 func (p *ParagraphLayout) contextAt(at int, deadline time.Time) (paragraphContext, bool) {
 	advanced := false
 	for p.scanned < at {
@@ -434,15 +463,8 @@ func (p *ParagraphLayout) page(index int, deadline time.Time) *paragraphPage {
 		return nil
 	}
 	var prefix string
-	if r.Start > 0 && (len(state.stack) > 0 || state.base == '\u200f') {
-		base := state.base
-		if base == 0 {
-			base = '\u200e'
-		}
-		prefix = string(base) + string(state.stack)
-		if state.strong != 0 {
-			prefix += string(state.strong)
-		}
+	if r.Start > 0 {
+		prefix = state.layoutPrefix(text)
 	}
 	version := p.version
 	native, err := p.context.NewTextLayout(NativeLayoutText(prefix+text), p.format, p.width, 1<<20)
@@ -575,15 +597,8 @@ func (p *ParagraphLayout) joinAdvance(previous, next *paragraphPage) (float32, e
 		return 0, fmt.Errorf("paragraph seam context unavailable")
 	}
 	var prefix string
-	if r.Start > 0 && (len(state.stack) > 0 || state.base == '\u200f') {
-		base := state.base
-		if base == 0 {
-			base = '\u200e'
-		}
-		prefix = string(base) + string(state.stack)
-		if state.strong != 0 {
-			prefix += string(state.strong)
-		}
+	if r.Start > 0 {
+		prefix = state.layoutPrefix(text)
 	}
 	layout, err := p.context.NewTextLayout(NativeLayoutText(prefix+text), p.format, p.width, 1<<20)
 	if err != nil {

@@ -297,3 +297,54 @@ func testParagraphCoordinatesNative(t *testing.T, factory func() (typography.Con
 func TestParagraphLayoutNative(t *testing.T) { testParagraphLayoutNative(t, nativeContext) }
 
 func TestParagraphCoordinatesNative(t *testing.T) { testParagraphCoordinatesNative(t, nativeContext) }
+
+// 随机跳到以 RTL 文本开头的 LTR 段落窗口；接缝仍须继承整个段落的基方向。
+func TestParagraphLTRRandomPageSeam(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	context, err := nativeContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer context.Destroy()
+	model := textcore.NewModel(strings.Repeat("word 0123456789 中文 אבג ", 35000))
+	format := typography.TextFormat{Font: typography.FontInfo{Family: "monospace", Size: 12}, WrapMode: typography.WrapWordChar, TabWidth: 32}
+	p := NewParagraphLayout(&paragraphBoundContext{Context: context, t: t}, format, math.Float32frombits(0x44602a0a), model.Len(), model.Slice)
+	defer p.Destroy()
+	for _, index := range []int{0, 232, 233} {
+		page := p.page(index, time.Now().Add(time.Second))
+		if page == nil {
+			t.Fatalf("随机页 %d 接缝失败：%v", index, p.Err())
+		}
+		// 独立参考显式声明原文的 LTR 基方向，不调用分页的上下文或 prefix 算法。
+		end := min(model.Len(), (index+1)*paragraphBlockBytes)
+		for !model.IsRuneBoundary(end) {
+			end--
+		}
+		text, err := model.Slice(textcore.Range{Start: page.range_.Start, End: end})
+		if err != nil {
+			t.Fatal(err)
+		}
+		reference, err := context.NewTextLayout("\u200e"+text, format, p.width, 1<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, _ := reference.MeasureMetrics()
+		reference.Destroy()
+		if len(lines) < len(page.lines) {
+			t.Fatal("分页行数超过原生 LTR 参考", index)
+		}
+		for i, got := range page.lines {
+			want := lines[i]
+			want.Clusters = nil
+			want.Start += page.range_.Start - len("\u200e")
+			if want.Start < page.range_.Start {
+				want.Length -= page.range_.Start - want.Start
+				want.Start = page.range_.Start
+			}
+			if got.Start != want.Start || got.Length != want.Length || math.Abs(float64(got.X-want.X)) > .1 || math.Abs(float64(got.Width-want.Width)) > .1 {
+				t.Fatalf("页 %d 行 %d 与独立 LTR 参考不符：got=%+v want=%+v", index, i, got, want)
+			}
+		}
+	}
+}
