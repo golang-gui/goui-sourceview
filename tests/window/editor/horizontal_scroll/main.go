@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"image"
 	"log"
-	"math"
 	"runtime"
 	"strings"
 	"time"
@@ -182,7 +181,7 @@ func main() {
 		})
 		settle(func() {
 			unchanged()
-			check(scroll.ScrollX() == float32(math.Floor(float64(scroll.Snapshot().MaxScrollX))), "trough setup did not reach far edge")
+			check(scroll.ScrollX() == scroll.Snapshot().MaxScrollX, "trough setup did not reach far edge")
 		})
 		drag := func(left bool) {
 			next(func() {

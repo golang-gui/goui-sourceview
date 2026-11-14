@@ -4,9 +4,13 @@
 > 投影、几何、片段和 GOUI ParagraphLayout 的方案。当前对应实现位于本仓 internal/text、
 > internal/view；下文带日期的 GOUI 源码与版本记录保留为历史依据，不能作为继续调用旧实现的契约。
 
-> 当前源码接入基线：已发布 GOUI v0.7.0（`33ce8a9e02f57364f2f18aaed1b36d4ca32ef127`）；
+> 最近公开依赖接入基线：已发布 GOUI v0.7.0（`33ce8a9e02f57364f2f18aaed1b36d4ca32ef127`）；
 > 四边 Padding、局部选区绑定和文件对话框适配见第 9–10 节，圆角迁移见第 11 节。
 > 以下较早的版本、提案及验收记录按各自日期保留，不代表当前最低依赖。
+
+> 2026-11-14 本地迁移：当前代码适配 GOUI `538ed4fa2d677249094eb2891dbd3b1497e53bc3`
+> 的类型化输入、Surface 和共享瞬态面；这些公共接口尚未发布，需本地工作区，
+> 不能仅用 go.mod 的 v0.7.0 独立构建。范围、取舍和验证见[迁移记录](PlanGOUILocalMigration.md)。
 
 > 实施状态：G1/G2/G3 及后续所需扩展已随 GOUI v0.2.0 发布，本模块直接声明该版本；下文保留设计与验收门槛，实际签名、范围和验证见 [Implementation](Implementation.md)。
 > 下文第 1–5 节保留初始提案的事实与拟新增契约；实施结果以当前公开接口及 Implementation 为准，样式注册见 [本轮验收](PlanStyles.md)。

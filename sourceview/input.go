@@ -30,7 +30,7 @@ func (c *sourceMotionController) HandleCrossing(ctx gui.CrossingContext) {
 
 func (v *SourceView) installInput() {
 	v.pointer = gui.NewMotionEventController()
-	v.pointer.ConnectMotion(func(info gui.MotionInfo) {
+	v.pointer.ConnectMotion(func(_ gui.EventContext, info gui.MotionInfo) {
 		_, wasBadge := v.collapsedLineHit(v.pointerPoint)
 		v.pointerPoint = info.Position
 		_, isBadge := v.collapsedLineHit(v.pointerPoint)
@@ -61,7 +61,8 @@ func (v *SourceView) installInput() {
 	drag := gui.NewDragEventController()
 	drag.SetPhase(gui.PhaseTarget)
 	drag.SetThreshold(0)
-	drag.ConnectBegin(func(point geometry.Point, mods events.Modifiers) {
+	drag.ConnectBegin(func(_ gui.EventContext, info gui.DragInfo) {
+		point, mods := info.Position, info.Modifiers
 		if !v.mounted || !gui.IsEnabled(v) {
 			return
 		}
@@ -87,12 +88,6 @@ func (v *SourceView) installInput() {
 			return
 		}
 		v.document.model.BreakUndoGroup()
-		if root, ok := v.Root().(gui.EventTarget); ok {
-			root.SetFocusedWidget(v)
-		}
-		if !v.mounted {
-			return
-		}
 		if line, ok := v.collapsedLineHit(point); ok {
 			v.dragging = false
 			v.expandLinePreview(line)
@@ -181,7 +176,8 @@ func (v *SourceView) installInput() {
 		}
 		v.setSelection(s, pos.Upstream, false)
 	})
-	drag.ConnectUpdate(func(point geometry.Point, _ events.Modifiers) {
+	drag.ConnectUpdate(func(_ gui.EventContext, info gui.DragInfo) {
+		point := info.Position
 		if v.minimap != nil && v.minimap.dragging {
 			v.dragMinimap(point)
 			return
@@ -194,7 +190,8 @@ func (v *SourceView) installInput() {
 			v.dragSelection(point)
 		}
 	})
-	drag.ConnectEnd(func(point geometry.Point, _ events.Modifiers) {
+	drag.ConnectEnd(func(_ gui.EventContext, info gui.DragInfo) {
+		point := info.Position
 		if v.minimap != nil && v.minimap.dragging {
 			v.dragMinimap(point)
 			v.endMinimapDrag()
@@ -213,7 +210,7 @@ func (v *SourceView) installInput() {
 		v.dragBase = nil
 		v.dragRemoveSelection = -1
 	})
-	drag.ConnectCancel(func() {
+	drag.ConnectCanceled(func(gui.GestureCancelReason) {
 		v.dragging = false
 		v.additiveDrag = false
 		v.dragBase = nil

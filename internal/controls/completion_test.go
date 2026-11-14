@@ -11,6 +11,7 @@ import (
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
 	"github.com/golang-gui/goui/layout"
+	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/graphics"
 	"github.com/golang-gui/goui/platform/typography"
 	"github.com/golang-gui/goui/style"
@@ -662,3 +663,63 @@ func TestNativeCompletionEllipsisAndBaseline(t *testing.T) {
 		}
 	}
 }
+
+// 通过正常分发验证 ClickInfo/MotionInfo 的局部坐标与取消，不直接调用控制器回调。
+func TestTypedCompletionPointerUsesLocalRows(t *testing.T) {
+	ctx := &shapedContext{}
+	selected, accepted, calls := 0, -1, 0
+	list := NewCompletionList(CompletionHost{
+		Context: func() typography.Context { return ctx }, Current: func() bool { return true },
+		State:  func() CompletionState { return CompletionState{Count: 3, Index: selected, Shown: true} },
+		Item:   func(int) CompletionItem { return CompletionItem{Label: "candidate", Detail: "detail"} },
+		Select: func(i int) { selected = i }, Accept: func(i int) { accepted, calls = i, calls+1 },
+		Fail: func(err error) { t.Fatal(err) },
+	})
+	t.Cleanup(list.Release)
+	root := gui.NewLinearBox(layout.DirectionVertical)
+	root.AddChild(list)
+	root.WidgetBase.Arrange(geometry.Rect(0, 0, 400, 300))
+	list.Arrange(geometry.Rect(35, 45, 220, 84))
+	list.LayoutVisible(geometry.Size{Width: 220, Height: 84}, geometry.Point{})
+	host := &completionPointerHost{widget: root}
+	var dispatcher gui.EventDispatcher
+	send := func(kind events.EventType) {
+		t.Helper()
+		row := list.Snapshot().Children[1].Bounds
+		e := events.PointerEvent{EventType: kind, Position: geometry.Point{X: row.X + row.Width/2, Y: row.Y + row.Height/2}}
+		if kind != events.PointerMove {
+			e.Button = events.PointerButtonLeft
+		}
+		if kind == events.PointerDown {
+			e.Buttons = events.PointerButtonLeftDown
+		}
+		if err := dispatcher.DispatchEvent(host, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send(events.PointerMove)
+	if selected != 1 {
+		t.Fatal("悬停没有命中第二项", selected)
+	}
+	send(events.PointerDown)
+	send(events.PointerUp)
+	if accepted != 1 || calls != 1 {
+		t.Fatal("完成点击没有命中第二项", accepted, calls)
+	}
+	send(events.PointerDown)
+	for _, c := range list.EventControllers() {
+		if click, ok := c.(*gui.ClickEventController); ok {
+			click.CancelPointer()
+		}
+	}
+	send(events.PointerUp)
+	if calls != 1 {
+		t.Fatal("取消的按压接受了候选", calls)
+	}
+}
+
+type completionPointerHost struct{ widget gui.Widget }
+
+func (h *completionPointerHost) Widget() gui.Widget             { return h.widget }
+func (*completionPointerHost) FocusedWidget() gui.Widget        { return nil }
+func (*completionPointerHost) SetFocusedWidget(gui.Widget) bool { return false }

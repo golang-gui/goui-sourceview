@@ -687,7 +687,7 @@ func (v *SourceView) mount() {
 		// A selection requested before first allocation still needs revealing.
 		*v.reveal = v.operationState()
 	}
-	if win := v.Window(); win != nil {
+	if win := v.Surface(); win != nil {
 		v.windowFocus = win.ConnectFocus(func(focused bool) {
 			if !focused {
 				v.ClearInlineSuggestion()
@@ -807,5 +807,5 @@ func visible(v gui.Widget) bool {
 }
 
 func activeFocus(v *SourceView) bool {
-	return v.Focused() && (v.Window() == nil || v.Window().Focused() || v.menu != nil && v.menu.popup.Visible())
+	return v.Focused() && (v.Surface() == nil || v.Surface().Focused() || v.menu != nil && v.menu.popup.Visible())
 }

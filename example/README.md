@@ -9,11 +9,15 @@ The examples use Modern and request
 ## Setup / 环境准备
 
 Requires Go 1.24 or newer and GOUI's [desktop runtime dependencies](https://github.com/golang-gui/goui#platforms-and-dependencies).
-The module depends on GOUI v0.7.0; Go downloads it automatically. A separate GOUI
-checkout or local workspace is not required to build or run these examples.
+This development checkout requires the unpublished GOUI commit `538ed4f` or a
+compatible descendant. Use a local workspace containing this module and GOUI;
+for adjacent checkouts, run `go work init . ../goui` from the repository root if
+no workspace exists. Do not commit the workspace or a machine-specific replace.
 
-需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。模块依赖 GOUI v0.7.0，由 Go
-自动下载；构建和运行示例无需另行检出 GOUI 或创建本地工作区。
+需要 Go 1.24 或更新版本及 GOUI 的桌面运行依赖。当前开发检出依赖尚未发布的 GOUI
+`538ed4f` 或兼容后续提交；相邻检出且没有工作区时，在仓库根运行 `go work init . ../goui`。
+`go.mod` 保留最后公开的 v0.7.0，该版本不能在关闭工作区时构建当前代码；
+本地工作区不提交，不使用机器专属 replace。范围与验证见[迁移记录](../doc/PlanGOUILocalMigration.md)。
 
 Core imports in this checkout use `github.com/golang-gui/goui-sourceview/sourceview`.
 The `ui`, `language` and `scheme` paths are unchanged. This package layout is not
@@ -132,13 +136,14 @@ also accept nil for plain-text templates. Samples are displayed and edited; they
   控件默认仍为 Alt 添加选区、Alt+Shift 列选；本示例通过 `SetSelectionModifiers` 仅覆盖 Linux
   的添加选区修饰键，以避开 Xfwm4 的 Alt 窗口操作。宿主可经同一 API 配置自己的组合；
   编辑器不修改桌面设置。
-- Known issue with GOUI v0.7.0: Windows client-area pointer events omit Alt, so the configured
-  Alt+click and Alt+Shift+drag gestures currently fail on the tested Windows desktop. Keyboard
-  multi-selection commands work. macOS Option mouse gestures over VNC remain unresolved.
-  Release is on hold; see the [native acceptance record](../doc/PlanReleaseV060.md).
-  GOUI v0.7.0 已知问题：Windows 客户区指针事件遗漏 Alt，实测 Alt+点击、Alt+Shift+拖动无效，
-  键盘多选区命令正常。macOS VNC 的 Option 鼠标手势也未通过，原因尚未定位。
-  当前暂缓发布，详见[原生验收记录](../doc/PlanReleaseV060.md)。
+- GOUI v0.7.0 omitted Alt from Windows client-area pointer events; the local GOUI
+  baseline includes fix `b40908c`. SourceView's Windows native mouse acceptance has
+  not been repeated for this migration. macOS Option gestures over VNC remain unresolved.
+  Release is still on hold; see the [earlier native record](../doc/PlanReleaseV060.md)
+  and [current migration](../doc/PlanGOUILocalMigration.md).
+  GOUI v0.7.0 的 Windows Alt 鼠标缺陷已在本地 GOUI `b40908c` 修正；本轮尚未重跑
+  SourceView Windows 真实鼠标验收，macOS VNC 的 Option 手势原因也仍未定位。
+  发布继续暂缓，旧失败与本轮源码/验证状态分别记录。
 - The header button switches light/dark. `-theme system` follows system appearance
   until you choose a theme; settings connections end with the application.
   标题栏按钮切换亮暗；`-theme system` 在手动切换前跟随系统外观，订阅随应用结束释放。

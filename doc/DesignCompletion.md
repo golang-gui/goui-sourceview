@@ -9,7 +9,7 @@ Completion、CompletionContext 和 CompletionProvider 仍是真实的核心包�
 内部值算法使用结构约束直接处理核心包的候选切片，保留原有数量／大小边界、
 指针与附加编辑的副本，不增加一份无界中间候选列表。会话身份、异步取消、
 焦点与关闭回调后的修订校验、最终 ApplyEdits 留在核心包。
-补全是 SourceView 的语言和交互能力；GOUI 提供普通 Popover、事件、排版和绘制，
+补全是 SourceView 的语言和交互能力；GOUI 提供共享瞬态 Popover、事件、排版和绘制，
 不反向依赖本模块，也不在 TextView 中添加源码特例。
 
 ## 候选与公共接口
@@ -65,8 +65,16 @@ view.SetCompletionProvider(provider)
 
 ## 弹窗与输入
 
-使用不获取原生焦点的普通非模态 Popover；键盘和 IME 保留在编辑器，继续经过
+使用不获取原生焦点的共享瞬态非模态 Popover；键盘和 IME 保留在编辑器，继续经过
 Window.DispatchEvent 和正常 IMClient。选择列表不是菜单：打开后仍需要正常键入前缀。
+
+2026-11-14 起采用 GOUI `NewTransientPopover`，与所属 Surface 的菜单、下拉列表和
+Tooltip 共用一套原生 Popup/Painter；逻辑补全列表、候选和排版仍由本视图拥有。
+关闭/卸载销毁逻辑 presenter、释放列表排版，原生共享资源归 GOUI owner 生命周期管理。
+透明创建不支持/不可用时的 opaque 降级也交由 GOUI，不在 SourceView 重试 Show。
+另一浮层取代本次补全时通过 ConnectClosed 关闭会话，避免隐藏的候选继续截获 Enter；
+DismissRequest/Closed 的回调均校验当前会话，旧 presenter 清理不能关闭新会话。
+此接入依赖尚未发布的 GOUI，版本与验收见[本地迁移](PlanGOUILocalMigration.md)。
 
 - 上下键循环切换并请求选中项滚入视口，Enter/Tab 确认当前候选；鼠标移动选择、点击确认。
   滚轮和滚动条仅浏览视口，不改变选中项或提交文本；键盘随后从原选中项继续导航。

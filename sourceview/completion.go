@@ -13,7 +13,6 @@ import (
 	"github.com/golang-gui/goui-sourceview/language"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
-	"github.com/golang-gui/goui/platform"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -219,7 +218,7 @@ func (v *SourceView) RefreshCompletion() error {
 	} else {
 		return nil
 	}
-	if v.Destroyed() || !v.mounted || !v.Focused() || v.editable() != nil || v.projection != nil || v.Window() == nil {
+	if v.Destroyed() || !v.mounted || !v.Focused() || v.editable() != nil || v.projection != nil || v.Surface() == nil {
 		v.closeCompletion()
 		return nil
 	}
@@ -280,7 +279,7 @@ func (v *SourceView) completeTriggered(explicit bool, trigger string) error {
 	if err := v.editable(); err != nil {
 		return err
 	}
-	if !v.Focused() || v.projection != nil || v.Window() == nil {
+	if !v.Focused() || v.projection != nil || v.Surface() == nil {
 		return nil
 	}
 	c, ok := v.completionContext(explicit)
@@ -350,35 +349,19 @@ func (v *SourceView) presentCompletions(state operationState, epoch uint64, c Co
 	s.list = newCompletionList(v, s)
 	s.panel = controls.NewCompletionPanel(s.list)
 	position.X -= s.panel.Inset() - controls.CompletionInset
-	newPopup := func(transparent bool) gui.Popover {
-		p := gui.NewPopover(v, &gui.PopoverOptions{Transparent: transparent})
-		p.SetStyleName("sourceview.completion")
-		p.SetWidget(s.panel)
-		p.SetPosition(position)
-		p.ConnectDismissRequest(v.closeCompletion)
-		return p
+	s.popup = gui.NewTransientPopover(v)
+	s.popup.SetStyleName("sourceview.completion")
+	s.popup.SetWidget(s.panel)
+	s.popup.SetPosition(position)
+	closeCurrent := func() {
+		if v.completion == s {
+			v.closeCompletion()
+		}
 	}
-	s.popup = newPopup(true)
+	s.popup.ConnectDismissRequest(closeCurrent)
+	s.popup.ConnectClosed(closeCurrent)
 	v.completion = s
 	err := s.popup.Show()
-	// Unsupported/unavailable alpha surfaces are a normal presentation fallback.
-	// Content errors and stale sessions must never trigger a second Show.
-	if err != nil && s.list.Error() == nil && (errors.Is(err, platform.ErrUnsupported) || errors.Is(err, platform.ErrUnavailable)) && v.completion == s && state.valid(v) && epoch == v.completionEpoch {
-		s.popup.SetWidget(nil)
-		s.popup.Destroy()
-		if v.completion != s || !state.valid(v) || epoch != v.completionEpoch || !v.mounted || !v.Focused() || v.editable() != nil {
-			if v.completion == s {
-				v.closeCompletion()
-			}
-			return nil
-		}
-		s.popup = newPopup(false)
-		if retry := s.popup.Show(); retry != nil {
-			err = errors.Join(err, retry)
-		} else {
-			err = nil
-		}
-	}
 	if err != nil {
 		if v.completion == s {
 			v.closeCompletion()

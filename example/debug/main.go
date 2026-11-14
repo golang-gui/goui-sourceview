@@ -176,5 +176,5 @@ func main() {
 	update()
 	must(win.Show())
 	win.SetFocusedWidget(editor)
-	app.Run()
+	must(app.Run())
 }

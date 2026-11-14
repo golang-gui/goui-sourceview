@@ -8,7 +8,7 @@ import (
 )
 
 type GoToUI struct {
-	Surface     *gotoSurface
+	Content     *gotoSurface
 	Row         *gui.LinearBox
 	Input       *gui.TextInput
 	Status      *gui.Label
@@ -17,13 +17,13 @@ type GoToUI struct {
 
 func NewGoToUI(refresh, submit, close func()) *GoToUI {
 	b := &GoToUI{}
-	b.Surface = &gotoSurface{ui: b}
+	b.Content = &gotoSurface{ui: b}
 	l := layout.NewLinearLayout(layout.DirectionVertical)
 	l.Padding = geometry.UniformInsets(12)
 	l.Spacing = 4
 	l.CrossAlign = layout.CrossStretch
-	b.Surface.SetLayoutManager(l)
-	b.Surface.SetVisible(false)
+	b.Content.SetLayoutManager(l)
+	b.Content.SetVisible(false)
 	b.Row = gui.NewLinearBox(layout.DirectionHorizontal)
 	b.Row.SetSpacing(4)
 	b.Input = gui.NewTextInput()
@@ -43,8 +43,8 @@ func NewGoToUI(refresh, submit, close func()) *GoToUI {
 	b.Row.AddChild(b.CloseButton)
 	b.Status = gui.NewLabel("")
 	b.Status.SetStyleName("sourceview.find.status")
-	b.Surface.WidgetBase.AddChild(b.Surface, b.Row)
-	b.Surface.WidgetBase.AddChild(b.Surface, b.Status)
+	b.Content.WidgetBase.AddChild(b.Content, b.Row)
+	b.Content.WidgetBase.AddChild(b.Content, b.Status)
 
 	return b
 }

@@ -87,17 +87,15 @@ func NewCompletionList(host CompletionHost) *CompletionList {
 	l.ReadAppearance()
 	l.ConnectUnmount(l.Release)
 	click := gui.NewClickEventController()
-	click.ConnectClicked(func(ctx gui.EventContext) {
-		if p, ok := ctx.Position(); ok {
-			if index, hit := l.itemAt(p); hit {
-				host.Accept(index)
-				ctx.StopPropagation()
-			}
+	click.ConnectClicked(func(ctx gui.EventContext, info gui.ClickInfo) {
+		if index, hit := l.itemAt(info.Position); hit {
+			host.Accept(index)
+			ctx.StopPropagation()
 		}
 	})
 	l.AddEventController(click)
 	motion := gui.NewMotionEventController()
-	motion.ConnectMotion(func(info gui.MotionInfo) {
+	motion.ConnectMotion(func(_ gui.EventContext, info gui.MotionInfo) {
 		if index, hit := l.itemAt(info.Position); hit && host.State().Index != index {
 			host.Select(index)
 			l.RequestPaint()

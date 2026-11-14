@@ -412,7 +412,9 @@ func run() error {
 		return err
 	}
 	win.SetFocusedWidget(editor)
-	app.Run()
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
 	return nil
 }
 

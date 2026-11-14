@@ -6,6 +6,7 @@
 // 重建目标视图、调整原生窗口宽高与字体，并恢复约 10 MiB 超长单行中段（包含 RTL
 // 文本）。检查实际首屏到达时间、事件循环间隔、输入取消和过期拒绝。滚轮、
 // 滚动条拖动及 CommitText 走正常事件路径。正文历史只在最后的明确输入时变化。
+// 内容留出窗口 resize 边缘，滚动条验收不借用已排版边缘上的原生缩放手势区域。
 // 断言实际语义和滚动位置；时间用于观测而非跨机器性能门槛。不访问用户文件、
 // 剪贴板或系统设置。成功自动关闭，超时/提前退出/断言失败非零退出；重启复位。
 // 原生 IME、物理输入及 macOS/Windows 需单独验证；本程序不代表这些平台通过。
@@ -80,6 +81,8 @@ func main() {
 	defer win.Destroy()
 	must(win.SetTitle("SourceView state verification"))
 	box := gui.NewLinearBox(layout.DirectionVertical)
+	// Integrated 的外侧 resize 区域始终归窗口，不能把滚动条放在该输入区域内。
+	box.SetPadding(geometry.UniformInsets(12))
 	box.SetCrossAlign(layout.CrossStretch)
 	label := gui.NewLabel("Save selection, viewport and folds; restore into an independent view")
 	box.AddChild(label)

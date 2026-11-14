@@ -154,7 +154,8 @@ func main() {
 	must(win.Show())
 	win.SetFocusedWidget(editor)
 	submit()
-	app.Run()
+	err = app.Run()
 	service.Close()
 	service.Wait()
+	must(err)
 }

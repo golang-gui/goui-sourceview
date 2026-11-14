@@ -34,7 +34,7 @@ func TestCompanionControlsKeepUniformPadding(t *testing.T) {
 	if goTo.Input.Padding() != geometry.UniformInsets(4) || goTo.CloseButton.Padding() != geometry.UniformInsets(3) {
 		t.Fatal("跳转栏输入框或关闭按钮的四边留白不一致")
 	}
-	if goTo.Surface.LayoutManager().(*layout.LinearLayout).Padding != geometry.UniformInsets(12) {
+	if goTo.Content.LayoutManager().(*layout.LinearLayout).Padding != geometry.UniformInsets(12) {
 		t.Fatal("跳转栏初始容器留白改变")
 	}
 }

@@ -35,7 +35,7 @@ func newGoToBar() *goToBar {
 	b.pointer = gui.NewMotionEventController()
 	b.AddEventController(b.pointer)
 	b.GoToUI = controls.NewGoToUI(b.refresh, b.submit, b.Close)
-	b.WidgetBase.AddChild(b, b.Surface)
+	b.WidgetBase.AddChild(b, b.Content)
 	keys := gui.NewKeyEventController()
 	keys.SetPhase(gui.PhaseCapture)
 	keys.ConnectKeyDown(b.key)
@@ -44,7 +44,7 @@ func newGoToBar() *goToBar {
 	b.ConnectUnmount(func() {
 		b.mounted = false
 		b.open = false
-		b.Surface.SetVisible(false)
+		b.Content.SetVisible(false)
 		b.epoch++
 		b.disconnect()
 		if b.language != nil {
@@ -127,7 +127,7 @@ func (b *goToBar) Open() error {
 	changed := !b.open
 	b.open = true
 	b.SetVisible(true)
-	b.Surface.SetVisible(true)
+	b.Content.SetVisible(true)
 	b.refresh()
 	host.SetFocusedWidget(b.Input)
 	if b.Destroyed() || b.epoch != epoch || !b.open {
@@ -146,7 +146,7 @@ func (b *goToBar) Close() {
 	focus := b.ContainsFocus()
 	b.open = false
 	b.epoch++
-	b.Surface.SetVisible(false)
+	b.Content.SetVisible(false)
 	b.SetVisible(false)
 	if focus {
 		if v := b.liveTarget(); v != nil && visible(v) {

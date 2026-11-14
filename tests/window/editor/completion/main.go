@@ -340,7 +340,7 @@ func main() {
 					must(popup.DispatchEvent(events.PointerEvent{EventType: events.PointerMove, Buttons: events.PointerButtonLeftDown, Position: grab}))
 					must(popup.DispatchEvent(events.PointerEvent{EventType: events.PointerUp, Button: events.PointerButtonLeft, Position: grab}))
 					after = role(popup.Widget().Snapshot(), gui.RoleScrollView)
-					check(after.ScrollY == float32(math.Floor(float64(after.MaxScrollY))), "thumb drag did not reach the last candidate")
+					check(after.ScrollY == after.MaxScrollY, "thumb drag did not reach the last candidate")
 					info = candidates(popup)
 					check(info.VisibleEnd == 32 && info.Children[len(info.Children)-1].Text == "transform31", "drag lost final candidate")
 					// Keyboard navigation resumes from the chosen item, independently

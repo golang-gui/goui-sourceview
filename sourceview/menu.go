@@ -150,11 +150,11 @@ func (v *SourceView) runCommand(c Command) {
 func (v *SourceView) installContextMenu() {
 	c := gui.NewContextMenuEventController()
 	c.SetPhase(gui.PhaseTarget)
-	c.ConnectRequest(func(ctx gui.EventContext) {
+	c.ConnectRequest(func(ctx gui.EventContext, info gui.ContextMenuInfo) {
 		if !v.mounted || !gui.IsEnabled(v) {
 			return
 		}
-		point, pointer := ctx.Position()
+		point, pointer := info.Position, info.HasPosition
 		if pointer {
 			if v.minimapHit(point) {
 				ctx.StopPropagation()
@@ -176,10 +176,12 @@ func (v *SourceView) showContextMenu(point geometry.Point, pointer bool) error {
 	state := v.operationState()
 	v.closeCompletion()
 	v.cancelPreedit()
-	if !state.valid(v) || !v.mounted || v.Window() == nil {
+	if !state.valid(v) || !v.mounted || v.Surface() == nil {
 		return nil
 	}
-	v.Window().SetFocusedWidget(v)
+	if !pointer {
+		v.Surface().SetFocusedWidget(v)
+	}
 	if !state.valid(v) || !v.mounted {
 		return nil
 	}

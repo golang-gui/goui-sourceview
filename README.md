@@ -12,7 +12,12 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer and GOUI v0.7.0, which Go downloads automatically.
+Requires Go 1.24 or newer. This development checkout now needs the unpublished
+GOUI commit `538ed4f` (or a compatible descendant) in a local Go workspace.
+`go.mod` still names the last public GOUI v0.7.0; that version cannot build this
+checkout with `GOWORK=off`. See the [migration record](doc/PlanGOUILocalMigration.md).
+For adjacent checkouts, create an uncommitted workspace with `go work init . ../goui`
+if one does not already exist. Published SourceView versions retain their own dependency requirements.
 
 This checkout uses a new, **unreleased** package layout. The imperative entry is:
 

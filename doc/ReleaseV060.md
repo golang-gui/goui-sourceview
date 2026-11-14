@@ -1,5 +1,12 @@
 # GOUI SourceView v0.6.0
 
+2026-11-14：当前检出已适配尚未发布的本地 GOUI `538ed4f`，需工作区，无法仅凭公开
+v0.7.0 独立构建。下文三端验证数字属于 11-12 冻结候选，不是新迁移代码的原生验证。
+Windows Alt 的上游修复已进入本地基线，SourceView 真机重验及其他门槛见[迁移记录](PlanGOUILocalMigration.md)。
+
+The current checkout requires unpublished local GOUI changes and a workspace. The native results below
+refer to the November 12 frozen candidate; see the [migration record](PlanGOUILocalMigration.md) for current validation.
+
 状态：**暂缓发布**；本文件为发布说明草稿，版本尚未发布。
 Windows 真实 Alt 鼠标输入存在已确认的 GOUI v0.7.0 缺陷，macOS 远程 Option 手势尚未通过，
 真实 IME 验收未完成。本轮只记录问题，不修 GOUI、不推送、不打标签或创建 Release。

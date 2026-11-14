@@ -13,6 +13,7 @@ import (
 	"github.com/golang-gui/goui-sourceview/internal/view"
 	"github.com/golang-gui/goui/core/geometry"
 	"github.com/golang-gui/goui/gui"
+	"github.com/golang-gui/goui/layout"
 	"github.com/golang-gui/goui/platform/events"
 	"github.com/golang-gui/goui/platform/typography"
 )
@@ -861,5 +862,65 @@ func TestDragScrollCallbackCannotApplyOldSelection(t *testing.T) {
 	v.dragSelection(geometry.Point{X: 450, Y: 10})
 	if v.Document() != replacement || v.Selection() != (TextSelection{}) {
 		t.Fatal("applied selection after reentrant document replacement", v.Selection())
+	}
+}
+
+// 类型化回调的位置已是控件局部坐标；嵌套容器不能再转换一次，也不能漏掉修饰键或取消。
+func TestTypedPointerCallbacksKeepLocalSelectionAndCancellation(t *testing.T) {
+	v, _ := colorFixture(t)
+	v.Document().SetText("abcdefghi\nsecond\nthird")
+	v.SetShowLineNumbers(false)
+	v.SetFoldingEnabled(false)
+	root := gui.NewLinearBox(layout.DirectionVertical)
+	root.AddChild(v)
+	root.WidgetBase.Arrange(geometry.Rect(0, 0, 500, 300))
+	v.Arrange(geometry.Rect(40, 30, 400, 200))
+	var dispatch gui.EventDispatcher
+	host := &bracketHost{widget: root}
+	pointer := func(kind events.EventType, local geometry.Point, mods events.Modifiers) {
+		t.Helper()
+		event := events.PointerEvent{EventType: kind, Position: geometry.Point{X: local.X + 40, Y: local.Y + 30}, Modifiers: mods}
+		if kind != events.PointerMove {
+			event.Button = events.PointerButtonLeft
+		}
+		if kind != events.PointerUp {
+			event.Buttons = events.PointerButtonLeftDown
+		}
+		if err := dispatch.DispatchEvent(host, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	start, end := geometry.Point{X: 16, Y: 16}, geometry.Point{X: 46, Y: 16}
+	pointer(events.PointerDown, start, 0)
+	pointer(events.PointerMove, end, 0)
+	pointer(events.PointerUp, end, 0)
+	if v.Selection() != (TextSelection{Anchor: 1, Caret: 4}) || v.pointerPoint != end || v.dragging {
+		t.Fatal("局部拖选坐标或释放状态错误", v.Selection(), v.pointerPoint, v.dragging)
+	}
+	alt, ok := gui.ModAlt.Resolve()
+	if !ok {
+		t.Fatal("平台没有 Alt/Option 修饰键")
+	}
+	v.SetSelection(TextSelection{})
+	pointer(events.PointerDown, end, alt)
+	pointer(events.PointerUp, end, alt)
+	if got := v.Selections(); !reflect.DeepEqual(got, []TextSelection{{Anchor: 4, Caret: 4}, {}}) {
+		t.Fatal("添加光标遗漏类型化 modifier", got)
+	}
+	pointer(events.PointerDown, start, alt)
+	var drag *gui.DragEventController
+	for _, controller := range v.EventControllers() {
+		if d, ok := controller.(*gui.DragEventController); ok {
+			drag = d
+		}
+	}
+	if drag == nil || !v.dragging {
+		t.Fatal("未开始待取消的拖动")
+	}
+	drag.Reset()
+	before := v.Selections()
+	pointer(events.PointerUp, end, alt)
+	if v.dragging || v.additiveDrag || v.dragBase != nil || v.columnSelection != nil || !reflect.DeepEqual(v.Selections(), before) {
+		t.Fatal("取消被当作真实释放或残留拖动状态", v.Selections(), before)
 	}
 }
