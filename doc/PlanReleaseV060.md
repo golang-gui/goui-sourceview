@@ -1,5 +1,9 @@
 # v0.6.0 发布准备与原生验收
 
+2026-11-15 最终：维护者明确授权发布后，[v0.6.0](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0) 已正式公开。
+标签、官方 Go proxy 与消费验证见[发布完成记录](PlanReleaseV060Ready.md#发布完成)；
+下文按阶段保留旧候选、失败、副作用和当时的暂缓状态。
+
 2026-11-15 发布准备复验：GOUI v0.8.0 下三端包检查与各 49 组窗口通过，Windows Alt 手势已通过；
 macOS 系统 CGEvent Option 手势及两端真实拼音 IME 均通过。当前结果、VNC 映射限制和证据
 见[新准备记录](PlanReleaseV060Ready.md)。下文继续保留旧候选、失败和桌面副作用，不能替代本轮结果。

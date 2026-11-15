@@ -7,7 +7,8 @@
 GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源码编辑能力，
 支持语法高亮、补全、括号匹配及 Modern 亮暗外观，可通过命令式或声明式方式接入。
 
-项目正在开发中。[v0.6.0 发布说明](ReleaseV060.md)列出已准备、尚未发布的变更与迁移方式。
+项目正在开发中。[v0.6.0](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0) 已发布，
+变更与迁移方式见[发布说明](ReleaseV060.md)。
 
 ## 安装
 
@@ -15,20 +16,25 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 该正式版包含当前使用的类型化输入、Surface 和共享瞬态面接口，无需另行检出 GOUI
 或创建双仓工作区即可构建本仓。版本与验证见[升级记录](PlanGOUIV080.md)。
 
-当前检出采用**尚未发布**的新包布局，命令式入口为：
+安装 v0.6.0：
+
+```sh
+go get github.com/golang-gui/goui-sourceview/sourceview@v0.6.0
+```
+
+命令式 API 从子包导入：
 
 ```go
 import source "github.com/golang-gui/goui-sourceview/sourceview"
 ```
 
-应用联调时，将应用模块和本检出一起加入本地 Go 工作区。已发布的 v0.5.0 沿用
-旧根包路径，不包含上述新子包。`ui`、`language` 和 `scheme` 路径保持不变。
-布局和验证范围见[包迁移记录](PlanPackageMigration.md)。
+`ui`、`language` 和 `scheme` 路径保持不变。从 v0.5.0 迁移时，将旧根包导入改为上述路径，
+无需本地工作区。其他 API 变化见[发布说明](ReleaseV060.md)。
 
-当前检出还将正文、历史及段落缓存独立到本仓。直接使用 `Document`，不再使用
-`Document.Model()`／`NewDocumentWithModel`；文本值改用 SourceView 的
+SourceView 独立维护正文、历史及段落缓存。直接使用 `Document`，不再使用
+`Document.Model()`／`NewDocumentWithModel`；文本值使用 SourceView 的
 `TextRange`、`TextSelection`、`TextEdit`、`TextChange`，声明式层提供同名别名。
-这些接口变更尚未发布，详见[独立编辑内核](DesignEditorCore.md)。
+详见[独立编辑内核](DesignEditorCore.md)。
 
 ## 主要能力
 

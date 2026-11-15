@@ -11,8 +11,8 @@ description: Integrate and customize GOUI SourceView code editors in Go desktop 
 
 ## 先确认实际依赖
 
-当前检出的命令式入口为 `github.com/golang-gui/goui-sourceview/sourceview`；
-该目录迁移尚未发布，使用本地工作区接入。已发布 v0.5.0 及更早版本沿用旧根路径；
+SourceView v0.6.0 的命令式入口为 `github.com/golang-gui/goui-sourceview/sourceview`，
+依赖 GOUI v0.8.0，可直接使用发布模块，无需本地工作区。v0.5.0 及更早版本沿用旧根路径；
 先按实际版本核对，不能混用两个入口。模块路径以及 `ui`、`language`、`scheme` 路径保持不变。
 
 - 检查应用的 go.mod、go.work 和现有代码，用下列命令找到实际选中的版本和源码：

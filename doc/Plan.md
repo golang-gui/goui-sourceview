@@ -1,14 +1,23 @@
 # SourceView 开发与验收计划
 
-> v0.5.0 已发布；实际验收范围及仍未覆盖的平台组合见对应发布记录。
+> v0.6.0 已发布；实际验收范围及仍未覆盖的平台组合见对应发布记录。
 > 实际代码、命令、结果与限制见本文件及对应专题的 Plan 文档。
 > 首版范围见 [总设计](DesignSourceView.md)，场景与目标见 [Testing](Testing.md)。
 > 下列待办是开发切片，不构成未经用户授权就修改代码或其他仓库的许可。
 
 go.mod 当前声明 GOUI v0.8.0；
-SourceView v0.5.0 已正式发布，发布依赖为 GOUI v0.7.0。
+SourceView v0.6.0 已正式发布，发布依赖为 GOUI v0.8.0。
 历史联调和依赖失败保留为当时记录，
 当前独立依赖与发布准备结果见下方最新记录，不以历史验收代替当前验证。
+
+## v0.6.0 发布（2026-11-15）
+
+[正式 Release](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0) 已公开并标记 Latest，无手工二进制附件。
+annotated tag `v0.6.0` 指向 `c17b728834adc2fefbc7499f8d4c9102ccfd7c58`，已进入 origin/main 历史。
+官方 Go proxy 来源 SHA 一致；仓库外全新模块缓存、无 replace 的消费模块已下载、构建并运行
+sourceview、ui、language、scheme，正文编辑、保存点和 Undo 检查通过。
+[发布说明](ReleaseV060.md)列出 API 迁移，三端复验与最终身份见[发布记录](PlanReleaseV060Ready.md)。
+下列历史章节保留各阶段当时的状态，不代表当前仍未发布。
 
 ## v0.6.0 发布准备复验（2026-11-15）
 

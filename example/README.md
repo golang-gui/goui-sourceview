@@ -17,12 +17,13 @@ published dependency. See the [upgrade record](../doc/PlanGOUIV080.md).
 构建和运行示例无需 GOUI 本地检出或工作区；关闭工作区时使用正式发布依赖。
 按需双仓联调的工作区仍不提交，不使用机器专属 replace；验证见[升级记录](../doc/PlanGOUIV080.md)。
 
-Core imports in this checkout use `github.com/golang-gui/goui-sourceview/sourceview`.
-The `ui`, `language` and `scheme` paths are unchanged. This package layout is not
-released yet; applications integrating this checkout use a local Go workspace.
+SourceView v0.6.0 uses `github.com/golang-gui/goui-sourceview/sourceview` for the
+imperative API. The `ui`, `language` and `scheme` paths are unchanged. Applications
+can use the published module without a workspace; see the [release notes](../doc/ReleaseV060.md).
 
-当前检出的命令式入口为 `github.com/golang-gui/goui-sourceview/sourceview`，
-`ui`、`language` 和 `scheme` 路径保持不变。新布局尚未发布，应用联调使用本地工作区。
+SourceView v0.6.0 的命令式入口为 `github.com/golang-gui/goui-sourceview/sourceview`，
+`ui`、`language` 和 `scheme` 路径保持不变。应用可直接使用发布模块，无需工作区，
+迁移见[发布说明](../doc/ReleaseV060.md)。
 
 ## Run / 启动
 

@@ -1,12 +1,13 @@
 # GOUI SourceView v0.6.0
 
-状态：**发布准备完成，尚未发布**。2026-11-15 基于正式 GOUI v0.8.0 完成三端原生复验。
-验收代码为 `bc3c567ac9bb563434938f6233015d173cbebfa4`；本轮仅更新发布文档。
-候选、完整结果、输入方式及剩余覆盖范围见[本轮记录](PlanReleaseV060Ready.md)；
+状态：**2026-11-15 已正式发布**。[GitHub Release](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0)。
+标签 `v0.6.0` 指向 `c17b728834adc2fefbc7499f8d4c9102ccfd7c58`，直接依赖已发布的 GOUI v0.8.0。
+三端原生验收、最终冻结、官方 Go proxy 与消费验证见[发布记录](PlanReleaseV060Ready.md)；
 11-12 的失败与暂缓决定保留在[历史记录](PlanReleaseV060.md)。
 
-**Prepared, not yet released.** Native checks were repeated on November 15 with released GOUI v0.8.0.
-See the [current acceptance record](PlanReleaseV060Ready.md) for the tested source, input methods and coverage.
+**Released on November 15, 2026.** [GitHub Release](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0).
+The tag points to `c17b728834adc2fefbc7499f8d4c9102ccfd7c58` and uses released GOUI v0.8.0.
+See the [release record](PlanReleaseV060Ready.md) for native checks, proxy verification and coverage.
 
 ## 中文
 

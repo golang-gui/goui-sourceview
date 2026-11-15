@@ -14,8 +14,9 @@
 | 代码配色 | scheme、SourceView.SetScheme，以及 sourceview/styles.go 的公开样式部件 |
 | 应用定义语言和补全 | language、CompletionProvider；example/markdown |
 
-当前检出的核心包导入 `github.com/golang-gui/goui-sourceview/sourceview`。
-目录迁移尚未发布，应用联调使用本地工作区；下列已发布版本说明对应当时的旧包布局。
+SourceView v0.6.0 的核心包导入 `github.com/golang-gui/goui-sourceview/sourceview`，
+依赖 GOUI v0.8.0，无需工作区。安装可用
+`go get github.com/golang-gui/goui-sourceview/sourceview@v0.6.0`；旧版按各自包布局使用。
 
 普通界面由 GOUI gui / ui 提供。SourceView 只为需要源码编辑能力的区域增加依赖。
 

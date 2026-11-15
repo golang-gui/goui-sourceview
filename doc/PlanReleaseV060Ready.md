@@ -1,7 +1,8 @@
 # v0.6.0 发布准备复验
 
 日期：2026-11-15。维护者恢复 v0.6.0 发布准备；交付为 MIT Go 库与源码示例，无预编译附件。
-**准备完成，尚未发布**。本轮只更新文档，不修改 GOUI 或 SourceView 代码。
+**已正式发布**：[v0.6.0](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0)。准备阶段与发布阶段均未修改 GOUI 或 SourceView 代码。
+下文先保留发布前复验，正式身份与公开验证见[发布完成](#发布完成)。
 [中英文发布说明](ReleaseV060.md)与[历史暂缓记录](PlanReleaseV060.md)分别维护当前结果和旧失败。
 历史记录中的剪贴板副作用继续保留，不能以本轮恢复成功覆盖旧问题。
 
@@ -128,7 +129,44 @@ macOS Option 已通过系统事件路径验收，VNC 映射限制按上文保留
 混合显示器 DPI 和辅助技术操作未执行；Windows/macOS race 未执行，均不计为通过。
 
 截至准备提交，origin/main 仍为 `a91ed11`，候选代码较其超前 36 个提交；v0.6.0 标签及 Release 不存在。
-本轮不推送、不打标签、不创建 Draft 或正式 Release。正式发布时按[发布流程](Release.md)
+准备阶段未推送、打标签或创建 Release。维护者随后明确授权正式发布，按[发布流程](Release.md)
 将最终候选纳入 origin/main 历史，创建 annotated tag（消息 `Release v0.6.0.`），
 核对空附件 Draft 后发布，并执行官方 Go proxy 与无 replace 消费模块验证。
-这些外部步骤尚未执行；README 继续明确新包布局尚未发布，版本安装指引在公开验证后收尾。
+准备提交时这些外部步骤尚未执行；正式发布及安装文档收尾见下节。
+
+## 发布完成
+
+维护者明确发出“请发布”后，于 2026-11-15 完成：
+
+- main 从 `a91ed11` 快进到最终准备提交 `c17b728834adc2fefbc7499f8d4c9102ccfd7c58`，推送后核对远端一致。
+  该候选只比三端验收代码 `bc3c567` 增加七份 Markdown 变更，449 个非 Markdown 文件逐项一致。
+- 最终候选 git archive 共 574 个文件，SHA-256：
+  `366b616f3e471155ccbfe9a81d9001b3a9f871b8ea2bb86c888b75f31596cf19`。
+  独立干净副本 `GOWORK=off` 的 mod verify、tidy -diff、vet、CGO=0 build 均通过；
+  `go test -json ./... -count=1` 为 2362 通过、0 失败/跳过。三端窗口与 race 沿用上述相同代码的验收结果。
+- 创建 annotated tag `v0.6.0`，消息 `Release v0.6.0.`；仅推送本标签。
+  标签对象 `be9a18f31abbac93f7d078b7315cca386a62ba77`，远端 peeled SHA 为上述完整候选 SHA。
+- 先创建 Draft，逐项核对 tag、目标 SHA、中英文正文与 0 个手工附件，再转正式发布。
+  [Release](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0) 于 `2026-11-15T08:12:38Z` 公开，Latest 正确，draft/prerelease 均 false。
+  GitHub 自动源码归档仍可用，不制作 Demo、安装包、签名或公证附件。
+- 仓库外使用全新 `GOMODCACHE`、`GOWORK=off GOTOOLCHAIN=local CGO_ENABLED=0`，
+  仅用 `GOPROXY=https://proxy.golang.org`，开启 `GOSUMDB=sum.golang.org`，无镜像回退、replace 或工作区。
+  `go mod download -json github.com/golang-gui/goui-sourceview@v0.6.0` 成功，Origin.Hash 与标签一致，
+  Origin.Ref 为 `refs/tags/v0.6.0`；模块校验 `h1:smw7FpA1wl5a/6wcUTZ+OtlVWqConqKih0eeG2aX7NY=`。
+- 新建消费模块执行 README 中的
+  `go get github.com/golang-gui/goui-sourceview/sourceview@v0.6.0`，随后 tidy、mod verify、build、运行与 tidy -diff 全部通过。
+  实际构建 sourceview、ui、language、scheme；正文替换、保存点 Modified 和 Undo 回到 clean 均有断言。
+  全部模块 Replace 为空，GOUI 实际选中 v0.8.0。首次官方代理查询成功，无传播错误或重试。
+- 公开验证后更新中英文 README、示例与应用技能接入说明，移除新包布局尚未发布／必须工作区的过期描述，
+  同步当前设计状态与发布记录。收尾仅有文档变化，不移动发布标签。
+
+发布阶段未操作任何桌面或剪贴板，保留已有未跟踪 `doc/Doing.md`、`example/temp/`。
+Windows/macOS race、物理键、Wayland、Windows ARM64、macOS Intel、混合 DPI 和辅助技术操作的
+未验证边界保持不变，不以本次代理下载或消费运行补算为通过。
+
+发布证据 `/tmp/sourceview-v060-publish-0rtny7e_`：`draft.json` 与 `release.json` 保存 Draft/正式核对，
+`release-body.md` 为发布正文；`public-checks` 保存官方下载、模块列表、构建与运行的命令、输出和退出码，
+`consumer` 是无 replace 的消费模块，`module-cache` 是本次独立下载缓存。准备和原生证据根保持不变。
+
+收尾验证：`go test ./...`、`GOWORK=off go test ./...` 均通过（测试命中缓存）；
+差异无空白错误，12 份修改文档中的 190 个本地链接目标存在。收尾仅修改 Markdown。

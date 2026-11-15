@@ -8,8 +8,8 @@ GOUI SourceView brings source code editing to [GOUI](https://github.com/golang-g
 applications, with syntax highlighting, completion, matching brackets, and Modern
 light/dark appearances. It supports both imperative and declarative integration.
 
-The project is under active development. The [v0.6.0 release notes](doc/ReleaseV060.md)
-describe the prepared, unreleased changes and migration.
+The project is under active development. [v0.6.0](https://github.com/golang-gui/goui-sourceview/releases/tag/v0.6.0)
+is available; see the [release notes](doc/ReleaseV060.md) for changes and migration.
 
 ## Installation
 
@@ -18,21 +18,26 @@ A separate GOUI checkout or workspace is optional for development. The dependenc
 includes the typed input, Surface and shared transient contracts used here;
 see the [upgrade record](doc/PlanGOUIV080.md).
 
-This checkout uses a new, **unreleased** package layout. The imperative entry is:
+Install v0.6.0:
+
+```sh
+go get github.com/golang-gui/goui-sourceview/sourceview@v0.6.0
+```
+
+Import the imperative API from its subpackage:
 
 ```go
 import source "github.com/golang-gui/goui-sourceview/sourceview"
 ```
 
-To integrate this checkout into another application, include the application and SourceView modules in a
-local Go workspace. Published v0.5.0 uses the previous root import path and does
-not contain the new subpackage. The `ui`, `language` and `scheme` paths are unchanged.
-See the [package migration notes](doc/PlanPackageMigration.md) for the layout and validation scope.
+The `ui`, `language` and `scheme` paths are unchanged. When migrating from v0.5.0,
+replace the old root import with the path above; no local workspace is required.
+See the [release notes](doc/ReleaseV060.md) for the API changes.
 
-This checkout also owns its text model, history and paragraph caches. Use `Document`
+SourceView owns its text model, history and paragraph caches. Use `Document`
 directly in place of `Document.Model()` / `NewDocumentWithModel`; use SourceView
 `TextRange`, `TextSelection`, `TextEdit` and `TextChange` (also available in `ui`).
-These changes are unreleased. See the [editor core migration](doc/DesignEditorCore.md).
+See the [editor core design](doc/DesignEditorCore.md).
 
 ## Features
 

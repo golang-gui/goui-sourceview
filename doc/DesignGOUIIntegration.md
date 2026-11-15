@@ -265,5 +265,5 @@ SourceView 继续报告内容范围与延迟布局结果，不在 Measure 阶段
 公开迁移契约见 [GOUI v0.8.0 API migration](https://github.com/golang-gui/goui/releases/tag/v0.8.0)。
 
 所有正式依赖检查和本轮窗口程序构建均关闭工作区；保留已有忽略的工作区供按需双仓开发。
-SourceView 自身的新包布局尚未发布，应用联调当前 SourceView 检出仍可使用工作区，
-但无需把 GOUI 检出加入其中。实际命令、范围与真机缺口见[升级记录](PlanGOUIV080.md)。
+SourceView v0.6.0 已发布新包布局，可直接使用发布模块，无需 SourceView 或 GOUI 工作区。
+依赖迁移见[升级记录](PlanGOUIV080.md)，后续三端原生复验与输入边界见[发布验收](PlanReleaseV060Ready.md)。

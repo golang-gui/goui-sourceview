@@ -57,9 +57,9 @@ GOUI 不反向依赖本模块。
 
 核心公开入口为 `github.com/golang-gui/goui-sourceview/sourceview`，包名仍为
 `sourceview`。模块根目录不提供 Go 包；实现、同包测试和三个平台的原生测试辅助
-一起迁入 `sourceview/`，其余包路径保持不变。此次导入路径及类型完整包身份的
-变化尚未发布，应用使用当前检出时需通过本地 Go 工作区接入；已发布版本仍按
-对应版本的布局使用。迁移记录见 [公开核心包迁移](PlanPackageMigration.md)。
+一起迁入 `sourceview/`，其余包路径保持不变。导入路径及类型完整包身份的变化已随
+v0.6.0 发布，无需本地工作区；v0.5.0 及更早版本仍按对应版本的旧布局使用。
+迁移记录见 [公开核心包迁移](PlanPackageMigration.md)，发布契约见 [v0.6.0](ReleaseV060.md)。
 
 当前落位：
 
