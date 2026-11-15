@@ -8,7 +8,8 @@ GOUI SourceView brings source code editing to [GOUI](https://github.com/golang-g
 applications, with syntax highlighting, completion, matching brackets, and Modern
 light/dark appearances. It supports both imperative and declarative integration.
 
-The project is under active development.
+The project is under active development. The [v0.6.0 release notes](doc/ReleaseV060.md)
+describe the prepared, unreleased changes and migration.
 
 ## Installation
 
@@ -45,6 +46,9 @@ These changes are unreleased. See the [editor core migration](doc/DesignEditorCo
 - **Mixed documents** with highlighted Markdown metadata and code fences, plus HTML, XML, YAML and TOML template hosts.
 - **Folding and navigation** for structured documents, common code languages, Markdown headings and code fences, with independent external fold snapshots.
 - **Editing assistance** with smart indentation, whitespace markers, indent guides and rulers.
+- **Multiple cursors and column selection** with configurable mouse/keyboard gestures, occurrence commands and selection undo.
+- **Save points and view states** with document modified notifications and same-revision selection/viewport restoration.
+- **Special characters** with optional native-cluster markers and Unicode tooltips.
 - **Code editing** with Unicode and structural selection, word-part navigation, clipboard, undo/redo, reindentation and cleanup commands.
 - **Line marks and minimap** with breakpoint/bookmark presentation, execution lines and color-block navigation.
 - **External analysis** with independent highlight/fold snapshots and completion refresh.

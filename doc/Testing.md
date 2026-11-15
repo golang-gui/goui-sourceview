@@ -7,6 +7,8 @@ GOUI 接入专项：`go run ./tests/window/editor/goui_integration [-basic|-dark
 当前可通过正式 GOUI v0.8.0 依赖运行，无需 GOUI 工作区，见[升级记录](PlanGOUIV080.md)。检查类型化输入接入、焦点策略、
 共享补全被取代后的编辑和旧 presenter 隔离、查找/跳转子树；自动断言成功后退出。
 其模拟输入不替代真实 Alt/Option、IME 或 Windows/macOS 原生验收。
+GOUI v0.8.0 下的三端冻结源码、49 组窗口及两端原生输入结果见[本轮发布准备](PlanReleaseV060Ready.md)；
+记录区分 Windows RDP、macOS 系统 CGEvent 和 VNC Alt 映射，未将系统注入写成物理键测试。
 
 ## 1. 测试落位与执行
 
