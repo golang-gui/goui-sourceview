@@ -4,13 +4,13 @@
 > 投影、几何、片段和 GOUI ParagraphLayout 的方案。当前对应实现位于本仓 internal/text、
 > internal/view；下文带日期的 GOUI 源码与版本记录保留为历史依据，不能作为继续调用旧实现的契约。
 
-> 最近公开依赖接入基线：已发布 GOUI v0.7.0（`33ce8a9e02f57364f2f18aaed1b36d4ca32ef127`）；
-> 四边 Padding、局部选区绑定和文件对话框适配见第 9–10 节，圆角迁移见第 11 节。
+> 当前公开依赖接入基线：GOUI v0.8.0（`bc47eb006836fce9fed3cfe695f6345995513199`）；
+> 四边 Padding、局部选区绑定和文件对话框适配见第 9–10 节，圆角迁移见第 11 节，
+> 类型化输入、Surface 和共享瞬态面正式依赖见第 12 节。
 > 以下较早的版本、提案及验收记录按各自日期保留，不代表当前最低依赖。
 
-> 2026-11-14 本地迁移：当前代码适配 GOUI `538ed4fa2d677249094eb2891dbd3b1497e53bc3`
-> 的类型化输入、Surface 和共享瞬态面；这些公共接口尚未发布，需本地工作区，
-> 不能仅用 go.mod 的 v0.7.0 独立构建。范围、取舍和验证见[迁移记录](PlanGOUILocalMigration.md)。
+> 2026-11-14 的[本地迁移记录](PlanGOUILocalMigration.md)保留当时未发布接口与关闭工作区的失败。
+> 2026-11-15 已改为正式 v0.8.0，无需该本地依赖，结果见[升级记录](PlanGOUIV080.md)。
 
 > 实施状态：G1/G2/G3 及后续所需扩展已随 GOUI v0.2.0 发布，本模块直接声明该版本；下文保留设计与验收门槛，实际签名、范围和验证见 [Implementation](Implementation.md)。
 > 下文第 1–5 节保留初始提案的事实与拟新增契约；实施结果以当前公开接口及 Implementation 为准，样式注册见 [本轮验收](PlanStyles.md)。
@@ -252,3 +252,18 @@ SourceView 继续报告内容范围与延迟布局结果，不在 Measure 阶段
 
 本轮不迁移 SourceView 自己的编辑命令到通用 Command，不改公共编辑 API 或输入路由。
 验证范围和结果见 [v0.7.0 升级记录](PlanGOUIV070.md)。
+
+## 12. GOUI v0.8.0（2026-11-15）
+
+直接声明已发布的 v0.8.0，保持 Go 1.24，不提交 replace 或机器专属工作区。
+公开 Go 模块 Origin 为标签提交 `bc47eb006836fce9fed3cfe695f6345995513199`；
+发布后的 GOUI 文档提交不改变标签身份。
+
+该正式版包含此前本地接入的类型化输入、Surface、焦点策略与 NewTransientPopover，
+其库代码与 `538ed4f` 联调基线相同。保留本仓既有坐标转换、取消、会话身份及资源归属，
+不新增兼容分支，不改变正文内核、默认手势或命令。四个命令式示例继续处理 Run 错误。
+公开迁移契约见 [GOUI v0.8.0 API migration](https://github.com/golang-gui/goui/releases/tag/v0.8.0)。
+
+所有正式依赖检查和本轮窗口程序构建均关闭工作区；保留已有忽略的工作区供按需双仓开发。
+SourceView 自身的新包布局尚未发布，应用联调当前 SourceView 检出仍可使用工作区，
+但无需把 GOUI 检出加入其中。实际命令、范围与真机缺口见[升级记录](PlanGOUIV080.md)。

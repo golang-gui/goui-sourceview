@@ -1,24 +1,23 @@
 # GOUI SourceView v0.6.0
 
-2026-11-14：当前检出已适配尚未发布的本地 GOUI `538ed4f`，需工作区，无法仅凭公开
-v0.7.0 独立构建。下文三端验证数字属于 11-12 冻结候选，不是新迁移代码的原生验证。
-Windows Alt 的上游修复已进入本地基线，SourceView 真机重验及其他门槛见[迁移记录](PlanGOUILocalMigration.md)。
+2026-11-15：当前检出直接依赖已发布的 GOUI v0.8.0，无需本地 GOUI 工作区。
+下文三端验证数字属于 11-12 冻结候选；新的正式依赖结果与仍待真机重验的项目见[升级记录](PlanGOUIV080.md)。
 
-The current checkout requires unpublished local GOUI changes and a workspace. The native results below
-refer to the November 12 frozen candidate; see the [migration record](PlanGOUILocalMigration.md) for current validation.
+The current checkout uses released GOUI v0.8.0 without requiring a local GOUI workspace. The native results below
+refer to the November 12 frozen candidate; see the [upgrade record](PlanGOUIV080.md) for current validation.
 
 状态：**暂缓发布**；本文件为发布说明草稿，版本尚未发布。
-Windows 真实 Alt 鼠标输入存在已确认的 GOUI v0.7.0 缺陷，macOS 远程 Option 手势尚未通过，
-真实 IME 验收未完成。本轮只记录问题，不修 GOUI、不推送、不打标签或创建 Release。
+Windows Alt 鼠标缺陷修复已随 GOUI v0.8.0 发布，SourceView 真实鼠标输入尚未重验；
+macOS 远程 Option 手势尚未通过，真实 IME 验收未完成。不推送、不打标签或创建 Release。
 原生验证与发布门槛见 [准备记录](PlanReleaseV060.md)。
 
-**Release on hold.** Windows Alt mouse input is blocked by a confirmed GOUI v0.7.0 issue;
-macOS Option gestures over VNC remain unresolved, and real IME acceptance is incomplete.
+**Release on hold.** GOUI v0.8.0 includes the Windows Alt mouse fix, but SourceView's native mouse acceptance
+has not been repeated. macOS Option gestures over VNC remain unresolved, and real IME acceptance is incomplete.
 No GOUI changes, push, tag or Release are included in this round.
 
 ## 中文
 
-需要 Go 1.24 或更新版本，依赖 GOUI v0.7.0。发布 Go 库与源码示例，采用 MIT 许可证，不附预编译二进制。
+需要 Go 1.24 或更新版本，依赖 GOUI v0.8.0。发布 Go 库与源码示例，采用 MIT 许可证，不附预编译二进制。
 
 ### 主要变化
 
@@ -50,8 +49,8 @@ ApplyEdits、Undo/Redo、Revision 和 ConnectChange 等能力直接通过 Docume
 控件默认 Alt/Option+点击添加光标，Alt/Option+Shift+拖动列选；可集中配置 SelectionModifiers。
 Linux 编辑器示例使用 Ctrl+点击避开 Xfwm4 的 Alt 窗口操作。键盘命令通过 KeyBindings 配置；
 默认 Ctrl/Cmd+U 撤销选区，Ctrl/Cmd+Shift+D 跳过当前匹配。
-上述为手势配置；GOUI v0.7.0 Windows 客户区鼠标事件遗漏 Alt，实际 Alt+点击和 Alt+Shift+拖动
-当前均失败。macOS 远程 Option 手势也未通过；本草稿不承诺两端鼠标验收完成。
+上述为手势配置；GOUI v0.7.0 Windows 客户区鼠标事件遗漏 Alt 的修复已随 v0.8.0 发布，
+SourceView 真实鼠标尚未重验。macOS 远程 Option 手势也未通过；本草稿不承诺两端鼠标验收完成。
 
 保存前 CaptureSavePoint，写入成功后 MarkSaved；Modified 不等于磁盘文件存在，重新输入相同字节也可能仍为 dirty。
 示例 Mark saved 只标记内存，不写文件。特殊字符示例为第三项 unicode.jsonc，使用 View > Special characters 开关。
@@ -62,7 +61,7 @@ Linux 编辑器示例使用 Ctrl+点击避开 Xfwm4 的 Alt 窗口操作。键�
 视图快照为进程内、同文档同修订的值，不提供跨修订映射或序列化承诺。特殊字符显示不展开替代标签，
 合法连接字符也不表示错误诊断。代码片段、补全信息增强、诊断等保持暂缓。
 
-当前候选在 Linux amd64、Windows amd64、macOS arm64 的原生包测试均为 2359 项通过、零失败/跳过；
+11-12 冻结候选在 Linux amd64、Windows amd64、macOS arm64 的原生包测试均为 2359 项通过、零失败/跳过；
 mod verify、tidy -diff、vet 与 CGO=0 全仓构建通过，Linux 另通过全仓 race。
 三端最终各 42 组原生窗口通过，包含 100%/150% 应用缩放和 Basic/Modern Light/Dark；
 这些模拟输入结果不消除上述真实桌面输入阻塞。
@@ -70,7 +69,7 @@ mod verify、tidy -diff、vet 与 CGO=0 全仓构建通过，Linux 另通过全�
 
 ## English
 
-Requires Go 1.24 or newer and GOUI v0.7.0. This MIT-licensed release distributes the Go library and source examples without prebuilt binaries.
+Requires Go 1.24 or newer and GOUI v0.8.0. This MIT-licensed release distributes the Go library and source examples without prebuilt binaries.
 
 ### Changes
 
@@ -100,8 +99,8 @@ aliased by `ui`; ranges remain half-open UTF-8 byte offsets in normalized LF tex
 Alt/Option-click adds a cursor and Alt/Option-Shift-drag selects columns. Applications configure mouse gestures
 through SelectionModifiers and keyboard commands through KeyBindings. The Linux example uses Ctrl-click to
 avoid Xfwm4 window gestures. Ctrl/Cmd-U undoes selections; Ctrl/Cmd-Shift-D skips an occurrence.
-These are the configured gestures. GOUI v0.7.0 omits Alt from Windows client-area pointer events,
-so Alt-click and Alt-Shift-drag currently fail. macOS Option gestures over VNC also remain unverified.
+These are the configured gestures. GOUI v0.8.0 fixes the omitted Alt modifier in Windows client-area pointer
+events, but SourceView's native mouse acceptance has not been repeated. macOS Option gestures over VNC remain unresolved.
 
 Capture a save point before writing and mark it saved only after the write succeeds. Modified state tracks
 history, not byte equality or file existence. The example's Mark saved button only marks memory. Select
@@ -114,7 +113,7 @@ clusters and clamps short lines without inserting virtual spaces. View states re
 and revision and have no serialization contract. Special-character markers are display aids rather than
 diagnostics. Snippets, richer completion information and diagnostics remain deferred.
 
-The current candidate passed all 2359 native test cases without failures or skips on Linux amd64, Windows
+The November 12 frozen candidate passed all 2359 native test cases without failures or skips on Linux amd64, Windows
 amd64 and macOS arm64, along with module verification, tidy checks, vet and CGO=0 builds; Linux also passed
 the full race suite. Native-window results, desktop input and remaining coverage are recorded in the
 [preparation log](PlanReleaseV060.md). Builds and CommitText do not establish real IME coverage.

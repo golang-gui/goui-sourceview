@@ -74,7 +74,8 @@ Tooltip 共用一套原生 Popup/Painter；逻辑补全列表、候选和排版�
 透明创建不支持/不可用时的 opaque 降级也交由 GOUI，不在 SourceView 重试 Show。
 另一浮层取代本次补全时通过 ConnectClosed 关闭会话，避免隐藏的候选继续截获 Enter；
 DismissRequest/Closed 的回调均校验当前会话，旧 presenter 清理不能关闭新会话。
-此接入依赖尚未发布的 GOUI，版本与验收见[本地迁移](PlanGOUILocalMigration.md)。
+该接口已随 GOUI v0.8.0 发布，本仓直接依赖该版本；本地接入取舍见
+[迁移记录](PlanGOUILocalMigration.md)，正式依赖验证见[升级记录](PlanGOUIV080.md)。
 
 - 上下键循环切换并请求选中项滚入视口，Enter/Tab 确认当前候选；鼠标移动选择、点击确认。
   滚轮和滚动条仅浏览视口，不改变选中项或提交文本；键盘随后从原选中项继续导航。

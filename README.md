@@ -12,12 +12,10 @@ The project is under active development.
 
 ## Installation
 
-Requires Go 1.24 or newer. This development checkout now needs the unpublished
-GOUI commit `538ed4f` (or a compatible descendant) in a local Go workspace.
-`go.mod` still names the last public GOUI v0.7.0; that version cannot build this
-checkout with `GOWORK=off`. See the [migration record](doc/PlanGOUILocalMigration.md).
-For adjacent checkouts, create an uncommitted workspace with `go work init . ../goui`
-if one does not already exist. Published SourceView versions retain their own dependency requirements.
+Requires Go 1.24 or newer and GOUI v0.8.0, which Go downloads automatically.
+A separate GOUI checkout or workspace is optional for development. The dependency
+includes the typed input, Surface and shared transient contracts used here;
+see the [upgrade record](doc/PlanGOUIV080.md).
 
 This checkout uses a new, **unreleased** package layout. The imperative entry is:
 
@@ -25,7 +23,7 @@ This checkout uses a new, **unreleased** package layout. The imperative entry is
 import source "github.com/golang-gui/goui-sourceview/sourceview"
 ```
 
-To integrate this checkout into another application, include both modules in a
+To integrate this checkout into another application, include the application and SourceView modules in a
 local Go workspace. Published v0.5.0 uses the previous root import path and does
 not contain the new subpackage. The `ui`, `language` and `scheme` paths are unchanged.
 See the [package migration notes](doc/PlanPackageMigration.md) for the layout and validation scope.

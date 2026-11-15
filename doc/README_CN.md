@@ -11,11 +11,9 @@ GOUI SourceView 为 [GOUI](https://github.com/golang-gui/goui) 应用提供源�
 
 ## 安装
 
-需要 Go 1.24 或更新版本。当前开发检出依赖尚未发布的 GOUI `538ed4f` 或兼容后续提交，
-需将本模块与对应 GOUI 加入不提交的本地工作区。相邻检出且没有工作区时，
-可在仓库根运行 `go work init . ../goui`。`go.mod` 保留最后公开的 v0.7.0，
-该版本不能在 `GOWORK=off` 下构建当前代码；范围和验证见[迁移记录](PlanGOUILocalMigration.md)。
-已发布 SourceView 版本仍遵循各自的依赖要求。
+需要 Go 1.24 或更新版本，以及由 Go 自动下载的 GOUI v0.8.0。
+该正式版包含当前使用的类型化输入、Surface 和共享瞬态面接口，无需另行检出 GOUI
+或创建双仓工作区即可构建本仓。版本与验证见[升级记录](PlanGOUIV080.md)。
 
 当前检出采用**尚未发布**的新包布局，命令式入口为：
 

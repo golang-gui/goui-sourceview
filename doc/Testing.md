@@ -3,8 +3,8 @@
 > 状态：测试组织与验收规格。实际运行的命令、结果及缺口见 [实现记录](Plan.md)，不从本矩阵推定所有场景均已通过。
 > 测试分类遵循 [AGENTS.md](../AGENTS.md)，具体切片见 [Plan](Plan.md)。
 
-当前本地 GOUI 接入专项：`go run ./tests/window/editor/goui_integration [-basic|-dark]`，
-需要[迁移记录](PlanGOUILocalMigration.md)指定的本地工作区。检查类型化输入接入、焦点策略、
+GOUI 接入专项：`go run ./tests/window/editor/goui_integration [-basic|-dark]`，
+当前可通过正式 GOUI v0.8.0 依赖运行，无需 GOUI 工作区，见[升级记录](PlanGOUIV080.md)。检查类型化输入接入、焦点策略、
 共享补全被取代后的编辑和旧 presenter 隔离、查找/跳转子树；自动断言成功后退出。
 其模拟输入不替代真实 Alt/Option、IME 或 Windows/macOS 原生验收。
 
